@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+    <form method="POST" action="/login">
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul id="error-messages">
+            {% for message in messages %}
+                <li>{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        {% endwith %}
+        <button type="submit">Login</button>
+    </form>
+    <script>
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', () => {
+                document.getElementById('error-messages').innerHTML = '';
+            });
+        });
+    </script>
+</body>
+</html>

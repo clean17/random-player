@@ -7,15 +7,22 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <video id="videoPlayer" controls autoplay></video>
-    <br>
-    <div id="controls">
-        <button id="deleteButton">Delete</button>
-        <button id="nextButton">Next</button>
+    <div class="logout">
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('logout') }}">Logout</a>
+        {% endif %}
+    </div>
+    <div id="videoContainer">
+        <video id="videoPlayer" controls autoplay></video>
+        <div id="controls">
+            <button id="deleteButton">Delete</button>
+            <button id="nextButton">Next</button>
+        </div>
     </div>
     
     <script>
         let currentVideo = '';
+        let logoutDiv = document.querySelector('.logout');
 
         document.getElementById('nextButton').removeEventListener('click', getVideo);
         document.getElementById('nextButton').addEventListener('click', getVideo);
@@ -60,6 +67,7 @@
 
         const showControls = () => {
             controls.style.display = 'block';
+            logoutDiv.style.display = 'block';
             hideControls();
         };
 
@@ -74,6 +82,7 @@
             clearTimeout(hideControlsTimeout);
             hideControlsTimeout = setTimeout(() => {
                 controls.style.display = 'none';
+                logoutDiv.style.display = 'none';
             }, 2000);
         };
 
