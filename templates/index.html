@@ -17,7 +17,12 @@
     <script>
         let currentVideo = '';
 
-        document.getElementById('nextButton').addEventListener('click', () => {
+        document.getElementById('nextButton').removeEventListener('click', getVideo);
+        document.getElementById('nextButton').addEventListener('click', getVideo);
+        document.getElementById('deleteButton').removeEventListener('click', delVideo);
+        document.getElementById('deleteButton').addEventListener('click', delVideo);
+
+        function getVideo() {
             fetch('/videos')
                 .then(response => response.json())
                 .then(videos => {
@@ -28,9 +33,9 @@
                         alert('No videos found');
                     }
                 });
-        });
+        }
 
-        document.getElementById('deleteButton').addEventListener('click', () => {
+        function delVideo() {
             if (currentVideo) {
                 fetch(`/delete/${encodeURIComponent(currentVideo)}`, {
                     method: 'DELETE'
@@ -39,14 +44,41 @@
                         alert('Video deleted');
                         document.getElementById('videoPlayer').src = '';
                         currentVideo = '';
+                        getVideo();
                     } else {
                         alert('Failed to delete video');
                     }
                 });
             }
-        });
+        }
 
-        document.getElementById('nextButton').click();
+        const showControls = () => {
+            controls.style.display = 'block';
+            hideControls();
+        };
+
+        videoPlayer.addEventListener('play', showControls);
+        videoPlayer.addEventListener('pause', showControls);
+        videoPlayer.addEventListener('click', showControls);
+        videoPlayer.addEventListener('touchstart', showControls);
+        videoPlayer.addEventListener('ended', getVideo);
+
+        let hideControlsTimeout;
+        const hideControls = () => {
+            clearTimeout(hideControlsTimeout);
+            hideControlsTimeout = setTimeout(() => {
+                controls.style.display = 'none';
+            }, 2000);
+        };
+
+        videoPlayer.addEventListener('mousemove', showControls);
+        videoPlayer.addEventListener('touchmove', showControls);
+
+        function initPage() {
+            getVideo();
+        }
+
+        document.addEventListener("DOMContentLoaded", initPage)
     </script>
 </body>
 </html>
