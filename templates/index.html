@@ -10,7 +10,7 @@
     <video id="videoPlayer" controls autoplay></video>
     <br>
     <div id="controls">
-        <button id="nextButton">Random</button>
+        <button id="nextButton">Next</button>
         <button id="deleteButton">Delete</button>
     </div>
     
@@ -37,12 +37,16 @@
 
         function delVideo() {
             if (currentVideo) {
+                const videoPlayer = document.getElementById('videoPlayer');
+                videoPlayer.pause();
+                videoPlayer.src = '';
+                videoPlayer.load();
+
                 fetch(`/delete/${encodeURIComponent(currentVideo)}`, {
                     method: 'DELETE'
                 }).then(response => {
                     if (response.status === 204) {
                         alert('Video deleted');
-                        document.getElementById('videoPlayer').src = '';
                         currentVideo = '';
                         getVideo();
                     } else {
