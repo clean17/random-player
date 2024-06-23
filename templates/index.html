@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Video Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <video id="videoPlayer" controls autoplay></video>
+    <br>
+    <div id="controls">
+        <button id="nextButton">Random</button>
+        <button id="deleteButton">Delete</button>
+    </div>
+    
+    <script>
+        let currentVideo = '';
+
+        document.getElementById('nextButton').addEventListener('click', () => {
+            fetch('/videos')
+                .then(response => response.json())
+                .then(videos => {
+                    if (videos.length > 0) {
+                        currentVideo = videos[0];
+                        document.getElementById('videoPlayer').src = `/video/${encodeURIComponent(currentVideo)}`;
+                    } else {
+                        alert('No videos found');
+                    }
+                });
+        });
+
+        document.getElementById('deleteButton').addEventListener('click', () => {
+            if (currentVideo) {
+                fetch(`/delete/${encodeURIComponent(currentVideo)}`, {
+                    method: 'DELETE'
+                }).then(response => {
+                    if (response.status === 204) {
+                        alert('Video deleted');
+                        document.getElementById('videoPlayer').src = '';
+                        currentVideo = '';
+                    } else {
+                        alert('Failed to delete video');
+                    }
+                });
+            }
+        });
+
+        document.getElementById('nextButton').click();
+    </script>
+</body>
+</html>
