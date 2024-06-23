@@ -8,7 +8,8 @@ app = Flask(__name__)
 
 # Read configuration from config.ini
 config = configparser.ConfigParser()
-config.read('config.ini')
+with open('config.ini', 'r', encoding='utf-8') as configfile:
+    config.read_file(configfile)
 VIDEO_DIRECTORY = config['settings']['video_directory']
 
 @app.route('/')

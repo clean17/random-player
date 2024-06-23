@@ -10,8 +10,8 @@
     <video id="videoPlayer" controls autoplay></video>
     <br>
     <div id="controls">
-        <button id="nextButton">Next</button>
         <button id="deleteButton">Delete</button>
+        <button id="nextButton">Next</button>
     </div>
     
     <script>
@@ -37,22 +37,24 @@
 
         function delVideo() {
             if (currentVideo) {
-                const videoPlayer = document.getElementById('videoPlayer');
-                videoPlayer.pause();
-                videoPlayer.src = '';
-                videoPlayer.load();
+                if (confirm("Are you sure?")) {
+                    const videoPlayer = document.getElementById('videoPlayer');
+                    videoPlayer.pause();
+                    videoPlayer.src = '';
+                    videoPlayer.load();
 
-                fetch(`/delete/${encodeURIComponent(currentVideo)}`, {
-                    method: 'DELETE'
-                }).then(response => {
-                    if (response.status === 204) {
-                        alert('Video deleted');
-                        currentVideo = '';
-                        getVideo();
-                    } else {
-                        alert('Failed to delete video');
-                    }
-                });
+                    fetch(`/delete/${encodeURIComponent(currentVideo)}`, {
+                        method: 'DELETE'
+                    }).then(response => {
+                        if (response.status === 204) {
+                            alert('Video deleted');
+                            currentVideo = '';
+                            getVideo();
+                        } else {
+                            alert('Failed to delete video');
+                        }
+                    });
+                }
             }
         }
 
