@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Directory</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
+</head>
+<body>
+<div class="logout">
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('logout') }}">Logout</a>
+    {% endif %}
+</div>
+<div class="container">
+    <h2>Select Directory</h2>
+    <form action="{{ url_for('select_directory') }}" method="post">
+        <button type="submit" name="directory" value="1">Directory T</button>
+        <button type="submit" name="directory" value="2">Directory A</button>
+    </form>
+</div>
+</body>
+</html>

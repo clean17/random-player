@@ -13,7 +13,8 @@ app = Flask(__name__)
 config = configparser.ConfigParser()
 with open('config.ini', 'r', encoding='utf-8') as configfile:
     config.read_file(configfile)
-VIDEO_DIRECTORY = config['settings']['video_directory']
+VIDEO_DIRECTORY1 = config['directories']['video_directory']
+VIDEO_DIRECTORY2 = config['directories']['video_directory2']
 SECRET_KEY = config['settings']['secret_key']
 USERNAME = config['settings']['username']
 PASSWORD = generate_password_hash(config['settings']['password'])
@@ -71,42 +72,68 @@ def logout():
 @app.route('/')
 @login_required
 def home():
-    return render_template('index.html')
+    return render_template('directory_select.html')
 
-# @app.route('/reset_attempts')
-# def reset_attempts():
-#     session['attempts'] = 0
-#     session.pop('lockout_time', None)
-#     flash('Login attempts have been reset.')
-#     return redirect(url_for('login'))
+@app.route('/select_directory', methods=['POST'])
+@login_required
+def select_directory():
+    directory = request.form.get('directory')
+    return redirect(url_for('video_player', directory=directory))
+
+@app.route('/video_player/<directory>')
+@login_required
+def video_player(directory):
+    return render_template('index.html', directory=directory)
 
 @app.before_request
 def check_lockout():
-    if session.get('lockout_time') and datetime.now() >= session['lockout_time']:
-        session.pop('lockout_time', None)
-        session['attempts'] = 0
+    if 'lockout_time' in session and session['lockout_time']:
+        if datetime.now() >= session['lockout_time']:
+            session.pop('lockout_time', None)
+            session['attempts'] = 0
 
 @app.route('/videos', methods=['GET'])
+@login_required
 def get_videos():
+    directory = request.args.get('directory')
+    if directory == '1':
+        video_directory = VIDEO_DIRECTORY1
+    else:
+        video_directory = VIDEO_DIRECTORY2
+
     videos = []
-    for root, dirs, files in os.walk(VIDEO_DIRECTORY):
+    for root, dirs, files in os.walk(video_directory):
         for file in files:
             if file.endswith(('.mp4', '.avi', '.mkv')):
-                # Store relative paths from VIDEO_DIRECTORY
-                rel_dir = os.path.relpath(root, VIDEO_DIRECTORY)
+                rel_dir = os.path.relpath(root, video_directory)
                 rel_file = os.path.join(rel_dir, file)
                 videos.append(rel_file)
+
     random.seed(time.time())
     random.shuffle(videos)
     return jsonify(videos)
 
 @app.route('/video/<path:filename>', methods=['GET'])
+@login_required
 def get_video(filename):
-    return send_file(os.path.join(VIDEO_DIRECTORY, filename))
+    directory = request.args.get('directory')
+    if directory == '1':
+        video_directory = VIDEO_DIRECTORY1
+    else:
+        video_directory = VIDEO_DIRECTORY2
+
+    return send_file(os.path.join(video_directory, filename))
 
 @app.route('/delete/<path:filename>', methods=['DELETE'])
+@login_required
 def delete_video(filename):
-    file_path = os.path.join(VIDEO_DIRECTORY, filename)
+    directory = request.args.get('directory')
+    if directory == '1':
+        video_directory = VIDEO_DIRECTORY1
+    else:
+        video_directory = VIDEO_DIRECTORY2
+
+    file_path = os.path.join(video_directory, filename)
     if os.path.exists(file_path):
         os.remove(file_path)
         return '', 204

@@ -7,10 +7,15 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="logout">
-        {% if current_user.is_authenticated %}
+    <div class="top-bar">
+        <div class="back">
+            <a href="{{ url_for('home') }}">Back</a>
+        </div>
+        <div class="logout">
+            {% if current_user.is_authenticated %}
             <a href="{{ url_for('logout') }}">Logout</a>
-        {% endif %}
+            {% endif %}
+        </div>
     </div>
     <div id="videoContainer">
         <video id="videoPlayer" controls autoplay></video>
@@ -22,7 +27,26 @@
     
     <script>
         let currentVideo = '';
-        let logoutDiv = document.querySelector('.logout');
+        let controls = document.querySelector('#controls');
+        let topDiv = document.querySelector('.top-bar');
+        let directory = "{{ directory }}";
+        let videoPlayer = document.querySelector('#videoPlayer');
+
+        let hideControlsTimeout;
+
+        const hideControls = () => {
+            clearTimeout(hideControlsTimeout);
+            hideControlsTimeout = setTimeout(() => {
+                controls.style.display = 'none';
+                topDiv.style.display = 'none';
+            }, 2000);
+        };
+
+        const showControls = () => {
+            controls.style.display = 'block';
+            topDiv.style.display = 'block';
+            hideControls();
+        };
 
         document.getElementById('nextButton').removeEventListener('click', getVideo);
         document.getElementById('nextButton').addEventListener('click', getVideo);
@@ -30,12 +54,12 @@
         document.getElementById('deleteButton').addEventListener('click', delVideo);
 
         function getVideo() {
-            fetch('/videos')
+            fetch(`/videos?directory=${directory}`)
                 .then(response => response.json())
                 .then(videos => {
                     if (videos.length > 0) {
                         currentVideo = videos[0];
-                        document.getElementById('videoPlayer').src = `/video/${encodeURIComponent(currentVideo)}`;
+                        videoPlayer.src = `/video/${encodeURIComponent(currentVideo)}?directory=${directory}`;
                     } else {
                         alert('No videos found');
                     }
@@ -45,16 +69,14 @@
         function delVideo() {
             if (currentVideo) {
                 if (confirm("Are you sure?")) {
-                    const videoPlayer = document.getElementById('videoPlayer');
                     videoPlayer.pause();
                     videoPlayer.src = '';
                     videoPlayer.load();
 
-                    fetch(`/delete/${encodeURIComponent(currentVideo)}`, {
+                    fetch(`/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`, {
                         method: 'DELETE'
                     }).then(response => {
                         if (response.status === 204) {
-                            alert('Video deleted');
                             currentVideo = '';
                             getVideo();
                         } else {
@@ -65,26 +87,11 @@
             }
         }
 
-        const showControls = () => {
-            controls.style.display = 'block';
-            logoutDiv.style.display = 'block';
-            hideControls();
-        };
-
         videoPlayer.addEventListener('play', showControls);
         videoPlayer.addEventListener('pause', showControls);
         videoPlayer.addEventListener('click', showControls);
         videoPlayer.addEventListener('touchstart', showControls);
         videoPlayer.addEventListener('ended', getVideo);
-
-        let hideControlsTimeout;
-        const hideControls = () => {
-            clearTimeout(hideControlsTimeout);
-            hideControlsTimeout = setTimeout(() => {
-                controls.style.display = 'none';
-                logoutDiv.style.display = 'none';
-            }, 2000);
-        };
 
         videoPlayer.addEventListener('mousemove', showControls);
         videoPlayer.addEventListener('touchmove', showControls);
