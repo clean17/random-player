@@ -27,7 +27,7 @@ body, html {
     right: 10px;
     z-index: 2;
 }
-.top-bar a {
+.top-bar a, .back a {
     font-size: 16px;
     padding: 10px;
     margin: 5px;
@@ -39,7 +39,7 @@ body, html {
     opacity: 0.8;
     text-decoration: none;
 }
-.top-bar a:hover {
+.top-bar a:hover, .back a:hover {
     background-color: #0056b3;
 }
 #videoContainer {
@@ -73,4 +73,28 @@ body, html {
 }
 #controls button:hover {
     opacity: 1;
+}
+.input-size {
+    width: 100%;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 18px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+}
+.input-button-size {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #0056b3;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+}
+.input-button-size:hover {
+    background-color: #007BFF;
 }

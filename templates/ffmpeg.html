@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Page</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
+</head>
+<body>
+<div class="logout">
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('logout') }}">Logout</a>
+    {% endif %}
+</div>
+<div class="back">
+    <a href="{{ url_for('home') }}">Back</a>
+</div>
+<div class="container">
+    <h2>ffmpeg batch</h2>
+    <form action="{{ url_for('run_batch') }}" method="post">
+        <input type="text" id="clipboard_input" name="keyword" placeholder="Enter keyword" class="input-size">
+        <input type="hidden" id="hidden_input" name="clipboard_content">
+        <button type="button" onclick="pasteFromClipboard()" class="input-button-size">Paste from Clipboard</button>
+        <button type="submit" class="input-button-size">Run Batch</button>
+    </form>
+</div>
+<script>
+    function pasteFromClipboard() {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText()
+                .then(text => {
+                    if (text) {
+                        document.getElementById('hidden_input').value = text;
+                    }
+                })
+        }
+    }
+</script>
+</body>
+</html>

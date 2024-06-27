@@ -2,6 +2,7 @@ import os
 import random
 import configparser
 import time
+import subprocess
 from flask import Flask, jsonify, render_template, send_file, redirect, url_for, request, flash, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -15,6 +16,7 @@ with open('config.ini', 'r', encoding='utf-8') as configfile:
     config.read_file(configfile)
 VIDEO_DIRECTORY1 = config['directories']['video_directory']
 VIDEO_DIRECTORY2 = config['directories']['video_directory2']
+VIDEO_DIRECTORY3 = config['directories']['video_directory3']
 SECRET_KEY = config['settings']['secret_key']
 USERNAME = config['settings']['username']
 PASSWORD = generate_password_hash(config['settings']['password'])
@@ -69,6 +71,32 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+@app.route('/ffmpeg')
+@login_required
+def ffmpeg():
+    return render_template('ffmpeg.html')
+
+@app.route('/run_batch', methods=['POST'])
+def run_batch():
+    keyword = request.form.get('keyword')
+    clipboard_content = request.form.get('clipboard_content')
+    print(keyword)
+    print(clipboard_content)
+    if keyword and clipboard_content:
+        command = f'f:\\m\\ff.bat {keyword} "{clipboard_content}"'
+        try:
+            result = subprocess.run(command, shell=True, capture_output=True, text=True, encoding='utf-8')
+            flash(f'Command executed: {result.stdout}', 'success')
+        except subprocess.CalledProcessError as e:
+            flash(f'Error executing command: {e}', 'danger')
+        except UnicodeDecodeError as e:
+            flash(f'Encoding error: {e}', 'danger')
+        except IndexError as e:
+            flash(f'Index error: {e}', 'danger')
+    else:
+        flash('Keyword and clipboard content are required', 'warning')
+    return redirect(url_for('home'))
+
 @app.route('/')
 @login_required
 def home():
@@ -98,9 +126,10 @@ def get_videos():
     directory = request.args.get('directory')
     if directory == '1':
         video_directory = VIDEO_DIRECTORY1
-    else:
+    elif directory == '2':
         video_directory = VIDEO_DIRECTORY2
-
+    else :
+        video_directory = VIDEO_DIRECTORY3
     videos = []
     for root, dirs, files in os.walk(video_directory):
         for file in files:
@@ -119,8 +148,10 @@ def get_video(filename):
     directory = request.args.get('directory')
     if directory == '1':
         video_directory = VIDEO_DIRECTORY1
-    else:
+    elif directory == '2':
         video_directory = VIDEO_DIRECTORY2
+    else :
+        video_directory = VIDEO_DIRECTORY3
 
     return send_file(os.path.join(video_directory, filename))
 
@@ -130,8 +161,10 @@ def delete_video(filename):
     directory = request.args.get('directory')
     if directory == '1':
         video_directory = VIDEO_DIRECTORY1
-    else:
+    elif directory == '2':
         video_directory = VIDEO_DIRECTORY2
+    else :
+        video_directory = VIDEO_DIRECTORY3
 
     file_path = os.path.join(video_directory, filename)
     if os.path.exists(file_path):
@@ -140,5 +173,5 @@ def delete_video(filename):
     return '', 404
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=8090)
-
+#     app.run(debug=True, host='0.0.0.0', port=8090)
+    app.run(debug=False, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))

@@ -39,3 +39,29 @@ video_directory = C:/[dirPath]
 ### encodeURIComponent
 JavaScript의 내장 함수로 URI의 특정 구성 요소를 인코딩하여 안전하게 전달한다<br>
 의미를 가지는 일부문자를 이스케이프한다
+
+### 인증서 생성
+```bash
+$ openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
+```
+```bash
+Generating a RSA private key
+................................................++++
+........................................................................................++++
+writing new private key to 'key.pem'
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Country Name (2 letter code) [AU]:ko
+State or Province Name (full name) [Some-State]:suwon
+Locality Name (eg, city) []:suwon
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:local
+Organizational Unit Name (eg, section) []:software
+Common Name (e.g. server FQDN or YOUR name) []:localhost
+Email Address []:localhost@com
+```

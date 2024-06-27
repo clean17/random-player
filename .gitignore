@@ -12,3 +12,5 @@ env/
 *.sqlite3
 .DS_Store
 *.ini
+*.pem
+*.ts
