@@ -1,9 +1,10 @@
 import json
 import os
+import signal
 import subprocess
 import time
 import shutil
-
+import threading
 class TaskManager:
     def __init__(self, work_directory):
         self.tasks = []
@@ -11,17 +12,15 @@ class TaskManager:
         self.load_tasks()
 
     def start_task(self, command, keyword):
-        # Ensure the command runs through cmd.exe in Windows environments
         if command.endswith(".bat"):
             command = f"cmd.exe /c \"{command}\""
-        process = subprocess.Popen(command, shell=True, cwd=self.work_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process = subprocess.Popen(command, shell=True, cwd=self.work_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
         video_path = self.extract_video_path(command)
         try:
-            thumbnail_path = self.generate_thumbnail(video_path)
+            self.start_thumbnail_generation(video_path)
         except Exception as e:
-            thumbnail_path = None
-            print(f"Failed to generate thumbnail for {video_path}: {e}")
-        task_info = {'pid': process.pid, 'keyword': keyword, 'command': command, 'thumbnail': thumbnail_path, 'video_path': video_path}
+            print(f"Failed to generate thumbnails for {video_path}: {e}")
+        task_info = {'pid': process.pid, 'keyword': keyword, 'command': command, 'video_path': video_path}
         self.tasks.append({'process': process, 'info': task_info})
         self.save_tasks()
         return process.pid
@@ -39,27 +38,21 @@ class TaskManager:
         shutil.copy(thumbnail_path, static_thumbnail_path)
         return static_thumbnail_path
 
-    def generate_thumbnails(self, video_path, interval=60, duration=None):
-        if duration:
-            total_intervals = duration // interval
-        else:
-            # 비디오 전체 길이를 자동으로 계산하는 로직이 필요할 수 있음
-            total_intervals = 100  # 임시 값
-
-        for i in range(total_intervals):
-            timestamp = i * interval
-            output_filename = f"thumbnail_{timestamp:03d}.png"
-            command = [
-                "ffmpeg",
-                "-ss", str(timestamp),
-                "-i", video_path,
-                "-vframes", "1",
-                "-q:v", "2",  # 품질 설정
-                output_filename
-            ]
-            subprocess.run(command)
-            print(f"Generated {output_filename}")
+    def generate_thumbnails(self, video_path, interval=60):
+        while True:
+            thumbnail_name = f"thumbnail_{int(time.time())}.png"
+            thumbnail_path = os.path.join(self.work_directory, thumbnail_name)
+            static_thumbnail_path = os.path.join('static', thumbnail_name)
+            command = f"ffmpeg -i \"{video_path}\" -ss 00:00:01.000 -vframes 1 \"{thumbnail_path}\""
+            subprocess.run(command, shell=True)
+            shutil.copy(thumbnail_path, static_thumbnail_path)
+            print(f"Generated {static_thumbnail_path}")
             time.sleep(interval)
+
+    def start_thumbnail_generation(self, video_path):
+        thread = threading.Thread(target=self.generate_thumbnails, args=(video_path,))
+        thread.daemon = True  # 데몬 쓰레드로 설정하여 메인 프로그램이 종료될 때 자동으로 종료되도록 함
+        thread.start()
 
     def get_running_tasks(self):
         self.tasks = [task for task in self.tasks if task['process'].poll() is None]
@@ -68,7 +61,7 @@ class TaskManager:
     def stop_task(self, pid):
         task = next((task for task in self.tasks if task['process'].pid == pid), None)
         if task:
-            task['process'].terminate()
+            os.kill(task['process'].pid, signal.SIGTERM)
             self.tasks.remove(task)
             self.save_tasks()
 
@@ -84,8 +77,9 @@ class TaskManager:
                     tasks_info = json.load(f)
                     for task_info in tasks_info:
                         try:
-                            process = subprocess.Popen(task_info['command'], shell=True, cwd=self.work_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            process = subprocess.Popen(task_info['command'], shell=True, cwd=self.work_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
                             self.tasks.append({'process': process, 'info': task_info})
+                            self.start_thumbnail_generation(task_info['video_path'])
                         except Exception as e:
                             print(f"Failed to load task {task_info['pid']}: {e}")
             except (json.JSONDecodeError, FileNotFoundError):
