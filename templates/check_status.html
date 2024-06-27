@@ -1,0 +1,139 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Check FFmpeg Status</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+        <style>
+            body, html {
+                margin: 0;
+                padding: 0;
+                background-color: #ffffff; /* 변경된 배경색 */
+            }
+            .logout, .back {
+                position: absolute;
+                top: 10px;
+                padding: 10px;
+                margin: 5px;
+                background-color: black;
+                color: white;
+                border-radius: 5px;
+                text-decoration: none;
+                cursor: pointer;
+            }
+            .logout {
+                right: 10px;
+            }
+            .back {
+                left: 10px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            table, th, td {
+                border: 1px solid black;
+            }
+            th, td {
+                padding: 15px;
+                text-align: left;
+            }
+            th {
+                background-color: #f2f2f2;
+            }
+            .loading {
+                width: 50px;
+                height: 50px;
+            }
+            .thumbnail {
+                width: 100px;
+                height: auto;
+            }
+            .stop-button {
+                width: 100%;
+                padding: 15px;
+                border: none;
+                border-radius: 5px;
+                background-color: #0056b3;
+                color: white;
+                font-size: 18px;
+                cursor: pointer;
+                margin-bottom: 10px;
+            }
+            .stop-button:hover {
+                background-color: #007BFF;
+            }
+        </style>
+    </head>
+    <body>
+    <a href="{{ url_for('auth.logout') }}" class="logout">Logout</a>
+    <a href="{{ url_for('main.home') }}" class="back">Back</a>
+    <div class="container">
+        <h2>FFmpeg Status</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>PID</th>
+                <th>Keyword</th>
+                <th>Thumbnail</th>
+                <th>Status</th>
+                <th>File Size</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for task in tasks %}
+            <tr id="task-{{ task.process.pid }}">
+                <td>{{ task.process.pid }}</td>
+                <td>{{ task.info.keyword }}</td>
+                <td>
+                    {% if task.info.thumbnail %}
+                    {{task.info.thumbnail}}
+    <!--                <img src="{{ url_for('external_thumbnail', filename=task.info.thumbnail.split('/')[-1]) }}" class="thumbnail">-->
+                    <img src="{{ url_for('external_thumbnail', filename=task.info.thumbnail.replace(':', '')) }}" class="thumbnail">
+                    {% else %}
+                    No thumbnail
+                    {% endif %}
+                </td>
+                <td>
+                    <img src="{{ url_for('static', filename='loading.svg') }}" class="loading" id="loading-{{ task.process.pid }}">
+                </td>
+                <td id="file-size-{{ task.process.pid }}">Calculating...</td>
+                <td>
+                    <form action="{{ url_for('stop_task', pid=task.process.pid) }}" method="post" style="display:inline;">
+                        <button type="submit" class="stop-button">Stop</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <script>
+        function updateProgressBars() {
+            fetch("{{ url_for('task_status') }}")
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(task => {
+                        let loadingImg = document.getElementById(`loading-${task.pid}`);
+                        let fileSizeElement = document.getElementById(`file-size-${task.pid}`);
+                        if (task.running) {
+                            loadingImg.style.display = "block";
+                            fetch(`{{ url_for('get_file_size') }}?path=${task.video_path}`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    fileSizeElement.innerText = data.size;
+                                });
+                        } else {
+                            loadingImg.style.display = "none";
+                            document.getElementById(`task-${task.pid}`).remove();
+                        }
+                    });
+                });
+        }
+
+        setInterval(updateProgressBars, 1000);
+    </script>
+    </body>
+    </html>

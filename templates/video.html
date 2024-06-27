@@ -9,11 +9,11 @@
 <body>
     <div class="top-bar">
         <div class="back">
-            <a href="{{ url_for('home') }}">Back</a>
+            <a href="{{ url_for('main.home') }}">Back</a>
         </div>
         <div class="logout">
             {% if current_user.is_authenticated %}
-            <a href="{{ url_for('logout') }}">Logout</a>
+            <a href="{{ url_for('auth.logout') }}">Logout</a>
             {% endif %}
         </div>
     </div>
@@ -54,12 +54,12 @@
         document.getElementById('deleteButton').addEventListener('click', delVideo);
 
         function getVideo() {
-            fetch(`/videos?directory=${directory}`)
+            fetch(`/video/videos?directory=${directory}`)
                 .then(response => response.json())
                 .then(videos => {
                     if (videos.length > 0) {
                         currentVideo = videos[0];
-                        videoPlayer.src = `/video/${encodeURIComponent(currentVideo)}?directory=${directory}`;
+                        videoPlayer.src = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`;
                     } else {
                         alert('No videos found');
                     }
@@ -73,7 +73,7 @@
                     videoPlayer.src = '';
                     videoPlayer.load();
 
-                    fetch(`/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`, {
+                    fetch(`/video/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`, {
                         method: 'DELETE'
                     }).then(response => {
                         if (response.status === 204) {
