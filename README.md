@@ -57,11 +57,11 @@ There are quite a few fields but you can leave some blank
 For some fields there will be a default value,
 If you enter '.', the field will be left blank.
 -----
-Country Name (2 letter code) [AU]:ko
-State or Province Name (full name) [Some-State]:suwon
-Locality Name (eg, city) []:suwon
-Organization Name (eg, company) [Internet Widgits Pty Ltd]:local
-Organizational Unit Name (eg, section) []:software
-Common Name (e.g. server FQDN or YOUR name) []:localhost
-Email Address []:localhost@com
+Country Name (2 letter code) [AU]:
+State or Province Name (full name) [Some-State]:
+Locality Name (eg, city) []:
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:
+Organizational Unit Name (eg, section) []:
+Common Name (e.g. server FQDN or YOUR name) []:
+Email Address []:
 ```
