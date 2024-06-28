@@ -56,6 +56,10 @@
         .actions a:hover {
             text-decoration: underline;
         }
+        .thumbnail {
+            width: 100px;
+            height: auto;
+        }
     </style>
 </head>
 <body>
@@ -77,15 +81,23 @@
                 <th>PID</th>
                 <th>File Name</th>
                 <th>Last Modified Time</th>
+                <th>Thumbnail</th>
                 <th>Action</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="taskTableBody">
             {% for task in tasks %}
             <tr>
                 <td>{{ task.pid }}</td>
                 <td>{{ task.file_name }}</td>
                 <td>{{ task.last_modified_time }}</td>
+                <td>
+                    {% if task.thumbnail_path %}
+                    <img src="{{ task.thumbnail_path }}" class="thumbnail">
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
                 <td>
                     <form action="{{ url_for('ffmpeg.kill_task', pid=task.pid) }}" method="post">
                         <button type="submit">Kill</button>
@@ -96,5 +108,59 @@
         </tbody>
     </table>
 </div>
+<script>
+    function fetchTasks() {
+        fetch('{{ url_for("ffmpeg.get_tasks") }}')
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('taskTableBody');
+                tbody.innerHTML = '';
+                data.forEach(task => {
+                    const row = document.createElement('tr');
+
+                    const pidCell = document.createElement('td');
+                    pidCell.textContent = task.pid;
+                    row.appendChild(pidCell);
+
+                    const fileNameCell = document.createElement('td');
+                    fileNameCell.textContent = task.file_name;
+                    row.appendChild(fileNameCell);
+
+                    const lastModifiedCell = document.createElement('td');
+                    lastModifiedCell.textContent = task.last_modified_time;
+                    row.appendChild(lastModifiedCell);
+
+                    const thumbnailCell = document.createElement('td');
+                    if (task.thumbnail_path) {
+                        const img = document.createElement('img');
+                        img.src = task.thumbnail_path;
+                        img.className = 'thumbnail';
+                        thumbnailCell.appendChild(img);
+                    } else {
+                        thumbnailCell.textContent = 'N/A';
+                    }
+                    row.appendChild(thumbnailCell);
+
+                    const actionCell = document.createElement('td');
+                    const form = document.createElement('form');
+                    form.action = `{{ url_for('ffmpeg.kill_task', pid=0) }}`.replace('0', task.pid);
+                    form.method = 'post';
+
+                    const button = document.createElement('button');
+                    button.type = 'submit';
+                    button.textContent = 'Kill';
+                    form.appendChild(button);
+
+                    actionCell.appendChild(form);
+                    row.appendChild(actionCell);
+
+                    tbody.appendChild(row);
+                });
+            });
+    }
+
+    setInterval(fetchTasks, 1000);
+    document.addEventListener('DOMContentLoaded', fetchTasks);
+</script>
 </body>
 </html>

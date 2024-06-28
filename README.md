@@ -65,3 +65,7 @@ Organizational Unit Name (eg, section) []:
 Common Name (e.g. server FQDN or YOUR name) []:
 Email Address []:
 ```
+### win32 설치
+```bash
+pip install pypiwin32
+```
