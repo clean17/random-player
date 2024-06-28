@@ -4,8 +4,66 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Status</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/status.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+            overflow-x: auto; /* 모바일에서 그리드가 깨지지 않도록 설정 */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            table-layout: fixed; /* 셀 크기 고정 */
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            word-wrap: break-word; /* 긴 단어나 URL이 자동으로 줄바꿈되도록 설정 */
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .actions a {
+            text-decoration: none;
+            color: #007BFF;
+            margin: 0 10px;
+        }
+        .actions a:hover {
+            text-decoration: underline;
+        }
+        .thumbnail {
+            width: 100px;
+            height: auto;
+        }
+    </style>
 </head>
 <body>
 <div class="container">
@@ -22,34 +80,34 @@
     <h2>Task Status</h2>
     <table>
         <thead>
-            <tr>
-                <th>PID</th>
-                <th>File Name</th>
-                <th>Last Modified Time</th>
-                <th>Thumbnail</th>
-                <th>Action</th>
-            </tr>
+        <tr>
+            <th>PID</th>
+            <th>File Name</th>
+            <th>Last Modified Time</th>
+            <th>Thumbnail</th>
+            <th>Action</th>
+        </tr>
         </thead>
         <tbody id="taskTableBody">
-            {% for task in tasks %}
-            <tr>
-                <td>{{ task.pid }}</td>
-                <td>{{ task.file_name }}</td>
-                <td>{{ task.last_modified_time }}</td>
-                <td>
-                    {% if task.thumbnail_path %}
-                    <img src="{{ task.thumbnail_path }}" class="thumbnail">
-                    {% else %}
-                    N/A
-                    {% endif %}
-                </td>
-                <td>
-                    <form action="{{ url_for('ffmpeg.kill_task', pid=task.pid) }}" method="post">
-                        <button type="submit">Kill</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
+        {% for task in tasks %}
+        <tr>
+            <td>{{ task.pid }}</td>
+            <td>{{ task.file_name }}</td>
+            <td>{{ task.last_modified_time }}</td>
+            <td>
+                {% if task.thumbnail_path %}
+                <img src="{{ task.thumbnail_path }}" class="thumbnail">
+                {% else %}
+                N/A
+                {% endif %}
+            </td>
+            <td>
+                <form action="{{ url_for('ffmpeg.kill_task', pid=task.pid) }}" method="post">
+                    <button type="submit">Kill</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
         </tbody>
     </table>
 </div>
@@ -104,7 +162,7 @@
             });
     }
 
-    setInterval(fetchTasks, 1000);
+    setInterval(fetchTasks, 3000);
     document.addEventListener('DOMContentLoaded', fetchTasks);
 </script>
 </body>
