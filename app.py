@@ -7,7 +7,7 @@ from flask_login import LoginManager
 
 from auth import auth, User, users
 from config import load_config
-from ffmpeg import m_ffmpeg
+from ffmpeg_handle import m_ffmpeg
 from main import main
 from video import video
 
