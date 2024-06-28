@@ -1,10 +1,10 @@
 import os
 from datetime import datetime
-
+import signal
+import sys
 from flask import Flask
 from flask import session
 from flask_login import LoginManager
-
 from auth import auth, User, users
 from config import load_config
 from ffmpeg_handle import m_ffmpeg
@@ -46,7 +46,12 @@ def check_server_restarted():
         return True
     return False
 
+def signal_handler(sig, frame):
+    print("Exiting server...")
+    os.system('taskkill /f /im python.exe')
+    sys.exit(0)
 
 if __name__ == '__main__':
 #     app.run(debug=True, host='0.0.0.0', port=8090)
+    signal.signal(signal.SIGINT, signal_handler)
     app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
