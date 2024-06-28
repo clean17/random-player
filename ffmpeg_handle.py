@@ -1,7 +1,7 @@
 import os
 import signal
 import subprocess
-from flask import Blueprint, jsonify, render_template, request, redirect, url_for, send_from_directory
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from flask_login import login_required
 from config import settings
 from task_manager import tasks, Task, current_date
@@ -35,9 +35,9 @@ def status():
 @m_ffmpeg.route('/kill_task/<int:pid>', methods=['POST'])
 @login_required
 def kill_task(pid):
+    os.kill(pid, signal.SIGTERM)
     for task in tasks:
         if task.pid == pid:
-            task.terminate()
             tasks.remove(task)
             break
     return redirect(url_for('ffmpeg.status'))
@@ -50,12 +50,6 @@ def get_tasks():
         task_list.append({
             'pid': task.pid,
             'file_name': task.file_name,
-            'last_modified_time': task.last_modified_time.strftime('%Y-%m-%d %H:%M:%S') if task.last_modified_time else 'N/A',
-            'thumbnail_path': url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path)) if task.thumbnail_path else None
+            'last_modified_time': task.last_modified_time.strftime('%Y-%m-%d %H:%M:%S') if task.last_modified_time else 'N/A'
         })
     return jsonify(task_list)
-
-@m_ffmpeg.route('/thumbnails/<path:filename>')
-@login_required
-def thumbnail(filename):
-    return send_from_directory(settings['WORK_DIRECTORY'], filename)

@@ -1,0 +1,57 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f9f9f9;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+.container {
+    background-color: #fff;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 800px;
+    text-align: center;
+    overflow-x: auto; /* 모바일에서 그리드가 깨지지 않도록 설정 */
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    table-layout: fixed; /* 셀 크기 고정 */
+}
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    word-wrap: break-word; /* 긴 단어나 URL이 자동으로 줄바꿈되도록 설정 */
+}
+th {
+    background-color: #f2f2f2;
+}
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+tr:hover {
+    background-color: #f1f1f1;
+}
+.actions {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+.actions a {
+    text-decoration: none;
+    color: #007BFF;
+    margin: 0 10px;
+}
+.actions a:hover {
+    text-decoration: underline;
+}
+.thumbnail {
+    width: 100px;
+    height: auto;
+}
