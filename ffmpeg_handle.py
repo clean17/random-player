@@ -37,7 +37,7 @@ def status():
 def kill_task(pid):
     for task in tasks:
         if task.pid == pid:
-            task.terminate()
+            Task.terminate(pid)
             tasks.remove(task)
             break
     return redirect(url_for('ffmpeg.status'))

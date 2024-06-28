@@ -12,7 +12,7 @@ import re
 current_date = datetime.now().strftime('%y%m%d')
 
 # BAT 파일을 실행할 때 keyword와 url 인수를 전달
-keyword = "output6"
+keyword = "output"
 url = ""
 
 # BAT 파일이 위치한 디렉토리

@@ -16,42 +16,68 @@ body {
     width: 90%;
     max-width: 800px;
     text-align: center;
-    overflow-x: auto; /* 모바일에서 그리드가 깨지지 않도록 설정 */
+    overflow-x: auto;
 }
 table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
-    table-layout: fixed; /* 셀 크기 고정 */
+    table-layout: fixed;
 }
 th, td {
     border: 1px solid #ddd;
     padding: 8px;
-    word-wrap: break-word; /* 긴 단어나 URL이 자동으로 줄바꿈되도록 설정 */
+    text-align: center;
 }
 th {
     background-color: #f2f2f2;
 }
-tr:nth-child(even) {
+.task-row, .task-detail {
     background-color: #f9f9f9;
 }
-tr:hover {
-    background-color: #f1f1f1;
-}
-.actions {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 20px;
-}
-.actions a {
-    text-decoration: none;
-    color: #007BFF;
-    margin: 0 10px;
-}
-.actions a:hover {
-    text-decoration: underline;
+.task-row:nth-child(odd), .task-detail:nth-child(odd) {
+    background-color: #fff;
 }
 .thumbnail {
-    width: 100px;
+    width: 200px; /* Larger thumbnail */
     height: auto;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+.button:hover {
+    background-color: #0056b3;
+}
+.actions {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: calc(100% - 40px); /* Adjust width taking into account padding */
+    display: flex;
+    justify-content: space-between; /* This will push the logout to the right */
+    margin-bottom: 20px;
+}
+.back a, .logout a {
+    font-size: 16px;
+    padding: 10px;
+    margin: 5px;
+    cursor: pointer;
+    background-color: black;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    opacity: 0.8;
+    text-decoration: none;
+}
+.back a:hover, .logout a:hover {
+    background-color: #0056b3;
 }

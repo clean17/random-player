@@ -5,65 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Status</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .container {
-            background-color: #fff;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            width: 90%;
-            max-width: 800px;
-            text-align: center;
-            overflow-x: auto; /* 모바일에서 그리드가 깨지지 않도록 설정 */
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            table-layout: fixed; /* 셀 크기 고정 */
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            word-wrap: break-word; /* 긴 단어나 URL이 자동으로 줄바꿈되도록 설정 */
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-        .actions {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        .actions a {
-            text-decoration: none;
-            color: #007BFF;
-            margin: 0 10px;
-        }
-        .actions a:hover {
-            text-decoration: underline;
-        }
-        .thumbnail {
-            width: 100px;
-            height: auto;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/status.css') }}">
 </head>
 <body>
 <div class="container">
@@ -81,33 +23,11 @@
     <table>
         <thead>
         <tr>
-            <th>PID</th>
-            <th>File Name</th>
-            <th>Last Modified Time</th>
-            <th>Thumbnail</th>
-            <th>Action</th>
+            <th colspan="5">Task Details</th>
         </tr>
         </thead>
         <tbody id="taskTableBody">
-        {% for task in tasks %}
-        <tr>
-            <td>{{ task.pid }}</td>
-            <td>{{ task.file_name }}</td>
-            <td>{{ task.last_modified_time }}</td>
-            <td>
-                {% if task.thumbnail_path %}
-                <img src="{{ task.thumbnail_path }}" class="thumbnail">
-                {% else %}
-                N/A
-                {% endif %}
-            </td>
-            <td>
-                <form action="{{ url_for('ffmpeg.kill_task', pid=task.pid) }}" method="post">
-                    <button type="submit">Kill</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
+        <!-- Dynamic rows will be added by JavaScript -->
         </tbody>
     </table>
 </div>
@@ -119,21 +39,11 @@
                 const tbody = document.getElementById('taskTableBody');
                 tbody.innerHTML = '';
                 data.forEach(task => {
-                    const row = document.createElement('tr');
-
-                    const pidCell = document.createElement('td');
-                    pidCell.textContent = task.pid;
-                    row.appendChild(pidCell);
-
-                    const fileNameCell = document.createElement('td');
-                    fileNameCell.textContent = task.file_name;
-                    row.appendChild(fileNameCell);
-
-                    const lastModifiedCell = document.createElement('td');
-                    lastModifiedCell.textContent = task.last_modified_time;
-                    row.appendChild(lastModifiedCell);
+                    const thumbnailRow = document.createElement('tr');
+                    const detailRow = document.createElement('tr');
 
                     const thumbnailCell = document.createElement('td');
+                    thumbnailCell.colSpan = "3";
                     if (task.thumbnail_path) {
                         const img = document.createElement('img');
                         img.src = task.thumbnail_path;
@@ -142,27 +52,38 @@
                     } else {
                         thumbnailCell.textContent = 'N/A';
                     }
-                    row.appendChild(thumbnailCell);
+                    thumbnailRow.appendChild(thumbnailCell);
 
                     const actionCell = document.createElement('td');
                     const form = document.createElement('form');
                     form.action = `{{ url_for('ffmpeg.kill_task', pid=0) }}`.replace('0', task.pid);
                     form.method = 'post';
-
                     const button = document.createElement('button');
-                    button.type = 'submit';
+                    button.className = 'button';
                     button.textContent = 'Kill';
                     form.appendChild(button);
-
                     actionCell.appendChild(form);
-                    row.appendChild(actionCell);
+                    actionCell.colSpan = "2";
+                    thumbnailRow.appendChild(actionCell);
 
-                    tbody.appendChild(row);
+                    const pidCell = document.createElement('td');
+                    pidCell.textContent = task.pid;
+                    const fileNameCell = document.createElement('td');
+                    fileNameCell.textContent = task.file_name;
+                    fileNameCell.colSpan = '2';
+                    const lastModifiedCell = document.createElement('td');
+                    lastModifiedCell.colSpan = '2';
+                    lastModifiedCell.textContent = task.last_modified_time;
+                    detailRow.appendChild(pidCell);
+                    detailRow.appendChild(fileNameCell);
+                    detailRow.appendChild(lastModifiedCell);
+
+                    tbody.appendChild(thumbnailRow);
+                    tbody.appendChild(detailRow);
                 });
             });
     }
-
-    setInterval(fetchTasks, 3000);
+    setInterval(fetchTasks, 3000); // Refresh every 3 seconds
     document.addEventListener('DOMContentLoaded', fetchTasks);
 </script>
 </body>

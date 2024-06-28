@@ -1,11 +1,9 @@
+import cmd
 import threading
 import time
 import os
 import glob
 import subprocess
-import signal
-import win32api
-import win32con
 from datetime import datetime, timedelta
 
 tasks = []
@@ -19,8 +17,10 @@ class Task:
         self.file_name = None
         self.thumbnail_path = None
         self.thumbnail_update_time = None
-        self.creation_time = None
+        # self.creation_time = None
         self.initial_thumbnail_created = False
+
+        self.creation_time = datetime.now()  # 예시로 현재 시간을 사용
 
     def update_last_modified(self):
         latest_file = self.get_latest_file()
@@ -42,32 +42,48 @@ class Task:
         if self.file_name and self.creation_time:
             if not self.initial_thumbnail_created:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
-                initial_thumbnail_path = os.path.join(self.work_directory, self.file_name.replace('.ts', '_1sec.jpg'))
+                initial_thumbnail_path = os.path.join(self.work_directory, self.file_name.replace('.ts', '_0s.jpg'))
                 initial_cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss 1 -vframes 1 {initial_thumbnail_path}"
-                subprocess.call(initial_cmd, shell=True)
-                self.thumbnail_path = initial_thumbnail_path
-                self.initial_thumbnail_created = True
+                print(f"Executing command: {initial_cmd}")
+                result = subprocess.run(initial_cmd, shell=True)
+                print(f"Command result: {result.returncode}")
+                if result.returncode == 0:
+                    self.thumbnail_path = initial_thumbnail_path
+                    self.initial_thumbnail_created = True
+                    print(f"Initial thumbnail created at {self.thumbnail_path}")
+                else:
+                    print("Failed to create initial thumbnail")
 
             current_time = datetime.now()
             # 이후 썸네일은 파일 생성 시간으로부터 매 분마다 생성
             if not self.thumbnail_update_time or (current_time - self.thumbnail_update_time).seconds >= 60:
                 thumbnail_time = self.creation_time + timedelta(seconds=60 * (self.creation_time.minute + 1))  # 첫 번째 썸네일은 생성 후 1분
+                print(f"########################################### {thumbnail_time} ##############################################")
                 while thumbnail_time < current_time:
-                    thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_{thumbnail_time.minute}min.jpg")
+                    thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_{thumbnail_time.minute}.jpg")
                     cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {thumbnail_time.minute * 60} -vframes 1 {thumbnail_path}"
-                    subprocess.call(cmd, shell=True)
-                    self.thumbnail_path = thumbnail_path
+                    print(f"Executing command: {cmd}")
+                    result = subprocess.run(cmd, shell=True)
+                    print(f"Command result: {result.returncode}")
+                    if result.returncode == 0:
+                        self.thumbnail_path = thumbnail_path
+                        print(f"Thumbnail created at {self.thumbnail_path}")
+                    else:
+                        print(f"Failed to create thumbnail at {thumbnail_time.minute} minute mark")
                     thumbnail_time += timedelta(minutes=1)
 
                 self.thumbnail_update_time = current_time
-
-    def terminate(self):
+                print(f"Updated thumbnail update time to {self.thumbnail_update_time}")
+    @staticmethod
+    def terminate(pid):
+        """특정 PID와 그 자식 프로세스를 강제로 종료합니다."""
         try:
-            # 프로세스 그룹에 CTRL+C 이벤트 전송
-            if self.process.pid > 0:  # 유효한 PID가 있는지 확인
-                win32api.GenerateConsoleCtrlEvent(win32con.CTRL_C_EVENT, -self.process.pid)  # 프로세스 그룹 ID에 음수를 사용
+            subprocess.run(['taskkill', '/PID', str(pid), '/F', '/T'], check=True)
+            print(f"Process {pid} and its children have been successfully terminated.")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to terminate process {pid} and its children: {e}")
         except Exception as e:
-            print("Failed to send CTRL+C:", e)
+            print(f"An error occurred: {e}")
 
 
 # 현재 날짜를 YYMMDD 형식으로 가져오기
