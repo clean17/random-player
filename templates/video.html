@@ -41,6 +41,29 @@
 
         let hideControlsTimeout;
 
+        function setVideoOptions(vodUrl, videoFileType) {
+            var videoOptions = {
+                sources: [
+                    {
+                        src: vodUrl,
+                        type: videoFileType
+                    }
+                ],
+                controls: true, // 동영상 제어를 위한 컨트롤 바 제공 여부
+                playsinline: true, // 웹 브라우저 환경의 재생 형태
+                muted: false, // 최초 재생시 무음인지
+                preload: "auto", // 비디오 데이터를 즉시 다운로드 시작할 지 여부
+                controlBar: {
+                    playToggle: true, // 재생, 일시정지 토글
+                    pictureInPictureToggle: true, // pip모드
+                    remainingTimeDisplay: true, // 남은 시간 표시
+                    progressControl: true // 재생 진행바
+                },
+            };
+            return videoOptions;
+        }
+
+
         const hideControls = () => {
             clearTimeout(hideControlsTimeout);
             hideControlsTimeout = setTimeout(() => {
@@ -72,6 +95,7 @@
                         let mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
                         videoPlayer.querySelector('source').src = videoUrl;
                         document.title = currentVideo.replace(/.\\/g,'')
+                        player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
                         player.src({ type: mimeType, src: videoUrl });
                         player.load();
                         player.on('loadeddata', function() {
@@ -114,7 +138,7 @@
         videoPlayer.addEventListener('touchmove', showControls);
 
         function initPage() {
-            player = videojs('videoPlayer');
+            // player = videojs('videoPlayer');
             getVideo();
         }
 
