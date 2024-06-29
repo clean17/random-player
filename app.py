@@ -32,12 +32,18 @@ def handle_server_restart():
             session['attempts'] = 0
     if check_server_restarted():
         session.clear()
+   # load_tasks_from_json_file()
 
 @login_manager.user_loader
 def load_user(user_id):
     if user_id in users:
         return User(user_id)
     return None
+
+# 서버 종료 시 파일에 작업 저장
+# @app.teardown_appcontext
+# def teardown_appcontext_func(exception=None):
+#     save_tasks_to_json_file()
 
 def check_server_restarted():
     restart_flag = 'server_status.txt'

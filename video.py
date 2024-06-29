@@ -39,6 +39,7 @@ def get_videos():
                 rel_file = os.path.join(rel_dir, file)
                 videos.append(rel_file)
 
+    # print('############### video_list ###############')
     random.seed(time.time())
     random.shuffle(videos)
     return jsonify(videos)
@@ -92,6 +93,7 @@ def generate_ffmpeg_command(input_path, start_time, output_codec='libx264'):
 
 @video.route('/stream/<path:filename>', methods=['GET'])
 def video_stream(filename):
+    print('############### stream ###################')
     directory = request.args.get('directory')
     video_directory = settings['VIDEO_DIRECTORY' + directory]
     file_path = os.path.join(video_directory, filename)
@@ -113,6 +115,7 @@ def video_stream(filename):
             start_byte = int(match.group(1))
             start_time = start_byte / 1000  # FFmpeg 시간 설정 (초 단위)
 
+    start_time = start_byte / 1000
     command = generate_ffmpeg_command(file_path, start_time, output_codec)
 
     # FFmpeg 프로세스 시작

@@ -4,7 +4,7 @@ import subprocess
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, send_from_directory
 from flask_login import login_required
 from config import settings
-from task_manager import tasks, Task, current_date, save_tasks_to_file
+from task_manager import tasks, Task, current_date
 
 m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
 
@@ -24,7 +24,6 @@ def run_batch():
     cmd = f"cmd /c \"{settings['FFMPEG_SCRIPT_PATH']} {keyword} \"{url}\"\""
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True, encoding='utf-8')
     tasks.append(Task(process.pid, file_pattern, settings['WORK_DIRECTORY']))
-    save_tasks_to_file()
 
     return redirect(url_for('ffmpeg.status'))
 
@@ -40,7 +39,6 @@ def kill_task(pid):
         if task.pid == pid:
             Task.terminate(pid)
             tasks.remove(task)
-            save_tasks_to_file()
             break
     return redirect(url_for('ffmpeg.status'))
 

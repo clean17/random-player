@@ -13,6 +13,7 @@ def load_config():
         'VIDEO_DIRECTORY2': config['directories']['video_directory2'],
         'VIDEO_DIRECTORY3': config['directories']['video_directory3'],
         'VIDEO_DIRECTORY4': config['directories']['video_directory4'],
+        'VIDEO_DIRECTORY5': config['directories']['video_directory5'],
         'SECRET_KEY': config['settings']['secret_key'],
         'USERNAME': config['settings']['username'],
         'PASSWORD': generate_password_hash(config['settings']['password']),
