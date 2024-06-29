@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Random Video Player</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://vjs.zencdn.net/7.17.0/video-js.css" rel="stylesheet" />
 </head>
 <body>
     <div class="top-bar">
@@ -18,14 +19,20 @@
         </div>
     </div>
     <div id="videoContainer">
-        <video id="videoPlayer" controls autoplay></video>
+<!--        <video id="videoPlayer" controls autoplay></video>-->
+        <video id="videoPlayer" class="video-js vjs-default-skin" controls preload="auto">
+            <source src="" type="video/mp4">
+            Your browser does not support HTML5 video.
+        </video>
         <div id="controls">
             <button id="deleteButton">Delete</button>
             <button id="nextButton">Next</button>
         </div>
     </div>
-    
+
+    <script src="https://vjs.zencdn.net/7.17.0/video.min.js"></script>
     <script>
+        let player;
         let currentVideo = '';
         let controls = document.querySelector('#controls');
         let topDiv = document.querySelector('.top-bar');
@@ -59,7 +66,15 @@
                 .then(videos => {
                     if (videos.length > 0) {
                         currentVideo = videos[0];
-                        videoPlayer.src = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`;
+                        let url = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`;
+                        let fileExtension = currentVideo.split('.').pop();
+                        let mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
+                        videoPlayer.querySelector('source').src = url;
+                        player.src({ type: mimeType, src: url });
+                        player.load();
+                        player.on('loadeddata', function() {
+                            player.play();
+                        });
                     } else {
                         alert('No videos found');
                     }
@@ -97,6 +112,7 @@
         videoPlayer.addEventListener('touchmove', showControls);
 
         function initPage() {
+            player = videojs('videoPlayer');
             getVideo();
         }
 
