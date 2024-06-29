@@ -1,15 +1,16 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import signal
 import sys
-from flask import Flask
-from flask import session
+from flask import Flask, session, request, jsonify, send_file, abort
 from flask_login import LoginManager
+import logging
 from auth import auth, User, users
-from config import load_config
+from config import load_config, settings
 from ffmpeg_handle import m_ffmpeg
 from main import main
 from video import video
+from waitress import serve
 
 app = Flask(__name__)
 app.config.update(load_config())
@@ -52,6 +53,30 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 if __name__ == '__main__':
-#     app.run(debug=True, host='0.0.0.0', port=8090)
     signal.signal(signal.SIGINT, signal_handler)
-    app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
+    app.run(debug=True, host='0.0.0.0', port=8090)
+    # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
+'''
+    # Create a logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    # Create a file handler for logging
+    file_handler = logging.FileHandler('app.log', encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+
+    # Create a console handler for logging
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+
+    # Create a logging format
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    # Add the handlers to the logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    serve(app, host='0.0.0.0', port=8090)
+'''

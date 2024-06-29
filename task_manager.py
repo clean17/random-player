@@ -4,6 +4,7 @@ import time
 import os
 import glob
 import subprocess
+import pickle
 from datetime import datetime, timedelta
 
 tasks = []
@@ -18,7 +19,7 @@ class Task:
         self.thumbnail_path = None
         self.thumbnail_update_time = None
         # self.creation_time = None
-        self.creation_time = datetime.now()  # 예시로 현재 시간을 사용
+        self.creation_time = datetime.now()  # Task 객체 생성된 시점
         self.initial_thumbnail_created = False
         self.thumbnail_duration = 0;
 
@@ -28,7 +29,7 @@ class Task:
         if latest_file:
             self.file_name = os.path.basename(latest_file)
             self.last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file)).strftime('%Y-%m-%d %H:%M:%S')
-            self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
+            self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))  # 파일의 생성 시간을 저장
             self.generate_thumbnail()
 
     def get_latest_file(self):
@@ -72,7 +73,6 @@ class Task:
 
     @staticmethod
     def terminate(pid):
-        """특정 PID와 그 자식 프로세스를 강제로 종료합니다."""
         try:
             subprocess.run(['taskkill', '/PID', str(pid), '/F', '/T'], check=True)
             print(f"Process {pid} and its children have been successfully terminated.")
@@ -81,6 +81,31 @@ class Task:
         except Exception as e:
             print(f"An error occurred: {e}")
 
+def save_tasks_to_file():
+    with open('tasks.pkl', 'wb') as f:
+        pickle.dump(tasks, f)
+
+def load_tasks_from_file():
+    global tasks
+    if os.path.exists('tasks.pkl'):
+        if os.path.getsize('tasks.pkl') > 0:  # 파일이 비어 있는지 확인
+            with open('tasks.pkl', 'rb') as f:
+                try:
+                    tasks = pickle.load(f)
+                except EOFError:
+                    print("Warning: The tasks.pkl file is empty or corrupted.")
+                    tasks = []
+        else:
+            print("Warning: The tasks.pkl file is empty.")
+            tasks = []
+    else:
+        print("No tasks.pkl file found. Starting with an empty tasks list.")
+        tasks = []
+
+def save_tasks_to_file():
+    global tasks
+    with open('tasks.pkl', 'wb') as f:
+        pickle.dump(tasks, f)
 
 # 현재 날짜를 YYMMDD 형식으로 가져오기
 def current_date():
@@ -91,7 +116,15 @@ def update_task_status():
     while True:
         for task in tasks:
             task.update_last_modified()
+        save_tasks_to_file()
         time.sleep(5)
+
+# 서버 시작 시 태스크 로드
+load_tasks_from_file()
 
 # 스레드 시작
 threading.Thread(target=update_task_status, daemon=True).start()
+
+# 앱 종료 시 tasks를 파일에 저장
+import atexit
+atexit.register(save_tasks_to_file)

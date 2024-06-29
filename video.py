@@ -1,8 +1,11 @@
+import hashlib
 import os
 import random
+import subprocess
 import time
+from hashlib import md5
 
-from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for
+from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for, Response, abort
 from flask_login import login_required
 
 from config import settings
@@ -29,7 +32,7 @@ def get_videos():
     videos = []
     for root, dirs, files in os.walk(video_directory):
         for file in files:
-            if file.endswith(('.mp4', '.avi', '.mkv')):
+            if file.endswith(('.mp4', '.avi', '.mkv', 'ts')):
                 rel_dir = os.path.relpath(root, video_directory)
                 rel_file = os.path.join(rel_dir, file)
                 videos.append(rel_file)

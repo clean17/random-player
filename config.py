@@ -8,9 +8,11 @@ def load_config():
     with open('config.ini', 'r', encoding='utf-8') as configfile:
         config.read_file(configfile)
     return {
-        'VIDEO_DIRECTORY1': config['directories']['video_directory'],
+        'VIDEO_DIRECTORY0': config['directories']['ffmpeg_directory'],
+        'VIDEO_DIRECTORY1': config['directories']['video_directory1'],
         'VIDEO_DIRECTORY2': config['directories']['video_directory2'],
         'VIDEO_DIRECTORY3': config['directories']['video_directory3'],
+        'VIDEO_DIRECTORY4': config['directories']['video_directory4'],
         'SECRET_KEY': config['settings']['secret_key'],
         'USERNAME': config['settings']['username'],
         'PASSWORD': generate_password_hash(config['settings']['password']),
