@@ -1,6 +1,6 @@
 body {
     font-family: Arial, sans-serif;
-    background-color: #f9f9f9;
+    background-color: white;
     margin: 0;
     padding: 0;
     display: flex;
@@ -9,8 +9,8 @@ body {
     min-height: 100vh;
 }
 .container {
-    background-color: #fff;
-    padding: 20px;
+    background-color: white;
+    padding: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
     width: 90%;
@@ -43,6 +43,17 @@ th {
     height: auto;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.back-button {
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: black;
+    color: white;
+    border: none;
+    opacity: 0.8;
 }
 .button {
     padding: 10px 20px;
