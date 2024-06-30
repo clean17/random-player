@@ -64,7 +64,10 @@
                         img.className = 'thumbnail';
                         thumbnailCell.appendChild(img);
                     } else {
-                        thumbnailCell.textContent = 'N/A';
+                        const img = document.createElement('img');
+                        img.src = '{{ url_for("static", filename="no-image.png") }}';
+                        img.className = 'thumbnail';
+                        thumbnailCell.appendChild(img);
                     }
                     thumbnailRow.appendChild(thumbnailCell);
 

@@ -18,10 +18,10 @@
 </div>
 <div class="container">
     <h2>ffmpeg batch</h2>
-    <form action="{{ url_for('ffmpeg.run_batch') }}" method="post">
+    <form action="{{ url_for('ffmpeg.run_batch') }}" method="post" onsubmit="return valid()">
         <input type="text" id="clipboard_input" name="keyword" placeholder="Enter keyword" class="input-size">
-        <input type="text" id="hidden_input" name="clipboard_content" placeholder="Enter Url" class="input-size">
-        <button type="button" onclick="pasteFromClipboard()" class="input-button-size">Paste from Clipboard</button>
+        <input type="hiden" id="hidden_input" name="clipboard_content" placeholder="Enter Url" class="input-size">
+<!--        <button type="button" onclick="pasteFromClipboard()" class="input-button-size">Paste from Clipboard</button>-->
         <button type="submit" class="input-button-size">Run Batch</button>
     </form>
 </div>
@@ -36,6 +36,22 @@
                 })
         }
     }
+
+    function valid() {
+        const content = document.getElementById('hidden_input').value
+        if (content) {
+            return true;
+        } else {
+            alert('The clipboard is empty');
+            return false;
+        }
+    }
+
+    function initPage() {
+        pasteFromClipboard()
+    }
+
+    document.addEventListener("DOMContentLoaded", initPage)
 </script>
 </body>
 </html>

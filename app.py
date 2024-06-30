@@ -61,8 +61,8 @@ def signal_handler(sig, frame):
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     # app.run(debug=True, host='0.0.0.0', port=8090)
-    app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
-'''
+    # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
+
     # Create a logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
@@ -83,5 +83,5 @@ if __name__ == '__main__':
     # Add the handlers to the logger
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
-'''
-    # serve(app, host='0.0.0.0', port=8090)
+
+    serve(app, host='0.0.0.0', port=8090) ## ssl > nginx 에 적용
