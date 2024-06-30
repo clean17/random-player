@@ -8,8 +8,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/status.css') }}">
 </head>
 <body>
-<div class="container">
-    <div class="actions">
+<div class="container" style="position: relative;">
+    <div class="actions" style="display: flex; justify-content: space-between; position: sticky; top: 0; background-color: white; z-index: 10; padding: 10px 0;">
         <div class="back">
             <a href="{{ url_for('main.home') }}">Back</a>
         </div>
@@ -19,7 +19,12 @@
             {% endif %}
         </div>
     </div>
-    <h2>Task Status</h2>
+    <div style="margin-top: 10px; display: flex; justify-content: center; align-items: center; position: relative;">
+        <h2 style="flex-grow: 1; text-align: center;">Task Status</h2>
+        <a href="{{ url_for('ffmpeg.ffmpeg') }}" style="position: absolute; right: 0;">
+            <button type="button" class="button">add</button>
+        </a>
+    </div>
     <table>
         <thead>
         <tr>
@@ -31,6 +36,7 @@
         </tbody>
     </table>
 </div>
+
 <script>
     function fetchTasks() {
         fetch('{{ url_for("ffmpeg.get_tasks") }}')
@@ -100,7 +106,7 @@
                 });
             });
     }
-    setInterval(fetchTasks, 5000); // Refresh every 3 seconds
+    setInterval(fetchTasks, 5000);
     document.addEventListener('DOMContentLoaded', fetchTasks);
 </script>
 </body>
