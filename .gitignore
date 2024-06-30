@@ -13,8 +13,8 @@ env/
 *.ini
 *.pem
 *.ts
-tasks.json
-tasks.pkl
+app/tasks.json
+app/tasks.pkl
 HELP.md
 .gradle
 build/

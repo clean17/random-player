@@ -1,10 +1,9 @@
 import os
-import signal
 import subprocess
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, send_from_directory
 from flask_login import login_required
 from config import settings
-from task_manager import tasks, Task, current_date
+from app.task_manager import tasks, Task, current_date
 
 m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
 

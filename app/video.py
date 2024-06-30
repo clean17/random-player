@@ -1,9 +1,7 @@
-import hashlib
 import os
 import random
 import subprocess
 import time
-from hashlib import md5
 import cv2
 import re
 
