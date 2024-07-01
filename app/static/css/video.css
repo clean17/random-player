@@ -16,3 +16,8 @@
     bottom: 50px;
     left: 10px;
 }
+.video-mirror {
+    width: 33.33%;
+    height: auto;
+    object-fit: cover;
+}

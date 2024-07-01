@@ -7,17 +7,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/video.css') }}">
     <link href="//vjs.zencdn.net/8.3.0/video-js.min.css" rel="stylesheet">
-    <script src="{{ url_for('static', filename='js/video.js') }}"></script>
     <script src="//vjs.zencdn.net/8.3.0/video.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
-<style>
-    .video-mirror {
-        width: 33.33%;
-        height: auto;
-        object-fit: cover;
-    }
-</style>
 <body>
     <div class="top-bar">
         <div class="back">
@@ -42,57 +34,8 @@
     <div id="volume-message"></div>
 
     <script>
-        let player;
-        let videoElement;
-        let currentVideo = '';
-        let controls = document.querySelector('#controls');
-        let topDiv = document.querySelector('.top-bar');
-        let directory = "{{ directory }}";
-        let videoPlayer = document.querySelector('#videoPlayer');
-        let audioOffset = 0;
-        let syncMessage = document.getElementById('sync-message');
-        let volumeMessage = document.getElementById('volume-message');
-        let videoLeft;
-        let videoRight;
-        {#var videoElement = document.getElementById('my-video_html5_api'); // 직접 비디오 엘리먼트 선택#}
-        let hideControlsTimeout;
-
-
-        function getVideo() {
-            axios.get(`/video/videos?directory=${directory}`)
-                .then(response => {
-                    let videos = response.data;
-                    if (videos.length > 0) {
-                        currentVideo = videos[0];
-                        let url = directory === '0' ? `/video/stream/` : `/video/video/`;
-                        let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
-                        let fileExtension = currentVideo.split('.').pop();
-                        let mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
-                        videoPlayer.querySelector('source').src = videoUrl;
-                        document.title = currentVideo.replace(/.\\/g,'')
-                        player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
-                        player.src({ type: mimeType, src: videoUrl });
-                        player.load();
-                        player.on('loadeddata', function() {
-                            player.play();
-                            // TODO videojs 속성이 이전 영상 데이터를 가져오는것 같다
-                            addKeyboardControls();
-                        });
-                        player.on('loadedmetadata', function() {
-                            //threeSplitLayout();
-                        });
-                    } else {
-                        alert('No videos found');
-                    }
-                });
-        }
-
-        function initPage() {
-            // player = videojs('videoPlayer');
-            getVideo();
-        }
-
-        document.addEventListener("DOMContentLoaded", initPage)
+        const directory = "{{ directory }}";
     </script>
+    <script src="{{ url_for('static', filename='js/video.js') }}"></script>
 </body>
 </html>

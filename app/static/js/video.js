@@ -1,23 +1,40 @@
-function setVideoOptions(vodUrl, videoFileType) {
-    let videoOptions = {
-        sources: [
-            {
-                src: vodUrl,
-                type: videoFileType
+let videoPlayer = document.querySelector('#videoPlayer');
+let player;
+let currentVideo = '';
+let controls = document.querySelector('#controls');
+let topDiv = document.querySelector('.top-bar');
+let audioOffset = 0;
+let syncMessage = document.getElementById('sync-message');
+let volumeMessage = document.getElementById('volume-message');
+let videoLeft;
+let videoRight;
+
+function getVideo() {
+    axios.get(`/video/videos?directory=${directory}`)
+        .then(response => {
+            let videos = response.data;
+            if (videos.length > 0) {
+                currentVideo = videos[0];
+                let url = directory === '0' ? `/video/stream/` : `/video/video/`;
+                let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
+                let fileExtension = currentVideo.split('.').pop();
+                let mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
+                videoPlayer.querySelector('source').src = videoUrl;
+                document.title = currentVideo.replace(/.\\/g,'')
+                player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
+                player.src({ type: mimeType, src: videoUrl });
+                player.load();
+                player.on('loadeddata', function() {
+                    player.play();
+                    addKeyboardControls();
+                });
+                player.on('loadedmetadata', function() {
+                    //threeSplitLayout();
+                });
+            } else {
+                alert('No videos found');
             }
-        ],
-        controls: true, // 동영상 제어를 위한 컨트롤 바 제공 여부
-        playsinline: true, // 웹 브라우저 환경의 재생 형태
-        muted: false, // 최초 재생시 무음인지
-        preload: "auto", // 비디오 데이터를 즉시 다운로드 시작할 지 여부
-        controlBar: {
-            playToggle: true, // 재생, 일시정지 토글
-            pictureInPictureToggle: true, // pip모드
-            remainingTimeDisplay: true, // 남은 시간 표시
-            progressControl: true // 재생 진행바
-        },
-    };
-    return videoOptions;
+        });
 }
 
 function delVideo() {
@@ -42,6 +59,31 @@ function delVideo() {
     }
 }
 
+
+function setVideoOptions(vodUrl, videoFileType) {
+    let videoOptions = {
+        sources: [
+            {
+                src: vodUrl,
+                type: videoFileType
+            }
+        ],
+        controls: true, // 동영상 제어를 위한 컨트롤 바 제공 여부
+        playsinline: true, // 웹 브라우저 환경의 재생 형태
+        muted: false, // 최초 재생시 무음인지
+        preload: "auto", // 비디오 데이터를 즉시 다운로드 시작할 지 여부
+        controlBar: {
+            playToggle: true, // 재생, 일시정지 토글
+            pictureInPictureToggle: true, // pip모드
+            remainingTimeDisplay: true, // 남은 시간 표시
+            progressControl: true // 재생 진행바
+        },
+    };
+    return videoOptions;
+}
+
+
+let hideControlsTimeout;
 const hideControls = () => {
     clearTimeout(hideControlsTimeout);
     hideControlsTimeout = setTimeout(() => {
@@ -87,8 +129,8 @@ function showSyncMessage() {
 
 function adjustAudioSync(offset) {
     audioOffset += offset;
-    var videoElement = player.el().querySelector('video');
-    var currentTime = videoElement.currentTime;
+    let videoElement = player.el().querySelector('video');
+    let currentTime = videoElement.currentTime;
     videoElement.currentTime = currentTime + offset;
     showSyncMessage();
 }
@@ -123,7 +165,7 @@ function exitFullscreen() {
 
 function toggleFullscreen() {
     if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {  // 현재 전체화면이 아닌 경우
-        var docEl = document.documentElement;
+        let docEl = document.documentElement;
         if (docEl.requestFullscreen) {
             docEl.requestFullscreen();
         } else if (docEl.webkitRequestFullscreen) {
@@ -147,73 +189,76 @@ function toggleFullscreen() {
 }
 
 function addKeyboardControls() {
-    document.addEventListener('keydown', function(event) {
-        var currentTime = player.currentTime();
-        var duration = player.duration();
+    document.removeEventListener('keydown', videoKeyEvent)
+    document.addEventListener('keydown', videoKeyEvent)
+}
 
-        switch(event.key) {
-            case 'ArrowRight':
-                if (event.shiftKey) {
-                    player.currentTime(Math.min(currentTime + 30, duration));
-                } else {
-                    player.currentTime(Math.min(currentTime + 5, duration));
-                }
-                break;
-            case 'ArrowLeft':
-                if (event.shiftKey) {
-                    player.currentTime(Math.max(currentTime - 30, 0));
-                } else {
-                    player.currentTime(Math.max(currentTime - 5, 0));
-                }
-                break;
-            case 'ArrowUp':
-                player.volume(Math.min(player.volume() + 0.1, 1));
-                showVolumeMessage();
-                break;
-            case 'ArrowDown':
-                player.volume(Math.max(player.volume() - 0.1, 0));
-                showVolumeMessage();
-                break;
-            case 'a':  // 'a' 키를 눌러 오디오 싱크를 -0.02초 조정
-                adjustAudioSync(-0.02);
-                break;
-            case 'd':  // 'd' 키를 눌러 오디오 싱크를 +0.02초 조정
-                adjustAudioSync(0.02);
-                break;
-            case 's':  // 's' 키를 눌러 오디오 싱크를 0으로 초기화
-                resetAudioSync();
-                break;
-            case 'Delete':  // 'Delete' 키를 눌러 비디오 삭제 함수 호출
-                delVideo();
-                break;
-            case 'PageDown':  // 'PageDown' 키를 눌러 비디오 가져오기 함수 호출
-                getVideo();
-                break;
-            case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
-                event.preventDefault();  // 스페이스바의 기본 동작 방지
-                if (player.paused()) {
-                    player.play();
-                } else {
-                    player.pause();
-                }
-                break;
-            case 'Escape':  // ESC 키를 눌러 전체화면 해제
-                exitFullscreen();
-                break;
-            case 'Enter':
-                toggleFullscreen();
-                break;
-        }
-    })
+function videoKeyEvent(event) {
+    let currentTime = player.currentTime();
+    let duration = player.duration();
+
+    switch(event.key) {
+        case 'ArrowRight':
+            if (event.shiftKey) {
+                player.currentTime(Math.min(currentTime + 30, duration));
+            } else {
+                player.currentTime(Math.min(currentTime + 5, duration));
+            }
+            break;
+        case 'ArrowLeft':
+            if (event.shiftKey) {
+                player.currentTime(Math.max(currentTime - 30, 0));
+            } else {
+                player.currentTime(Math.max(currentTime - 5, 0));
+            }
+            break;
+        case 'ArrowUp':
+            player.volume(Math.min(player.volume() + 0.1, 1));
+            showVolumeMessage();
+            break;
+        case 'ArrowDown':
+            player.volume(Math.max(player.volume() - 0.1, 0));
+            showVolumeMessage();
+            break;
+        case 'a':  // 'a' 키를 눌러 오디오 싱크를 -0.02초 조정
+            adjustAudioSync(-0.02);
+            break;
+        case 'd':  // 'd' 키를 눌러 오디오 싱크를 +0.02초 조정
+            adjustAudioSync(0.02);
+            break;
+        case 's':  // 's' 키를 눌러 오디오 싱크를 0으로 초기화
+            resetAudioSync();
+            break;
+        case 'Delete':  // 'Delete' 키를 눌러 비디오 삭제 함수 호출
+            delVideo();
+            break;
+        case 'PageDown':  // 'PageDown' 키를 눌러 비디오 가져오기 함수 호출
+            getVideo();
+            break;
+        case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
+            event.preventDefault();  // 스페이스바의 기본 동작 방지
+            if (player.paused()) {
+                player.play();
+            } else {
+                player.pause();
+            }
+            break;
+        case 'Escape':  // ESC 키를 눌러 전체화면 해제
+            exitFullscreen();
+            break;
+        case 'Enter':
+            toggleFullscreen();
+            break;
+    }
 }
 
 // TODO 이벤트만 붙이면 작동할것 같다
 function threeSplitLayout() {
-    var videoElement = player.el().querySelector('video');
-    var videoRatio = videoElement.videoHeight / videoElement.videoWidth;
+    let videoElement = player.el().querySelector('video');
+    let videoRatio = videoElement.videoHeight / videoElement.videoWidth;
     if (videoRatio > 1) {
-        var videoContainer = document.getElementById('videoContainer');
-        var videoPlayer = document.getElementById('videoPlayer');
+        let videoContainer = document.getElementById('videoContainer');
+        let videoPlayer = document.getElementById('videoPlayer');
         // 왼쪽 비디오 추가
         videoLeft = document.createElement('video');
         videoLeft.id = 'videoLeft';
@@ -265,3 +310,10 @@ function threeSplitLayout() {
         }
     }
 }
+
+function initPage() {
+    // player = videojs('videoPlayer');
+    getVideo();
+}
+
+document.addEventListener("DOMContentLoaded", initPage)
