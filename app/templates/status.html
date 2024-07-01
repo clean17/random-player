@@ -61,24 +61,25 @@
                             } else {
                                 img.src = task.thumbnail_path;
                             }
-
-                            img.addEventListener('click', () => {
-                                const form = document.createElement('form');
-                                form.method = 'POST';
-                                form.action = '{{ url_for("video.select_directory") }}';
-
-                                const input = document.createElement('input');
-                                input.type = 'hidden';
-                                input.name = 'directory';
-                                input.value = '0';
-
-                                form.appendChild(input);
-                                document.body.appendChild(form);
-                                form.submit();
-                            });
-                            img.className = 'thumbnail';
-                            thumbnailCell.appendChild(img);
+                        } else {
+                            img.src = '{{ url_for("static", filename="no-image.png") }}';
                         }
+                        img.addEventListener('click', () => {
+                            const form = document.createElement('form');
+                            form.method = 'POST';
+                            form.action = '{{ url_for("video.select_directory") }}';
+
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = 'directory';
+                            input.value = '0';
+
+                            form.appendChild(input);
+                            document.body.appendChild(form);
+                            form.submit();
+                        });
+                        img.className = 'thumbnail';
+                        thumbnailCell.appendChild(img);
                     } else {
                         const img = document.createElement('img');
                         img.src = '{{ url_for("static", filename="no-image.png") }}';
