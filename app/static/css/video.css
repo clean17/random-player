@@ -1,0 +1,18 @@
+#sync-message, #volume-message {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 14px;
+    display: none;
+}
+#sync-message {
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+#volume-message {
+    bottom: 50px;
+    left: 10px;
+}
