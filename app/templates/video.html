@@ -28,6 +28,11 @@
         bottom: 50px;
         left: 10px;
     }
+    .video-mirror {
+        width: 33.33%;
+        height: auto;
+        object-fit: cover;
+    }
 </style>
 <body>
     <div class="top-bar">
@@ -64,8 +69,8 @@
         let audioOffset = 0;
         let syncMessage = document.getElementById('sync-message');
         let volumeMessage = document.getElementById('volume-message');
-        let videoLeft = document.getElementById('video-left');
-        let videoRight = document.getElementById('video-right');
+        let videoLeft;
+        let videoRight;
         {#var videoElement = document.getElementById('my-video_html5_api'); // 직접 비디오 엘리먼트 선택#}
         let hideControlsTimeout;
 
@@ -131,7 +136,7 @@
                         });
                         // 비디오 메타데이터 로드 완료 시 비율을 체크하고 레이아웃 적용
                         player.on('loadedmetadata', function() {
-                            checkAndApplyThreeSplitLayout();
+                            //threeSplitLayout();
                         });
                     } else {
                         alert('No videos found');
@@ -300,8 +305,66 @@
             })
         }
 
-        function checkAndApplyThreeSplitLayout() {
+        function threeSplitLayout() {
+            var videoElement = player.el().querySelector('video');
+            var videoRatio = videoElement.videoHeight / videoElement.videoWidth;
+            if (videoRatio > 1) {
+                {#var videoLeft = document.getElementById('videoLeft');
+                var videoPlayer = document.getElementById('videoPlayer');
+                var videoRight = document.getElementById('videoRight');#}
 
+                var videoContainer = document.getElementById('videoContainer');
+                var videoPlayer = document.getElementById('videoPlayer');
+                // 왼쪽 비디오 추가
+                videoLeft = document.createElement('video');
+                videoLeft.id = 'videoLeft';
+                videoLeft.className = 'video-mirror video-js vjs-default-skin';
+                videoLeft.muted = 'true'
+                videoLeft.autoplay = 'true'
+                videoLeft.setAttribute('loop', '');
+                videoContainer.insertBefore(videoLeft, videoPlayer);
+
+                // 오른쪽 비디오 추가
+                videoRight = document.createElement('video');
+                videoRight.id = 'videoRight';
+                videoRight.className = 'video-mirror video-js vjs-default-skin';
+                videoRight.muted = 'true'
+                videoRight.autoplay = 'true'
+                videoRight.setAttribute('loop', '');
+                videoContainer.appendChild(videoRight);
+
+                let mainSrc = videoPlayer.querySelector('source').src;
+
+                videoLeft.src = mainSrc;
+                videoRight.src = mainSrc;
+                videoLeft.load();
+                videoRight.load();
+
+                function playVideo() {
+                    videoLeft.play();
+                    videoRight.play();
+                }
+
+                function pauseVideo() {
+                    video.pause();
+                }
+
+                function skipForward() {
+                    if (video.duration - video.currentTime > 10) {
+                        video.currentTime += 10;
+                    } else {
+                        video.currentTime = video.duration; // Move to the end of the video if less than 10s remain
+                    }
+                }
+
+                function skipBackward() {
+                    if (video.currentTime > 10) {
+                        video.currentTime -= 10;
+                    } else {
+                        video.currentTime = 0; // Go back to the start if less than 10s into the video
+                    }
+                }
+            }
         }
 
         function initPage() {
