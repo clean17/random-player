@@ -9,6 +9,26 @@
     <script src="//vjs.zencdn.net/8.3.0/video.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
+<style>
+    #sync-message, #volume-message {
+        position: absolute;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 14px;
+        display: none;
+    }
+    #sync-message {
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    #volume-message {
+        bottom: 50px;
+        left: 10px;
+    }
+</style>
 <body>
     <div class="top-bar">
         <div class="back">
@@ -24,26 +44,33 @@
 <!--        <video id="videoPlayer" controls autoplay></video>-->
         <video id="videoPlayer" class="video-js vjs-default-skin" controls preload="auto">
             <source src="" type="video/mp4">
-            Your browser does not support HTML5 video.
         </video>
         <div id="controls">
             <button id="deleteButton">Delete</button>
             <button id="nextButton">Next</button>
         </div>
     </div>
+    <div id="sync-message"></div>
+    <div id="volume-message"></div>
 
     <script>
         let player;
+        {#let videoElement;#}
         let currentVideo = '';
         let controls = document.querySelector('#controls');
         let topDiv = document.querySelector('.top-bar');
         let directory = "{{ directory }}";
         let videoPlayer = document.querySelector('#videoPlayer');
-
+        let audioOffset = 0;
+        let syncMessage = document.getElementById('sync-message');
+        let volumeMessage = document.getElementById('volume-message');
+        let videoLeft = document.getElementById('video-left');
+        let videoRight = document.getElementById('video-right');
+        {#var videoElement = document.getElementById('my-video_html5_api'); // 직접 비디오 엘리먼트 선택#}
         let hideControlsTimeout;
 
         function setVideoOptions(vodUrl, videoFileType) {
-            var videoOptions = {
+            let videoOptions = {
                 sources: [
                     {
                         src: vodUrl,
@@ -63,7 +90,6 @@
             };
             return videoOptions;
         }
-
 
         const hideControls = () => {
             clearTimeout(hideControlsTimeout);
@@ -101,6 +127,11 @@
                         player.load();
                         player.on('loadeddata', function() {
                             player.play();
+                            addKeyboardControls();
+                        });
+                        // 비디오 메타데이터 로드 완료 시 비율을 체크하고 레이아웃 적용
+                        player.on('loadedmetadata', function() {
+                            checkAndApplyThreeSplitLayout();
                         });
                     } else {
                         alert('No videos found');
@@ -136,6 +167,142 @@
 
         videoPlayer.addEventListener('mousemove', showControls);
         videoPlayer.addEventListener('touchmove', showControls);
+
+
+        function showSyncMessage() {
+            syncMessage.textContent = 'Audio Sync Offset: ' + audioOffset.toFixed(2) + 's';
+            syncMessage.style.display = 'block';
+            clearTimeout(syncMessage.hideTimeout);
+            syncMessage.hideTimeout = setTimeout(function() {
+                syncMessage.style.display = 'none';
+            }, 2000); // 2초 후 메시지 숨기기
+        }
+
+        function adjustAudioSync(offset) {
+            audioOffset += offset;
+            var videoElement = player.el().querySelector('video');
+            var currentTime = videoElement.currentTime;
+            videoElement.currentTime = currentTime + offset;
+            showSyncMessage();
+        }
+
+        function resetAudioSync() {
+            audioOffset = 0;
+            showSyncMessage();
+        }
+
+        function showVolumeMessage() {
+            volumeMessage.textContent = 'Volume: ' + Math.round(player.volume() * 100) + '%';
+            volumeMessage.style.display = 'block';
+            clearTimeout(volumeMessage.hideTimeout);
+            volumeMessage.hideTimeout = setTimeout(function() {
+                volumeMessage.style.display = 'none';
+            }, 2000); // 2초 후 메시지 숨기기
+        }
+
+        function exitFullscreen() {
+            if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {  // 현재 전체화면이 아닌 경우
+                var docEl = document.documentElement;
+                if (docEl.requestFullscreen) {
+                    docEl.requestFullscreen();
+                } else if (docEl.webkitRequestFullscreen) {
+                    docEl.webkitRequestFullscreen();
+                } else if (docEl.mozRequestFullScreen) {
+                    docEl.mozRequestFullScreen();
+                } else if (docEl.msRequestFullscreen) {
+                    docEl.msRequestFullscreen();
+                }
+            } else {  // 현재 전체화면인 경우
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        function addKeyboardControls() {
+            document.addEventListener('keydown', function(event) {
+                var currentTime = player.currentTime();
+                var duration = player.duration();
+
+                switch(event.key) {
+                    case 'ArrowRight':
+                        if (event.shiftKey) {
+                            player.currentTime(Math.min(currentTime + 30, duration));
+                        } else {
+                            player.currentTime(Math.min(currentTime + 5, duration));
+                        }
+                        break;
+                    case 'ArrowLeft':
+                        if (event.shiftKey) {
+                            player.currentTime(Math.max(currentTime - 30, 0));
+                        } else {
+                            player.currentTime(Math.max(currentTime - 5, 0));
+                        }
+                        break;
+                    case 'ArrowUp':
+                        player.volume(Math.min(player.volume() + 0.1, 1));
+                        showVolumeMessage();
+                        break;
+                    case 'ArrowDown':
+                        player.volume(Math.max(player.volume() - 0.1, 0));
+                        showVolumeMessage();
+                        break;
+                    case 'a':  // 'a' 키를 눌러 오디오 싱크를 -0.02초 조정
+                        adjustAudioSync(-0.02);
+                        break;
+                    case 'd':  // 'd' 키를 눌러 오디오 싱크를 +0.02초 조정
+                        adjustAudioSync(0.02);
+                        break;
+                    case 's':  // 's' 키를 눌러 오디오 싱크를 0으로 초기화
+                        resetAudioSync();
+                        break;
+                    case 'Delete':  // 'Delete' 키를 눌러 비디오 삭제 함수 호출
+                        delVideo();
+                        break;
+                    case 'PageDown':  // 'PageDown' 키를 눌러 비디오 가져오기 함수 호출
+                        getVideo();
+                        break;
+                    case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
+                        event.preventDefault();  // 스페이스바의 기본 동작 방지
+                        if (player.paused()) {
+                            player.play();
+                        } else {
+                            player.pause();
+                        }
+                        break;
+                    case 'Escape':  // ESC 키를 눌러 전체화면 해제
+                        exitFullscreen();
+                        break;
+                    case 'Enter':
+                        toggleFullscreen();
+                        break;
+                }
+            })
+        }
+
+        function checkAndApplyThreeSplitLayout() {
+
+        }
 
         function initPage() {
             // player = videojs('videoPlayer');
