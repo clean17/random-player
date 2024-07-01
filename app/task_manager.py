@@ -50,22 +50,24 @@ class Task:
                 if result.returncode == 0:
                     self.thumbnail_path = initial_thumbnail_path
                     self.initial_thumbnail_created = True
-                    self.thumbnail_update_time = current_time
+                    self.thumbnail_update_time = current_time.isoformat()
                     # print(f"Initial thumbnail created at {self.thumbnail_path}")
                 else:
                     print("Failed to create initial thumbnail")
 
             elif self.thumbnail_update_time:
+                last_update_time = datetime.fromisoformat(self.thumbnail_update_time)
+
                 # 이후 썸네일은 마지막 썸네일 생성 시간으로부터 매 분마다 생성
-                if (current_time - self.thumbnail_update_time).seconds >= 5:
-                    self.thumbnail_duration += 5
+                if (current_time - last_update_time).total_seconds() >= 60:
+                    self.thumbnail_duration += 60
                     thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_thumb.jpg")
                     cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {self.thumbnail_duration} -frames:v 1 {thumbnail_path}"
                     # print(f"Executing command: {cmd}")
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                     if result.returncode == 0:
                         self.thumbnail_path = thumbnail_path
-                        self.thumbnail_update_time = current_time
+                        self.thumbnail_update_time = current_time.isoformat()
                     else:
                         print(f"Failed to create thumbnail at {self.thumbnail_duration} minute mark")
 

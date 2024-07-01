@@ -6,6 +6,7 @@
     <title>Task Status</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/status.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
 <div class="back">
@@ -39,12 +40,11 @@
 
 <script>
     function fetchTasks() {
-        fetch('{{ url_for("ffmpeg.get_tasks") }}')
-            .then(response => response.json())
-            .then(data => {
+        axios.get('{{ url_for("ffmpeg.get_tasks") }}')
+            .then(response => {
                 const tbody = document.getElementById('taskTableBody');
                 tbody.innerHTML = '';
-                data.forEach(task => {
+                response.data.forEach(task => {
                     const thumbnailRow = document.createElement('tr');
                     const detailRow = document.createElement('tr');
 
@@ -52,23 +52,33 @@
                     thumbnailCell.colSpan = "3";
                     if (task.thumbnail_path) {
                         const img = document.createElement('img');
-                        img.src = task.thumbnail_path;
-                        img.addEventListener('click', () => {
-                            const form = document.createElement('form');
-                            form.method = 'POST';
-                            form.action = '{{ url_for("video.select_directory") }}';
 
-                            const input = document.createElement('input');
-                            input.type = 'hidden';
-                            input.name = 'directory';
-                            input.value = '0';
+                        if (task.thumbnail_update_time) {
+                            const thumbnailTime = new Date(task.thumbnail_update_time);
+                            const timeDifference = (new Date() - new Date(thumbnailTime)) / 1000
+                            if (Number(timeDifference) > 120) {
+                                img.src = '{{ url_for("static", filename="no-image.png") }}';
+                            } else {
+                                img.src = task.thumbnail_path;
+                            }
 
-                            form.appendChild(input);
-                            document.body.appendChild(form);
-                            form.submit();
-                        });
-                        img.className = 'thumbnail';
-                        thumbnailCell.appendChild(img);
+                            img.addEventListener('click', () => {
+                                const form = document.createElement('form');
+                                form.method = 'POST';
+                                form.action = '{{ url_for("video.select_directory") }}';
+
+                                const input = document.createElement('input');
+                                input.type = 'hidden';
+                                input.name = 'directory';
+                                input.value = '0';
+
+                                form.appendChild(input);
+                                document.body.appendChild(form);
+                                form.submit();
+                            });
+                            img.className = 'thumbnail';
+                            thumbnailCell.appendChild(img);
+                        }
                     } else {
                         const img = document.createElement('img');
                         img.src = '{{ url_for("static", filename="no-image.png") }}';

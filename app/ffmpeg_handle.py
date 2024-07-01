@@ -50,7 +50,8 @@ def get_tasks():
             'pid': task.pid,
             'file_name': task.file_name,
             'last_modified_time': task.last_modified_time,
-            'thumbnail_path': url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path)) if task.thumbnail_path else None
+            'thumbnail_path': url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path)) if task.thumbnail_path else None,
+            'thumbnail_update_time': task.thumbnail_update_time,
         })
     return jsonify(task_list)
 
