@@ -7,6 +7,7 @@ import os
 import glob
 import subprocess
 from datetime import datetime
+import multiprocessing
 
 tasks = []
 
@@ -33,7 +34,8 @@ class Task:
             self.file_name = os.path.basename(latest_file)
             self.last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file)).strftime('%Y-%m-%d %H:%M:%S')
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
-            self.generate_thumbnail()
+            process = multiprocessing.Process(target=self.generate_thumbnail())
+            process.start()
 
     def get_latest_file(self):
         files = glob.glob(self.file_pattern)
@@ -50,7 +52,7 @@ class Task:
             if not self.initial_thumbnail_created:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
                 initial_thumbnail_path = os.path.join(self.work_directory, self.file_name.replace('.ts', '_thumb.jpg'))
-                initial_cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss 1 -vframes 1 {initial_thumbnail_path}"
+                initial_cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss 1 -vframes 1 -s 426x240 -q:v 10 {initial_thumbnail_path}"
                 result = subprocess.run(initial_cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                 if result.returncode == 0:
                     self.thumbnail_path = initial_thumbnail_path
@@ -67,7 +69,7 @@ class Task:
                 if time_difference >= 20:
                     self.thumbnail_duration = (current_time - self.creation_time).total_seconds()
                     thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_thumb.jpg")
-                    cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {int(self.thumbnail_duration)} -frames:v 1 {thumbnail_path}"
+                    cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {int(self.thumbnail_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                     if result.returncode == 0:
                         self.thumbnail_path = thumbnail_path
