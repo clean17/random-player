@@ -53,17 +53,17 @@
                     if (task.thumbnail_path) {
                         const img = document.createElement('img');
 
-                        if (task.thumbnail_update_time) {
+                        {#if (task.thumbnail_update_time) {
                             const thumbnailTime = new Date(task.thumbnail_update_time);
                             const timeDifference = (new Date() - new Date(thumbnailTime)) / 1000
-                            if (Number(timeDifference) > 120) {
+                            #}{#console.log(task.file_name ,' : ',timeDifference)#}{#
+                            if (Number(timeDifference) > 300) {
                                 img.src = '{{ url_for("static", filename="no-image.png") }}';
                             } else {
                                 img.src = task.thumbnail_path;
                             }
-                        } else {
-                            img.src = '{{ url_for("static", filename="no-image.png") }}';
-                        }
+                        }#}
+                        img.src = task.thumbnail_path;
                         img.addEventListener('click', () => {
                             const form = document.createElement('form');
                             form.method = 'POST';
@@ -117,7 +117,7 @@
                 });
             });
     }
-    setInterval(fetchTasks, 5000);
+    setInterval(fetchTasks, 10000);
     document.addEventListener('DOMContentLoaded', fetchTasks);
 </script>
 </body>

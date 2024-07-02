@@ -16,12 +16,17 @@ def ffmpeg():
 @login_required
 def run_batch():
     keyword = request.form['keyword']
-    url = request.form['clipboard_content'].replace('\r\n', '').replace('\n', '')
+    url = request.form['clipboard_content'].replace('\r\n', '').replace('\n', '').strip()
     current_date_str = current_date()
     file_pattern = f"{settings['WORK_DIRECTORY']}/{current_date_str}{keyword}_*.ts"
 
     cmd = f"cmd /c \"{settings['FFMPEG_SCRIPT_PATH']} {keyword} \"{url}\"\""
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True, encoding='utf-8')
+    '''
+    shell=True 새로운 셸
+    capture_output=True 표준 출력,오류 캡쳐
+    stdout=subprocess.PIPE 파이프로 캡쳐 (capture_output=True 의 기본값)
+    '''
     tasks.append(Task(process.pid, file_pattern, settings['WORK_DIRECTORY']))
 
     return redirect(url_for('ffmpeg.status'))
@@ -58,4 +63,8 @@ def get_tasks():
 @m_ffmpeg.route('/thumbnails/<path:filename>')
 @login_required
 def thumbnail(filename):
-    return send_from_directory(settings['WORK_DIRECTORY'], filename)
+    response = send_from_directory(settings['WORK_DIRECTORY'], filename)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
+    return response
