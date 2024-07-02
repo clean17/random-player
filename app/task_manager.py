@@ -1,4 +1,6 @@
 import cmd
+# import sched
+from apscheduler.schedulers.background import BackgroundScheduler
 import threading
 import time
 import os
@@ -7,6 +9,9 @@ import subprocess
 from datetime import datetime
 
 tasks = []
+
+# scheduler = sched.scheduler(time.time, time.sleep) # sched
+scheduler = BackgroundScheduler()
 
 class Task:
     def __init__(self, pid, file_pattern, work_directory):
@@ -17,7 +22,7 @@ class Task:
         self.file_name = None
         self.thumbnail_path = None
         self.thumbnail_update_time = None
-        self.creation_time = datetime.now()  # 예시로 현재 시간을 사용
+        self.creation_time = datetime.now()
         self.initial_thumbnail_created = False
         self.thumbnail_duration = 0;
 
@@ -35,7 +40,7 @@ class Task:
         if not files:
             return None
 
-        latest_file = max(files, key=os.path.getctime)
+        latest_file = max(files, key=os.path.getctime) # 가장 최근 파일
         return latest_file
 
     def generate_thumbnail(self):
@@ -57,13 +62,12 @@ class Task:
 
             elif self.thumbnail_update_time:
                 last_update_time = datetime.fromisoformat(self.thumbnail_update_time)
-
-                # 이후 썸네일은 마지막 썸네일 생성 시간으로부터 매 분마다 생성
-                if (current_time - last_update_time).total_seconds() >= 60:
-                    self.thumbnail_duration += 60
+                time_difference = (current_time - last_update_time).total_seconds()
+                # print(self.file_name, time_difference)
+                if time_difference >= 20:
+                    self.thumbnail_duration = (current_time - self.creation_time).total_seconds()
                     thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_thumb.jpg")
-                    cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {self.thumbnail_duration} -frames:v 1 {thumbnail_path}"
-                    # print(f"Executing command: {cmd}")
+                    cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {int(self.thumbnail_duration)} -frames:v 1 {thumbnail_path}"
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                     if result.returncode == 0:
                         self.thumbnail_path = thumbnail_path
@@ -88,10 +92,32 @@ def current_date():
 
 # 작업 상태를 주기적으로 업데이트하는 스레드
 def update_task_status():
-    while True:
-        for task in tasks:
-            task.update_last_modified()
-        time.sleep(10)
+    # while True:
+    #     for task in tasks:
+    #         task.update_last_modified()
+    #     time.sleep(10)
 
-# 스레드 시작
-threading.Thread(target=update_task_status, daemon=True).start()
+    # 10초마다 반복 실행
+    # while True:
+    #     start_time = time.time()
+    #     for task in tasks:
+    #         task.update_last_modified()
+    #
+    #     # 다음 실행 시간을 계산
+    #     end_time = time.time()
+    #     elapsed_time = end_time - start_time
+    #     next_run_in = max(10 - elapsed_time, 0)
+    #     time.sleep(next_run_in)
+
+    for task in tasks:
+        task.update_last_modified()
+
+
+# 스레드 시작 (썸네일 생성이 늘어진다..?)
+# threading.Thread(target=update_task_status, daemon=True).start()
+
+# 스케줄러에 작업 추가
+scheduler.add_job(update_task_status, 'interval', seconds=10)
+
+# 스케줄러 시작
+scheduler.start()
