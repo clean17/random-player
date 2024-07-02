@@ -66,7 +66,7 @@ class Task:
                 last_update_time = datetime.fromisoformat(self.thumbnail_update_time)
                 time_difference = (current_time - last_update_time).total_seconds()
                 # print(self.file_name, time_difference)
-                if time_difference >= 20:
+                if time_difference >= 60:
                     self.thumbnail_duration = (current_time - self.creation_time).total_seconds()
                     thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_thumb.jpg")
                     cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {int(self.thumbnail_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
