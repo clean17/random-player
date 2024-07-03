@@ -9,6 +9,8 @@ let volumeMessage = document.getElementById('volume-message');
 let videoLeft;
 let videoRight;
 let filenameDisplay = document.getElementById('video-filename');
+let previousVideos = []
+let mimeType;
 
 function getVideo() {
     axios.get(`/video/videos?directory=${directory}`)
@@ -20,7 +22,7 @@ function getVideo() {
                 let url = directory === '0' ? `/video/stream/` : `/video/video/`;
                 let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
                 let fileExtension = currentVideo.split('.').pop();
-                let mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
+                mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
                 videoPlayer.querySelector('source').src = videoUrl;
                 document.title = currentVideo.replace(/.\\/g,'')
                 player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
@@ -28,6 +30,7 @@ function getVideo() {
                 player.load();
                 player.on('loadeddata', function() {
                     player.play();
+                    previousVideos.push(videoUrl);
                     addKeyboardControls();
                     let sourceElement = videoPlayer.getElementsByTagName('source')[0];
                     let videoFilename = sourceElement.getAttribute('src').split('/').pop().split('?')[0].slice(4)
@@ -64,6 +67,14 @@ function delVideo() {
         }
     }
 }
+
+document.getElementById('prevButton').addEventListener('click', function() {
+    if (previousVideos.length > 1) {
+        let prevVideoUrl = previousVideos.pop();
+        player.src({ mimeType, src: prevVideoUrl });
+        player.play();
+    }
+});
 
 
 function setVideoOptions(vodUrl, videoFileType) {
@@ -320,6 +331,7 @@ function threeSplitLayout() {
 }
 
 function initPage() {
+    previousVideos.push('undefined')
     // player = videojs('videoPlayer');
     getVideo();
 }

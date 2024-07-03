@@ -12,44 +12,9 @@ import multiprocessing
 
 tasks = []
 
-# # 'apscheduler.scheduler' 로거 가져오기
-# apscheduler_logger = logging.getLogger('apscheduler.scheduler')
-# # 로깅 레벨 설정 (ERROR로 설정하여 WARNING 메시지를 숨김)
-# apscheduler_logger.setLevel(logging.ERROR)
-
-class SkipSpecificMessageFilter(logging.Filter):
-    def filter(self, record):
-        if "maximum number of running instances reached" in record.getMessage():
-            return False
-        return True
-
-class SkipInfoMessageFilter(logging.Filter):
-    def filter(self, record):
-        if record.name == 'apscheduler.executors.default' and record.levelno == logging.INFO:
-            return False
-        return True
-
 # 'apscheduler.scheduler' 로거 가져오기
-apscheduler_scheduler_logger = logging.getLogger('apscheduler.scheduler')
-# 'apscheduler.executors.default' 로거 가져오기
-apscheduler_executors_logger = logging.getLogger('apscheduler.executors.default')
-
-# 필터 추가
-for handler in apscheduler_scheduler_logger.handlers:
-    handler.addFilter(SkipSpecificMessageFilter())
-for handler in apscheduler_executors_logger.handlers:
-    handler.addFilter(SkipInfoMessageFilter())
-
-# 기본 핸들러가 없으면 새로운 스트림 핸들러 추가
-if not apscheduler_scheduler_logger.handlers:
-    handler = logging.StreamHandler()
-    handler.addFilter(SkipSpecificMessageFilter())
-    apscheduler_scheduler_logger.addHandler(handler)
-
-if not apscheduler_executors_logger.handlers:
-    handler = logging.StreamHandler()
-    handler.addFilter(SkipInfoMessageFilter())
-    apscheduler_executors_logger.addHandler(handler)
+apscheduler_logger = logging.getLogger('apscheduler.scheduler')
+apscheduler_logger.setLevel(logging.ERROR)
 
 # scheduler = sched.scheduler(time.time, time.sleep) # sched
 scheduler = BackgroundScheduler()
@@ -159,7 +124,7 @@ def update_task_status():
 # threading.Thread(target=update_task_status, daemon=True).start()
 
 # 스케줄러에 작업 추가
-scheduler.add_job(update_task_status, 'interval', seconds=20)
+scheduler.add_job(update_task_status, 'interval', seconds=15)
 
 # 스케줄러 시작
 scheduler.start()
