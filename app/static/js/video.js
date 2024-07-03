@@ -8,13 +8,15 @@ let syncMessage = document.getElementById('sync-message');
 let volumeMessage = document.getElementById('volume-message');
 let videoLeft;
 let videoRight;
+let filenameDisplay = document.getElementById('video-filename');
 
 function getVideo() {
     axios.get(`/video/videos?directory=${directory}`)
         .then(response => {
             let videos = response.data;
             if (videos.length > 0) {
-                currentVideo = videos[0];
+                let randomIndex = Math.floor(Math.random() * videos.length);
+                currentVideo = videos[randomIndex];
                 let url = directory === '0' ? `/video/stream/` : `/video/video/`;
                 let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
                 let fileExtension = currentVideo.split('.').pop();
@@ -27,6 +29,10 @@ function getVideo() {
                 player.on('loadeddata', function() {
                     player.play();
                     addKeyboardControls();
+                    let sourceElement = videoPlayer.getElementsByTagName('source')[0];
+                    let videoFilename = sourceElement.getAttribute('src').split('/').pop().split('?')[0].slice(4)
+
+                    filenameDisplay.textContent = decodeURIComponent(videoFilename);
                 });
                 player.on('loadedmetadata', function() {
                     //threeSplitLayout();
@@ -89,12 +95,14 @@ const hideControls = () => {
     hideControlsTimeout = setTimeout(() => {
         controls.style.display = 'none';
         topDiv.style.display = 'none';
+        filenameDisplay.style.display = 'none';
     }, 2000);
 };
 
 const showControls = () => {
     controls.style.display = 'block';
     topDiv.style.display = 'block';
+    filenameDisplay.style.display = 'block';
     hideControls();
 };
 

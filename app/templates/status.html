@@ -9,23 +9,30 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
-<div class="back">
-    <a href="{{ url_for('main.home') }}">Back</a>
-</div>
-<div class="logout">
-    {% if current_user.is_authenticated %}
-    <a href="{{ url_for('auth.logout') }}">Logout</a>
-    {% endif %}
-</div>
-<div class="container" style="margin-top: 140px;">
+{#<div class="back">#}
+{#    <a href="{{ url_for('main.home') }}">Back</a>#}
+{#</div>#}
+{#<div class="logout">#}
+{#    {% if current_user.is_authenticated %}#}
+{#    <a href="{{ url_for('auth.logout') }}">Logout</a>#}
+{#    {% endif %}#}
+{#</div>#}
+<div class="container">
     <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 10px; position: relative;">
-<!--        <a href="{{ url_for('main.home') }}" class="back-button" style="position: absolute; left: 0;">Back</a>-->
+        <a href="{{ url_for('main.home') }}" class="back-button" style="position: absolute; left: 0;">Back</a>
+        {#<div class="dropdown">
+            <button class="dropdown-button" id="dropdownButton">⋮</button>
+            <div class="dropdown-content" id="dropdownContent">
+                <a href="{{ url_for('main.home') }}">Back</a>
+                <a href="{{ url_for('auth.logout') }}">Logout</a>
+            </div>
+        </div>#}
         <h2 style="flex-grow: 1; text-align: center;">Task Status</h2>
         <a href="{{ url_for('ffmpeg.ffmpeg') }}" style="position: absolute; right: 0;">
             <button type="button" class="button">add</button>
         </a>
     </div>
-    <div class="table-container" style="overflow-y: auto; max-height: calc(100vh - 50px);">
+    <div class="table-container" style="overflow-y: auto; {#max-height: calc(100vh - 50px);#}">
         <table>
             <thead>
             <tr>
@@ -39,6 +46,14 @@
 </div>
 
 <script>
+    document.querySelector('.container').addEventListener('wheel', function(event) {
+        const scrollableList = document.querySelector('.table-container');
+        if (scrollableList.scrollHeight > scrollableList.clientHeight) {
+            event.preventDefault();
+            scrollableList.scrollTop += event.deltaY;
+        }
+    });
+
     function fetchTasks() {
         axios.get('{{ url_for("ffmpeg.get_tasks") }}')
             .then(response => {
@@ -64,6 +79,13 @@
                             }
                         }#}
                         img.src = task.thumbnail_path;
+                        let fallbackSrc = '{{ url_for("static", filename="no-image.png") }}';
+
+                        img.onerror = function() {
+                            this.onerror = null; // 무한 루프 방지
+                            this.src = fallbackSrc;
+                        };
+
                         img.addEventListener('click', () => {
                             const form = document.createElement('form');
                             form.method = 'POST';
@@ -118,6 +140,22 @@
             });
     }
     setInterval(fetchTasks, 10000);
+
+    document.getElementById('dropdownButton').addEventListener('click', function(event) {
+        event.stopPropagation();
+        document.getElementById('dropdownContent').style.display = 'block';
+    });
+
+    document.addEventListener('click', function(event) {
+        if (!event.target.matches('.dropdown-button')) {
+            document.getElementById('dropdownContent').style.display = 'none';
+        }
+    });
+
+    document.getElementById('dropdownContent').addEventListener('click', function(event) {
+        event.stopPropagation();
+    });
+
     document.addEventListener('DOMContentLoaded', fetchTasks);
 </script>
 </body>
