@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dropdown Button</title>
+    <style>
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+
+        .dropdown-button {
+            background-color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dropdown">
+        <button class="dropdown-button" id="dropdownButton">⋮</button>
+        <div class="dropdown-content" id="dropdownContent">
+            <a href="#" onclick="alert('Option 1 selected')">Option 1</a>
+            <a href="#" onclick="alert('Option 2 selected')">Option 2</a>
+            <a href="#" onclick="alert('Option 3 selected')">Option 3</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('dropdownButton').addEventListener('click', function(event) {
+            event.stopPropagation();
+            document.getElementById('dropdownContent').style.display = 'block';
+        });
+
+        document.addEventListener('click', function(event) {
+            if (!event.target.matches('.dropdown-button')) {
+                document.getElementById('dropdownContent').style.display = 'none';
+            }
+        });
+
+        document.getElementById('dropdownContent').addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
+    </script>
+</body>
+</html>

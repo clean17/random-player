@@ -82,6 +82,9 @@ document.getElementById('prevButton').addEventListener('click', function() {
     if (prevVideoUrl) {
         player.src({ mimeType, src: prevVideoUrl });
         player.play();
+        let url1 = prevVideoUrl.split('/')[3]
+        let url2 = url1.slice(0, url1.lastIndexOf('?'))
+        currentVideo = decodeURIComponent(url2)
     }
 });
 
