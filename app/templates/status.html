@@ -139,9 +139,8 @@
                 });
             });
     }
-    setInterval(fetchTasks, 10000);
 
-    document.getElementById('dropdownButton').addEventListener('click', function(event) {
+    document.getElementById('dropdownButton')?.addEventListener('click', function(event) {
         event.stopPropagation();
         document.getElementById('dropdownContent').style.display = 'block';
     });
@@ -152,11 +151,16 @@
         }
     });
 
-    document.getElementById('dropdownContent').addEventListener('click', function(event) {
+    document.getElementById('dropdownContent')?.addEventListener('click', function(event) {
         event.stopPropagation();
     });
 
-    document.addEventListener('DOMContentLoaded', fetchTasks);
+    function initPage() {
+        fetchTasks();
+        setInterval(fetchTasks, 10000);
+    }
+
+    document.addEventListener('DOMContentLoaded', initPage);
 </script>
 </body>
 </html>

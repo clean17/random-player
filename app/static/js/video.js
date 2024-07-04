@@ -28,15 +28,17 @@ function getVideo() {
                 player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
                 player.src({ type: mimeType, src: videoUrl });
                 player.load();
+                player.off('loadeddata');
                 player.on('loadeddata', function() {
                     player.play();
-                    previousVideos.push(videoUrl);
+                    pushVideoArr(videoUrl)
                     addKeyboardControls();
                     let sourceElement = videoPlayer.getElementsByTagName('source')[0];
                     let videoFilename = sourceElement.getAttribute('src').split('/').pop().split('?')[0].slice(4)
 
                     filenameDisplay.textContent = decodeURIComponent(videoFilename);
                 });
+                player.off('loadedmetadata');
                 player.on('loadedmetadata', function() {
                     //threeSplitLayout();
                 });
@@ -68,9 +70,16 @@ function delVideo() {
     }
 }
 
-document.getElementById('prevButton').addEventListener('click', function() {
+function pushVideoArr(url) {
     if (previousVideos.length > 1) {
-        let prevVideoUrl = previousVideos.pop();
+        previousVideos.shift();
+    }
+    previousVideos.push(url)
+}
+
+document.getElementById('prevButton').addEventListener('click', function() {
+    let prevVideoUrl = previousVideos.shift();
+    if (prevVideoUrl) {
         player.src({ mimeType, src: prevVideoUrl });
         player.play();
     }
@@ -331,7 +340,7 @@ function threeSplitLayout() {
 }
 
 function initPage() {
-    previousVideos.push('undefined')
+    previousVideos.push(undefined)
     // player = videojs('videoPlayer');
     getVideo();
 }
