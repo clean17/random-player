@@ -39,7 +39,8 @@
 
     function valid() {
         const content = document.getElementById('hidden_input').value
-        if (content) {
+        const input = document.querySelector('#clipboard_input').value
+        if (content && input) {
             return true;
         } else {
             alert('The clipboard is empty');

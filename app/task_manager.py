@@ -51,8 +51,6 @@ class Task:
         return latest_file
 
     def generate_thumbnail(self):
-        current_time = datetime.now()
-
         if self.file_name and self.creation_time:
             if not self.initial_thumbnail_created:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
@@ -62,13 +60,20 @@ class Task:
                 if result.returncode == 0:
                     self.thumbnail_path = initial_thumbnail_path
                     self.initial_thumbnail_created = True
-                    self.thumbnail_update_time = current_time.isoformat()
+                    self.thumbnail_update_time = datetime.now().isoformat()
                     # print(f"Initial thumbnail created at {self.thumbnail_path}")
                 else:
                     print("Failed to create initial thumbnail")
 
             elif self.thumbnail_update_time:
+                current_time = datetime.now()
                 last_update_time = datetime.fromisoformat(self.thumbnail_update_time)
+
+                modification_time = datetime.strptime(self.last_modified_time, '%Y-%m-%d %H:%M:%S')
+                duration = modification_time - self.creation_time
+                thumb_duration = duration.total_seconds()
+                # self.thumbnail_duration -> thumb_duration 교체 테스트 예정
+
                 time_difference = (current_time - last_update_time).total_seconds()
                 # print(self.file_name, time_difference)
                 if time_difference >= 60:
@@ -78,7 +83,7 @@ class Task:
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                     if result.returncode == 0:
                         self.thumbnail_path = thumbnail_path
-                        self.thumbnail_update_time = current_time.isoformat()
+                        self.thumbnail_update_time = datetime.now().isoformat()
                     else:
                         print(f"Failed to create thumbnail at {self.thumbnail_duration} minute mark")
 
