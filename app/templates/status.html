@@ -140,7 +140,7 @@
             });
     }
 
-    document.getElementById('dropdownButton')?.addEventListener('click', function(event) {
+    {#document.getElementById('dropdownButton')?.addEventListener('click', function(event) {
         event.stopPropagation();
         document.getElementById('dropdownContent').style.display = 'block';
     });
@@ -153,7 +153,7 @@
 
     document.getElementById('dropdownContent')?.addEventListener('click', function(event) {
         event.stopPropagation();
-    });
+    });#}
 
     function initPage() {
         fetchTasks();
