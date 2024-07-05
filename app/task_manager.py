@@ -36,18 +36,39 @@ class Task:
     def update_last_modified(self):
         latest_file = self.get_latest_file()
         if latest_file:
+            print('################################ ', latest_file, self.thumbnail_update_time)
             self.file_name = os.path.basename(latest_file)
             self.last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file)).strftime('%Y-%m-%d %H:%M:%S')
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
-            process = multiprocessing.Process(target=self.generate_thumbnail())
-            process.start()
+            # process = multiprocessing.Process(target=self.generate_thumbnail)
+            # process.start() # multiprocessing는 메모리를 공유하지 않는다 -> class의 필드를 공유하지 않음
+            thread = threading.Thread(target=self.generate_thumbnail)
+            thread.start()
+
+    #def get_latest_file(self):
+        # 파일 수정 시간이 딜레이 되는 이슈
+        # files = glob.glob(self.file_pattern)
+        #if not files:
+        #    return None
+
+        #latest_file = max(files, key=os.path.getctime)
+        #return latest_file
+        #try:
+        #    files = [os.path.join(self.work_directory, f) for f in os.listdir(self.work_directory) if self.file_pattern in f]
+        #    latest_file = max(files, key=os.path.getmtime)
+        #    return latest_file
+        #except ValueError:
+        #    return None
 
     def get_latest_file(self):
-        files = glob.glob(self.file_pattern)
+
+        search_pattern = os.path.join(self.work_directory, self.file_pattern)
+        files = glob.glob(search_pattern)
+
         if not files:
             return None
 
-        latest_file = max(files, key=os.path.getctime) # 가장 최근 파일
+        latest_file = max(files, key=os.path.getmtime)
         return latest_file
 
     def generate_thumbnail(self):
@@ -63,29 +84,30 @@ class Task:
                     self.thumbnail_update_time = datetime.now().isoformat()
                     # print(f"Initial thumbnail created at {self.thumbnail_path}")
                 else:
-                    print("Failed to create initial thumbnail")
+                    print("Failed to create initial thumbnail. Error: {result.stderr}")
 
             elif self.thumbnail_update_time:
-                current_time = datetime.now()
+                current_time = datetime.now() # ok
                 last_update_time = datetime.fromisoformat(self.thumbnail_update_time)
 
                 modification_time = datetime.strptime(self.last_modified_time, '%Y-%m-%d %H:%M:%S')
-                duration = modification_time - self.creation_time
+                duration = modification_time - self.creation_time # 파일수정 - 생성
                 thumb_duration = duration.total_seconds()
-                # self.thumbnail_duration -> thumb_duration 교체 테스트 예정
 
-                time_difference = (current_time - last_update_time).total_seconds()
+                thumb_time_difference = (current_time - last_update_time).total_seconds() # 마지막 썸네일 생성시간 차
                 # print(self.file_name, time_difference)
-                if time_difference >= 60:
-                    self.thumbnail_duration = (current_time - self.creation_time).total_seconds()
+                print('self.last_modified_time', self.last_modified_time)
+                print('thumb_duration', thumb_duration)
+                if thumb_time_difference >= 60:
+                    # self.thumbnail_duration = (current_time - self.creation_time).total_seconds()
                     thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_thumb.jpg")
-                    cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {int(self.thumbnail_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
+                    cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {int(thumb_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                     if result.returncode == 0:
                         self.thumbnail_path = thumbnail_path
                         self.thumbnail_update_time = datetime.now().isoformat()
                     else:
-                        print(f"Failed to create thumbnail at {self.thumbnail_duration} minute mark")
+                        print(f"Failed to create thumbnail at {thumb_duration} second mark. Error: {result.stderr}")
 
     @staticmethod
     def terminate(pid):
