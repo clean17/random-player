@@ -124,7 +124,8 @@ def cleanup_tasks():
     global tasks
     current_time = datetime.now()
     threshold_time = timedelta(minutes=20)  # 20분
-    tasks = [task for task in tasks if current_time - task.last_modified_time < threshold_time]
+    format_str = '%Y-%m-%d %H:%M:%S'
+    tasks = [task for task in tasks if current_time - datetime.strptime(task.last_modified_time, format_str) < threshold_time]
 
 # 작업 상태를 주기적으로 업데이트하는 스레드
 def update_task_status():
