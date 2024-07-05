@@ -6,7 +6,9 @@ import os
 import glob
 import subprocess
 from datetime import datetime, timedelta
+import multiprocessing
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 tasks = []
 
@@ -27,7 +29,7 @@ class Task:
         self.creation_time = datetime.now()
         self.initial_thumbnail_created = False
         self.thumbnail_duration = 0
-
+        #self.executor = ThreadPoolExecutor(max_workers=10) # 스레드 풀
 
     def update_last_modified(self):
         latest_file = self.get_latest_file()
@@ -36,10 +38,39 @@ class Task:
             self.file_name = os.path.basename(latest_file)
             self.last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file)).strftime('%Y-%m-%d %H:%M:%S')
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
+
+            params = {
+                'file_name': self.file_name,
+                'work_directory': self.work_directory,
+                'initial_thumbnail_created': self.initial_thumbnail_created,
+                'thumbnail_path': self.thumbnail_path,
+                'thumbnail_update_time': self.thumbnail_update_time,
+                'last_modified_time': self.last_modified_time,
+                'creation_time': self.creation_time,
+            }
+
+            # multiprocessing.Manager > 공유 dict
+            manager = multiprocessing.Manager()
+            return_dict = manager.dict()
+
+            process = multiprocessing.Process(target=self.generate_thumbnail, args=(params, return_dict))
+            process.start()
+            process.join()
+
+            # 프로세스가 완료된 후 공유된 dict에서 결과를 가져옴
+            self.thumbnail_path = return_dict.get('thumbnail_path')
+            self.thumbnail_update_time = return_dict.get('thumbnail_update_time')
+            self.initial_thumbnail_created = return_dict.get('initial_thumbnail_created')
+            print(f"Updated thumbnail_path: {self.thumbnail_path}")
+            print(f"Updated thumbnail_update_time: {self.thumbnail_update_time}")
+
             # process = multiprocessing.Process(target=self.generate_thumbnail)
-            # process.start() # multiprocessing는 메모리를 공유하지 않는다 -> class의 필드를 공유하지 않음
-            thread = threading.Thread(target=self.generate_thumbnail)
-            thread.start()
+            # process.start() # 1. multiprocessing는 메모리를 공유하지 않는다 -> class의 필드를 공유하지 않음
+
+            #thread = threading.Thread(target=self.generate_thumbnail) # 2. 스레드를 무한히 생성하는 오류
+            #thread.start()
+
+            #self.executor.submit(self.generate_thumbnail) # 3. 자식 프로세스가 무한히 증식한다..
 
     #def get_latest_file(self):
         # 파일 수정 시간이 딜레이 되는 이슈
@@ -57,7 +88,6 @@ class Task:
         #    return None
 
     def get_latest_file(self):
-
         search_pattern = os.path.join(self.work_directory, self.file_pattern)
         files = glob.glob(search_pattern)
 
@@ -67,43 +97,50 @@ class Task:
         latest_file = max(files, key=os.path.getmtime)
         return latest_file
 
-    def generate_thumbnail(self):
-        if self.file_name and self.creation_time:
-            if not self.initial_thumbnail_created:
+    def generate_thumbnail(self, params, return_dict):
+        file_name = params['file_name']
+        work_directory = params['work_directory']
+        initial_thumbnail_created = params['initial_thumbnail_created']
+        thumbnail_path = params['thumbnail_path']
+        thumbnail_update_time = params['thumbnail_update_time']
+        last_modified_time = params['last_modified_time']
+        creation_time = params['creation_time']
+
+        if file_name and creation_time:
+            if not initial_thumbnail_created:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
-                initial_thumbnail_path = os.path.join(self.work_directory, self.file_name.replace('.ts', '_thumb.jpg'))
-                initial_cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss 1 -vframes 1 -s 426x240 -q:v 10 {initial_thumbnail_path}"
+                initial_thumbnail_path = os.path.join(work_directory, file_name.replace('.ts', '_thumb.jpg'))
+                initial_cmd = f"ffmpeg -y -i {os.path.join(work_directory, file_name)} -ss 1 -vframes 1 -s 426x240 -q:v 10 {initial_thumbnail_path}"
                 result = subprocess.run(initial_cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                 if result.returncode == 0:
-                    self.thumbnail_path = initial_thumbnail_path
-                    self.initial_thumbnail_created = True
-                    self.thumbnail_update_time = datetime.now().isoformat()
-                    # print(f"Initial thumbnail created at {self.thumbnail_path}")
+                    thumbnail_path = initial_thumbnail_path
+                    initial_thumbnail_created = True
+                    thumbnail_update_time = datetime.now().isoformat()
                 else:
                     print("Failed to create initial thumbnail. Error: {result.stderr}")
 
-            elif self.thumbnail_update_time:
-                current_time = datetime.now() # ok
-                last_update_time = datetime.fromisoformat(self.thumbnail_update_time)
+            elif thumbnail_update_time:
+                current_time = datetime.now()
+                last_update_time = datetime.fromisoformat(thumbnail_update_time)
 
-                modification_time = datetime.strptime(self.last_modified_time, '%Y-%m-%d %H:%M:%S')
-                duration = modification_time - self.creation_time # 파일수정 - 생성
+                modification_time = datetime.strptime(last_modified_time, '%Y-%m-%d %H:%M:%S')
+                duration = modification_time - creation_time
                 thumb_duration = duration.total_seconds()
 
-                thumb_time_difference = (current_time - last_update_time).total_seconds() # 마지막 썸네일 생성시간 차
-                # print(self.file_name, time_difference)
-                # print('self.last_modified_time', self.last_modified_time)
-                # print('thumb_duration', thumb_duration)
+                thumb_time_difference = (current_time - last_update_time).total_seconds()
                 if thumb_time_difference >= 60:
-                    # self.thumbnail_duration = (current_time - self.creation_time).total_seconds()
-                    thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_thumb.jpg")
-                    cmd = f"ffmpeg -y -i {os.path.join(self.work_directory, self.file_name)} -ss {int(thumb_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
+                    thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
+                    cmd = f"ffmpeg -y -i {os.path.join(work_directory, file_name)} -ss {int(thumb_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8')
                     if result.returncode == 0:
-                        self.thumbnail_path = thumbnail_path
-                        self.thumbnail_update_time = datetime.now().isoformat()
+                        thumbnail_path = thumbnail_path
+                        thumbnail_update_time = datetime.now().isoformat()
                     else:
                         print(f"Failed to create thumbnail at {thumb_duration} second mark. Error: {result.stderr}")
+
+        return_dict['thumbnail_path'] = thumbnail_path
+        return_dict['initial_thumbnail_created'] = initial_thumbnail_created
+        return_dict['thumbnail_update_time'] = thumbnail_update_time
 
     @staticmethod
     def terminate(pid):
@@ -129,26 +166,8 @@ def cleanup_tasks():
 
 # 작업 상태를 주기적으로 업데이트하는 스레드
 def update_task_status():
-    # while True:
-    #     for task in tasks:
-    #         task.update_last_modified()
-    #     time.sleep(10)
-
-    # 10초마다 반복 실행
-    # while True:
-    #     start_time = time.time()
-    #     for task in tasks:
-    #         task.update_last_modified()
-    #
-    #     # 다음 실행 시간을 계산
-    #     end_time = time.time()
-    #     elapsed_time = end_time - start_time
-    #     next_run_in = max(10 - elapsed_time, 0)
-    #     time.sleep(next_run_in)
-
     for task in tasks:
         task.update_last_modified()
-
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
