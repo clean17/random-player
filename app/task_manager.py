@@ -1,4 +1,3 @@
-import cmd
 # import sched
 from apscheduler.schedulers.background import BackgroundScheduler
 import threading
@@ -6,17 +5,14 @@ import time
 import os
 import glob
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
-import multiprocessing
 
 tasks = []
 
-# 'apscheduler.scheduler' 로거 가져오기
-apscheduler_logger = logging.getLogger('apscheduler.scheduler')
-apscheduler_logger.setLevel(logging.ERROR)
+# scheduler = sched.scheduler(time.time, time.sleep) # sched 기본 스케줄러, 블로킹
 
-# scheduler = sched.scheduler(time.time, time.sleep) # sched
+# 스케줄리 인스턴스 생성 (논블로킹)
 scheduler = BackgroundScheduler()
 
 class Task:
@@ -30,13 +26,13 @@ class Task:
         self.thumbnail_update_time = None
         self.creation_time = datetime.now()
         self.initial_thumbnail_created = False
-        self.thumbnail_duration = 0;
+        self.thumbnail_duration = 0
 
 
     def update_last_modified(self):
         latest_file = self.get_latest_file()
         if latest_file:
-            print('################################ ', latest_file, self.thumbnail_update_time)
+            # print('################################ ', latest_file, self.thumbnail_update_time)
             self.file_name = os.path.basename(latest_file)
             self.last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file)).strftime('%Y-%m-%d %H:%M:%S')
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
@@ -96,8 +92,8 @@ class Task:
 
                 thumb_time_difference = (current_time - last_update_time).total_seconds() # 마지막 썸네일 생성시간 차
                 # print(self.file_name, time_difference)
-                print('self.last_modified_time', self.last_modified_time)
-                print('thumb_duration', thumb_duration)
+                # print('self.last_modified_time', self.last_modified_time)
+                # print('thumb_duration', thumb_duration)
                 if thumb_time_difference >= 60:
                     # self.thumbnail_duration = (current_time - self.creation_time).total_seconds()
                     thumbnail_path = os.path.join(self.work_directory, f"{self.file_name.replace('.ts', '')}_thumb.jpg")
@@ -123,6 +119,12 @@ class Task:
 # 현재 날짜를 YYMMDD 형식으로 가져오기
 def current_date():
     return datetime.now().strftime('%y%m%d')
+
+def cleanup_tasks():
+    global tasks
+    current_time = datetime.now()
+    threshold_time = timedelta(minutes=20)  # 20분
+    tasks = [task for task in tasks if current_time - task.last_modified_time < threshold_time]
 
 # 작업 상태를 주기적으로 업데이트하는 스레드
 def update_task_status():
@@ -152,6 +154,6 @@ def update_task_status():
 
 # 스케줄러에 작업 추가
 scheduler.add_job(update_task_status, 'interval', seconds=15)
+scheduler.add_job(cleanup_tasks, 'interval', minutes=5)
 
-# 스케줄러 시작
 scheduler.start()
