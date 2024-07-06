@@ -37,7 +37,7 @@ class Task:
         self.pid = pid
         self.file_pattern = file_pattern
         self.work_directory = work_directory
-        self.last_modified_time = None
+        self.last_modified_time = datetime.now()
         self.last_checked_time = None
         self.file_name = None
         self.thumbnail_path = None
@@ -131,7 +131,7 @@ class Task:
                 thumb_duration = duration.total_seconds()
                 thumb_time_difference = (current_time - last_update_time).total_seconds()
 
-                if thumb_time_difference >= 10:
+                if thumb_time_difference >= 60:
                     thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
                     (
                         ffmpeg.input(target_file, ss=int(thumb_duration))
@@ -172,10 +172,6 @@ def cleanup_tasks():
     new_tasks = []
 
     for task in tasks:
-        if task.last_modified_time is None:
-            print(f"Task {task.file_name} has no last_modified_time. Skipping.")
-            continue
-
         task_time = datetime.strptime(task.last_modified_time, format_str)
         time_difference = current_time - task_time
         print(f"######### Task ############ {task.file_name} - - time_difference : {time_difference}")
