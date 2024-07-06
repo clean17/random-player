@@ -35,6 +35,8 @@ def get_videos():
             if file.endswith(('.mp4', '.avi', '.mkv', 'ts')):
                 rel_dir = os.path.relpath(root, video_directory)
                 rel_file = os.path.join(rel_dir, file)
+
+                rel_file = rel_file.replace(os.path.sep, '/')
                 videos.append(rel_file)
 
     # print('############### video_list ###############')

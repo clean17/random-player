@@ -11,6 +11,7 @@ let videoRight;
 let filenameDisplay = document.getElementById('video-filename');
 let previousVideos = []
 let mimeType;
+let prevButton = document.getElementById('prevButton');
 
 function extractFilename(url) {
     const cleanUrl = url.split('?')[0];
@@ -24,14 +25,21 @@ function getVideo() {
             let videos = response.data;
             if (videos.length > 0) {
                 let randomIndex = Math.floor(Math.random() * videos.length);
-                currentVideo = videos[randomIndex].replace(/.\\/g,'');
+                currentVideo = videos[randomIndex]
+                // console.log('currentVideo', currentVideo)
                 let url = directory === '0' ? `/video/stream/` : `/video/video/`;
                 let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
                 let fileExtension = currentVideo.split('.').pop();
                 mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
                 videoPlayer.querySelector('source').src = videoUrl;
-                document.title = currentVideo
-                player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
+                document.title = currentVideo.split('/')[1]
+
+                if (videojs.players['videoPlayer']) { // 재사용
+                    player = videojs.players['videoPlayer'];
+                } else {
+                    player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
+                }
+
                 player.src({ type: mimeType, src: videoUrl });
                 player.load();
                 player.off('loadeddata');
@@ -40,10 +48,10 @@ function getVideo() {
                     pushVideoArr(videoUrl)
                     addKeyboardControls();
                     let sourceElement = videoPlayer.getElementsByTagName('source')[0];
-                    let videoFilename = extractFilename(sourceElement.getAttribute('src'))
+                    let videoFilename =(sourceElement.getAttribute('src'))
 
-                    console.log('getvideo', decodeURIComponent(videoFilename))
-                    filenameDisplay.textContent = decodeURIComponent(videoFilename);
+                    console.log('getvideo', extractFilename(decodeURIComponent(videoFilename)))
+                    filenameDisplay.textContent = extractFilename(decodeURIComponent(videoFilename))
                 });
                 player.off('loadedmetadata');
                 player.on('loadedmetadata', function() {
@@ -65,7 +73,7 @@ function delVideo() {
             axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`)
                 .then(response => {
                     if (response.status === 204) {
-                        alert(`${currentVideo}`+` is deleted`)
+                        // alert(`${currentVideo}`+` is deleted`)
                         currentVideo = '';
                         getVideo();
                     } else {
@@ -85,7 +93,7 @@ function pushVideoArr(url) {
     previousVideos.push(url)
 }
 
-document.getElementById('prevButton').addEventListener('click', function() {
+prevButton.addEventListener('click', function() {
     let prevVideoUrl = previousVideos.shift();
     if (prevVideoUrl) {
         player.src({ mimeType, src: prevVideoUrl });
@@ -94,7 +102,7 @@ document.getElementById('prevButton').addEventListener('click', function() {
         player.on('loadeddata', function() {
             player.play();
             addKeyboardControls();
-            let videoFilename = decodeURIComponent(extractFilename(prevVideoUrl))
+            let videoFilename = extractFilename(decodeURIComponent(extractFilename(prevVideoUrl)))
             currentVideo = videoFilename
 
             console.log('prevButton', videoFilename)
@@ -282,6 +290,9 @@ function videoKeyEvent(event) {
         case 'PageDown':  // 'PageDown' 키를 눌러 비디오 가져오기 함수 호출
             getVideo();
             break;
+        case 'PageUp':
+            prevButton.click(); // 'PageUp' 키를 눌러 이전 비디오 재생
+            break;
         case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
             event.preventDefault();  // 스페이스바의 기본 동작 방지
             if (player.paused()) {
@@ -305,7 +316,6 @@ function threeSplitLayout() {
     let videoRatio = videoElement.videoHeight / videoElement.videoWidth;
     if (videoRatio > 1) {
         let videoContainer = document.getElementById('videoContainer');
-        let videoPlayer = document.getElementById('videoPlayer');
         // 왼쪽 비디오 추가
         videoLeft = document.createElement('video');
         videoLeft.id = 'videoLeft';
