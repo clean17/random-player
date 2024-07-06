@@ -17,6 +17,7 @@ portalocker==2.10.0
 psutil==6.0.0
 pytz==2024.1
 pywin32==306
+Send2Trash==1.8.3
 six==1.16.0
 tzdata==2024.1
 tzlocal==5.2
