@@ -61,6 +61,7 @@ class Task:
                 self.set_param_generate_thumbnail()
 
     def set_param_generate_thumbnail(self):
+        # 처음부터 ffmpeg를 import 했으면 multiprocessing을 사용할 이유가 있었을까?
         params = {
             'file_name': self.file_name,
             'work_directory': self.work_directory,
@@ -95,26 +96,31 @@ class Task:
         return latest_file
 
     def generate_thumbnail(self, params, return_dict):
-        file_name = params['file_name']
-        work_directory = params['work_directory']
-        initial_thumbnail_created = params['initial_thumbnail_created']
-        thumbnail_path = params['thumbnail_path']
-        thumbnail_update_time = params['thumbnail_update_time']
-        last_modified_time = params['last_modified_time']
-        creation_time = params['creation_time']
+        file_name = params.get("file_name")
+        work_directory = params.get("work_directory")
+        creation_time = params.get("creation_time")
+        last_modified_time = params.get("last_modified_time")
+        initial_thumbnail_created = params.get("initial_thumbnail_created")
+        thumbnail_update_time = params.get("thumbnail_update_time")
+        thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
 
         if file_name and creation_time:
+            target_file = os.path.join(work_directory, file_name)
+
             if not initial_thumbnail_created:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
                 initial_thumbnail_path = os.path.join(work_directory, file_name.replace('.ts', '_thumb.jpg'))
-                initial_cmd = f"ffmpeg -y -i {os.path.join(work_directory, file_name)} -ss 1 -vframes 1 -s 426x240 -q:v 10 {initial_thumbnail_path}"
-                result = subprocess.run(initial_cmd, shell=True, capture_output=True, text=True, encoding='utf-8', check=True)
-                if result.returncode == 0:
+                (
+                    ffmpeg.input(target_file, ss=1)
+                    .output(initial_thumbnail_path, vframes=1, s='426x240', q=10, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                    .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
+                )
+                if os.path.exists(initial_thumbnail_path):
                     thumbnail_path = initial_thumbnail_path
                     initial_thumbnail_created = True
                     thumbnail_update_time = datetime.now().isoformat()
                 else:
-                    print("Failed to create initial thumbnail. Error: {result.stderr}")
+                    print("Failed to create initial thumbnail.")
 
             elif thumbnail_update_time:
                 current_time = datetime.now()
@@ -125,19 +131,22 @@ class Task:
                 thumb_duration = duration.total_seconds()
                 thumb_time_difference = (current_time - last_update_time).total_seconds()
 
-                if thumb_time_difference >= 300:
+                if thumb_time_difference >= 10:
                     thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
-                    cmd = f"ffmpeg -y -i {os.path.join(work_directory, file_name)} -ss {int(thumb_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', check=True)
-                    if result.returncode == 0:
+                    (
+                        ffmpeg.input(target_file, ss=int(thumb_duration))
+                        .output(thumbnail_path, vframes=1, s='426x240', q=10, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                        .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
+                    )
+                    if os.path.exists(thumbnail_path):
                         thumbnail_update_time = datetime.now().isoformat()
                         # print(f"Created Thumbnail at {file_name} {thumb_duration} second mark.")
                     else:
-                        print(f"Failed to create thumbnail at {thumb_duration} second mark. Error: {result.stderr}")
+                        print(f"Failed to create thumbnail at {thumb_duration} second mark.")
 
-        return_dict['thumbnail_path'] = thumbnail_path
-        return_dict['initial_thumbnail_created'] = initial_thumbnail_created
-        return_dict['thumbnail_update_time'] = thumbnail_update_time
+            return_dict['thumbnail_path'] = thumbnail_path
+            return_dict['initial_thumbnail_created'] = initial_thumbnail_created
+            return_dict['thumbnail_update_time'] = thumbnail_update_time
 
     @staticmethod
     def terminate(pid):
