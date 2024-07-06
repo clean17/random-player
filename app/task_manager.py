@@ -4,6 +4,7 @@ import threading
 import time
 import os
 import glob
+import ffmpeg
 import subprocess
 from datetime import datetime, timedelta
 from multiprocessing import Process, Manager
@@ -48,9 +49,10 @@ class Task:
 
     def update_last_modified(self):
         latest_file = self.get_latest_file()
-        if latest_file:
-            self.file_name = os.path.basename(latest_file)
+        if not self.initial_thumbnail_created:
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
+            self.file_name = os.path.basename(latest_file)
+        if latest_file:
             last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file))
             if self.last_checked_time is None or last_modified_time != self.last_checked_time:
                 self.last_modified_time = last_modified_time.strftime('%Y-%m-%d %H:%M:%S')
@@ -129,7 +131,7 @@ class Task:
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', check=True)
                     if result.returncode == 0:
                         thumbnail_update_time = datetime.now().isoformat()
-                        print(f"Created Thumbnail at {file_name} {thumb_duration} second mark.")
+                        # print(f"Created Thumbnail at {file_name} {thumb_duration} second mark.")
                     else:
                         print(f"Failed to create thumbnail at {thumb_duration} second mark. Error: {result.stderr}")
 
@@ -167,7 +169,7 @@ def cleanup_tasks():
 
         task_time = datetime.strptime(task.last_modified_time, format_str)
         time_difference = current_time - task_time
-        print(f"Task {task.file_name}: last_modified_time = {task.last_modified_time}, current_time = {current_time}, time_difference = {time_difference}")
+        print(f"######### Task ############ {task.file_name} - - time_difference : {time_difference}")
 
         if time_difference < threshold_time:
             new_tasks.append(task)
