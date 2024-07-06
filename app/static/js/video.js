@@ -12,19 +12,25 @@ let filenameDisplay = document.getElementById('video-filename');
 let previousVideos = []
 let mimeType;
 
+function extractFilename(url) {
+    const cleanUrl = url.split('?')[0];
+    const parts = cleanUrl.split('/');
+    return parts[parts.length - 1];
+}
+
 function getVideo() {
     axios.get(`/video/videos?directory=${directory}`)
         .then(response => {
             let videos = response.data;
             if (videos.length > 0) {
                 let randomIndex = Math.floor(Math.random() * videos.length);
-                currentVideo = videos[randomIndex];
+                currentVideo = videos[randomIndex].replace(/.\\/g,'');
                 let url = directory === '0' ? `/video/stream/` : `/video/video/`;
                 let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
                 let fileExtension = currentVideo.split('.').pop();
                 mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
                 videoPlayer.querySelector('source').src = videoUrl;
-                document.title = currentVideo.replace(/.\\/g,'')
+                document.title = currentVideo
                 player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
                 player.src({ type: mimeType, src: videoUrl });
                 player.load();
@@ -34,8 +40,9 @@ function getVideo() {
                     pushVideoArr(videoUrl)
                     addKeyboardControls();
                     let sourceElement = videoPlayer.getElementsByTagName('source')[0];
-                    let videoFilename = sourceElement.getAttribute('src').split('/').pop().split('?')[0].slice(4)
+                    let videoFilename = extractFilename(sourceElement.getAttribute('src'))
 
+                    console.log('getvideo', decodeURIComponent(videoFilename))
                     filenameDisplay.textContent = decodeURIComponent(videoFilename);
                 });
                 player.off('loadedmetadata');
@@ -50,7 +57,7 @@ function getVideo() {
 
 function delVideo() {
     if (currentVideo) {
-        if (confirm("Are you sure?")) {
+        if (confirm(`Delete \r\n ${currentVideo} ?`)) {
             videoPlayer.pause();
             videoPlayer.src = '';
             videoPlayer.load();
@@ -58,6 +65,7 @@ function delVideo() {
             axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`)
                 .then(response => {
                     if (response.status === 204) {
+                        alert(`${currentVideo}`+` is deleted`)
                         currentVideo = '';
                         getVideo();
                     } else {
@@ -81,10 +89,18 @@ document.getElementById('prevButton').addEventListener('click', function() {
     let prevVideoUrl = previousVideos.shift();
     if (prevVideoUrl) {
         player.src({ mimeType, src: prevVideoUrl });
-        player.play();
-        let url1 = prevVideoUrl.split('/')[3]
-        let url2 = url1.slice(0, url1.lastIndexOf('?'))
-        currentVideo = decodeURIComponent(url2)
+        player.load();
+        player.off('loadeddata');
+        player.on('loadeddata', function() {
+            player.play();
+            addKeyboardControls();
+            let videoFilename = decodeURIComponent(extractFilename(prevVideoUrl))
+            currentVideo = videoFilename
+
+            console.log('prevButton', videoFilename)
+            filenameDisplay.textContent = videoFilename;
+            document.title = videoFilename
+        });
     }
 });
 

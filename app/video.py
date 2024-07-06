@@ -4,7 +4,7 @@ import subprocess
 import time
 import cv2
 import re
-
+from send2trash import send2trash
 from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for, Response, abort
 from flask_login import login_required
 
@@ -53,10 +53,14 @@ def get_video(filename):
 @login_required
 def delete_video(filename):
     directory = request.args.get('directory')
-    video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
+    video_directory = settings.get('VIDEO_DIRECTORY' + directory)  # 딕셔너리 접근 방식으로 수정
+    if not video_directory:
+        return '', 404
+    
     file_path = os.path.join(video_directory, filename)
     if os.path.exists(file_path):
-        os.remove(file_path)
+        send2trash(file_path) # 휴지통
+        # os.remove(file_path)
         return '', 204
     return '', 404
 

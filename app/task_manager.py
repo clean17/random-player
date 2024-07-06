@@ -57,7 +57,7 @@ class Task:
             if self.last_checked_time is None or last_modified_time != self.last_checked_time:
                 self.last_modified_time = last_modified_time.strftime('%Y-%m-%d %H:%M:%S')
                 self.last_checked_time = last_modified_time
-                print(f"######### Updated ######### : {self.file_name} - - {self.thumbnail_update_time} - - {self.last_modified_time}")
+                # print(f"######### Updated ######### : {self.file_name} - - {self.thumbnail_update_time} - - {self.last_modified_time}")
                 self.set_param_generate_thumbnail()
 
     def set_param_generate_thumbnail(self):
@@ -174,7 +174,7 @@ def cleanup_tasks():
     for task in tasks:
         task_time = datetime.strptime(task.last_modified_time, format_str)
         time_difference = current_time - task_time
-        print(f"######### Task ############ {task.file_name} - - time_difference : {time_difference}")
+        print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
 
         if time_difference < threshold_time:
             new_tasks.append(task)
@@ -190,7 +190,7 @@ def update_task_status():
 # threading.Thread(target=update_task_status, daemon=True).start()
 
 # 스케줄러에 작업 추가, max_instances 기본 1
-scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=1)
+scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=3)
 scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
 
 scheduler.start()
