@@ -37,7 +37,7 @@ class Task:
         self.pid = pid
         self.file_pattern = file_pattern
         self.work_directory = work_directory
-        self.last_modified_time = datetime.now()
+        self.last_modified_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.last_checked_time = None
         self.file_name = None
         self.thumbnail_path = None
@@ -112,7 +112,7 @@ class Task:
                 initial_thumbnail_path = os.path.join(work_directory, file_name.replace('.ts', '_thumb.jpg'))
                 (
                     ffmpeg.input(target_file, ss=1)
-                    .output(initial_thumbnail_path, vframes=1, s='426x240', q=10, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                    .output(initial_thumbnail_path, vframes=1, s='640x360', q=5, pix_fmt='yuvj420p', loglevel="panic", update=1)
                     .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
                 )
                 if os.path.exists(initial_thumbnail_path):
@@ -131,11 +131,11 @@ class Task:
                 thumb_duration = duration.total_seconds()
                 thumb_time_difference = (current_time - last_update_time).total_seconds()
 
-                if thumb_time_difference >= 60:
+                if thumb_time_difference >= 30:
                     thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
                     (
                         ffmpeg.input(target_file, ss=int(thumb_duration))
-                        .output(thumbnail_path, vframes=1, s='426x240', q=10, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                        .output(thumbnail_path, vframes=1, s='640x360', q=5, pix_fmt='yuvj420p', loglevel="panic", update=1)
                         .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
                     )
                     if os.path.exists(thumbnail_path):

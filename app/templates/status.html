@@ -29,7 +29,7 @@
         </div>#}
         <h2 style="flex-grow: 1; text-align: center;">Task Status</h2>
         <a href="{{ url_for('ffmpeg.ffmpeg') }}" style="position: absolute; right: 0;">
-            <button type="button" class="button">add</button>
+            <button type="button" class="button" id="addButton">add</button>
         </a>
     </div>
     <div class="table-container" style="overflow-y: auto; {#max-height: calc(100vh - 50px);#}">
@@ -154,6 +154,16 @@
     document.getElementById('dropdownContent')?.addEventListener('click', function(event) {
         event.stopPropagation();
     });#}
+
+    document.addEventListener('keydown', function(event) {
+        // Ctrl + Enter
+        if (event.ctrlKey && event.key === 'Enter') {
+            var addButton = document.getElementById('addButton');
+            if (addButton) {
+                addButton.click();
+            }
+        }
+    });
 
     function initPage() {
         fetchTasks();
