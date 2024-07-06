@@ -4,6 +4,8 @@ import sys
 import logging
 from waitress import serve
 from app import create_app
+# from flask_cors import CORS
+
 
 # 전역 로거  (웹요청이 아닌 파이썬 내부 로그를 출력) - root
 console_handler = logging.StreamHandler()
@@ -49,8 +51,11 @@ app = create_app()
 
 def signal_handler(sig, frame):
     print("Exiting server...")
-    os.system('taskkill /f /im python.exe')
-    sys.exit(0)
+    pid = os.getpid()
+    os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
+
+    # os.system('taskkill /f /im python.exe')
+    # sys.exit(0)
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
