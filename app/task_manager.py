@@ -72,42 +72,14 @@ class Task:
         # multiprocessing.Manager > 공유 dict
         manager = Manager()
         return_dict = manager.dict()
-        processes = []
-
-        # 비동기 프로세스 시작
         process = Process(target=self.generate_thumbnail, args=(params, return_dict))
         process.start()
-        processes.append(process)
-
-        # 모든 프로세스가 완료될 때까지 대기
-        for process in processes:
-            process.join()
+        process.join()
 
         # 프로세스가 완료된 후 공유된 dict에서 결과를 가져옴
         self.thumbnail_path = return_dict.get('thumbnail_path')
         self.thumbnail_update_time = return_dict.get('thumbnail_update_time')
         self.initial_thumbnail_created = return_dict.get('initial_thumbnail_created')
-
-
-        # processes = [] #
-        #
-        # process = multiprocessing.Process(target=self.generate_thumbnail, args=(params, return_dict))
-        # process.start()
-        # processes.append(process) #
-        # # process.join()
-        #
-        # for process in processes: #
-        #     process.join() #
-        #
-        # for i in range(len(processes)): #
-        #     if i in return_dict: #
-        #         result = return_dict[i] #
-        #         print(f"Thumbnail updated at {result['thumbnail_update_time']} for index {i}") #
-        #
-        # # 프로세스가 완료된 후 공유된 dict에서 결과를 가져옴
-        # self.thumbnail_path = return_dict.get('thumbnail_path')
-        # self.thumbnail_update_time = return_dict.get('thumbnail_update_time')
-        # self.initial_thumbnail_created = return_dict.get('initial_thumbnail_created')
 
     def get_latest_file(self):
         search_pattern = os.path.join(self.work_directory, self.file_pattern)
@@ -156,7 +128,6 @@ class Task:
                     cmd = f"ffmpeg -y -i {os.path.join(work_directory, file_name)} -ss {int(thumb_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', check=True)
                     if result.returncode == 0:
-                        thumbnail_path = thumbnail_path
                         thumbnail_update_time = datetime.now().isoformat()
                         print(f"Created Thumbnail at {file_name} {thumb_duration} second mark.")
                     else:
@@ -181,11 +152,11 @@ class Task:
 def current_date():
     return datetime.now().strftime('%y%m%d')
 
+# 작업이 끝난 task 목록 제거
 def cleanup_tasks():
     global tasks
     current_time = datetime.now()
     threshold_time = timedelta(minutes=11)  # 11분
-    # tasks = [task for task in tasks if current_time - datetime.strptime(task.last_modified_time, format_str) < threshold_time]
     format_str = '%Y-%m-%d %H:%M:%S'
     new_tasks = []
 
