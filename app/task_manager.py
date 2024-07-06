@@ -11,7 +11,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 tasks = []
-running_processes = []
 
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
@@ -56,7 +55,7 @@ class Task:
             if self.last_checked_time is None or last_modified_time != self.last_checked_time:
                 self.last_modified_time = last_modified_time.strftime('%Y-%m-%d %H:%M:%S')
                 self.last_checked_time = last_modified_time
-                # print(f"######### Updated ######### : {self.file_name} - - {self.thumbnail_update_time} - - {self.last_modified_time}")
+                print(f"######### Updated ######### : {self.file_name} - - {self.thumbnail_update_time} - - {self.last_modified_time}")
                 self.set_param_generate_thumbnail()
 
     def set_param_generate_thumbnail(self):
@@ -73,11 +72,42 @@ class Task:
         # multiprocessing.Manager > 공유 dict
         manager = Manager()
         return_dict = manager.dict()
+        processes = []
+
+        # 비동기 프로세스 시작
         process = Process(target=self.generate_thumbnail, args=(params, return_dict))
         process.start()
+        processes.append(process)
 
-        # 프로세스를 리스트에 추가하여 추적
-        running_processes.append((self, process, return_dict))
+        # 모든 프로세스가 완료될 때까지 대기
+        for process in processes:
+            process.join()
+
+        # 프로세스가 완료된 후 공유된 dict에서 결과를 가져옴
+        self.thumbnail_path = return_dict.get('thumbnail_path')
+        self.thumbnail_update_time = return_dict.get('thumbnail_update_time')
+        self.initial_thumbnail_created = return_dict.get('initial_thumbnail_created')
+
+
+        # processes = [] #
+        #
+        # process = multiprocessing.Process(target=self.generate_thumbnail, args=(params, return_dict))
+        # process.start()
+        # processes.append(process) #
+        # # process.join()
+        #
+        # for process in processes: #
+        #     process.join() #
+        #
+        # for i in range(len(processes)): #
+        #     if i in return_dict: #
+        #         result = return_dict[i] #
+        #         print(f"Thumbnail updated at {result['thumbnail_update_time']} for index {i}") #
+        #
+        # # 프로세스가 완료된 후 공유된 dict에서 결과를 가져옴
+        # self.thumbnail_path = return_dict.get('thumbnail_path')
+        # self.thumbnail_update_time = return_dict.get('thumbnail_update_time')
+        # self.initial_thumbnail_created = return_dict.get('initial_thumbnail_created')
 
     def get_latest_file(self):
         search_pattern = os.path.join(self.work_directory, self.file_pattern)
@@ -91,7 +121,6 @@ class Task:
         return latest_file
 
     def generate_thumbnail(self, params, return_dict):
-        print('## call generate_thumbnail')
         file_name = params['file_name']
         work_directory = params['work_directory']
         initial_thumbnail_created = params['initial_thumbnail_created']
@@ -110,7 +139,6 @@ class Task:
                     thumbnail_path = initial_thumbnail_path
                     initial_thumbnail_created = True
                     thumbnail_update_time = datetime.now().isoformat()
-                    print('## first thumnail ok')
                 else:
                     print("Failed to create initial thumbnail. Error: {result.stderr}")
 
@@ -123,7 +151,7 @@ class Task:
                 thumb_duration = duration.total_seconds()
                 thumb_time_difference = (current_time - last_update_time).total_seconds()
 
-                if thumb_time_difference >= 15:
+                if thumb_time_difference >= 300:
                     thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
                     cmd = f"ffmpeg -y -i {os.path.join(work_directory, file_name)} -ss {int(thumb_duration)} -frames:v 1 -s 426x240 -q:v 10 {thumbnail_path}"
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', check=True)
@@ -153,18 +181,17 @@ class Task:
 def current_date():
     return datetime.now().strftime('%y%m%d')
 
-# 이미 종료된 프로세스는 목록에서 제거
 def cleanup_tasks():
     global tasks
     current_time = datetime.now()
     threshold_time = timedelta(minutes=11)  # 11분
+    # tasks = [task for task in tasks if current_time - datetime.strptime(task.last_modified_time, format_str) < threshold_time]
     format_str = '%Y-%m-%d %H:%M:%S'
     new_tasks = []
 
     for task in tasks:
         if task.last_modified_time is None:
             print(f"Task {task.file_name} has no last_modified_time. Skipping.")
-            new_tasks.append(task)  # last_modified_time이 없으면 유지
             continue
 
         task_time = datetime.strptime(task.last_modified_time, format_str)
@@ -172,33 +199,14 @@ def cleanup_tasks():
         print(f"Task {task.file_name}: last_modified_time = {task.last_modified_time}, current_time = {current_time}, time_difference = {time_difference}")
 
         if time_difference < threshold_time:
-            new_tasks.append(task)  # 11분 미만이면 유지
+            new_tasks.append(task)
 
     tasks[:] = new_tasks
-    print(f"Remaining tasks: {len(tasks)}")
-
-
 
 # 작업 상태를 주기적으로 업데이트하는 스레드
 def update_task_status():
     for task in tasks:
         task.update_last_modified()
-
-def check_running_processes():
-    global running_processes
-    for entry in running_processes[:]:  # 리스트 복사본을 사용하여 안전하게 반복
-        if len(entry) != 3:
-            print(f"Skipping entry with unexpected format: {entry}")
-            continue
-        task, process, return_dict = entry
-        if not process.is_alive():
-            process.join()  # 프로세스가 종료되었으므로 리소스 해제
-            if 'thumbnail_path' in return_dict:
-                task.thumbnail_path = return_dict['thumbnail_path']
-                task.thumbnail_update_time = return_dict['thumbnail_update_time']
-                task.initial_thumbnail_created = return_dict['initial_thumbnail_created']
-                print(f"Thumbnail updated at {task.thumbnail_update_time} for file {task.file_name}")
-            running_processes.remove(entry)
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
@@ -206,6 +214,5 @@ def check_running_processes():
 # 스케줄러에 작업 추가, max_instances 기본 1
 scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=1)
 scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
-scheduler.add_job(check_running_processes, 'interval', seconds=5)
 
 scheduler.start()
