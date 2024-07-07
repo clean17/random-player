@@ -112,7 +112,7 @@ class Task:
                 initial_thumbnail_path = os.path.join(work_directory, file_name.replace('.ts', '_thumb.jpg'))
                 (
                     ffmpeg.input(target_file, ss=1)
-                    .output(initial_thumbnail_path, vframes=1, s='640x360', q=5, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                    .output(initial_thumbnail_path, vframes=1, q=5, pix_fmt='yuvj420p', loglevel="panic", update=1)
                     .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
                 )
                 if os.path.exists(initial_thumbnail_path):
@@ -135,7 +135,7 @@ class Task:
                     thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
                     (
                         ffmpeg.input(target_file, ss=int(thumb_duration))
-                        .output(thumbnail_path, vframes=1, s='640x360', q=5, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                        .output(thumbnail_path, vframes=1, q=5, pix_fmt='yuvj420p', loglevel="panic", update=1) # s='640x360'
                         .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
                     )
                     if os.path.exists(thumbnail_path):
