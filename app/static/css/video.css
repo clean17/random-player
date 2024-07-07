@@ -28,12 +28,12 @@
 #videoLeft {
     position: relative;
     z-index: 2;
-    left: 50px;
+    left: 65px;
 }
 #videoRight {
     position: relative;
     z-index: 2;
-    right: 50px;
+    right: 65px;
 }
 
 #video-filename {

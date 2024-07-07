@@ -7,8 +7,6 @@ let topDiv = document.querySelector('.top-bar');
 let audioOffset = 0;
 let syncMessage = document.getElementById('sync-message');
 let volumeMessage = document.getElementById('volume-message');
-let videoLeft;
-let videoRight;
 let filenameDisplay = document.getElementById('video-filename');
 let previousVideos = []
 let mimeType;
@@ -329,20 +327,20 @@ function threeSplitLayout() {
         videoPlayer.style = 'height :100vh; weight: 33.33%'
 
         // 왼쪽 비디오 추가
-        videoLeft = document.createElement('video');
+        let videoLeft = document.createElement('video');
         videoLeft.id = 'videoLeft';
         videoLeft.className = 'video-mirror video-js vjs-default-skin';
-        videoLeft.muted = 'true'
-        videoLeft.autoplay = 'true'
+        videoLeft.muted = true;
+        videoLeft.autoplay = true;
         videoLeft.setAttribute('loop', '');
         videoContainer.insertBefore(videoLeft, videoPlayer);
 
         // 오른쪽 비디오 추가
-        videoRight = document.createElement('video');
+        let videoRight = document.createElement('video');
         videoRight.id = 'videoRight';
         videoRight.className = 'video-mirror video-js vjs-default-skin';
-        videoRight.muted = 'true'
-        videoRight.autoplay = 'true'
+        videoRight.muted = true;
+        videoRight.autoplay = true;
         videoRight.setAttribute('loop', '');
         videoContainer.appendChild(videoRight);
 
