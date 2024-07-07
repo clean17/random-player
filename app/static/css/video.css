@@ -18,8 +18,22 @@
 }
 .video-mirror {
     width: 33.33%;
-    height: auto;
+    height: 100vh;
     object-fit: cover;
+}
+
+#videoPlayer {
+    position: relative;
+}
+#videoLeft {
+    position: relative;
+    z-index: 2;
+    left: 50px;
+}
+#videoRight {
+    position: relative;
+    z-index: 2;
+    right: 50px;
 }
 
 #video-filename {

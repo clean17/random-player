@@ -1,4 +1,5 @@
 let videoPlayer = document.querySelector('#videoPlayer');
+let videoContainer = document.querySelector('#videoContainer');
 let player;
 let currentVideo = '';
 let controls = document.querySelector('#controls');
@@ -17,6 +18,13 @@ function extractFilename(url) {
     const cleanUrl = url.split('?')[0];
     const parts = cleanUrl.split('/');
     return parts[parts.length - 1];
+}
+
+function videoReset() {
+    const videoLeft = document.querySelector('#videoLeft')
+    const videoRight = document.querySelector('#videoRight')
+    if (videoLeft) videoLeft.remove()
+    if (videoRight) videoRight.remove()
 }
 
 function getVideo() {
@@ -47,6 +55,7 @@ function getVideo() {
                     player.play();
                     pushVideoArr(videoUrl)
                     addKeyboardControls();
+
                     let sourceElement = videoPlayer.getElementsByTagName('source')[0];
                     let videoFilename =(sourceElement.getAttribute('src'))
 
@@ -55,7 +64,8 @@ function getVideo() {
                 });
                 player.off('loadedmetadata');
                 player.on('loadedmetadata', function() {
-                    //threeSplitLayout();
+                    videoReset();
+                    threeSplitLayout();
                 });
             } else {
                 alert('No videos found');
@@ -310,12 +320,14 @@ function videoKeyEvent(event) {
     }
 }
 
-// TODO 이벤트만 붙이면 작동할것 같다
 function threeSplitLayout() {
     let videoElement = player.el().querySelector('video');
     let videoRatio = videoElement.videoHeight / videoElement.videoWidth;
-    if (videoRatio > 1) {
+    if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
         let videoContainer = document.getElementById('videoContainer');
+        let videoPlayer = document.getElementById('videoPlayer');
+        videoPlayer.style = 'height :100vh; weight: 33.33%'
+
         // 왼쪽 비디오 추가
         videoLeft = document.createElement('video');
         videoLeft.id = 'videoLeft';
@@ -347,24 +359,25 @@ function threeSplitLayout() {
         }
 
         function pauseVideo() {
-            video.pause();
+            videoLeft.pause();
+            videoRight.pause();
         }
 
-        function skipForward() {
-            if (video.duration - video.currentTime > 10) {
-                video.currentTime += 10;
-            } else {
-                video.currentTime = video.duration; // Move to the end of the video if less than 10s remain
-            }
+        function updateDuration() {
+            let currentTime = player.currentTime();
+            videoLeft.currentTime = currentTime
+            videoRight.currentTime = currentTime
         }
 
-        function skipBackward() {
-            if (video.currentTime > 10) {
-                video.currentTime -= 10;
-            } else {
-                video.currentTime = 0; // Go back to the start if less than 10s into the video
-            }
+        if (videojs.players['videoPlayer']) { // 재사용
+            player = videojs.players['videoPlayer'];
+        } else {
+            player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
         }
+
+        player.on('pause', pauseVideo);
+        player.on('play', playVideo);
+        player.on('seeked', updateDuration);
     }
 }
 
