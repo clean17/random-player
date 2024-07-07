@@ -6,32 +6,43 @@
     border-radius: 3px;
     font-size: 14px;
     display: none;
+    z-index: 5;
 }
 #sync-message {
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 5;
 }
 #volume-message {
     bottom: 50px;
     left: 10px;
+    z-index: 5;
 }
-.video-mirror {
-    width: 33.33%;
+
+#videoContainer {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-around;
     height: 100vh;
+    overflow: hidden;
+}
+
+.video-js, .video-mirror {
+    width: 33.33%;
     object-fit: cover;
 }
 
-#videoPlayer {
+#videoPlayer, #videoLeft, #videoRight {
+    height: 100%;
     position: relative;
 }
 #videoLeft {
-    position: relative;
     z-index: 2;
     left: 65px;
 }
 #videoRight {
-    position: relative;
     z-index: 2;
     right: 65px;
 }

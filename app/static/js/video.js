@@ -324,7 +324,8 @@ function threeSplitLayout() {
     if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
         let videoContainer = document.getElementById('videoContainer');
         let videoPlayer = document.getElementById('videoPlayer');
-        videoPlayer.style = 'height :100vh; weight: 33.33%'
+        let videoWidth = window.screen.width * 0.3333;
+        videoPlayer.style.minWidth = `${videoWidth}px`;
 
         // 왼쪽 비디오 추가
         let videoLeft = document.createElement('video');
