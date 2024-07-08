@@ -61,7 +61,8 @@ def delete_video(filename):
     
     file_path = os.path.join(video_directory, filename)
     if os.path.exists(file_path):
-        send2trash(file_path) # 휴지통
+        normalized_path = os.path.normpath(file_path)
+        send2trash(normalized_path) # 휴지통
         # os.remove(file_path)
         return '', 204
     return '', 404
