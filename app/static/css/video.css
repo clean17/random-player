@@ -25,7 +25,7 @@
     flex-direction: row;
     align-items: stretch;
     justify-content: space-around;
-    height: 100vh;
+    height: 100%;
     overflow: hidden;
 }
 
