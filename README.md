@@ -25,6 +25,15 @@ $ pip install -r requirements.txt
 python run.py
 ```
 
+### 가상환경 제거
+```bash
+rmdir /s /q venv # cmd
+```
+### pip upgrade
+```bash
+python -m pip install --upgrade pip
+```
+
 ### 사용 방법
 `config.ini` 파일을 생성 후 내부에 디렉토리를 지정한다
 ```
