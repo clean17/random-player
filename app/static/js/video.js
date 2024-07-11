@@ -1,4 +1,7 @@
 let videoPlayer = document.querySelector('#videoPlayer');
+let videoSource = document.querySelector('#videoSource');
+let videoLeft ;
+let videoRight ;
 let videoContainer = document.querySelector('#videoContainer');
 let player;
 let currentVideo = '';
@@ -19,65 +22,104 @@ function extractFilename(url) {
 }
 
 function videoReset() {
-    const videoLeft = document.querySelector('#videoLeft')
-    const videoRight = document.querySelector('#videoRight')
-    if (videoLeft) videoLeft.remove()
-    if (videoRight) videoRight.remove()
+    if (videoLeft) {
+        videoLeft.remove()
+    }
+    if (videoRight) {
+        videoRight.remove()
+    }
+}
+
+function initVideo() {
+    if (videoPlayer) {
+        videoPlayer.pause();
+        videoPlayer.onloadedmetadata = null;
+        videoSource.src = ''
+        videoPlayer.load();
+    }
+
+    if (videoLeft) {
+        videoLeft.pause();
+        videoLeft.onloadedmetadata = null;
+        videoLeft.querySelector('source').src = ''
+        videoLeft.load();
+    }
+
+    if (videoRight) {
+        videoRight.pause();
+        videoRight.onloadedmetadata = null;
+        videoRight.querySelector('source').src = ''
+        videoRight.load();
+    }
 }
 
 function getVideo() {
+    initVideo()
+    videoReset();
     axios.get(`/video/videos?directory=${directory}`)
         .then(response => {
             let videos = response.data;
             if (videos.length > 0) {
                 let randomIndex = Math.floor(Math.random() * videos.length);
                 currentVideo = videos[randomIndex]
-                // console.log('currentVideo', currentVideo)
-                let url = directory === '0' ? `/video/stream/` : `/video/video/`;
-                let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
-                let fileExtension = currentVideo.split('.').pop();
-                mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
-                videoPlayer.querySelector('source').src = videoUrl;
-                document.title = currentVideo.split('/')[1]
 
-                if (videojs.players['videoPlayer']) { // 재사용
-                    player = videojs.players['videoPlayer'];
-                } else {
-                    player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
-                }
+                videoSource.src = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`;
+                videoPlayer.load();
+                videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
+                videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
 
-                player.src({ type: mimeType, src: videoUrl });
-                player.load();
-                player.off('loadeddata');
-                player.on('loadeddata', function() {
-                    player.play();
-                    pushVideoArr(videoUrl)
-                    addKeyboardControls();
-
-                    let sourceElement = videoPlayer.getElementsByTagName('source')[0];
-                    let videoFilename =(sourceElement.getAttribute('src'))
-
-                    console.log('getvideo', extractFilename(decodeURIComponent(videoFilename)))
-                    filenameDisplay.textContent = extractFilename(decodeURIComponent(videoFilename))
-                });
-                player.off('loadedmetadata');
-                player.on('loadedmetadata', function() {
-                    videoReset();
-                    threeSplitLayout();
-                });
             } else {
                 alert('No videos found');
             }
         });
 }
 
+function getVideoEvent() {
+    if (!threeSplitLayout()) {
+        // videojs 로 전환
+        changeVideo(directory, currentVideo)
+    }
+    addKeyboardControls();
+}
+
+function changeVideo(directory, currentVideo) {
+    videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
+    initVideo()
+    videoPlayer.classList.add('video-js', ',vjs-default-skin')
+
+    let url = directory === '0' ? `/video/stream/` : `/video/video/`;
+    let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
+    let fileExtension = currentVideo.split('.').pop();
+    mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
+    videoSource.src = videoUrl;
+    document.title = currentVideo.split('/')[1]
+
+    if (videojs.players['videoPlayer']) { // 재사용
+        player = videojs.players['videoPlayer'];
+    } else {
+        player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
+    }
+
+    player.src({type: mimeType, src: videoUrl});
+    player.load();
+    player.off('loadeddata');
+    player.on('loadeddata', function () {
+        player.play();
+        pushVideoArr(videoUrl)
+        // addKeyboardControls();
+
+        let sourceElement = videoPlayer.getElementsByTagName('source')[0];
+        let videoFilename = (sourceElement.getAttribute('src'))
+
+        console.log('getvideo', extractFilename(decodeURIComponent(videoFilename)))
+        filenameDisplay.textContent = extractFilename(decodeURIComponent(videoFilename))
+    });
+}
+
 function delVideo() {
     if (currentVideo) {
         if (confirm(`Delete \r\n ${currentVideo} ?`)) {
-            videoPlayer.pause();
-            videoPlayer.src = '';
-            videoPlayer.load();
-
+            initVideo()
             axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`)
                 .then(response => {
                     if (response.status === 204) {
@@ -252,13 +294,21 @@ function toggleFullscreen() {
 }
 
 function addKeyboardControls() {
-    document.removeEventListener('keydown', videoKeyEvent)
-    document.addEventListener('keydown', videoKeyEvent)
+    // document.removeEventListener('keydown', videoKeyEvent)
+    // document.addEventListener('keydown', videoKeyEvent)
 }
 
 function videoKeyEvent(event) {
-    let currentTime = player.currentTime();
-    let duration = player.duration();
+    let currentTime, duration;
+    let videojs = false;
+    if (player) {
+        videojs = true;
+        currentTime = player.currentTime();
+        duration = player.duration();
+    } else {
+        currentTime = videoPlayer.currentTime
+        duration = videoPlayer.duration
+    }
 
     switch(event.key) {
         case 'ArrowRight':
@@ -303,10 +353,18 @@ function videoKeyEvent(event) {
             break;
         case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
             event.preventDefault();  // 스페이스바의 기본 동작 방지
-            if (player.paused()) {
-                player.play();
+            if (videojs) {
+                if (player.paused()) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
             } else {
-                player.pause();
+                if (player.paused) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
             }
             break;
         case 'Escape':  // ESC 키를 눌러 전체화면 해제
@@ -319,8 +377,7 @@ function videoKeyEvent(event) {
 }
 
 function threeSplitLayout() {
-    let videoElement = player.el().querySelector('video');
-    let videoRatio = videoElement.videoHeight / videoElement.videoWidth;
+    let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
     if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
         let videoContainer = document.getElementById('videoContainer');
         let videoPlayer = document.getElementById('videoPlayer');
@@ -328,55 +385,71 @@ function threeSplitLayout() {
         videoPlayer.style.minWidth = `${videoWidth}px`;
 
         // 왼쪽 비디오 추가
-        let videoLeft = document.createElement('video');
+        videoLeft = document.createElement('video');
         videoLeft.id = 'videoLeft';
-        videoLeft.className = 'video-mirror video-js vjs-default-skin';
+        videoLeft.className = 'video-mirror';
         videoLeft.muted = true;
-        videoLeft.autoplay = true;
-        videoLeft.setAttribute('loop', '');
+        let videoLeftSource = document.createElement('source')
+        videoLeftSource.type = 'video/mp4'
+        videoLeft.appendChild(videoLeftSource)
         videoContainer.insertBefore(videoLeft, videoPlayer);
 
         // 오른쪽 비디오 추가
-        let videoRight = document.createElement('video');
+        videoRight = document.createElement('video');
         videoRight.id = 'videoRight';
-        videoRight.className = 'video-mirror video-js vjs-default-skin';
+        videoRight.className = 'video-mirror';
         videoRight.muted = true;
-        videoRight.autoplay = true;
-        videoRight.setAttribute('loop', '');
+        let videoRightSource = document.createElement('source')
+        videoRightSource.type = 'video/mp4'
+        videoRight.appendChild(videoRightSource)
         videoContainer.appendChild(videoRight);
 
-        let mainSrc = videoPlayer.querySelector('source').src;
+        let mainSrc = videoSource.src;
 
-        videoLeft.src = mainSrc;
-        videoRight.src = mainSrc;
+        videoLeftSource.src = mainSrc;
+        videoRightSource.src = mainSrc;
         videoLeft.load();
         videoRight.load();
 
+        // setTimeout(() => {
+        //     videoPlayer.click()
+        // }, 1000)
+
+        // videoPlayer.play().then(_ => {
+        //     playVideo();
+        // }).catch(error => {});
+
         function playVideo() {
-            videoLeft.play();
-            videoRight.play();
+            videoPlayer.play().catch(error => {});
+            videoLeft.play().catch(error => {});
+            videoRight.play().catch(error => {});
         }
 
-        function pauseVideo() {
+        videoPlayer.addEventListener('play', function() {
+            videoLeft.play().catch(error => {});
+            videoRight.play().catch(error => {});
+        });
+
+        videoPlayer.addEventListener('pause', function() {
             videoLeft.pause();
             videoRight.pause();
-        }
+        });
 
-        function updateDuration() {
-            let currentTime = player.currentTime();
-            videoLeft.currentTime = currentTime
-            videoRight.currentTime = currentTime
-        }
+        videoPlayer.addEventListener('seeked', function() {
+            videoPlayer.pause();
+            videoLeft.pause();
+            videoRight.pause();
+            let currentTime = videoPlayer.currentTime;
+            videoLeft.currentTime = currentTime;
+            videoRight.currentTime = currentTime;
+            setTimeout(() => {
+                playVideo()
+            }, 400)
+        });
 
-        if (videojs.players['videoPlayer']) { // 재사용
-            player = videojs.players['videoPlayer'];
-        } else {
-            player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
-        }
-
-        player.on('pause', pauseVideo);
-        player.on('play', playVideo);
-        player.on('seeked', updateDuration);
+        return true;
+    } else {
+        return false;
     }
 }
 
