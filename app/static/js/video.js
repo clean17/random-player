@@ -63,7 +63,10 @@ function getVideo() {
                 let randomIndex = Math.floor(Math.random() * videos.length);
                 currentVideo = videos[randomIndex]
 
-                videoSource.src = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`;
+
+                let videoUrl = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`
+                videoSource.src = videoUrl;
+                pushVideoArr(videoUrl)
                 videoPlayer.load();
                 videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
                 videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
@@ -76,10 +79,15 @@ function getVideo() {
 
 function getVideoEvent() {
     if (!threeSplitLayout()) {
-        // videojs 로 전환
         changeVideo(directory, currentVideo)
     }
     addKeyboardControls();
+    let videoFilename = extractFilename(decodeURIComponent(videoSource.src));
+    currentVideo = videoFilename;
+
+    console.log('prevButton', videoFilename);
+    filenameDisplay.textContent = videoFilename;
+    document.title = videoFilename;
 }
 
 function changeVideo(directory, currentVideo) {
@@ -143,7 +151,7 @@ function pushVideoArr(url) {
     previousVideos.push(url)
 }
 
-prevButton.addEventListener('click', function() {
+/*prevButton.addEventListener('click', function() {
     let prevVideoUrl = previousVideos.shift();
     if (prevVideoUrl) {
         player.src({ mimeType, src: prevVideoUrl });
@@ -159,6 +167,41 @@ prevButton.addEventListener('click', function() {
             filenameDisplay.textContent = videoFilename;
             document.title = videoFilename
         });
+    }
+});*/
+
+function isVideoJs(player) {
+    if (player) {
+        return typeof player.src === 'function';
+    } return false;
+}
+
+prevButton.addEventListener('click', function() {
+    let prevVideoUrl = previousVideos.shift();
+    if (prevVideoUrl) {
+        if (isVideoJs(player)) {
+            player.src({ type: mimeType, src: prevVideoUrl });
+            player.load();
+            player.off('loadeddata');
+            player.on('loadeddata', function() {
+                player.play();
+                addKeyboardControls();
+                let videoFilename = extractFilename(decodeURIComponent(prevVideoUrl));
+                currentVideo = videoFilename;
+
+                console.log('prevButton', videoFilename);
+                filenameDisplay.textContent = videoFilename;
+                document.title = videoFilename;
+            });
+        } else {
+            initVideo()
+            videoReset();
+            videoSource.src = prevVideoUrl;
+            pushVideoArr(prevVideoUrl)
+            videoPlayer.load();
+            videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
+            videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
+        }
     }
 });
 
@@ -246,7 +289,12 @@ function resetAudioSync() {
 }
 
 function showVolumeMessage() {
-    volumeMessage.textContent = 'Volume: ' + Math.round(player.volume() * 100) + '%';
+    if (player) {
+        volumeMessage.textContent = 'Volume: ' + Math.round(player.volume() * 100) + '%';
+    } else {
+        volumeMessage.textContent = 'Volume: ' + Math.round(videoPlayer.volume * 100) + '%';
+    }
+
     volumeMessage.style.display = 'block';
     clearTimeout(volumeMessage.hideTimeout);
     volumeMessage.hideTimeout = setTimeout(function() {
@@ -294,80 +342,184 @@ function toggleFullscreen() {
 }
 
 function addKeyboardControls() {
-    // document.removeEventListener('keydown', videoKeyEvent)
-    // document.addEventListener('keydown', videoKeyEvent)
+    document.removeEventListener('keydown', videoKeyEvent)
+    document.addEventListener('keydown', videoKeyEvent)
 }
+
+// function videoKeyEvent(event) {
+//     let currentTime, duration;
+//     let videojs = false;
+//     if (player) {
+//         videojs = true;
+//         currentTime = player.currentTime();
+//         duration = player.duration();
+//     } else {
+//         currentTime = videoPlayer.currentTime
+//         duration = videoPlayer.duration
+//     }
+//
+//     switch(event.key) {
+//         case 'ArrowRight':
+//             if (event.shiftKey) {
+//                 player.currentTime(Math.min(currentTime + 30, duration));
+//             } else {
+//                 player.currentTime(Math.min(currentTime + 5, duration));
+//             }
+//             break;
+//         case 'ArrowLeft':
+//             if (event.shiftKey) {
+//                 player.currentTime(Math.max(currentTime - 30, 0));
+//             } else {
+//                 player.currentTime(Math.max(currentTime - 5, 0));
+//             }
+//             break;
+//         case 'ArrowUp':
+//             player.volume(Math.min(player.volume() + 0.1, 1));
+//             showVolumeMessage();
+//             break;
+//         case 'ArrowDown':
+//             player.volume(Math.max(player.volume() - 0.1, 0));
+//             showVolumeMessage();
+//             break;
+//         case 'a':  // 'a' 키를 눌러 오디오 싱크를 -0.02초 조정
+//             adjustAudioSync(-0.02);
+//             break;
+//         case 'd':  // 'd' 키를 눌러 오디오 싱크를 +0.02초 조정
+//             adjustAudioSync(0.02);
+//             break;
+//         case 's':  // 's' 키를 눌러 오디오 싱크를 0으로 초기화
+//             resetAudioSync();
+//             break;
+//         case 'Delete':  // 'Delete' 키를 눌러 비디오 삭제 함수 호출
+//             delVideo();
+//             break;
+//         case 'PageDown':  // 'PageDown' 키를 눌러 비디오 가져오기 함수 호출
+//             getVideo();
+//             break;
+//         case 'PageUp':
+//             prevButton.click(); // 'PageUp' 키를 눌러 이전 비디오 재생
+//             break;
+//         case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
+//             event.preventDefault();  // 스페이스바의 기본 동작 방지
+//             if (videojs) {
+//                 if (player.paused()) {
+//                     player.play();
+//                 } else {
+//                     player.pause();
+//                 }
+//             } else {
+//                 if (player.paused) {
+//                     player.play();
+//                 } else {
+//                     player.pause();
+//                 }
+//             }
+//             break;
+//         case 'Escape':  // ESC 키를 눌러 전체화면 해제
+//             exitFullscreen();
+//             break;
+//         case 'Enter':
+//             toggleFullscreen();
+//             break;
+//     }
+// }
 
 function videoKeyEvent(event) {
     let currentTime, duration;
-    let videojs = false;
-    if (player) {
-        videojs = true;
+    let isVideoJS = false;
+    const videoPlayer = document.getElementById('videoPlayer');
+
+    if (typeof player !== 'undefined' && player) {
+        isVideoJS = true;
         currentTime = player.currentTime();
         duration = player.duration();
-    } else {
-        currentTime = videoPlayer.currentTime
-        duration = videoPlayer.duration
+    } else if (videoPlayer) {
+        currentTime = videoPlayer.currentTime;
+        duration = videoPlayer.duration;
     }
 
     switch(event.key) {
         case 'ArrowRight':
             if (event.shiftKey) {
-                player.currentTime(Math.min(currentTime + 30, duration));
+                if (isVideoJS) {
+                    player.currentTime(Math.min(currentTime + 30, duration));
+                } else {
+                    videoPlayer.currentTime = Math.min(currentTime + 30, duration);
+                }
             } else {
-                player.currentTime(Math.min(currentTime + 5, duration));
+                if (isVideoJS) {
+                    player.currentTime(Math.min(currentTime + 5, duration));
+                } else {
+                    videoPlayer.currentTime = Math.min(currentTime + 5, duration);
+                }
             }
             break;
         case 'ArrowLeft':
             if (event.shiftKey) {
-                player.currentTime(Math.max(currentTime - 30, 0));
+                if (isVideoJS) {
+                    player.currentTime(Math.max(currentTime - 30, 0));
+                } else {
+                    videoPlayer.currentTime = Math.max(currentTime - 30, 0);
+                }
             } else {
-                player.currentTime(Math.max(currentTime - 5, 0));
+                if (isVideoJS) {
+                    player.currentTime(Math.max(currentTime - 5, 0));
+                } else {
+                    videoPlayer.currentTime = Math.max(currentTime - 5, 0);
+                }
             }
             break;
         case 'ArrowUp':
-            player.volume(Math.min(player.volume() + 0.1, 1));
+            if (isVideoJS) {
+                player.volume(Math.min(player.volume() + 0.1, 1));
+            } else {
+                videoPlayer.volume = Math.min(videoPlayer.volume + 0.1, 1);
+            }
             showVolumeMessage();
             break;
         case 'ArrowDown':
-            player.volume(Math.max(player.volume() - 0.1, 0));
+            if (isVideoJS) {
+                player.volume(Math.max(player.volume() - 0.1, 0));
+            } else {
+                videoPlayer.volume = Math.max(videoPlayer.volume - 0.1, 0);
+            }
             showVolumeMessage();
             break;
-        case 'a':  // 'a' 키를 눌러 오디오 싱크를 -0.02초 조정
+        case 'a':
             adjustAudioSync(-0.02);
             break;
-        case 'd':  // 'd' 키를 눌러 오디오 싱크를 +0.02초 조정
+        case 'd':
             adjustAudioSync(0.02);
             break;
-        case 's':  // 's' 키를 눌러 오디오 싱크를 0으로 초기화
+        case 's':
             resetAudioSync();
             break;
-        case 'Delete':  // 'Delete' 키를 눌러 비디오 삭제 함수 호출
+        case 'Delete':
             delVideo();
             break;
-        case 'PageDown':  // 'PageDown' 키를 눌러 비디오 가져오기 함수 호출
+        case 'PageDown':
             getVideo();
             break;
         case 'PageUp':
-            prevButton.click(); // 'PageUp' 키를 눌러 이전 비디오 재생
+            prevButton.click();
             break;
-        case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
-            event.preventDefault();  // 스페이스바의 기본 동작 방지
-            if (videojs) {
+        case ' ':
+            event.preventDefault();
+            if (isVideoJS) {
                 if (player.paused()) {
                     player.play();
                 } else {
                     player.pause();
                 }
             } else {
-                if (player.paused) {
-                    player.play();
+                if (videoPlayer.paused) {
+                    videoPlayer.play();
                 } else {
-                    player.pause();
+                    videoPlayer.pause();
                 }
             }
             break;
-        case 'Escape':  // ESC 키를 눌러 전체화면 해제
+        case 'Escape':
             exitFullscreen();
             break;
         case 'Enter':
@@ -410,6 +562,31 @@ function threeSplitLayout() {
         videoRightSource.src = mainSrc;
         videoLeft.load();
         videoRight.load();
+
+        let videoLeftLoaded = false;
+        let videoRightLoaded = false;
+        let videoPlayerLoaded = false;
+
+        function checkBothVideosLoaded() {
+            if (videoLeftLoaded && videoRightLoaded && videoPlayerLoaded) {
+                playVideo();
+            }
+        }
+
+        videoLeft.onloadedmetadata = () => {
+            videoPlayerLoaded = true;
+            checkBothVideosLoaded();
+        };
+
+        videoLeft.onloadedmetadata = () => {
+            videoLeftLoaded = true;
+            checkBothVideosLoaded();
+        };
+
+        videoRight.onloadedmetadata = () => {
+            videoRightLoaded = true;
+            checkBothVideosLoaded();
+        };
 
         // setTimeout(() => {
         //     videoPlayer.click()
