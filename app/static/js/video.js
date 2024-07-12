@@ -113,15 +113,11 @@ function changeVideo(directory, currentVideo) {
     player.off('loadeddata');
     player.on('loadeddata', function () {
         player.play();
-        pushVideoArr(videoUrl)
-        console.log('dddddddd')
-        // console.log('pushVideoArr', extractFilename(decodeURIComponent(prevVideoUrl)))
         // addKeyboardControls();
 
         let sourceElement = videoPlayer.getElementsByTagName('source')[0];
         let videoFilename = (sourceElement.getAttribute('src'))
 
-        console.log('getvideo', extractFilename(decodeURIComponent(videoFilename)))
         filenameDisplay.textContent = extractFilename(decodeURIComponent(videoFilename))
     });
 }
