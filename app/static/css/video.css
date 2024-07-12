@@ -40,11 +40,9 @@
 }
 #videoLeft {
     z-index: 2;
-    left: 65px;
 }
 #videoRight {
     z-index: 2;
-    right: 65px;
 }
 
 #video-filename {

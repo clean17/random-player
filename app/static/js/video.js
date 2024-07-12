@@ -525,7 +525,11 @@ function videoKeyEvent(event) {
             exitFullscreen();
             break;
         case 'Enter':
+            event.preventDefault()
             toggleFullscreen();
+            break;
+        case 'F11':
+            event.preventDefault();
             break;
     }
 }
@@ -533,7 +537,6 @@ function videoKeyEvent(event) {
 function threeSplitLayout() {
     let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
     if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
-        let videoPlayer = document.getElementById('videoPlayer');
         let videoWidth = window.screen.width * 0.3333;
         videoPlayer.style.minWidth = `${videoWidth}px`;
 
@@ -545,7 +548,7 @@ function threeSplitLayout() {
         let videoLeftSource = document.createElement('source')
         videoLeftSource.type = 'video/mp4'
         videoLeft.appendChild(videoLeftSource)
-        videoContainer.insertBefore(videoLeft, videoPlayer);
+        videoContainer?.insertBefore(videoLeft, videoPlayer);
 
         // 오른쪽 비디오 추가
         videoRight = document.createElement('video');
@@ -555,7 +558,7 @@ function threeSplitLayout() {
         let videoRightSource = document.createElement('source')
         videoRightSource.type = 'video/mp4'
         videoRight.appendChild(videoRightSource)
-        videoContainer.appendChild(videoRight);
+        videoContainer?.appendChild(videoRight);
 
         let mainSrc = videoSource.src;
 
@@ -620,14 +623,57 @@ function threeSplitLayout() {
             let currentTime = videoPlayer.currentTime;
             videoLeft.currentTime = currentTime;
             videoRight.currentTime = currentTime;
+
             setTimeout(() => {
                 playVideo()
-            }, 400)
+                // checkDuration()
+            }, 500)
         });
+
+        if (document.fullscreenElement) {
+            setLeftPositionForFullscreen();
+        } else {
+            setLeftPositionForNormal();
+        }
 
         return true;
     } else {
         return false;
+    }
+}
+
+function setLeftPositionForNormal() {
+    event.preventDefault()
+    let windowHeight = window.innerHeight;
+    let position = windowHeight * 0.157;
+    videoLeft.style.left = position + 'px';
+    videoRight.style.right = position + 'px';
+}
+
+function setLeftPositionForFullscreen() {
+    event.preventDefault()
+    let windowHeight = window.innerHeight;
+    let position = windowHeight * 0.0453;
+    videoLeft.style.left = position + 'px';
+    videoRight.style.right = position + 'px';
+}
+
+// window.onload = setLeftPosition;
+window.onresize = () => {
+    if (document.fullscreenElement) {
+        setLeftPositionForFullscreen();
+    } else {
+        setLeftPositionForNormal();
+    }
+};
+// document.removeEventListener('fullscreenchange', setLeftPosition);
+// document.addEventListener('fullscreenchange', setLeftPosition);
+
+function checkDuration() {
+    if (videoLeft && videoRight) {
+        const currentTime = videoPlayer.currentTime;
+        videoLeft.currentTime = currentTime
+        videoRight.currentTime = currentTime
     }
 }
 
