@@ -548,7 +548,10 @@ function threeSplitLayout() {
         let videoLeftSource = document.createElement('source')
         videoLeftSource.type = 'video/mp4'
         videoLeft.appendChild(videoLeftSource)
-        videoContainer?.insertBefore(videoLeft, videoPlayer);
+        if (videoContainer && videoPlayer && videoContainer.contains(videoPlayer)) {
+            videoContainer.insertBefore(videoLeft, videoPlayer);
+        }
+        // videoContainer?.insertBefore(videoLeft, videoPlayer);
 
         // 오른쪽 비디오 추가
         videoRight = document.createElement('video');
@@ -600,12 +603,6 @@ function threeSplitLayout() {
         //     playVideo();
         // }).catch(error => {});
 
-        function playVideo() {
-            videoPlayer.play().catch(error => {});
-            videoLeft.play().catch(error => {});
-            videoRight.play().catch(error => {});
-        }
-
         videoPlayer.addEventListener('play', function() {
             videoLeft.play().catch(error => {});
             videoRight.play().catch(error => {});
@@ -617,18 +614,9 @@ function threeSplitLayout() {
         });
 
         videoPlayer.addEventListener('seeked', function() {
-            videoPlayer.pause();
-            videoLeft.pause();
-            videoRight.pause();
-            let currentTime = videoPlayer.currentTime;
-            videoLeft.currentTime = currentTime;
-            videoRight.currentTime = currentTime;
-
-            setTimeout(() => {
-                playVideo()
-                // checkDuration()
-            }, 500)
+            initTriple()
         });
+        initTriple()
 
         if (document.fullscreenElement) {
             setLeftPositionForFullscreen();
@@ -640,6 +628,26 @@ function threeSplitLayout() {
     } else {
         return false;
     }
+}
+
+function playVideo() {
+    videoPlayer.play().catch(error => {});
+    videoLeft.play().catch(error => {});
+    videoRight.play().catch(error => {});
+}
+
+function initTriple() {
+    videoPlayer.pause();
+    videoLeft.pause();
+    videoRight.pause();
+    let currentTime = videoPlayer.currentTime;
+    videoLeft.currentTime = currentTime;
+    videoRight.currentTime = currentTime;
+
+    setTimeout(() => {
+        playVideo()
+        // checkDuration()
+    }, 500)
 }
 
 function setLeftPositionForNormal() {
