@@ -45,6 +45,11 @@ function setVideoOptions(vodUrl, videoFileType) {
     return videoOptions;
 }
 
+function makeGetUrl(filename) {
+    const prefixUrl = directory === '0' ? `/video/stream/` : `/video/video/`;
+    return prefixUrl + `${encodeURIComponent(filename)}?directory=${directory}`;
+}
+
 function extractFilename(url) {
     const cleanUrl = url.split('?')[0];
     const parts = cleanUrl.split('/');
@@ -62,7 +67,7 @@ function initVideoElem() {
     const currentVideoPlayer = document.querySelector('#videoPlayer')
     if (currentVideoPlayer) {
         if (isVideoJs()) {
-            const player = videojs.getPlayer(currentVideoPlayer.id);
+            let player = videojs.getPlayer(currentVideoPlayer.id);
             if (player) {
                 player.dispose(); // video.js 인스턴스 해제
             }
@@ -140,21 +145,22 @@ function getVideo() {
             if (videos.length > 0) {
                 let randomIndex = Math.floor(Math.random() * videos.length);
                 currentVideo = videos[randomIndex]
-                playVideo(currentVideo)
+
+                const videoUrl = makeGetUrl(currentVideo)
+                playVideo(videoUrl)
             } else {
                 alert('No videos found');
             }
         });
 }
 
-function playVideo(currentVideo) {
+function playVideo(videoUrl) {
     initVideoSrc()
     initVideoElem();
-    const videoUrl = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`
     if (videoSource) {
         videoSource.src = videoUrl;
     }
-    pushVideoArr(videoUrl)
+    pushVideoArr(currentVideo)
     /*console.log('-----------------------')
     previousVideos.forEach(item => {
         console.log(extractFilename(decodeURIComponent(item)))
@@ -169,27 +175,27 @@ function playVideo(currentVideo) {
 }
 
 function getVideoEvent() {
-    let videoFilename = extractFilename(decodeURIComponent(videoSource.src));
-    currentVideo = videoFilename;
-
+    let decodedUrl = decodeURIComponent(videoSource.src)
+    let videoFilename = extractFilename(decodedUrl);
     filenameDisplay.textContent = videoFilename;
     document.title = videoFilename;
+    // console.log('getvideo', videoFilename)
 
     if (!threeSplitLayout()) {
-        changeVideo(directory, currentVideo)
+        changeVideo()
     }
     addKeyboardControls();
 }
 
-function changeVideo(directory, currentVideo) {
+function changeVideo() {
+    initVideoSrc()
+    initVideoElem();
     videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
     videoPlayer.classList.add('video-js', ',vjs-default-skin')
 
-    let url = directory === '0' ? `/video/stream/` : `/video/video/`;
-    let videoUrl = url + `${encodeURIComponent(currentVideo)}?directory=${directory}`;
-    let fileExtension = currentVideo.split('.').pop();
+    const videoUrl = makeGetUrl(currentVideo)
+    const fileExtension = currentVideo.split('.').pop();
     mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
-    videoSource.src = videoUrl;
     document.title = currentVideo.split('/')[1]
 
     if (videojs.players['videoPlayer']) { // 재사용
@@ -204,12 +210,7 @@ function changeVideo(directory, currentVideo) {
     player.off('loadeddata');
     player.on('loadeddata', function () {
         player.play();
-        // addKeyboardControls();
-
-        let sourceElement = videoPlayer.getElementsByTagName('source')[0];
-        let videoFilename = (sourceElement.getAttribute('src'))
-
-        filenameDisplay.textContent = extractFilename(decodeURIComponent(videoFilename))
+        filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl))
     });
     player.off('ended');
     player.on('ended', function() {
@@ -410,13 +411,16 @@ function addVideoEvent() {
 }
 
 prevButton.addEventListener('click', function () {
-    let prevVideoUrl = previousVideos.shift();
+    let prevVideo = previousVideos.shift();
 
-    if (prevVideoUrl) {
-        const videoFilename = extractFilename(decodeURIComponent(prevVideoUrl));
+    if (prevVideo) {
+        const videoFilename = extractFilename(decodeURIComponent(prevVideo));
         console.log('prevButton', videoFilename);
         pushVideoArr(currentVideo)
-        playVideo(videoFilename)
+        currentVideo = prevVideo;
+
+        const videoUrl = makeGetUrl(prevVideo)
+        playVideo(videoUrl)
     }
 });
 
@@ -585,9 +589,11 @@ function videoKeyEvent(event) {
             delVideo();
             break;
         case 'PageDown':
+            event.preventDefault();
             getVideo();
             break;
         case 'PageUp':
+            event.preventDefault();
             prevButton.click();
             break;
         case ' ': // Space

@@ -3,6 +3,9 @@ video::-webkit-media-controls {
     z-index: 3 !important;
     position: relative;
 }
+.vjs-control-bar {
+    z-index: 5; /* video.js 컨트롤러의 z-index 설정 */
+}
 
 #sync-message, #volume-message {
     position: absolute;
