@@ -1,6 +1,6 @@
 const videoContainer = document.querySelector('#videoContainer');
-const videoPlayer = document.querySelector('#videoPlayer');
-const videoSource = document.querySelector('#videoSource');
+let videoPlayer = document.querySelector('#videoPlayer');
+let videoSource = document.querySelector('#videoSource');
 let videoLeft ;
 let videoRight ;
 let player;
@@ -18,6 +18,32 @@ let audioOffset = 0;
 let hideControlsTimeout;
 let isLooping = false;
 
+/************************************************************************/
+/******************************   Common   ******************************/
+/************************************************************************/
+
+function setVideoOptions(vodUrl, videoFileType) {
+    let videoOptions = {
+        sources: [
+            {
+                src: vodUrl,
+                type: videoFileType
+            }
+        ],
+        controls: true, // 동영상 제어를 위한 컨트롤 바 제공 여부
+        playsinline: true, // 웹 브라우저 환경의 재생 형태
+        muted: false, // 최초 재생시 무음인지
+        preload: "auto", // 비디오 데이터를 즉시 다운로드 시작할 지 여부
+        controlBar: {
+            playToggle: true, // 재생, 일시정지 토글
+            pictureInPictureToggle: true, // pip모드
+            remainingTimeDisplay: true, // 남은 시간 표시
+            progressControl: true // 재생 진행바
+        },
+    };
+    return videoOptions;
+}
+
 function extractFilename(url) {
     const cleanUrl = url.split('?')[0];
     const parts = cleanUrl.split('/');
@@ -31,14 +57,38 @@ function videoReset() {
     if (videoRight) {
         videoRight.remove()
     }
+
+    const currentVideoPlayer = document.querySelector('#videoPlayer')
+    if (currentVideoPlayer) {
+        if (isVideoJs(currentVideoPlayer)) {
+            const player = videojs.getPlayer(currentVideoPlayer.id);
+            if (player) {
+                player.dispose(); // video.js 인스턴스 해제
+            }
+        }
+        currentVideoPlayer.remove();
+    }
+
+    videoContainer.appendChild(getDefaultVideoElem())
+    videoPlayer = videoContainer.querySelector('#videoPlayer')
+    videoSource = videoPlayer.querySelector('#videoSource')
+    addVideoEvent();
 }
 
 function initVideo() {
-    if (videoPlayer) {
-        videoPlayer.pause();
-        videoPlayer.onloadedmetadata = null;
-        videoSource.src = ''
-        videoPlayer.load();
+    const currentVideoPlayer = document.querySelector('#videoPlayer')
+    if (currentVideoPlayer) {
+        if (isVideoJs(player)) {
+            player.pause();
+            player.src({ src: '', type: 'video/mp4' });
+            player.load();
+            player.reset()
+        } else if (currentVideoPlayer) {
+            currentVideoPlayer.pause();
+            currentVideoPlayer.onloadedmetadata = null;
+            currentVideoPlayer.querySelector('#videoSource').src = '';
+            currentVideoPlayer.load();
+        }
     }
 
     if (videoLeft) {
@@ -56,6 +106,31 @@ function initVideo() {
     }
 }
 
+function isVideoJs(player) {
+    return typeof player !== 'undefined' && player;
+}
+
+function getDefaultVideoElem() {
+    /*<video id="videoPlayer" controls autoPlay preload="auto">
+        <source src="" type="video/mp4" id="videoSource">
+    </video>*/
+    const video = document.createElement('video')
+    const source = document.createElement('source')
+    video.id = 'videoPlayer'
+    video.controls = true
+    video.autoplay = true
+    video.preload = "auto"
+    source.src = ""
+    source.type ="video/mp4"
+    source.id = 'videoSource'
+    video.appendChild(source)
+    return video;
+}
+
+/************************************************************************/
+/*************************   Video Function   ***************************/
+/************************************************************************/
+
 function getVideo() {
     initVideo()
     videoReset();
@@ -67,11 +142,16 @@ function getVideo() {
                 currentVideo = videos[randomIndex]
 
                 let videoUrl = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`
-                videoSource.src = videoUrl;
+                if (videoSource) {
+                    videoSource.src = videoUrl;
+                }
                 pushVideoArr(videoUrl)
-                videoPlayer.load();
-                videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
-                videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
+                if (videoPlayer) {
+                    videoPlayer.load();
+                    videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
+                    videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
+                }
+
 
             } else {
                 alert('No videos found');
@@ -94,7 +174,6 @@ function getVideoEvent() {
 
 function changeVideo(directory, currentVideo) {
     videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
-    initVideo()
     videoPlayer.classList.add('video-js', ',vjs-default-skin')
 
     let url = directory === '0' ? `/video/stream/` : `/video/video/`;
@@ -134,6 +213,7 @@ function delVideo() {
     if (currentVideo) {
         if (confirm(`Delete \r\n ${currentVideo} ?`)) {
             initVideo()
+            videoReset();
             axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`)
                 .then(response => {
                     if (response.status === 204) {
@@ -157,6 +237,169 @@ function pushVideoArr(url) {
     previousVideos.push(url)
 }
 
+function threeSplitLayout() {
+    let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
+    if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
+        let videoWidth = window.screen.width * 0.3333;
+        videoPlayer.style.minWidth = `${videoWidth}px`;
+
+        // 왼쪽 비디오 추가
+        videoLeft = document.createElement('video');
+        videoLeft.id = 'videoLeft';
+        videoLeft.className = 'video-mirror';
+        videoLeft.muted = true;
+        let videoLeftSource = document.createElement('source')
+        videoLeftSource.type = 'video/mp4'
+        videoLeft.appendChild(videoLeftSource)
+        if (videoContainer && videoPlayer && videoContainer.contains(videoPlayer)) {
+            videoContainer.insertBefore(videoLeft, videoPlayer);
+        }
+        // videoContainer?.insertBefore(videoLeft, videoPlayer);
+
+        // 오른쪽 비디오 추가
+        videoRight = document.createElement('video');
+        videoRight.id = 'videoRight';
+        videoRight.className = 'video-mirror';
+        videoRight.muted = true;
+        let videoRightSource = document.createElement('source')
+        videoRightSource.type = 'video/mp4'
+        videoRight.appendChild(videoRightSource)
+        videoContainer?.appendChild(videoRight);
+
+        let mainSrc = videoSource.src;
+
+        videoLeftSource.src = mainSrc;
+        videoRightSource.src = mainSrc;
+        videoLeft.load();
+        videoRight.load();
+
+        let videoLeftLoaded = false;
+        let videoRightLoaded = false;
+        let videoPlayerLoaded = false;
+
+        function checkBothVideosLoaded() {
+            if (videoLeftLoaded && videoRightLoaded && videoPlayerLoaded) {
+                playVideo();
+            }
+        }
+
+        videoLeft.onloadedmetadata = () => {
+            videoPlayerLoaded = true;
+            checkBothVideosLoaded();
+        };
+
+        videoLeft.onloadedmetadata = () => {
+            videoLeftLoaded = true;
+            checkBothVideosLoaded();
+        };
+
+        videoRight.onloadedmetadata = () => {
+            videoRightLoaded = true;
+            checkBothVideosLoaded();
+        };
+
+        videoPlayer.play().then(_ => {
+            playVideo();
+        }).catch(error => {});
+
+        videoPlayer.addEventListener('play', function() {
+            videoLeft.play().catch(error => {});
+            videoRight.play().catch(error => {});
+        });
+
+        videoPlayer.addEventListener('pause', function() {
+            videoLeft.pause();
+            videoRight.pause();
+        });
+
+        videoPlayer.addEventListener('seeked', function() {
+            initTriple()
+        });
+        initTriple()
+
+        if (document.fullscreenElement) {
+            setLeftPositionForFullscreen();
+        } else {
+            setLeftPositionForNormal();
+        }
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+function playVideo() {
+    videoPlayer.play().catch(error => {});
+    videoLeft.play().catch(error => {});
+    videoRight.play().catch(error => {});
+}
+
+function initTriple() {
+    videoPlayer.pause();
+    videoLeft.pause();
+    videoRight.pause();
+    let currentTime = videoPlayer.currentTime;
+    videoLeft.currentTime = currentTime;
+    videoRight.currentTime = currentTime;
+
+    setTimeout(() => {
+        playVideo()
+        // checkDuration()
+    }, 500)
+}
+
+function checkDuration() {
+    if (videoLeft && videoRight) {
+        const currentTime = videoPlayer.currentTime;
+        videoLeft.currentTime = currentTime
+        videoRight.currentTime = currentTime
+    }
+}
+
+/************************************************************************/
+/***************************   Key Event   ******************************/
+/************************************************************************/
+
+const hideControls = () => {
+    clearTimeout(hideControlsTimeout);
+    hideControlsTimeout = setTimeout(() => {
+        controls.style.display = 'none';
+        topDiv.style.display = 'none';
+        filenameDisplay.style.display = 'none';
+    }, 2000);
+};
+
+const showControls = () => {
+    controls.style.display = 'block';
+    topDiv.style.display = 'block';
+    filenameDisplay.style.display = 'block';
+    hideControls();
+};
+
+document.getElementById('nextButton').removeEventListener('click', getVideo);
+document.getElementById('nextButton').addEventListener('click', getVideo);
+document.getElementById('deleteButton').removeEventListener('click', delVideo);
+document.getElementById('deleteButton').addEventListener('click', delVideo);
+document.addEventListener('mousemove', showControls);
+
+function addVideoEvent() {
+    if (videoPlayer) {
+        videoPlayer.removeEventListener('play', showControls);
+        videoPlayer.addEventListener('play', showControls);
+        videoPlayer.removeEventListener('pause', showControls);
+        videoPlayer.addEventListener('pause', showControls);
+        videoPlayer.removeEventListener('click', showControls);
+        videoPlayer.addEventListener('click', showControls);
+        videoPlayer.removeEventListener('touchstart', showControls);
+        videoPlayer.addEventListener('touchstart', showControls);
+        videoPlayer.removeEventListener('ended', getVideo);
+        videoPlayer.addEventListener('ended', getVideo);
+        videoPlayer.removeEventListener('touchmove', showControls);
+        videoPlayer.addEventListener('touchmove', showControls);
+    }
+}
+
 /*prevButton.addEventListener('click', function() {
     let prevVideoUrl = previousVideos.shift();
     if (prevVideoUrl) {
@@ -176,20 +419,14 @@ function pushVideoArr(url) {
     }
 });*/
 
-function isVideoJs(player) {
-    if (player) {
-        return typeof player.src === 'function';
-    } return false;
-}
-
-prevButton.addEventListener('click', function() {
+prevButton.addEventListener('click', function () {
     let prevVideoUrl = previousVideos.shift();
     if (prevVideoUrl) {
         if (isVideoJs(player)) {
-            player.src({ type: mimeType, src: prevVideoUrl });
+            player.src({type: mimeType, src: prevVideoUrl});
             player.load();
             player.off('loadeddata');
-            player.on('loadeddata', function() {
+            player.on('loadeddata', function () {
                 player.play();
                 addKeyboardControls();
                 let videoFilename = extractFilename(decodeURIComponent(prevVideoUrl));
@@ -201,7 +438,7 @@ prevButton.addEventListener('click', function() {
                 document.title = videoFilename;
             });
             player.off('ended');
-            player.on('ended', function() {
+            player.on('ended', function () {
                 if (isLooping) {
                     player.play();
                 }
@@ -227,67 +464,6 @@ loopButton.addEventListener('click', function() {
     if (videoPlayer) videoPlayer.loop = isLooping;
     loopButton.classList.toggle('active', isLooping);
 });
-
-
-function setVideoOptions(vodUrl, videoFileType) {
-    let videoOptions = {
-        sources: [
-            {
-                src: vodUrl,
-                type: videoFileType
-            }
-        ],
-        controls: true, // 동영상 제어를 위한 컨트롤 바 제공 여부
-        playsinline: true, // 웹 브라우저 환경의 재생 형태
-        muted: false, // 최초 재생시 무음인지
-        preload: "auto", // 비디오 데이터를 즉시 다운로드 시작할 지 여부
-        controlBar: {
-            playToggle: true, // 재생, 일시정지 토글
-            pictureInPictureToggle: true, // pip모드
-            remainingTimeDisplay: true, // 남은 시간 표시
-            progressControl: true // 재생 진행바
-        },
-    };
-    return videoOptions;
-}
-
-
-
-const hideControls = () => {
-    clearTimeout(hideControlsTimeout);
-    hideControlsTimeout = setTimeout(() => {
-        controls.style.display = 'none';
-        topDiv.style.display = 'none';
-        filenameDisplay.style.display = 'none';
-    }, 2000);
-};
-
-const showControls = () => {
-    controls.style.display = 'block';
-    topDiv.style.display = 'block';
-    filenameDisplay.style.display = 'block';
-    hideControls();
-};
-
-document.getElementById('nextButton').removeEventListener('click', getVideo);
-document.getElementById('nextButton').addEventListener('click', getVideo);
-document.getElementById('deleteButton').removeEventListener('click', delVideo);
-document.getElementById('deleteButton').addEventListener('click', delVideo);
-
-videoPlayer.addEventListener('play', showControls);
-videoPlayer.addEventListener('pause', showControls);
-videoPlayer.addEventListener('click', showControls);
-videoPlayer.addEventListener('touchstart', showControls);
-videoPlayer.addEventListener('ended', getVideo);
-
-document.addEventListener('mousemove', showControls);
-videoPlayer.addEventListener('touchmove', showControls);
-
-
-/************************************************************************/
-/************************************************************************/
-/************************************************************************/
-
 
 function showSyncMessage() {
     syncMessage.textContent = 'Audio Sync Offset: ' + audioOffset.toFixed(2) + 's';
@@ -452,7 +628,7 @@ function videoKeyEvent(event) {
     let isVideoJS = false;
     const videoPlayer = document.getElementById('videoPlayer');
 
-    if (typeof player !== 'undefined' && player) {
+    if (isVideoJs(player)) {
         isVideoJS = true;
         currentTime = player.currentTime();
         duration = player.duration();
@@ -555,121 +731,23 @@ function videoKeyEvent(event) {
     }
 }
 
-function threeSplitLayout() {
-    let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
-    if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
-        let videoWidth = window.screen.width * 0.3333;
-        videoPlayer.style.minWidth = `${videoWidth}px`;
 
-        // 왼쪽 비디오 추가
-        videoLeft = document.createElement('video');
-        videoLeft.id = 'videoLeft';
-        videoLeft.className = 'video-mirror';
-        videoLeft.muted = true;
-        let videoLeftSource = document.createElement('source')
-        videoLeftSource.type = 'video/mp4'
-        videoLeft.appendChild(videoLeftSource)
-        if (videoContainer && videoPlayer && videoContainer.contains(videoPlayer)) {
-            videoContainer.insertBefore(videoLeft, videoPlayer);
-        }
-        // videoContainer?.insertBefore(videoLeft, videoPlayer);
 
-        // 오른쪽 비디오 추가
-        videoRight = document.createElement('video');
-        videoRight.id = 'videoRight';
-        videoRight.className = 'video-mirror';
-        videoRight.muted = true;
-        let videoRightSource = document.createElement('source')
-        videoRightSource.type = 'video/mp4'
-        videoRight.appendChild(videoRightSource)
-        videoContainer?.appendChild(videoRight);
+/************************************************************************/
+/***************************   CSS   ************************************/
+/************************************************************************/
 
-        let mainSrc = videoSource.src;
-
-        videoLeftSource.src = mainSrc;
-        videoRightSource.src = mainSrc;
-        videoLeft.load();
-        videoRight.load();
-
-        let videoLeftLoaded = false;
-        let videoRightLoaded = false;
-        let videoPlayerLoaded = false;
-
-        function checkBothVideosLoaded() {
-            if (videoLeftLoaded && videoRightLoaded && videoPlayerLoaded) {
-                playVideo();
-            }
-        }
-
-        videoLeft.onloadedmetadata = () => {
-            videoPlayerLoaded = true;
-            checkBothVideosLoaded();
-        };
-
-        videoLeft.onloadedmetadata = () => {
-            videoLeftLoaded = true;
-            checkBothVideosLoaded();
-        };
-
-        videoRight.onloadedmetadata = () => {
-            videoRightLoaded = true;
-            checkBothVideosLoaded();
-        };
-
-        // setTimeout(() => {
-        //     videoPlayer.click()
-        // }, 1000)
-
-        // videoPlayer.play().then(_ => {
-        //     playVideo();
-        // }).catch(error => {});
-
-        videoPlayer.addEventListener('play', function() {
-            videoLeft.play().catch(error => {});
-            videoRight.play().catch(error => {});
-        });
-
-        videoPlayer.addEventListener('pause', function() {
-            videoLeft.pause();
-            videoRight.pause();
-        });
-
-        videoPlayer.addEventListener('seeked', function() {
-            initTriple()
-        });
-        initTriple()
-
-        if (document.fullscreenElement) {
-            setLeftPositionForFullscreen();
-        } else {
-            setLeftPositionForNormal();
-        }
-
-        return true;
+// window.onload = setLeftPosition;
+window.onresize = () => {
+    if (document.fullscreenElement) {
+        setLeftPositionForFullscreen();
     } else {
-        return false;
+        setLeftPositionForNormal();
     }
-}
+};
+// document.removeEventListener('fullscreenchange', setLeftPosition);
+// document.addEventListener('fullscreenchange', setLeftPosition);
 
-function playVideo() {
-    videoPlayer.play().catch(error => {});
-    videoLeft.play().catch(error => {});
-    videoRight.play().catch(error => {});
-}
-
-function initTriple() {
-    videoPlayer.pause();
-    videoLeft.pause();
-    videoRight.pause();
-    let currentTime = videoPlayer.currentTime;
-    videoLeft.currentTime = currentTime;
-    videoRight.currentTime = currentTime;
-
-    setTimeout(() => {
-        playVideo()
-        // checkDuration()
-    }, 500)
-}
 
 function setLeftPositionForNormal() {
     event.preventDefault()
@@ -687,24 +765,9 @@ function setLeftPositionForFullscreen() {
     videoRight.style.right = position + 'px';
 }
 
-// window.onload = setLeftPosition;
-window.onresize = () => {
-    if (document.fullscreenElement) {
-        setLeftPositionForFullscreen();
-    } else {
-        setLeftPositionForNormal();
-    }
-};
-// document.removeEventListener('fullscreenchange', setLeftPosition);
-// document.addEventListener('fullscreenchange', setLeftPosition);
-
-function checkDuration() {
-    if (videoLeft && videoRight) {
-        const currentTime = videoPlayer.currentTime;
-        videoLeft.currentTime = currentTime
-        videoRight.currentTime = currentTime
-    }
-}
+/************************************************************************/
+/***************************   init  ************************************/
+/************************************************************************/
 
 function initPage() {
     previousVideos.push(undefined)

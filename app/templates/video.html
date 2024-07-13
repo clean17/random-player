@@ -25,16 +25,18 @@
     </div>
     <div id="videoContainer">
         <div id="video-filename"></div>
-        <video id="videoPlayer" controls autoplay preload="auto">
-            <source src="" type="video/mp4" id="videoSource">
-        </video>
-        {#<video id="videoPlayer" class="video-js vjs-default-skin" controls preload="auto">
-            <source src="" type="video/mp4">
-        </video>#}
+
         <div id="controls">
             <button id="deleteButton">Delete</button>
             <button id="nextButton">Next</button>
         </div>
+
+        {#<video id="videoPlayer" controls autoplay preload="auto">
+            <source src="" type="video/mp4" id="videoSource">
+        </video>#}
+        {#<video id="videoPlayer" class="video-js vjs-default-skin" controls preload="auto">
+            <source src="" type="video/mp4">
+        </video>#}
     </div>
     <div id="sync-message"></div>
     <div id="volume-message"></div>
