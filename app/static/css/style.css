@@ -27,7 +27,16 @@ body, html {
     right: 10px;
     z-index: 2;
 }
-.top-bar a, .back a {
+.loop {
+    position: absolute;
+    top: 60px;
+    right: 10px;
+    z-index: 2;
+}
+.loop .active {
+    background-color: #0080ff;
+}
+.top-bar a {
     font-size: 16px;
     padding: 10px;
     margin: 5px;
@@ -39,9 +48,14 @@ body, html {
     opacity: 0.8;
     text-decoration: none;
 }
-.top-bar a:hover, .back a:hover {
+.top-bar a:hover{
     background-color: #0056b3;
 }
+
+.loop-button.active {
+    background-color: #0080ff;
+}
+
 #videoContainer {
     position: relative;
     width: 100%;

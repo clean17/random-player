@@ -12,9 +12,11 @@ const syncMessage = document.getElementById('sync-message');
 const volumeMessage = document.getElementById('volume-message');
 const filenameDisplay = document.getElementById('video-filename');
 const prevButton = document.getElementById('prevButton');
+const loopButton = document.getElementById('loopbutton');
 let mimeType;
 let audioOffset = 0;
 let hideControlsTimeout;
+let isLooping = false;
 
 function extractFilename(url) {
     const cleanUrl = url.split('?')[0];
@@ -120,6 +122,12 @@ function changeVideo(directory, currentVideo) {
 
         filenameDisplay.textContent = extractFilename(decodeURIComponent(videoFilename))
     });
+    player.off('ended');
+    player.on('ended', function() {
+        if (isLooping) {
+            player.play();
+        }
+    });
 }
 
 function delVideo() {
@@ -192,6 +200,12 @@ prevButton.addEventListener('click', function() {
                 filenameDisplay.textContent = videoFilename;
                 document.title = videoFilename;
             });
+            player.off('ended');
+            player.on('ended', function() {
+                if (isLooping) {
+                    player.play();
+                }
+            });
         } else {
             initVideo()
             videoReset();
@@ -205,6 +219,13 @@ prevButton.addEventListener('click', function() {
             videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
         }
     }
+});
+
+loopButton.addEventListener('click', function() {
+    isLooping = !isLooping;
+    if (player) player.loop(isLooping);
+    if (videoPlayer) videoPlayer.loop = isLooping;
+    loopButton.classList.toggle('active', isLooping);
 });
 
 
