@@ -249,8 +249,8 @@ function pushVideoArr(url) {
 function threeSplitLayout() {
     let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
     if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
-        let videoWidth = window.screen.width * 0.3333;
-        videoPlayer.style.minWidth = `${videoWidth}px`;
+        // let videoWidth = window.screen.width * 0.3333;
+        // videoPlayer.style.minWidth = `${videoWidth}px`;
 
         // 왼쪽 비디오 추가
         videoLeft = document.createElement('video');
@@ -641,6 +641,8 @@ function setLeftPositionForNormal() {
     event.preventDefault()
     let windowHeight = window.innerHeight;
     let position = windowHeight * 0.157;
+    // let position = windowHeight * 0.11;
+    // let position = windowHeight * 0.00;
     videoLeft.style.left = position + 'px';
     videoRight.style.right = position + 'px';
 }
@@ -649,6 +651,8 @@ function setLeftPositionForFullscreen() {
     event.preventDefault()
     let windowHeight = window.innerHeight;
     let position = windowHeight * 0.0453;
+    // let position = windowHeight * 0.03;
+    // let position = windowHeight * 0.000;
     videoLeft.style.left = position + 'px';
     videoRight.style.right = position + 'px';
 }
