@@ -280,7 +280,7 @@ videoPlayer.addEventListener('click', showControls);
 videoPlayer.addEventListener('touchstart', showControls);
 videoPlayer.addEventListener('ended', getVideo);
 
-videoPlayer.addEventListener('mousemove', showControls);
+document.addEventListener('mousemove', showControls);
 videoPlayer.addEventListener('touchmove', showControls);
 
 
