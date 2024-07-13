@@ -17,6 +17,7 @@ let mimeType;
 let audioOffset = 0;
 let hideControlsTimeout;
 let isLooping = false;
+let previousVolume = 1.0;
 
 /************************************************************************/
 /******************************   Common   ******************************/
@@ -50,7 +51,7 @@ function extractFilename(url) {
     return parts[parts.length - 1];
 }
 
-function videoReset() {
+function initVideoElem() {
     if (videoLeft) {
         videoLeft.remove()
     }
@@ -60,7 +61,7 @@ function videoReset() {
 
     const currentVideoPlayer = document.querySelector('#videoPlayer')
     if (currentVideoPlayer) {
-        if (isVideoJs(currentVideoPlayer)) {
+        if (isVideoJs()) {
             const player = videojs.getPlayer(currentVideoPlayer.id);
             if (player) {
                 player.dispose(); // video.js 인스턴스 해제
@@ -75,14 +76,14 @@ function videoReset() {
     addVideoEvent();
 }
 
-function initVideo() {
+function initVideoSrc() {
     const currentVideoPlayer = document.querySelector('#videoPlayer')
     if (currentVideoPlayer) {
-        if (isVideoJs(player)) {
+        if (isVideoJs()) {
             player.pause();
             player.src({ src: '', type: 'video/mp4' });
             player.load();
-            player.reset()
+            player.reset();
         } else if (currentVideoPlayer) {
             currentVideoPlayer.pause();
             currentVideoPlayer.onloadedmetadata = null;
@@ -106,8 +107,9 @@ function initVideo() {
     }
 }
 
-function isVideoJs(player) {
-    return typeof player !== 'undefined' && player;
+function isVideoJs() {
+    const videoPlayer = document.querySelector('#videoPlayer')
+    return videojs.getPlayer(videoPlayer.id);
 }
 
 function getDefaultVideoElem() {
@@ -132,44 +134,51 @@ function getDefaultVideoElem() {
 /************************************************************************/
 
 function getVideo() {
-    initVideo()
-    videoReset();
     axios.get(`/video/videos?directory=${directory}`)
         .then(response => {
             let videos = response.data;
             if (videos.length > 0) {
                 let randomIndex = Math.floor(Math.random() * videos.length);
                 currentVideo = videos[randomIndex]
-
-                let videoUrl = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`
-                if (videoSource) {
-                    videoSource.src = videoUrl;
-                }
-                pushVideoArr(videoUrl)
-                if (videoPlayer) {
-                    videoPlayer.load();
-                    videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
-                    videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
-                }
-
-
+                playVideo(currentVideo)
             } else {
                 alert('No videos found');
             }
         });
 }
 
+function playVideo(currentVideo) {
+    initVideoSrc()
+    initVideoElem();
+    const videoUrl = `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`
+    if (videoSource) {
+        videoSource.src = videoUrl;
+    }
+    pushVideoArr(videoUrl)
+    /*console.log('-----------------------')
+    previousVideos.forEach(item => {
+        console.log(extractFilename(decodeURIComponent(item)))
+    })
+    console.log('-----------------------')*/
+    if (videoPlayer) {
+        videoPlayer.volume = previousVolume;
+        videoPlayer.load();
+        videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
+        videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
+    }
+}
+
 function getVideoEvent() {
+    let videoFilename = extractFilename(decodeURIComponent(videoSource.src));
+    currentVideo = videoFilename;
+
+    filenameDisplay.textContent = videoFilename;
+    document.title = videoFilename;
+
     if (!threeSplitLayout()) {
         changeVideo(directory, currentVideo)
     }
     addKeyboardControls();
-    let videoFilename = extractFilename(decodeURIComponent(videoSource.src));
-    currentVideo = videoFilename;
-    console.log('getvideo', extractFilename(decodeURIComponent(videoFilename)))
-
-    filenameDisplay.textContent = videoFilename;
-    document.title = videoFilename;
 }
 
 function changeVideo(directory, currentVideo) {
@@ -191,6 +200,7 @@ function changeVideo(directory, currentVideo) {
 
     player.src({type: mimeType, src: videoUrl});
     player.load();
+    player.volume(previousVolume)
     player.off('loadeddata');
     player.on('loadeddata', function () {
         player.play();
@@ -212,8 +222,6 @@ function changeVideo(directory, currentVideo) {
 function delVideo() {
     if (currentVideo) {
         if (confirm(`Delete \r\n ${currentVideo} ?`)) {
-            initVideo()
-            videoReset();
             axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`)
                 .then(response => {
                     if (response.status === 204) {
@@ -279,7 +287,7 @@ function threeSplitLayout() {
 
         function checkBothVideosLoaded() {
             if (videoLeftLoaded && videoRightLoaded && videoPlayerLoaded) {
-                playVideo();
+                playTripleVideo();
             }
         }
 
@@ -299,7 +307,7 @@ function threeSplitLayout() {
         };
 
         videoPlayer.play().then(_ => {
-            playVideo();
+            playTripleVideo();
         }).catch(error => {});
 
         videoPlayer.addEventListener('play', function() {
@@ -329,7 +337,7 @@ function threeSplitLayout() {
     }
 }
 
-function playVideo() {
+function playTripleVideo() {
     videoPlayer.play().catch(error => {});
     videoLeft.play().catch(error => {});
     videoRight.play().catch(error => {});
@@ -344,7 +352,7 @@ function initTriple() {
     videoRight.currentTime = currentTime;
 
     setTimeout(() => {
-        playVideo()
+        playTripleVideo()
         // checkDuration()
     }, 500)
 }
@@ -400,61 +408,14 @@ function addVideoEvent() {
     }
 }
 
-/*prevButton.addEventListener('click', function() {
-    let prevVideoUrl = previousVideos.shift();
-    if (prevVideoUrl) {
-        player.src({ mimeType, src: prevVideoUrl });
-        player.load();
-        player.off('loadeddata');
-        player.on('loadeddata', function() {
-            player.play();
-            addKeyboardControls();
-            let videoFilename = extractFilename(decodeURIComponent(extractFilename(prevVideoUrl)))
-            currentVideo = videoFilename
-
-            console.log('prevButton', videoFilename)
-            filenameDisplay.textContent = videoFilename;
-            document.title = videoFilename
-        });
-    }
-});*/
-
 prevButton.addEventListener('click', function () {
     let prevVideoUrl = previousVideos.shift();
+
     if (prevVideoUrl) {
-        if (isVideoJs(player)) {
-            player.src({type: mimeType, src: prevVideoUrl});
-            player.load();
-            player.off('loadeddata');
-            player.on('loadeddata', function () {
-                player.play();
-                addKeyboardControls();
-                let videoFilename = extractFilename(decodeURIComponent(prevVideoUrl));
-                pushVideoArr(prevVideoUrl)
-                currentVideo = videoFilename;
-
-                console.log('prevButton', videoFilename);
-                filenameDisplay.textContent = videoFilename;
-                document.title = videoFilename;
-            });
-            player.off('ended');
-            player.on('ended', function () {
-                if (isLooping) {
-                    player.play();
-                }
-            });
-        } else {
-            initVideo()
-            videoReset();
-            videoSource.src = prevVideoUrl;
-            let videoFilename = extractFilename(decodeURIComponent(prevVideoUrl));
-            pushVideoArr(prevVideoUrl)
-
-            console.log('prevButton', videoFilename);
-            videoPlayer.load();
-            videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
-            videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
-        }
+        const videoFilename = extractFilename(decodeURIComponent(prevVideoUrl));
+        console.log('prevButton', videoFilename);
+        pushVideoArr(currentVideo)
+        playVideo(videoFilename)
     }
 });
 
@@ -487,11 +448,15 @@ function resetAudioSync() {
     showSyncMessage();
 }
 
-function showVolumeMessage() {
-    if (player) {
+function showVolumeMessage(isVideoJS) {
+    if (isVideoJS) {
         volumeMessage.textContent = 'Volume: ' + Math.round(player.volume() * 100) + '%';
+        console.log('volume', player.volume())
+        previousVolume = player.volume()
     } else {
         volumeMessage.textContent = 'Volume: ' + Math.round(videoPlayer.volume * 100) + '%';
+        console.log('volume', videoPlayer.volume)
+        previousVolume = videoPlayer.volume
     }
 
     volumeMessage.style.display = 'block';
@@ -545,90 +510,12 @@ function addKeyboardControls() {
     document.addEventListener('keydown', videoKeyEvent)
 }
 
-/*function videoKeyEvent(event) {
-    let currentTime, duration;
-    let videojs = false;
-    if (player) {
-        videojs = true;
-        currentTime = player.currentTime();
-        duration = player.duration();
-    } else {
-        currentTime = videoPlayer.currentTime
-        duration = videoPlayer.duration
-    }
-
-    switch(event.key) {
-        case 'ArrowRight':
-            if (event.shiftKey) {
-                player.currentTime(Math.min(currentTime + 30, duration));
-            } else {
-                player.currentTime(Math.min(currentTime + 5, duration));
-            }
-            break;
-        case 'ArrowLeft':
-            if (event.shiftKey) {
-                player.currentTime(Math.max(currentTime - 30, 0));
-            } else {
-                player.currentTime(Math.max(currentTime - 5, 0));
-            }
-            break;
-        case 'ArrowUp':
-            player.volume(Math.min(player.volume() + 0.1, 1));
-            showVolumeMessage();
-            break;
-        case 'ArrowDown':
-            player.volume(Math.max(player.volume() - 0.1, 0));
-            showVolumeMessage();
-            break;
-        case 'a':  // 'a' 키를 눌러 오디오 싱크를 -0.02초 조정
-            adjustAudioSync(-0.02);
-            break;
-        case 'd':  // 'd' 키를 눌러 오디오 싱크를 +0.02초 조정
-            adjustAudioSync(0.02);
-            break;
-        case 's':  // 's' 키를 눌러 오디오 싱크를 0으로 초기화
-            resetAudioSync();
-            break;
-        case 'Delete':  // 'Delete' 키를 눌러 비디오 삭제 함수 호출
-            delVideo();
-            break;
-        case 'PageDown':  // 'PageDown' 키를 눌러 비디오 가져오기 함수 호출
-            getVideo();
-            break;
-        case 'PageUp':
-            prevButton.click(); // 'PageUp' 키를 눌러 이전 비디오 재생
-            break;
-        case ' ':  // 스페이스바를 눌러 재생/일시정지 토글
-            event.preventDefault();  // 스페이스바의 기본 동작 방지
-            if (videojs) {
-                if (player.paused()) {
-                    player.play();
-                } else {
-                    player.pause();
-                }
-            } else {
-                if (player.paused) {
-                    player.play();
-                } else {
-                    player.pause();
-                }
-            }
-            break;
-        case 'Escape':  // ESC 키를 눌러 전체화면 해제
-            exitFullscreen();
-            break;
-        case 'Enter':
-            toggleFullscreen();
-            break;
-    }
-}*/
-
 function videoKeyEvent(event) {
     let currentTime, duration;
     let isVideoJS = false;
     const videoPlayer = document.getElementById('videoPlayer');
 
-    if (isVideoJs(player)) {
+    if (isVideoJs()) {
         isVideoJS = true;
         currentTime = player.currentTime();
         duration = player.duration();
@@ -682,7 +569,7 @@ function videoKeyEvent(event) {
             } else {
                 videoPlayer.volume = Math.max(videoPlayer.volume - 0.1, 0);
             }
-            showVolumeMessage();
+            showVolumeMessage(isVideoJS);
             break;
         case 'a':
             adjustAudioSync(-0.02);
@@ -702,7 +589,7 @@ function videoKeyEvent(event) {
         case 'PageUp':
             prevButton.click();
             break;
-        case ' ':
+        case ' ': // Space
             event.preventDefault();
             if (isVideoJS) {
                 if (player.paused()) {
