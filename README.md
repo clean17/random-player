@@ -34,6 +34,12 @@ rmdir /s /q venv # cmd
 python -m pip install --upgrade pip
 ```
 
+### 버전차이로 문제가 되는 패키지 재설치
+```bash
+pip uninstall ffmpeg-python
+pip install ffmpeg-python
+```
+
 ### 사용 방법
 `config.ini` 파일을 생성 후 내부에 디렉토리를 지정한다
 ```

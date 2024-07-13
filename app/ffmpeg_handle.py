@@ -2,8 +2,10 @@ import os
 import subprocess
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, send_from_directory
 from flask_login import login_required
+from flask_cors import CORS, cross_origin
 from config import settings
 from app.task_manager import tasks, Task, current_date
+from urllib.parse import quote
 
 m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
 
@@ -20,7 +22,7 @@ def run_batch():
     current_date_str = current_date()
     file_pattern = f"{settings['WORK_DIRECTORY']}/{current_date_str}{keyword}_*.ts"
 
-    cmd = f"cmd /c \"{settings['FFMPEG_SCRIPT_PATH']} {keyword} \"{url}\"\""
+    cmd = f'cmd /c "{settings["FFMPEG_SCRIPT_PATH"]} {keyword} "{url}" && exit"'
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True, encoding='utf-8')
     '''
     shell=True 새로운 셸
@@ -51,17 +53,23 @@ def kill_task(pid):
 def get_tasks():
     task_list = []
     for task in tasks:
+        thumbnail_url = url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path), _external=True) if task.thumbnail_path else None
+        # thumbnail_url = url_for('ffmpeg.thumbnail', filename=quote(os.path.basename(task.thumbnail_path))) if task.thumbnail_path else None
+        # if thumbnail_url:
+        #     thumbnail_url = 'https://merci-seoul.iptime.org' + thumbnail_url
+        # print(thumbnail_url)
+
         task_list.append({
             'pid': task.pid,
             'file_name': task.file_name,
             'last_modified_time': task.last_modified_time,
-            'thumbnail_path': url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path)) if task.thumbnail_path else None,
+            'thumbnail_path': thumbnail_url,
             'thumbnail_update_time': task.thumbnail_update_time,
         })
     return jsonify(task_list)
 
 @m_ffmpeg.route('/thumbnails/<path:filename>')
-@login_required
+@cross_origin() # allowed CORS
 def thumbnail(filename):
     response = send_from_directory(settings['WORK_DIRECTORY'], filename)
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'

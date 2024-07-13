@@ -66,6 +66,7 @@
                     const thumbnailCell = document.createElement('td');
                     thumbnailCell.colSpan = "3";
                     if (task.thumbnail_path) {
+                        {#console.log(task.thumbnail_path)#}
                         const img = document.createElement('img');
 
                         {#if (task.thumbnail_update_time) {
@@ -79,6 +80,7 @@
                             }
                         }#}
                         img.src = task.thumbnail_path;
+                        img.alt = task.file_name
                         let fallbackSrc = '{{ url_for("static", filename="no-image.png") }}';
 
                         img.onerror = function() {
