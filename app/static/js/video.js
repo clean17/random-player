@@ -168,6 +168,7 @@ function playVideo(videoUrl) {
     console.log('-----------------------')*/
     if (videoPlayer) {
         videoPlayer.volume = previousVolume;
+        videoPlayer.loop = isLooping;
         videoPlayer.load();
         videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
         videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
@@ -207,6 +208,7 @@ function changeVideo() {
     player.src({type: mimeType, src: videoUrl});
     player.load();
     player.volume(previousVolume)
+    player.loop(isLooping)
     player.off('loadeddata');
     player.on('loadeddata', function () {
         player.play();
@@ -456,11 +458,9 @@ function resetAudioSync() {
 function showVolumeMessage(isVideoJS) {
     if (isVideoJS) {
         volumeMessage.textContent = 'Volume: ' + Math.round(player.volume() * 100) + '%';
-        console.log('volume', player.volume())
         previousVolume = player.volume()
     } else {
         volumeMessage.textContent = 'Volume: ' + Math.round(videoPlayer.volume * 100) + '%';
-        console.log('volume', videoPlayer.volume)
         previousVolume = videoPlayer.volume
     }
 
