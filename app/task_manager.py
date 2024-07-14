@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from multiprocessing import Process, Manager
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from ffmpeg_handle import terminate_task
 
 tasks = []
 
@@ -178,6 +179,8 @@ def cleanup_tasks():
 
         if time_difference < threshold_time:
             new_tasks.append(task)
+        else :
+            terminate_task(task.pid)
 
     tasks[:] = new_tasks
 

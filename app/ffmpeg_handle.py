@@ -41,11 +41,7 @@ def status():
 @m_ffmpeg.route('/kill_task/<int:pid>', methods=['POST'])
 @login_required
 def kill_task(pid):
-    for task in tasks:
-        if task.pid == pid:
-            Task.terminate(pid)
-            tasks.remove(task)
-            break
+    terminate_task(pid)
     return redirect(url_for('ffmpeg.status'))
 
 @m_ffmpeg.route('/get_tasks', methods=['GET'])
@@ -76,3 +72,10 @@ def thumbnail(filename):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
     return response
+
+def terminate_task(pid):
+    for task in tasks:
+        if task.pid == pid:
+            Task.terminate(pid)
+            tasks.remove(task)
+            break
