@@ -220,6 +220,16 @@ function changeVideo() {
             player.play();
         }
     });
+    player.ready(function() {
+        let controlBar = player.controlBar;
+
+        controlBar.on('keydown', function(event) {
+            // page up key: 33, page down key: 34
+            if (event.keyCode === 33 || event.keyCode === 34) {
+                event.preventDefault();
+            }
+        });
+    });
 }
 
 function delVideo() {
