@@ -757,6 +757,8 @@ function setLeftPositionForNormal() {
         position = windowHeight * 0.127;
     } else if (aspectRatio <= 1.948 && aspectRatio > 1.8618) {
         position = windowHeight * 0.087;
+    } else {
+        position = windowHeight * 0.078;
     }
     removeWidthFromVideoMirror()
 
