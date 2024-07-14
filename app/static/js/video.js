@@ -419,6 +419,20 @@ function addVideoEvent() {
         videoPlayer.addEventListener('ended', getVideo);
         videoPlayer.removeEventListener('touchmove', showControls);
         videoPlayer.addEventListener('touchmove', showControls);
+        videoPlayer.removeEventListener('focus', function(event) {
+            event.target.blur();
+        });
+        videoPlayer.addEventListener('focus', function(event) {
+            event.target.blur();
+        });
+        videoPlayer.removeEventListener('mousedown', function(event) {
+            event.preventDefault();
+            setTimeout(() => videoPlayer.blur(), 0);
+        });
+        videoPlayer.addEventListener('mousedown', function(event) {
+            event.preventDefault();
+            setTimeout(() => videoPlayer.blur(), 0);
+        });
     }
 }
 
@@ -656,9 +670,19 @@ window.onresize = () => {
 function setLeftPositionForNormal() {
     event.preventDefault()
     let windowHeight = window.innerHeight;
-    let position = windowHeight * 0.157;
-    // let position = windowHeight * 0.11;
-    // let position = windowHeight * 0.00;
+    let windowWidth = window.innerWidth;
+    let aspectRatio = windowWidth / windowHeight;
+    let position;
+
+    if (aspectRatio === 16 / 9) {
+        position = windowHeight * 0.157;
+    } else if (aspectRatio === 16 / 10) {
+        position = windowHeight * 0.00;
+    } else {
+        // Default or other aspect ratios
+        position = windowHeight * 0.11;
+    }
+
     videoLeft.style.left = position + 'px';
     videoRight.style.right = position + 'px';
 }
@@ -666,9 +690,19 @@ function setLeftPositionForNormal() {
 function setLeftPositionForFullscreen() {
     event.preventDefault()
     let windowHeight = window.innerHeight;
-    let position = windowHeight * 0.0453;
-    // let position = windowHeight * 0.03;
-    // let position = windowHeight * 0.000;
+    let windowWidth = window.innerWidth;
+    let aspectRatio = windowWidth / windowHeight;
+    let position;
+
+    if (aspectRatio === 16 / 9) {
+        position = windowHeight * 0.0453;
+    } else if (aspectRatio === 16 / 10) {
+        position = -1 * windowHeight * 0.02;
+    } else {
+        // Default or other aspect ratios
+        position = windowHeight * 0.03;
+    }
+
     videoLeft.style.left = position + 'px';
     videoRight.style.right = position + 'px';
 }
