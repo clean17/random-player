@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from flask_login import login_required
 from flask_cors import CORS, cross_origin
 from config import settings
-from app.task_manager import tasks, Task, current_date
+from app.task_manager import tasks, Task, current_date, terminate_task
 from urllib.parse import quote
 
 m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
@@ -72,10 +72,3 @@ def thumbnail(filename):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
     return response
-
-def terminate_task(pid):
-    for task in tasks:
-        if task.pid == pid:
-            Task.terminate(pid)
-            tasks.remove(task)
-            break

@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from multiprocessing import Process, Manager
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from ffmpeg_handle import terminate_task
 
 tasks = []
 
@@ -188,6 +187,13 @@ def cleanup_tasks():
 def update_task_status():
     for task in tasks:
         task.update_last_modified()
+
+def terminate_task(pid):
+    for task in tasks:
+        if task.pid == pid:
+            Task.terminate(pid)
+            tasks.remove(task)
+            break
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()

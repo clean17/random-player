@@ -14,6 +14,9 @@ const filenameDisplay = document.getElementById('video-filename');
 const prevButton = document.getElementById('prevButton');
 const loopButton = document.getElementById('loopbutton');
 let mimeType;
+let audioContext;
+let delayNode;
+let source;
 let audioOffset = 0;
 let hideControlsTimeout;
 let isLooping = false;
@@ -468,9 +471,16 @@ function showSyncMessage() {
 
 function adjustAudioSync(offset) {
     audioOffset += offset;
-    let videoElement = player.el().querySelector('video');
-    let currentTime = videoElement.currentTime;
-    videoElement.currentTime = currentTime + offset;
+    if (audioOffset < 0) {
+        const currentTime = audioContext.currentTime;
+        source.disconnect();
+        setTimeout(() => {
+            source.connect(delayNode).connect(audioContext.destination);
+            delayNode.delayTime.value = Math.abs(audioOffset);
+        }, Math.abs(audioOffset * 1000));
+    } else if (delayNode) {
+        delayNode.delayTime.value = audioOffset;
+    }
     showSyncMessage();
 }
 
@@ -537,6 +547,7 @@ function toggleFullscreen() {
 function addKeyboardControls() {
     document.removeEventListener('keydown', videoKeyEvent)
     document.addEventListener('keydown', videoKeyEvent)
+    delayAudio();
 }
 
 function videoKeyEvent(event) {
@@ -601,10 +612,10 @@ function videoKeyEvent(event) {
             showVolumeMessage(isVideoJS);
             break;
         case 'a':
-            adjustAudioSync(-0.02);
+            adjustAudioSync(-0.01);
             break;
         case 'd':
-            adjustAudioSync(0.02);
+            adjustAudioSync(0.01);
             break;
         case 's':
             resetAudioSync();
@@ -649,7 +660,64 @@ function videoKeyEvent(event) {
     }
 }
 
+function delayAudio() {
+    let video = document.querySelector('#videoPlayer')
+    if (video) {
+        if (isVideoJs()) {
+            /*video = videojs.getPlayer(video.id);
 
+            player.ready(() => {
+                const videoElement = player.el().querySelector('video');
+
+                if (videoElement instanceof HTMLMediaElement) {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    console.log('audioContext',audioContext)
+                    const source = audioContext.createMediaElementSource(videoElement);
+                    const delayNode = audioContext.createDelay();
+
+                    delayNode.delayTime.value = 0.1; // 0.1초 지연
+
+                    source.connect(delayNode);
+                    delayNode.connect(audioContext.destination);
+
+                    videoElement.addEventListener('play', () => {
+                        audioContext.resume();
+                    });
+                } else {
+                    console.error('Selected element is not an HTMLMediaElement');
+                }
+            });*/
+        } else {
+            if (video instanceof HTMLMediaElement) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('audioContext',audioContext)
+                source = audioContext.createMediaElementSource(video);
+                delayNode = audioContext.createDelay();
+
+                delayNode.delayTime.value = audioOffset;
+
+                source.connect(delayNode).connect(audioContext.destination);
+
+                // 비디오 재생이 시작될 때 오디오 컨텍스트를 재개
+                video.addEventListener('play', () => {
+                    audioContext.resume();
+                });
+
+                // 비디오 재생이 일시 중지되면 오디오도 일시 중지
+                video.addEventListener('pause', () => {
+                    audioContext.suspend();
+                });
+
+                // 비디오 재생이 중지되면 오디오도 중지
+                video.addEventListener('ended', () => {
+                    audioContext.suspend();
+                });
+            } else {
+                console.error('Selected element is not an HTMLMediaElement');
+            }
+        }
+    }
+}
 
 /************************************************************************/
 /***************************   CSS   ************************************/
