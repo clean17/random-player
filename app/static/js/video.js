@@ -149,7 +149,12 @@ function getVideo() {
                 let randomIndex = Math.floor(Math.random() * videos.length);
                 currentVideo = videos[randomIndex]
 
-                const videoUrl = makeGetUrl(currentVideo)
+                const previousVideo = previousVideos.slice(-1)[0]
+                if (currentVideo === previousVideo) {
+                    currentVideo = videos[randomIndex === 0 ? 1 : 0]
+                }
+
+                const videoUrl = makeGetUrl(currentVideo);
                 playVideo(videoUrl)
             } else {
                 alert('No videos found');
@@ -725,10 +730,12 @@ function delayAudio() {
 
 // window.onload = setLeftPosition;
 window.onresize = () => {
-    if (document.fullscreenElement) {
-        setLeftPositionForFullscreen();
-    } else {
-        setLeftPositionForNormal();
+    if (videoLeft && videoRight) {
+        if (document.fullscreenElement) {
+            setLeftPositionForFullscreen();
+        } else {
+            setLeftPositionForNormal();
+        }
     }
 };
 // document.removeEventListener('fullscreenchange', setLeftPosition);
