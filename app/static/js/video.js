@@ -744,26 +744,17 @@ window.onresize = () => {
 
 function setLeftPositionForNormal() {
     event.preventDefault()
-    let windowHeight = window.innerHeight;
     let windowWidth = window.innerWidth;
-    let aspectRatio = windowWidth / windowHeight;
-    let position;
-
-    if (aspectRatio > 2) {
-        position = windowHeight * 0.157;
-    } else if (aspectRatio <= 2 && aspectRatio > 1.948) {
-        position = windowHeight * 0.131;
-    } else if (aspectRatio <= 1.948 && aspectRatio > 1.9418) {
-        position = windowHeight * 0.127;
-    } else if (aspectRatio <= 1.948 && aspectRatio > 1.8618) {
-        position = windowHeight * 0.087;
-    } else {
-        position = windowHeight * 0.078;
-    }
-    removeWidthFromVideoMirror()
+    let videoWidth = videoPlayer.videoWidth;
+    let videoHeight = videoPlayer.videoHeight;
+    let videoAspectRatio = videoWidth / videoHeight; // 원본 비율
+    let displayedHeight = videoPlayer.offsetHeight;
+    let displayedWidth = displayedHeight * videoAspectRatio; // 내부 영상 가로길이
+    let position = (windowWidth - displayedWidth * 3) / 2
 
     videoLeft.style.left = position + 'px';
     videoRight.style.right = position + 'px';
+    removeWidthFromVideoMirror()
 }
 
 function setLeftPositionForFullscreen() {
