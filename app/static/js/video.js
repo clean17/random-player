@@ -682,6 +682,7 @@ function setLeftPositionForNormal() {
         // Default or other aspect ratios
         position = windowHeight * 0.11;
     }
+    removeWidthFromVideoMirror()
 
     videoLeft.style.left = position + 'px';
     videoRight.style.right = position + 'px';
@@ -697,7 +698,8 @@ function setLeftPositionForFullscreen() {
     if (aspectRatio === 16 / 9) {
         position = windowHeight * 0.0453;
     } else if (aspectRatio === 16 / 10) {
-        position = -1 * windowHeight * 0.02;
+        addWidthToVideoMirror();
+        position = windowHeight * 0.0;
     } else {
         // Default or other aspect ratios
         position = windowHeight * 0.03;
@@ -705,6 +707,20 @@ function setLeftPositionForFullscreen() {
 
     videoLeft.style.left = position + 'px';
     videoRight.style.right = position + 'px';
+}
+
+function addWidthToVideoMirror() {
+    const elements = document.querySelectorAll('.video-mirror');
+    elements.forEach(element => {
+        element.style.width = '33.33%';
+    });
+}
+
+function removeWidthFromVideoMirror() {
+    const elements = document.querySelectorAll('.video-mirror');
+    elements.forEach(element => {
+        element.style.width = ''; // 빈 문자열로 설정하여 width 속성 제거
+    });
 }
 
 /************************************************************************/
