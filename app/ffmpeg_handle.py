@@ -5,6 +5,7 @@ from flask_login import login_required
 from flask_cors import CORS, cross_origin
 from config import settings
 from app.task_manager import tasks, Task, current_date, terminate_task
+import shutil
 from urllib.parse import quote
 
 m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
@@ -36,7 +37,8 @@ def run_batch():
 @m_ffmpeg.route('/status')
 @login_required
 def status():
-    return render_template('status.html', tasks=tasks)
+    free_space_gb = get_drive_free_space('F:')
+    return render_template('status.html', tasks=tasks, free_space_gb=free_space_gb)
 
 @m_ffmpeg.route('/kill_task/<int:pid>', methods=['POST'])
 @login_required
@@ -72,3 +74,9 @@ def thumbnail(filename):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
     return response
+
+
+def get_drive_free_space(drive):
+    total, used, free = shutil.disk_usage(drive)
+    free_gb = free / (1024 ** 3)  # Convert bytes to GB
+    return free_gb

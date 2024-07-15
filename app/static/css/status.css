@@ -18,6 +18,14 @@ body {
     text-align: center;
     overflow-x: auto;
 }
+.content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+h2 {
+    margin: 15px 0 5px 0;
+}
 .table-container {
     max-height: 85vh;
     overflow-y: auto;
