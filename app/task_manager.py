@@ -9,7 +9,10 @@ import subprocess
 from datetime import datetime, timedelta
 from multiprocessing import Process, Manager
 import logging
+from moviepy.editor import VideoFileClip
+from send2trash import send2trash
 from concurrent.futures import ThreadPoolExecutor
+from config import settings
 
 tasks = []
 
@@ -18,6 +21,7 @@ tasks = []
 
 # 스케줄리 인스턴스 생성 (논블로킹)
 scheduler = BackgroundScheduler()
+work_directory = settings['WORK_DIRECTORY']
 
 '''
     # 1. multiprocessing는 메모리를 공유하지 않는다 -> class의 필드를 공유하지 않음
@@ -183,6 +187,11 @@ def cleanup_tasks():
 
     tasks[:] = new_tasks
 
+    '''
+    파일의 마지막 수정시간이 10분이 넘으면 체크해야한다
+    '''
+    # delete_short_videos(work_directory, 60)
+
 # 작업 상태를 주기적으로 업데이트하는 스레드
 def update_task_status():
     for task in tasks:
@@ -194,6 +203,36 @@ def terminate_task(pid):
             Task.terminate(pid)
             tasks.remove(task)
             break
+
+
+
+video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', 'ts')
+
+def get_video_length(file_path):
+    try:
+        clip = VideoFileClip(file_path)
+        duration = clip.duration # 길이를 초 단위로 반환
+        clip.close()
+        return duration
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return None
+    
+def delete_short_videos(directory, min_length):
+    '''비디오 파일 출력 + args[1] 보다 작으면 휴지통'''
+    for filename in os.listdir(directory):
+        if filename.lower().endswith(video_extensions):
+            file_path = os.path.join(directory, filename)
+            duration = get_video_length(file_path)
+        if duration is not None:
+            # print(f"{filename} - {duration} seconds")
+            if duration < min_length:
+                # os.remove(file_path)
+                if os.path.exists(file_path):
+                    normalized_path = os.path.normpath(file_path)
+                    send2trash(normalized_path) # 휴지통
+                print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
+        # else:
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
