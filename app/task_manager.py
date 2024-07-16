@@ -218,21 +218,25 @@ def get_video_length(file_path):
         print(f"Error processing {file_path}: {e}")
         return None
     
-def delete_short_videos(directory, min_length):
+def delete_short_videos():
     '''비디오 파일 출력 + args[1] 보다 작으면 휴지통'''
+    current_time = time.time()
+    min_length = 60 # 1분
+    directory = work_directory
+
     for filename in os.listdir(directory):
         if filename.lower().endswith(video_extensions):
             file_path = os.path.join(directory, filename)
-            duration = get_video_length(file_path)
-        if duration is not None:
-            # print(f"{filename} - {duration} seconds")
-            if duration < min_length:
-                # os.remove(file_path)
-                if os.path.exists(file_path):
-                    normalized_path = os.path.normpath(file_path)
-                    send2trash(normalized_path) # 휴지통
-                print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
-        # else:
+            last_modified_time = os.path.getmtime(file_path)
+
+            if current_time - last_modified_time > 900:  # 15분
+                duration = get_video_length(file_path)
+                if duration is not None:
+                    if duration < min_length:
+                        if os.path.exists(file_path):
+                            normalized_path = os.path.normpath(file_path)
+                            send2trash(normalized_path)  # 휴지통으로 보내기
+                        print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
@@ -240,5 +244,6 @@ def delete_short_videos(directory, min_length):
 # 스케줄러에 작업 추가, max_instances 기본 1
 scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=3)
 scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
+scheduler.add_job(delete_short_videos, 'interval', minutes=10)
 
 scheduler.start()
