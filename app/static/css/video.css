@@ -7,6 +7,46 @@ video::-webkit-media-controls {
     z-index: 5; /* video.js 컨트롤러의 z-index 설정 */
 }
 
+
+.prev {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+.loop {
+    position: absolute;
+    top: 60px;
+    right: 10px;
+}
+.loop .active {
+    background-color: #0080ff;
+}
+.loop-button.active {
+    background-color: #0080ff;
+}
+
+#controls {
+    position: absolute;
+    bottom: 90px;
+    right: 10px;
+    z-index: 5;
+}
+#controls button {
+    font-size: 16px;
+    padding: 10px;
+    margin: 5px;
+    cursor: pointer;
+    background-color: black;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    opacity: 0.8;
+}
+#controls button:hover {
+    opacity: 1;
+}
+
+
 #sync-message, #volume-message {
     position: absolute;
     background-color: rgba(0, 0, 0, 0.7);
@@ -28,6 +68,7 @@ video::-webkit-media-controls {
     left: 10px;
     z-index: 5;
 }
+
 
 #videoContainer {
     display: flex;
