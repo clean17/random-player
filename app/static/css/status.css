@@ -75,6 +75,7 @@ th {
     font-size: 16px;
     background-color: #007BFF;
     transition: background-color 0.3s ease;
+    width: auto;
 }
 .button:hover, .back-button:hover{
     background-color: #0056b3;
