@@ -106,21 +106,19 @@ class Task:
         last_modified_time = params.get("last_modified_time")
         initial_thumbnail_created = params.get("initial_thumbnail_created")
         thumbnail_update_time = params.get("thumbnail_update_time")
-        thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
+        thumbnail_path = os.path.join(work_directory, file_name.replace('.ts', '_thumb.webp'))
+        target_file = os.path.join(work_directory, file_name)
+
 
         if file_name and creation_time:
-            target_file = os.path.join(work_directory, file_name)
-
             if not initial_thumbnail_created:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
-                initial_thumbnail_path = os.path.join(work_directory, file_name.replace('.ts', '_thumb.jpg'))
                 (
                     ffmpeg.input(target_file, ss=1)
-                    .output(initial_thumbnail_path, vframes=1, q=5, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                    .output(thumbnail_path, vframes=1, q=85, pix_fmt='yuvj420p', loglevel="panic", update=1)
                     .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
                 )
-                if os.path.exists(initial_thumbnail_path):
-                    thumbnail_path = initial_thumbnail_path
+                if os.path.exists(thumbnail_path):
                     initial_thumbnail_created = True
                     thumbnail_update_time = datetime.now().isoformat()
                 else:
@@ -136,10 +134,9 @@ class Task:
                 thumb_time_difference = (current_time - last_update_time).total_seconds()
 
                 if thumb_time_difference >= 30:
-                    thumbnail_path = os.path.join(work_directory, f"{file_name.replace('.ts', '')}_thumb.jpg")
                     (
                         ffmpeg.input(target_file, ss=int(thumb_duration))
-                        .output(thumbnail_path, vframes=1, q=5, pix_fmt='yuvj420p', loglevel="panic", update=1) # s='640x360'
+                        .output(thumbnail_path, vframes=1, q=85, pix_fmt='yuvj420p', loglevel="panic", update=1) # s='640x360'
                         .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
                     )
                     if os.path.exists(thumbnail_path):
