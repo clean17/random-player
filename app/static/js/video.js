@@ -222,12 +222,12 @@ function changeVideo() {
         player.play();
         filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl))
     });
-    player.off('ended');
-    player.on('ended', function() {
-        if (isLooping) {
-            player.play();
-        }
-    });
+    // player.off('ended');
+    // player.on('ended', function() {
+    //     if (isLooping) {
+    //         player.play();
+    //     }
+    // });
     player.ready(function() {
         let controlBar = player.controlBar;
 

@@ -168,21 +168,22 @@ def current_date():
 def cleanup_tasks():
     global tasks
     current_time = datetime.now()
-    threshold_time = timedelta(minutes=11)  # 11분
+    threshold_time = timedelta(minutes=15)  # 15분
     format_str = '%Y-%m-%d %H:%M:%S'
     new_tasks = []
 
     for task in tasks:
         task_time = datetime.strptime(task.last_modified_time, format_str)
         time_difference = current_time - task_time
-        print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
 
         if time_difference < threshold_time:
+            # print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
             new_tasks.append(task)
         else :
             terminate_task(task.pid)
 
     tasks[:] = new_tasks
+    print(f"Updated tasks array: {[task.pid for task in tasks]}")
 
     '''
     파일의 마지막 수정시간이 10분이 넘으면 체크해야한다
@@ -197,8 +198,13 @@ def update_task_status():
 def terminate_task(pid):
     for task in tasks:
         if task.pid == pid:
+            print(f"##### Terminate Task ###### : {task.file_name} ")
             Task.terminate(pid)
-            tasks.remove(task)
+            try:
+                tasks.remove(task)
+                print(f"Task with PID: {pid} removed from tasks array.")
+            except ValueError:
+                print(f"Task with pid {pid} not found in tasks array.")
             break
 
 
