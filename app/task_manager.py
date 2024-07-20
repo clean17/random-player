@@ -183,7 +183,7 @@ def cleanup_tasks():
             terminate_task(task.pid)
 
     tasks[:] = new_tasks
-    print(f"Updated tasks array: {[task.pid for task in tasks]}")
+    print(f"Updated tasks array: {[task.file_name for task in tasks]}")
 
     '''
     파일의 마지막 수정시간이 10분이 넘으면 체크해야한다
@@ -202,9 +202,9 @@ def terminate_task(pid):
             Task.terminate(pid)
             try:
                 tasks.remove(task)
-                print(f"Task with PID: {pid} removed from tasks array.")
+                print(f"Task [ {task.file_name} ] removed from tasks array.")
             except ValueError:
-                print(f"Task with pid {pid} not found in tasks array.")
+                print(f"Task [ {task.file_name} ] not found in tasks array.")
             break
 
 
