@@ -397,6 +397,7 @@ const hideControls = () => {
         controls.style.display = 'none';
         topDiv.style.display = 'none';
         filenameDisplay.style.display = 'none';
+        videoContainer.style.cursor = 'none';
     }, 2000);
 };
 
@@ -404,6 +405,7 @@ const showControls = () => {
     controls.style.display = 'block';
     topDiv.style.display = 'block';
     filenameDisplay.style.display = 'block';
+    videoContainer.style.cursor = 'default';
     hideControls();
 };
 
@@ -549,10 +551,29 @@ function toggleFullscreen() {
     }
 }
 
+function adjustVolume(change) {
+    if (isVideoJs()) {
+        player.volume(Math.min(Math.max(player.volume() + change, 0), 1));
+    } else {
+        videoPlayer.volume = Math.min(Math.max(videoPlayer.volume + change, 0), 1);
+    }
+    showVolumeMessage();
+}
+
 function addKeyboardControls() {
     document.removeEventListener('keydown', videoKeyEvent)
     document.addEventListener('keydown', videoKeyEvent)
+    document.removeEventListener('wheel', wheelEvent)
+    document.addEventListener('wheel', wheelEvent)
     delayAudio();
+}
+
+function wheelEvent(evnet) {
+    if (event.deltaY < 0) {
+        adjustVolume(0.1);
+    } else {
+        adjustVolume(-0.1);
+    }
 }
 
 function videoKeyEvent(event) {
@@ -601,19 +622,11 @@ function videoKeyEvent(event) {
             }
             break;
         case 'ArrowUp':
-            if (isVideoJS) {
-                player.volume(Math.min(player.volume() + 0.1, 1));
-            } else {
-                videoPlayer.volume = Math.min(videoPlayer.volume + 0.1, 1);
-            }
+            adjustVolume(0.1)
             showVolumeMessage();
             break;
         case 'ArrowDown':
-            if (isVideoJS) {
-                player.volume(Math.max(player.volume() - 0.1, 0));
-            } else {
-                videoPlayer.volume = Math.max(videoPlayer.volume - 0.1, 0);
-            }
+            adjustVolume(-0.1)
             showVolumeMessage(isVideoJS);
             break;
         case 'a':
