@@ -249,12 +249,19 @@ def delete_short_videos():
 
             if current_time - last_modified_time > 900:  # 15분
                 duration = get_video_length(file_path)
-                if duration is not None:
-                    if duration < min_length:
-                        if os.path.exists(file_path):
-                            normalized_path = os.path.normpath(file_path)
+                if duration is not None and duration < min_length:
+                    if os.path.exists(file_path):
+                        normalized_path = os.path.normpath(file_path)
+                        try:
                             send2trash(normalized_path)  # 휴지통으로 보내기
-                        print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
+                            print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
+                        except FileNotFoundError:
+                            print(f"File not found: {normalized_path}. It may have been deleted already.")
+                        except Exception as e:
+                            print(f"Error sending {normalized_path} to trash: {e}")
+                    else:
+                        print(f"File does not exist: {file_path}. Skipping deletion.")
+                    print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
