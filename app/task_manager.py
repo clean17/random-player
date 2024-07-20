@@ -5,6 +5,7 @@ import time
 import os
 import glob
 import ffmpeg
+import psutil
 import subprocess
 from datetime import datetime, timedelta
 from multiprocessing import Process, Manager
@@ -163,6 +164,16 @@ class Task:
         except Exception as e:
             print(f"An error occurred: {e}")
 
+def is_process_running(pid):
+    """ Check if a process with a given pid is running """
+    if pid is None:
+        return False
+    try:
+        # psutil will throw NoSuchProcess exception if pid does not exist
+        process = psutil.Process(pid)
+        return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
 
 # 현재 날짜를 YYMMDD 형식으로 가져오기
 def current_date():
@@ -171,6 +182,9 @@ def current_date():
 # 작업이 끝난 task 목록 제거
 def cleanup_tasks():
     global tasks
+    if not tasks:
+        return
+
     current_time = datetime.now()
     threshold_time = timedelta(minutes=15)  # 15분
     format_str = '%Y-%m-%d %H:%M:%S'
@@ -182,7 +196,11 @@ def cleanup_tasks():
 
         if time_difference < threshold_time:
             # print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
-            new_tasks.append(task)
+            if is_process_running(task.pid):
+                new_tasks.append(task)
+            else:
+                print(f"Process with pid {task.pid} is not running. Task {task.file_name} will be terminated.")
+                terminate_task(task.pid)
         else :
             terminate_task(task.pid)
 
@@ -203,13 +221,15 @@ def terminate_task(pid):
     for task in tasks:
         if task.pid == pid:
             print(f"##### Terminate Task ###### : {task.file_name} ")
-            Task.terminate(pid)
-            try:
-                tasks.remove(task)
-                print(f"Task [ {task.file_name} ] removed from tasks array.")
-            except ValueError:
-                print(f"Task [ {task.file_name} ] not found in tasks array.")
-            break
+            if is_process_running(pid):
+                Task.terminate(pid)
+            # 이미 배열에서 제거되었다
+            # try:
+            #     tasks.remove(task)
+            #     print(f"Task [ {task.file_name} ] removed from tasks array.")
+            # except ValueError:
+            #     print(f"Task [ {task.file_name} ] not found in tasks array.")
+            # break
 
 
 
