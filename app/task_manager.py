@@ -133,6 +133,10 @@ class Task:
                 thumb_duration = duration.total_seconds()
                 thumb_time_difference = (current_time - last_update_time).total_seconds()
 
+                video_duration = get_video_duration(target_file)
+                if thumb_duration > video_duration:
+                    thumb_duration = video_duration
+
                 if thumb_time_difference >= 30:
                     (
                         ffmpeg.input(target_file, ss=int(thumb_duration))
@@ -211,6 +215,7 @@ def terminate_task(pid):
 
 video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', 'ts')
 
+# VideoFileClip 클래스로 파일을 직접 연다 (메모리 많이 사용한다)
 def get_video_length(file_path):
     try:
         clip = VideoFileClip(file_path)
@@ -219,6 +224,16 @@ def get_video_length(file_path):
         return duration
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
+        return None
+
+# ffmpeg로 메타데이터를 가져온다 (메모리 사용량이 적다)
+def get_video_duration(filepath):
+    try:
+        probe = ffmpeg.probe(filepath)
+        video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+        return float(video_info['duration'])
+    except Exception as e:
+        print(f"Error getting video duration: {e}")
         return None
     
 def delete_short_videos():
