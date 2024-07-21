@@ -202,6 +202,7 @@ def cleanup_tasks():
             else:
                 print(f"Process with pid {task.pid} is not running. Task {task.file_name} will be terminated.")
                 terminate_task(task.pid)
+        # 15분 초과하면 제거
         else :
             print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
             terminate_task(task.pid)
@@ -225,13 +226,13 @@ def terminate_task(pid):
             print(f"##### Terminate Task ###### : {task.file_name} ")
             if is_process_running(pid):
                 Task.terminate(pid)
-            # 이미 배열에서 제거되었다
-            # try:
-            #     tasks.remove(task)
-            #     print(f"Task [ {task.file_name} ] removed from tasks array.")
-            # except ValueError:
-            #     print(f"Task [ {task.file_name} ] not found in tasks array.")
-            # break
+            # ffmpeg_handle.kill_task 호출한 경우
+            try:
+                tasks.remove(task)
+                print(f"Task [ {task.file_name} ] removed from tasks array.")
+            except ValueError:
+                print(f"Task [ {task.file_name} ] not found in tasks array.")
+            break
 
 
 
