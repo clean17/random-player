@@ -68,6 +68,7 @@ class Task:
     def set_param_generate_thumbnail(self):
         # 처음부터 ffmpeg를 import 했으면 multiprocessing을 사용할 이유가 있었을까?
         params = {
+            'pid': self.pid,
             'file_name': self.file_name,
             'work_directory': self.work_directory,
             'initial_thumbnail_created': self.initial_thumbnail_created,
@@ -101,6 +102,7 @@ class Task:
         return latest_file
 
     def generate_thumbnail(self, params, return_dict):
+        pid = params.get("pid")
         file_name = params.get("file_name")
         work_directory = params.get("work_directory")
         creation_time = params.get("creation_time")
@@ -111,7 +113,7 @@ class Task:
         target_file = os.path.join(work_directory, file_name)
 
 
-        if file_name and creation_time:
+        if file_name and creation_time and is_process_running(pid):
             if not initial_thumbnail_created:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
                 (
