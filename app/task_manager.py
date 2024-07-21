@@ -197,13 +197,13 @@ def cleanup_tasks():
         time_difference = current_time - task_time
 
         if time_difference < threshold_time:
-            # print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
             if is_process_running(task.pid):
                 new_tasks.append(task)
             else:
                 print(f"Process with pid {task.pid} is not running. Task {task.file_name} will be terminated.")
                 terminate_task(task.pid)
         else :
+            print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
             terminate_task(task.pid)
 
     tasks[:] = new_tasks
@@ -289,7 +289,7 @@ def delete_short_videos():
 # threading.Thread(target=update_task_status, daemon=True).start()
 
 # 스케줄러에 작업 추가, max_instances 기본 1
-scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=3)
+scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=4)
 scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
 scheduler.add_job(delete_short_videos, 'interval', minutes=10)
 
