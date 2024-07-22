@@ -63,6 +63,7 @@ def delete_video(filename):
     if os.path.exists(file_path):
         normalized_path = os.path.normpath(file_path)
         send2trash(normalized_path) # 휴지통
+        print(f"[ {filename} ] is successfully deleted")
         # os.remove(file_path)
         return '', 204
     return '', 404
