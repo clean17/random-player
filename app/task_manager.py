@@ -118,7 +118,7 @@ class Task:
                 # 최초 썸네일 생성 (파일 시작 1초 후)
                 (
                     ffmpeg.input(target_file, ss=1)
-                    .output(thumbnail_path, vframes=1, q=85, pix_fmt='yuvj420p', loglevel="panic", update=1)
+                    .output(thumbnail_path, vframes=1, q=85, pix_fmt='yuvj420p', loglevel="error", update=1)
                     .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
                 )
                 if os.path.exists(thumbnail_path):
@@ -138,19 +138,26 @@ class Task:
 
                 video_duration = get_video_duration(target_file)
                 if thumb_duration > video_duration:
-                    thumb_duration = video_duration
+                    thumb_duration = video_duration - 5
 
                 if thumb_time_difference >= 30:
-                    (
-                        ffmpeg.input(target_file, ss=int(thumb_duration))
-                        .output(thumbnail_path, vframes=1, q=85, pix_fmt='yuvj420p', loglevel="panic", update=1) # s='640x360'
-                        .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
-                    )
+                    try:
+                        (
+                            ffmpeg.input(target_file, ss=int(thumb_duration))
+                            .output(thumbnail_path, vframes=1, q=85, pix_fmt='yuvj420p', loglevel="error", update=1) # s='640x360'
+                            .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
+                        )
+                    except ffmpeg.Error as e:
+                        # print('stdout:', e.stdout.decode('utf8'))
+                        print('stderr:', e.stderr.decode('utf8'))
+
                     if os.path.exists(thumbnail_path):
                         thumbnail_update_time = datetime.now().isoformat()
                         # print(f"Created Thumbnail at {file_name} {thumb_duration} second mark.")
                     else:
                         print(f"Failed to create thumbnail at {thumb_duration} second mark.")
+
+
 
             return_dict['thumbnail_path'] = thumbnail_path
             return_dict['initial_thumbnail_created'] = initial_thumbnail_created
