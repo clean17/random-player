@@ -169,12 +169,14 @@ class Task:
 def is_process_running(pid):
     """ Check if a process with a given pid is running """
     if pid is None:
+        print(f"## Process PID {pid} is None ## : ")
         return False
     try:
         # psutil will throw NoSuchProcess exception if pid does not exist
         process = psutil.Process(pid)
         return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
+        print("##### psutil Error ##### : ", pid)
         return False
 
 # 현재 날짜를 YYMMDD 형식으로 가져오기
@@ -197,9 +199,9 @@ def cleanup_tasks():
         time_difference = current_time - task_time
 
         if time_difference < threshold_time:
-            if is_process_running(task.pid):
-                new_tasks.append(task)
-            else:
+            if not is_process_running(task.pid):
+#                 new_tasks.append(task)
+#             else:
                 print(f"Process with pid {task.pid} is not running. Task {task.file_name} will be terminated.")
                 terminate_task(task.pid)
         # 15분 초과하면 제거
@@ -207,7 +209,7 @@ def cleanup_tasks():
             print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
             terminate_task(task.pid)
 
-    tasks[:] = new_tasks
+#     tasks[:] = new_tasks
     print(f"Updated tasks array: {[task.file_name for task in tasks]}")
 
     '''
