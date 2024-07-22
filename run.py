@@ -62,7 +62,7 @@ sys.stderr.reconfigure(encoding='utf-8')
 app = create_app()
 
 def signal_handler(sig, frame):
-    logger.info("Exiting server...")
+    logger.info("#### Exiting server... ####")
     pid = os.getpid()
     os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
 
@@ -71,8 +71,8 @@ def signal_handler(sig, frame):
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
-    logger.info("#### Starting server ####")
+    logger.info("#### Starting server.... ####")
     # app.run(debug=True, host='0.0.0.0', port=8090)
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
 
-    serve(app, host='127.0.0.1', port=8090)  # SSL 설정은 nginx에서 처리
+    serve(app, host='0.0.0.0', port=8090)  # SSL 설정은 nginx에서 처리
