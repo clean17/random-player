@@ -293,7 +293,6 @@ def delete_short_videos():
                             print(f"Error sending {normalized_path} to trash: {e}")
                     else:
                         print(f"File does not exist: {file_path}. Skipping deletion.")
-                    print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
