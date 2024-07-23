@@ -75,4 +75,4 @@ if __name__ == '__main__':
     # app.run(debug=True, host='0.0.0.0', port=8090)
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
 
-    serve(app, host='0.0.0.0', port=8090)  # SSL 설정은 nginx에서 처리
+    serve(app, host='0.0.0.0', port=8090, threads=6)  # SSL 설정은 nginx에서 처리

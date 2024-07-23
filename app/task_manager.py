@@ -183,7 +183,10 @@ def is_process_running(pid):
         process = psutil.Process(pid)
         return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
-        print("##### psutil Error ##### : ", pid)
+        # print("##### psutil Error ##### : ", pid)
+        return False
+    except Exception as e:
+        print(f"##### Unexpected error ##### : {str(e)}")
         return False
 
 # 현재 날짜를 YYMMDD 형식으로 가져오기
@@ -209,7 +212,7 @@ def cleanup_tasks():
             if not is_process_running(task.pid):
 #                 new_tasks.append(task)
 #             else:
-                print(f"Process with pid {task.pid} is not running. Task {task.file_name} will be terminated.")
+#                 print(f"Process with pid {task.pid} is not running. Task {task.file_name} will be terminated.")
                 terminate_task(task.pid)
         # 15분 초과하면 제거
         else :
@@ -286,7 +289,7 @@ def delete_short_videos():
                         normalized_path = os.path.normpath(file_path)
                         try:
                             send2trash(normalized_path)  # 휴지통으로 보내기
-                            print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
+                            # print(f"Deleted [ {filename} ] as it is shorter than {min_length} seconds.")
                         except FileNotFoundError:
                             print(f"File not found: {normalized_path}. It may have been deleted already.")
                         except Exception as e:
@@ -298,7 +301,7 @@ def delete_short_videos():
 # threading.Thread(target=update_task_status, daemon=True).start()
 
 # 스케줄러에 작업 추가, max_instances 기본 1
-scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=4)
+scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=2)
 scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
 scheduler.add_job(delete_short_videos, 'interval', minutes=10)
 
