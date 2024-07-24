@@ -54,6 +54,7 @@ class Task:
 
     def update_last_modified(self):
         latest_file = self.get_latest_file()
+        print(f"Latest file: {latest_file}")
         if not self.initial_thumbnail_created and latest_file is not None:
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
             self.file_name = os.path.basename(latest_file)
@@ -97,8 +98,8 @@ class Task:
         if not files:
             return None
 
-        # latest_file = max(files, key=os.path.getctime) # 수정시간 딜레이 이슈
-        latest_file = max(files, key=os.path.getmtime)
+        latest_file = max(files, key=os.path.getctime) # 수정시간 딜레이 이슈
+        # latest_file = max(files, key=os.path.getmtime)
         return latest_file
 
     def generate_thumbnail(self, params, return_dict):
