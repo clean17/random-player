@@ -54,10 +54,10 @@ class Task:
 
     def update_last_modified(self):
         latest_file = self.get_latest_file()
-        print(f"Latest file: {latest_file}")
+        # print(f"Latest file: {latest_file}")
+        self.file_name = os.path.basename(latest_file)
         if not self.initial_thumbnail_created and latest_file is not None:
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
-            self.file_name = os.path.basename(latest_file)
         if latest_file is not None:
             last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file))
             if self.last_checked_time is None or last_modified_time != self.last_checked_time:
@@ -242,7 +242,7 @@ def terminate_task(pid):
             # ffmpeg_handle.kill_task 호출한 경우
             try:
                 tasks.remove(task)
-                print(f"Task [ {task.file_name} ] removed from tasks array.")
+                # print(f"Task [ {task.file_name} ] removed from tasks array.")
             except ValueError:
                 print(f"Task [ {task.file_name} ] not found in tasks array.")
             break
