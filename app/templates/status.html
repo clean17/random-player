@@ -92,7 +92,7 @@
                             this.src = fallbackSrc;
                         };
 
-                        img.addEventListener('click', () => {
+                        {#img.addEventListener('click', () => {
                             const form = document.createElement('form');
                             form.method = 'POST';
                             form.action = '{{ url_for("video.select_directory") }}';
@@ -105,7 +105,7 @@
                             form.appendChild(input);
                             document.body.appendChild(form);
                             form.submit();
-                        });
+                        });#}
                         img.className = 'thumbnail';
                         thumbnailCell.appendChild(img);
                     } else {
@@ -123,6 +123,11 @@
                     const button = document.createElement('button');
                     button.className = 'button';
                     button.textContent = 'Kill';
+                    button.onclick = function(event) {
+                        if (!confirm('Are you sure you want to kill this task?')) {
+                            event.preventDefault();
+                        }
+                    };
                     form.appendChild(button);
                     actionCell.appendChild(form);
                     actionCell.colSpan = "2";
