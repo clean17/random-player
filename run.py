@@ -61,6 +61,41 @@ sys.stderr.reconfigure(encoding='utf-8')
 
 app = create_app()
 
+
+
+'''
+Hop-by-Hop: HTTP/1.1 프로토콜에서 사용하는 헤더
+프록시나 게이트웨이를 통과하는 동안 다른 연결로 전달되지 않아야 한다
+
+Connection, Keep-Alive, ...
+
+서버-애플리케이션 인터페이스에서 사용하면 안된다
+Hop-by-Hop 헤더를 제거하는 미들웨어
+'''
+class HopByHopHeaderFilter(object):
+    hop_by_hop_headers = {
+        'connection',
+        'keep-alive',
+        'proxy-authenticate',
+        'proxy-authorization',
+        'te',
+        'trailer',
+        'transfer-encoding',
+        'upgrade',
+    }
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        def custom_start_response(status, headers, exc_info=None):
+            filtered_headers = [(key, value) for key, value in headers if key.lower() not in self.hop_by_hop_headers]
+            return start_response(status, filtered_headers, exc_info)
+        return self.app(environ, custom_start_response)
+
+app.wsgi_app = HopByHopHeaderFilter(app.wsgi_app)
+
+
+
 def signal_handler(sig, frame):
     logger.info("#### Exiting server... ####")
     pid = os.getpid()

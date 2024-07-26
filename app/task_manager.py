@@ -55,8 +55,8 @@ class Task:
     def update_last_modified(self):
         latest_file = self.get_latest_file()
         # print(f"Latest file: {latest_file}")
-        self.file_name = os.path.basename(latest_file)
         if not self.initial_thumbnail_created and latest_file is not None:
+            self.file_name = os.path.basename(latest_file)
             self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
         if latest_file is not None:
             last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file))
