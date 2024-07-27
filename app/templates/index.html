@@ -18,14 +18,41 @@
 <div class="container">
     <h2>Select Directory</h2>
     <form action="{{ url_for('video.select_directory') }}" method="post">
-        <button type="submit" name="directory" value="1">Directory T</button>
-        <button type="submit" name="directory" value="2">Directory A</button>
-        <button type="submit" name="directory" value="3">Directory D120</button>
-        <button type="submit" name="directory" value="4">Directory R120</button>
+        <button type="submit" name="directory" value="1" id="btn1">Directory T</button>
+        <button type="submit" name="directory" value="2" id="btn2">Directory A</button>
+        <button type="submit" name="directory" value="3" id="btn3">Directory D120</button>
+        <button type="submit" name="directory" value="4" id="btn4">Directory R120</button>
 <!--        <button type="submit" name="directory" value="0">TEST ts</button>-->
-        <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button">FFmpeg Batch</button></a>
-        <a href="{{ url_for('ffmpeg.status') }}"><button type="button">Check FFmpeg Status</button></a>
+        <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button" id="btn5">FFmpeg Batch</button></a>
+        <a href="{{ url_for('ffmpeg.status') }}"><button type="button" id="btn6">Check FFmpeg Status</button></a>
     </form>
 </div>
 </body>
+<script>
+    function keyEvent(event) {
+        switch(event.key) {
+            case '1':
+                document.getElementById('btn1').click();
+                break;
+            case '2':
+                document.getElementById('btn2').click();
+                break;
+            case '3':
+                document.getElementById('btn3').click();
+                break;
+            case '4':
+                document.getElementById('btn4').click();
+                break;
+            case '5':
+                document.getElementById('btn5').click();
+                break;
+            case '6':
+                document.getElementById('btn6').click();
+                break;
+            default: break;
+        }
+    }
+
+    document.addEventListener('keydown', keyEvent)
+</script>
 </html>
