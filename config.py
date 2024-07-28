@@ -14,6 +14,8 @@ def load_config():
         'VIDEO_DIRECTORY3': config['directories']['video_directory3'],
         'VIDEO_DIRECTORY4': config['directories']['video_directory4'],
         'VIDEO_DIRECTORY5': config['directories']['video_directory5'],
+        'CRAWL_URL': config['urls']['crawl_url'],
+        'CRAWL_HOST': config['urls']['crawl_host'],
         'SECRET_KEY': config['settings']['secret_key'],
         'USERNAME': config['settings']['username'],
         'PASSWORD': generate_password_hash(config['settings']['password']),
