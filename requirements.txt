@@ -1,5 +1,6 @@
 APScheduler==3.10.4
 backports.zoneinfo==0.2.1
+beautifulsoup4==4.12.3
 blinker==1.8.2
 certifi==2024.7.4
 charset-normalizer==3.3.2
@@ -26,11 +27,13 @@ pillow==10.4.0
 portalocker==2.10.0
 proglog==0.1.10
 psutil==6.0.0
+PySocks==1.7.1
 pytz==2024.1
 pywin32==306
 requests==2.32.3
 Send2Trash==1.8.3
 six==1.16.0
+soupsieve==2.5
 tqdm==4.66.4
 tzdata==2024.1
 tzlocal==5.2
