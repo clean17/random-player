@@ -195,9 +195,13 @@ def is_process_running(pid):
 def current_date():
     return datetime.now().strftime('%y%m%d')
 
+
+image_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.webp')
+
 # 작업이 끝난 task 목록 제거
 def cleanup_tasks():
     global tasks
+    directory = work_directory
     if not tasks:
         return
 
@@ -220,6 +224,19 @@ def cleanup_tasks():
         else :
             print(f"######### Task ############ : {task.file_name} - - time_difference : {time_difference}")
             terminate_task(task.pid)
+
+    # 매 정각마다 실행
+    if current_time.minute == 0:
+        threshold_time = timedelta(minutes=30)  # 30분
+        for filename in os.listdir(directory):
+            if filename.lower().endswith(image_extensions):
+                file_path = os.path.join(directory, filename)
+                creation_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+                time_difference = current_time - creation_time
+                if time_difference > threshold_time:
+                    normalized_path = os.path.normpath(file_path)
+                    send2trash(normalized_path) # 휴지통
+                    # print(f"Moved to trash: {file_name}")
 
 #     tasks[:] = new_tasks
     print(f"Updated tasks array: {[task.file_name for task in tasks]}")
