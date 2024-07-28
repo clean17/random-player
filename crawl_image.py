@@ -87,6 +87,6 @@ def crawl_images_from_page(page_num):
             download_image(img_url, save_path)
 
 # 페이지 1부터 10까지 크롤링
-for page_num in range(1, 38):
+for page_num in range(2, 38):
     crawl_images_from_page(page_num)
-    time.sleep(300)  # 너무 빠르게 요청을 보내지 않도록 딜레이 추가
+    time.sleep(180)  # 너무 빠르게 요청을 보내지 않도록 딜레이 추가
