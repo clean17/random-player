@@ -4,6 +4,9 @@ import os
 import time
 from urllib.parse import quote, urljoin
 from config import settings
+from PIL import Image
+from io import BytesIO
+import uuid
 
 # 게시글 목록 페이지 URL 템플릿
 url_template = settings['CRAWL_URL']
@@ -29,9 +32,23 @@ os.makedirs(save_dir, exist_ok=True)
 
 def download_image(img_url, save_path):
     try:
+        # URL에 스킴이 없는 경우 'https:' 추가
+        if img_url.startswith('//'):
+            img_url = 'https:' + img_url
+        elif img_url.startswith('/'):
+            img_url = urljoin(url_host, img_url)
+
+        # 이미지 다운로드
         img_data = requests.get(img_url, headers=headers, proxies=proxies).content
-        with open(save_path, 'wb') as handler:
-            handler.write(img_data)
+
+        # 이미지 크기 확인, 가로 700 이상
+        img = Image.open(BytesIO(img_data))
+        if img.width >= 700:
+            with open(save_path, 'wb') as handler:
+                handler.write(img_data)
+            print(f"Downloaded {img_url} to {save_path}")
+        else:
+            print(f"Skipped {img_url} due to insufficient width: {img.width}px")
     except Exception as e:
         print(f"Failed to download {img_url}: {e}")
 
@@ -54,7 +71,7 @@ def crawl_images_from_page(page_num):
         post_soup = BeautifulSoup(post_response.content, 'html.parser')
 
         # 'div.article-body > div.fr-view.article-content > p > img' 태그를 탐색하여 'src' 속성 값 추출
-        img_urls = [img['src'] for img in post_soup.select('div.article-body div.fr-view.article-content p img')]
+        img_urls = [img['src'] for img in post_soup.select('div.article-body div.fr-view.article-content p img') if img['src'].startswith('//ac.namu.la')]
 
         for img_url in img_urls:
             # URL에 스킴이 없는 경우 'https:' 또는 절대 경로로 변환
@@ -63,11 +80,13 @@ def crawl_images_from_page(page_num):
             elif img_url.startswith('/'):
                 img_url = urljoin(url_host, img_url)
             img_name = os.path.basename(img_url.split('?')[0])  # 쿼리스트링 제거 후 파일명 추출
-            save_path = os.path.join(save_dir, img_name)
+
+            # 중복된 파일명을 피하기 위해 고유 식별자 추가
+            unique_img_name = f"{uuid.uuid4()}_{img_name}"
+            save_path = os.path.join(save_dir, unique_img_name)
             download_image(img_url, save_path)
-            print(f"Downloaded {img_url} to {save_path}")
 
 # 페이지 1부터 10까지 크롤링
-for page_num in range(1, 2):
+for page_num in range(1, 38):
     crawl_images_from_page(page_num)
-    time.sleep(10)  # 너무 빠르게 요청을 보내지 않도록 딜레이 추가
+    time.sleep(300)  # 너무 빠르게 요청을 보내지 않도록 딜레이 추가
