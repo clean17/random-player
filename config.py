@@ -17,6 +17,8 @@ def load_config():
         'CRAWL_URL': config['urls']['crawl_url'],
         'CRAWL_HOST': config['urls']['crawl_host'],
         'SECRET_KEY': config['settings']['secret_key'],
+        'MUD_USERNAME': config['settings']['mudfish_username'],
+        'MUD_PASSWORD': config['settings']['mudfish_password'],
         'USERNAME': config['settings']['username'],
         'PASSWORD': generate_password_hash(config['settings']['password']),
         'FFMPEG_SCRIPT_PATH': config['paths']['ffmpeg_script_path'],
