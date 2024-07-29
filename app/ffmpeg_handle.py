@@ -40,6 +40,12 @@ def status():
     free_space_gb = get_drive_free_space('F:')
     return render_template('status.html', tasks=tasks, free_space_gb=free_space_gb)
 
+@m_ffmpeg.route('/get_free_size')
+@login_required
+def get_free_size():
+    free_space_gb = get_drive_free_space('F:')
+    return jsonify(free_space_gb)
+
 @m_ffmpeg.route('/kill_task/<int:pid>', methods=['POST'])
 @login_required
 def kill_task(pid):

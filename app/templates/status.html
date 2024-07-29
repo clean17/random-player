@@ -59,6 +59,7 @@
     });
 
     function fetchTasks() {
+        fetchSize();
         axios.get('{{ url_for("ffmpeg.get_tasks") }}')
             .then(response => {
                 const tbody = document.getElementById('taskTableBody');
@@ -148,6 +149,13 @@
                     tbody.appendChild(thumbnailRow);
                     tbody.appendChild(detailRow);
                 });
+            });
+    }
+
+    function fetchSize() {
+        axios.get('{{ url_for("ffmpeg.get_free_size") }}')
+            .then(response => {
+                document.querySelector('#freeSize').textContent = '(' + response.data.toFixed(2) + ' GB)'
             });
     }
 
