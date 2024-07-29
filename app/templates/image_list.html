@@ -7,26 +7,27 @@
 </head>
 <body>
 <div class="container">
-    <div class="image-container">
-        {% for image in images %}
-            <div class="image-item" id="{{ image }}">
-                <img class="thumbnail" src="{{ url_for('image.get_image', filename=image) }}" alt="{{ image }}" onclick="moveImage('{{ image }}')">
-            </div>
-        {% endfor %}
-    </div>
-    <div class="pagination">
-        {% if page > 1 %}
-            <a href="{{ url_for('image.image_list', page=page-1) }}">&lt;</a>
-        {% endif %}
-        {% for p in range(max(1, page - 5), min(total_pages, page + 5) + 1) %}
-            <a href="{{ url_for('image.image_list', page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
-        {% endfor %}
-        {% if page < total_pages %}
-            <a href="{{ url_for('image.image_list', page=page+1) }}">&gt;</a>
-        {% endif %}
-    </div>
     <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
         <input type="hidden" name="page" value="{{ page }}">
+        <div class="image-container">
+            {% for image in images %}
+                <div class="image-item" id="{{ image }}">
+                    <img class="thumbnail" src="{{ url_for('image.get_image', filename=image) }}" alt="{{ image }}" onclick="moveImage('{{ image }}')">
+                    <input type="hidden" name="images[]" value="{{ image }}">
+                </div>
+            {% endfor %}
+        </div>
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="{{ url_for('image.image_list', page=page-1) }}">&lt;</a>
+            {% endif %}
+            {% for p in range(max(1, page - 5), min(total_pages, page + 5) + 1) %}
+                <a href="{{ url_for('image.image_list', page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            {% endfor %}
+            {% if page < total_pages %}
+                <a href="{{ url_for('image.image_list', page=page+1) }}">&gt;</a>
+            {% endif %}
+        </div>
         <button type="submit" class="delete-button">Delete</button>
     </form>
 </div>

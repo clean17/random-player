@@ -43,14 +43,15 @@ def move_image(filename):
 @image_bp.route('/delete_images', methods=['POST'])
 @login_required
 def delete_images():
-    images = os.listdir(IMAGE_DIR)
+    images_to_delete = request.form.getlist('images[]')
     moved_images = os.listdir(MOVE_DIR)
 
-    for image in images:
+    for image in images_to_delete:
         if image not in moved_images:
             send2trash(os.path.join(IMAGE_DIR, image))
 
-    return jsonify({'status': 'success'})
+    page = int(request.form.get('page', 1))
+    return redirect(url_for('image.image_list', page=page))
 
 @image_bp.route('/images/<filename>')
 @login_required
