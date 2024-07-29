@@ -1,0 +1,101 @@
+/* css/image.css */
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f0f0f0;
+    margin: 0;
+    overflow-x: hidden;
+}
+
+.container {
+    background-color: white;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 1000px;
+    text-align: center;
+    overflow-x: hidden; /* 가로 스크롤 제거 */
+}
+
+.image-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.image-item {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.thumbnail {
+    height: auto;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.move-button {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: large;
+    padding: 15px 20px;
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.move-button:hover {
+    background-color: #007BFF;
+}
+
+button.delete-button {
+    margin-top: 20px;
+    background-color: #d9534f;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: medium;
+    padding: 15px 20px;
+    cursor: pointer;
+}
+
+button.delete-button:hover {
+    background-color: #c9302c;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.pagination a {
+    margin: 0 5px;
+    padding: 10px 15px;
+    padding-bottom: 15px;
+    border-radius: 5px;
+    background-color: #0056b3;
+    color: white;
+    text-decoration: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5em;
+}
+
+.pagination a:hover {
+    background-color: #007BFF;
+}
+
+.pagination a.active {
+    background-color: #007BFF;
+}

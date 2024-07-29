@@ -25,6 +25,7 @@
 <!--        <button type="submit" name="directory" value="0">TEST ts</button>-->
         <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button" id="btn5">FFmpeg Batch</button></a>
         <a href="{{ url_for('ffmpeg.status') }}"><button type="button" id="btn6">Check FFmpeg Status</button></a>
+        <a href="{{ url_for('image.image_list') }}"><button type="button" id="btn7">View Images</button></a>
     </form>
 </div>
 </body>
@@ -48,6 +49,9 @@
                 break;
             case '6':
                 document.getElementById('btn6').click();
+                break;
+            case '7':
+                document.getElementById('btn7').click();
                 break;
             default: break;
         }
