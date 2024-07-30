@@ -33,6 +33,9 @@
         <button type="submit" class="delete-button">Delete</button>
     </form>
 </div>
+
+<button id="next-image-button" class="floating-button">Next Image</button>
+
 <script>
     let nextImageElement = null;
     document.addEventListener("DOMContentLoaded", function() {
@@ -52,6 +55,32 @@
             const img = item.querySelector('.thumbnail');
             img.addEventListener('click', () => setNextImage(item));
         });
+
+        document.getElementById('next-image-button').addEventListener('click', function() {
+            const centerImage = getCenterImage();
+            if (centerImage) {
+                const nextImage = centerImage.nextElementSibling;
+                if (nextImage && nextImage.classList.contains('image-item')) {
+                    nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }
+            }
+        });
+
+        function getCenterImage() {
+            const centerY = window.innerHeight / 2;
+            let closestImage = null;
+            let minDistance = Infinity;
+            imageItems.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const itemCenterY = rect.top + rect.height / 2;
+                const distance = Math.abs(centerY - itemCenterY);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestImage = item;
+                }
+            });
+            return closestImage;
+        }
     });
 
     function moveImage(filename, index) {
