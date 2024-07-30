@@ -6,6 +6,7 @@ from send2trash import send2trash
 from jinja2 import Environment
 
 image_bp = Blueprint('image', __name__)
+limit_page_num = 50
 
 # 설정
 IMAGE_DIR = os.path.join(os.getcwd(), 'images')
@@ -22,10 +23,10 @@ def get_images(start, count):
 @login_required
 def image_list():
     page = int(request.args.get('page', 1))
-    start = (page - 1) * 50
-    images = get_images(start, 50)
+    start = (page - 1) * limit_page_num
+    images = get_images(start, limit_page_num)
     total_images = len(os.listdir(IMAGE_DIR))
-    total_pages = (total_images + 49) // 50
+    total_pages = (total_images + limit_page_num-1) // limit_page_num
 
     return render_template('image_list.html', images=images, page=page, total_pages=total_pages)
 

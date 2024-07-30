@@ -38,6 +38,16 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+button {
+    width: 100%;
+    border: none;
+    border-radius: 5px;
+    /* background-color: #0056b3; */
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+}
+
 .move-button {
     position: absolute;
     bottom: 30px;
@@ -57,13 +67,13 @@ body {
 }
 
 button.delete-button {
-    margin-top: 20px;
+    margin: 20px 0px 60px 0px;
     background-color: #d9534f;
     color: white;
     border: none;
     border-radius: 5px;
-    font-size: medium;
-    padding: 15px 20px;
+    font-size: 1.7em;
+    padding: 25px 20px;
     cursor: pointer;
 }
 
@@ -79,9 +89,9 @@ button.delete-button:hover {
 }
 
 .pagination a {
-    margin: 0 5px;
-    padding: 10px 15px;
-    padding-bottom: 15px;
+    margin: 0 15px;
+    padding: 20px 30px;
+    padding-bottom: 25px;
     border-radius: 5px;
     background-color: #0056b3;
     color: white;
@@ -89,7 +99,7 @@ button.delete-button:hover {
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.5em;
+    font-size: 2em;
 }
 
 .pagination a:hover {
