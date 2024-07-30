@@ -11,14 +11,15 @@
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
-                <div class="image-item" id="{{ image }}">
-                    <img class="thumbnail" src="{{ url_for('static', filename='no-image.png') }}" data-src="{{ url_for('image.get_image', filename=image) }}" alt="{{ image }}" onclick="moveImage('{{ image }}')" >
+                <div class="image-item" id="image-{{ loop.index }}">
+                    <img class="thumbnail" src="{{ url_for('static', filename='no-image.png') }}" data-src="{{ url_for('image.get_image', filename=image) }}" alt="{{ image }}" onclick="moveImage('{{ image }}', {{ loop.index }})" >
                     <input type="hidden" name="images[]" value="{{ image }}">
                 </div>
             {% endfor %}
         </div>
         <div class="pagination">
             {% if page > 1 %}
+                <a href="{{ url_for('image.image_list', page=1) }}">&laquo;</a>
                 <a href="{{ url_for('image.image_list', page=page-1) }}">&lt;</a>
             {% endif %}
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
@@ -26,27 +27,49 @@
             {% endfor %}
             {% if page < total_pages %}
                 <a href="{{ url_for('image.image_list', page=page+1) }}">&gt;</a>
+                <a href="{{ url_for('image.image_list', page=total_pages) }}">&raquo;</a>
             {% endif %}
         </div>
         <button type="submit" class="delete-button">Delete</button>
     </form>
 </div>
 <script>
+    let nextImageElement = null;
     document.addEventListener("DOMContentLoaded", function() {
         const images = document.querySelectorAll('.thumbnail');
         images.forEach(img => {
             const tempSrc = img.getAttribute('data-src');
             img.src = tempSrc;
         });
+
+        const imageItems = document.querySelectorAll('.image-item');
+
+        function setNextImage(element) {
+            nextImageElement = element.nextElementSibling;
+        }
+
+        imageItems.forEach(item => {
+            const img = item.querySelector('.thumbnail');
+            img.addEventListener('click', () => setNextImage(item));
+        });
     });
 
-    function moveImage(filename) {
+    function moveImage(filename, index) {
         fetch(`/move_image/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    document.getElementById(filename).remove();
+                    const imageElement = document.getElementById(`image-${index}`);
+                    if (imageElement) {
+                        imageElement.remove();
+                        if (nextImageElement) {
+                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
                 }
+            })
+            .catch(error => {
+                console.error('Error:', error);
             });
     }
 </script>
