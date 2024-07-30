@@ -12,10 +12,10 @@ body {
 
 .container {
     background-color: white;
-    padding: 20px;
+    padding: 15px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
-    width: 90%;
+    width: 100%;
     max-width: 1000px;
     text-align: center;
     overflow-x: hidden; /* 가로 스크롤 제거 */
@@ -30,12 +30,15 @@ body {
 .image-item {
     margin-bottom: 20px;
     position: relative;
+    width: 100%;
 }
 
 .thumbnail {
     height: auto;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    object-fit: contain;
 }
 
 button {
@@ -67,13 +70,13 @@ button {
 }
 
 button.delete-button {
-    margin: 20px 0px 60px 0px;
+    margin: 40px 0px 20px 0px;
     background-color: #d9534f;
     color: white;
     border: none;
     border-radius: 5px;
-    font-size: 1.7em;
-    padding: 25px 20px;
+    font-size: 2em;
+    padding: 35px 20px;
     cursor: pointer;
 }
 
@@ -90,8 +93,8 @@ button.delete-button:hover {
 
 .pagination a {
     margin: 0 15px;
-    padding: 20px 30px;
-    padding-bottom: 25px;
+    padding: 30px 45px;
+    padding-bottom: 35px;
     border-radius: 5px;
     background-color: #0056b3;
     color: white;

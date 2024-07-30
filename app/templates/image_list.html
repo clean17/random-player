@@ -12,7 +12,7 @@
         <div class="image-container">
             {% for image in images %}
                 <div class="image-item" id="{{ image }}">
-                    <img class="thumbnail" src="{{ url_for('image.get_image', filename=image) }}" alt="{{ image }}" onclick="moveImage('{{ image }}')">
+                    <img class="thumbnail" src="{{ url_for('static', filename='no-image.png') }}" data-src="{{ url_for('image.get_image', filename=image) }}" alt="{{ image }}" onclick="moveImage('{{ image }}')" >
                     <input type="hidden" name="images[]" value="{{ image }}">
                 </div>
             {% endfor %}
@@ -32,6 +32,14 @@
     </form>
 </div>
 <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const images = document.querySelectorAll('.thumbnail');
+        images.forEach(img => {
+            const tempSrc = img.getAttribute('data-src');
+            img.src = tempSrc;
+        });
+    });
+
     function moveImage(filename) {
         fetch(`/move_image/${filename}`, { method: 'POST' })
             .then(response => response.json())
