@@ -118,7 +118,7 @@ button.delete-button:hover {
 .floating-button {
     position: fixed;
     z-index: 5;
-    bottom: 50px;
+    bottom: 350px;
     right: 20px;
     background-color: #007bff;
     color: white;
@@ -126,6 +126,7 @@ button.delete-button:hover {
     padding: 15px 20px;
     font-size: 300%;
     width: 35%;
+    max-width: 400px;
     height: 8%;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     cursor: pointer;

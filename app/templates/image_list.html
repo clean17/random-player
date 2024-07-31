@@ -92,32 +92,15 @@
         /**************************************************************/
 
         const lazyImages = document.querySelectorAll("img[data-src]");
-        let currentIndex = 0; // 현재 화면에 보이는 이미지의 인덱스 추적
         let initialLoadComplete = false;
 
         function preloadImage(img) {
             const src = img.getAttribute('data-src');
-            if (src) {
+            if (src && img.src !== src) {
                 img.src = src;
                 img.removeAttribute('data-src'); // 이미 로드된 이미지는 data-src 속성 제거
             }
         }
-
-        // 최초 5개 이미지 로드
-        for (let i = 0; i < Math.min(5, lazyImages.length); i++) {
-            preloadImage(lazyImages[i]);
-        }
-
-        // 스크롤 이벤트에 의한 이미지 로드
-        window.addEventListener('scroll', () => {
-            if (!initialLoadComplete) {
-                // 초기 로드가 완료되지 않았다면 완료 처리
-                initialLoadComplete = true;
-                return;
-            }
-            let centerImageIndex = findCenterImage();
-            loadImagesFromIndex(centerImageIndex);
-        });
 
         // 화면 중앙의 이미지 인덱스 찾기
         function findCenterImage() {
@@ -125,7 +108,7 @@
             let closestIndex = 0;
             let minDistance = Infinity;
             lazyImages.forEach((img, index) => {
-                let imgPosition = img.getBoundingClientRect().top + window.scrollY;
+                let imgPosition = img.getBoundingClientRect().top + window.scrollY + img.getBoundingClientRect().height / 2;
                 let distance = Math.abs(centerPosition - imgPosition);
                 if (distance < minDistance) {
                     minDistance = distance;
@@ -135,15 +118,47 @@
             return closestIndex;
         }
 
-        // 주어진 인덱스에서 시작하여 5개의 이미지 로드
-        function loadImagesFromIndex(index) {
-            let maxIndex = Math.min(index + 5, lazyImages.length);
-            for (let i = index + 1; i <= maxIndex; i++) {
+        // 주어진 인덱스 기준으로 위 아래 5개씩의 이미지 로드 (총 11개)
+        function loadImagesAroundIndex(index) {
+            let minIndex = Math.max(index - 5, 0);
+            let maxIndex = Math.min(index + 5, lazyImages.length - 1);
+            for (let i = minIndex; i <= maxIndex; i++) {
                 if (lazyImages[i] && lazyImages[i].hasAttribute('data-src')) {
                     preloadImage(lazyImages[i]);
                 }
             }
         }
+
+        // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
+        function initialImageLoad() {
+            if (!initialLoadComplete) {
+                let centerIndex = findCenterImage();
+                loadImagesAroundIndex(centerIndex);
+                initialLoadComplete = true;
+            }
+        }
+
+        // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
+        window.onload = initialImageLoad;
+
+        // Throttling 적용
+        let throttleTimer;
+        const throttle = (callback, time) => {
+            if (throttleTimer) return;
+            throttleTimer = setTimeout(() => {
+                callback();
+                throttleTimer = null;
+            }, time);
+        };
+
+        window.addEventListener('scroll', () => {
+            if (!initialLoadComplete) return; // 초기 로드가 완료되지 않았으면 실행하지 않음
+
+            throttle(() => {
+                let centerImageIndex = findCenterImage();
+                loadImagesAroundIndex(centerImageIndex);
+            }, 100);
+        });
     }
 
     function moveImage(filename, index) {
