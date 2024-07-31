@@ -38,8 +38,15 @@
 
 <script>
     let nextImageElement = null;
-    document.addEventListener("DOMContentLoaded", function() {
+    const nextBtn = document.getElementById('next-image-button');
+
+    function setNextImage(element) {
+        nextImageElement = element.nextElementSibling;
+    }
+
+    function initPage() {
         const images = document.querySelectorAll('.thumbnail');
+
         images.forEach(img => {
             const tempSrc = img.getAttribute('data-src');
             img.src = tempSrc;
@@ -47,16 +54,12 @@
 
         const imageItems = document.querySelectorAll('.image-item');
 
-        function setNextImage(element) {
-            nextImageElement = element.nextElementSibling;
-        }
-
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             img.addEventListener('click', () => setNextImage(item));
         });
 
-        document.getElementById('next-image-button').addEventListener('click', function() {
+        nextBtn.addEventListener('click', function() {
             const centerImage = getCenterImage();
             if (centerImage) {
                 const nextImage = centerImage.nextElementSibling;
@@ -81,7 +84,7 @@
             });
             return closestImage;
         }
-    });
+    }
 
     function moveImage(filename, index) {
         fetch(`/move_image/${filename}`, { method: 'POST' })
@@ -101,6 +104,8 @@
                 console.error('Error:', error);
             });
     }
+
+    document.addEventListener("DOMContentLoaded", initPage)
 </script>
 </body>
 </html>
