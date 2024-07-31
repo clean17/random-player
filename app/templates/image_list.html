@@ -12,7 +12,11 @@
         <div class="image-container">
             {% for image in images %}
                 <div class="image-item" id="image-{{ loop.index }}">
-                    <img class="thumbnail" src="{{ url_for('static', filename='no-image.png') }}" data-src="{{ url_for('image.get_image', filename=image) }}" alt="{{ image }}" onclick="moveImage('{{ image }}', {{ loop.index }})" >
+                    <!-- 처음 5개 이미지만 실제 이미지 로드 -->
+                    <img class="thumbnail"
+                         src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                         data-src="{{ url_for('image.get_image', filename=image) }}"
+                         alt="{{ image }}" onclick="moveImage('{{ image }}', {{ loop.index }})" data-index="{{ loop.index }}">
                     <input type="hidden" name="images[]" value="{{ image }}">
                 </div>
             {% endfor %}
@@ -45,15 +49,15 @@
     }
 
     function initPage() {
-        const images = document.querySelectorAll('.thumbnail');
-
+        // 전체 이미지 모두 로딩
+        {#const images = document.querySelectorAll('.thumbnail');
         images.forEach(img => {
             const tempSrc = img.getAttribute('data-src');
             img.src = tempSrc;
-        });
+        });#}
 
+        // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
         const imageItems = document.querySelectorAll('.image-item');
-
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             img.addEventListener('click', () => setNextImage(item));
@@ -84,6 +88,42 @@
             });
             return closestImage;
         }
+
+        /**************************************************************/
+
+        const lazyImages = document.querySelectorAll("img[data-src]");
+        let currentIndex = 0; // 현재 보고 있는 이미지의 인덱스를 추적
+
+        function preloadImage(img) {
+            const src = img.getAttribute('data-src');
+            if (src) {
+                img.src = src;
+                img.removeAttribute('data-src'); // 이미 로드된 이미지는 data-src 속성 제거
+            }
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    currentIndex = parseInt(entry.target.getAttribute('data-index'), 10); // 현재 인덱스 갱신
+                    observer.unobserve(entry.target); // 이미 보고 있는 이미지는 감시 중단
+                    const maxIndex = Math.min(currentIndex + 5, lazyImages.length); // 최대 5개 추가 이미지 로드
+
+                    for (let i = currentIndex + 1; i <= maxIndex; i++) {
+                        preloadImage(lazyImages[i]);
+                    }
+                }
+            });
+        }, {
+            rootMargin: "200px 0px", // 뷰포트가 이미지에 접근하기 전에 로딩 시작
+            threshold: 0.1
+        });
+
+        lazyImages.forEach(img => {
+            if (img.getAttribute('data-src')) { // 아직 로드되지 않은 이미지만 감시
+                observer.observe(img);
+            }
+        });
     }
 
     function moveImage(filename, index) {
