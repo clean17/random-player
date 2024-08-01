@@ -4,7 +4,7 @@ import subprocess
 import time
 import cv2
 import re
-from send2trash import send2trash
+from send2trash import send2trash, TrashPermissionError
 from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for, Response, abort
 from flask_login import login_required
 
@@ -62,7 +62,13 @@ def delete_video(filename):
     file_path = os.path.join(video_directory, filename)
     if os.path.exists(file_path):
         normalized_path = os.path.normpath(file_path)
-        send2trash(normalized_path) # 휴지통
+        try:
+            send2trash(normalized_path) # 휴지통
+        except OSError as e:
+            print(f"Error: {e}")
+        except TrashPermissionError as e:
+            print(f"Permission Error: {e}")
+
         print(f"[ {filename} ] is successfully deleted")
         # os.remove(file_path)
         return '', 204

@@ -57,15 +57,15 @@ class Task:
         # print(f"Latest file: {latest_file}")
         if latest_file is not None:
             self.file_name = os.path.basename(latest_file)
-        if not self.initial_thumbnail_created:
-            self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
-        if latest_file is not None:
-            last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file))
-            if self.last_checked_time is None or last_modified_time != self.last_checked_time:
-                self.last_modified_time = last_modified_time.strftime('%Y-%m-%d %H:%M:%S')
-                self.last_checked_time = last_modified_time
-                # print(f"######### Updated ######### : {self.file_name} - - {self.thumbnail_update_time} - - {self.last_modified_time}")
-                self.set_param_generate_thumbnail()
+            if not self.initial_thumbnail_created:
+                self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
+            if latest_file is not None:
+                last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file))
+                if self.last_checked_time is None or last_modified_time != self.last_checked_time:
+                    self.last_modified_time = last_modified_time.strftime('%Y-%m-%d %H:%M:%S')
+                    self.last_checked_time = last_modified_time
+                    # print(f"######### Updated ######### : {self.file_name} - - {self.thumbnail_update_time} - - {self.last_modified_time}")
+                    self.set_param_generate_thumbnail()
 
     def set_param_generate_thumbnail(self):
         # 처음부터 ffmpeg를 import 했으면 multiprocessing을 사용할 이유가 있었을까?
