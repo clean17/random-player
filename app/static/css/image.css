@@ -10,6 +10,7 @@ body {
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+    height: auto;
 }
 
 .container {
@@ -115,6 +116,11 @@ button.delete-button:hover {
     background-color: #007BFF;
 }
 
+
+.top-bar {
+    position: fixed;
+}
+
 .floating-button {
     position: fixed;
     z-index: 5;
@@ -135,4 +141,22 @@ button.delete-button:hover {
 
 .floating-button:hover {
     background-color: #0056b3;
+}
+
+.scroll-bottom-button {
+    bottom: 550px;
+    left: 20px;
+    width: 35%;
+    font-size: 300%;
+    position: fixed;
+    max-width: 400px;
+    z-index: 5;
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    display: inline-block;
+    background-color: #008CBA;
+    color: white;
+    border: none;
 }
