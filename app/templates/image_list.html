@@ -200,12 +200,51 @@
             }, time);
         };
 
+        /*****************************************************************/
+        // debounce
+        let lastScrollTop = 0;
+        let lastScrollTime = Date.now();
+        const SCROLL_DELAY = 400;
+        const SCROLL_THRESHOLD = 50000;  // px per second
+
+        function debounce(func, delay) {
+            let debounceTimer;
+            const context = this;
+            const args = arguments;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func.apply(context, args), delay);
+        }
+
+        function handleScroll() {
+            const currentScrollTop = window.scrollY;
+            const currentTime = Date.now();
+            const scrollDelta = Math.abs(currentScrollTop - lastScrollTop);
+            const timeDelta = currentTime - lastScrollTime;
+            const scrollSpeed = scrollDelta / (timeDelta / 1000);
+            /*if (scrollSpeed> 10000) {
+                console.log('scrollSpeed', scrollSpeed);
+            }*/
+
+            if (scrollSpeed < SCROLL_THRESHOLD) {
+                let centerImageIndex = findCenterImage();
+                loadImagesAroundIndex(centerImageIndex);
+            }
+
+            lastScrollTop = currentScrollTop;
+            lastScrollTime = currentTime;
+        }
+
+        /*****************************************************************/
+
         window.addEventListener('scroll', () => {
             if (!initialLoadComplete) return; // 초기 로드가 완료되지 않았으면 실행하지 않음
 
+            debounce(handleScroll, SCROLL_DELAY)
+
             throttle(() => {
-                let centerImageIndex = findCenterImage();
-                loadImagesAroundIndex(centerImageIndex);
+                debounce(handleScroll, SCROLL_DELAY) // 디바운스 적용, 스크롤이 빠르면 이미지를 로딩하지 않는다
+                /*let centerImageIndex = findCenterImage();
+                loadImagesAroundIndex(centerImageIndex);*/
             }, 100);
         });
     }
