@@ -5,6 +5,8 @@ from flask_login import login_required
 from send2trash import send2trash
 from jinja2 import Environment
 from config import settings
+import random
+import time
 
 image_bp = Blueprint('image', __name__)
 limit_page_num = 50
@@ -25,7 +27,8 @@ def get_images(start, count):
 
 def get_ref_images(start, count):
     images = os.listdir(REF_IMAGE_DIR)
-    images.sort()
+    random.seed(time.time())
+    random.shuffle(images)
     return images[start:start + count]
 
 @image_bp.route('/images', methods=['GET'])
