@@ -18,35 +18,35 @@
     </div>
 </div>
 <div class="container">
-    <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
+    <div id="delete-form" {#method="POST" action="{{ url_for('image.delete_images') }}"#}>
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
                 <div class="image-item" id="image-{{ loop.index }}">
                     <!-- 처음 5개 이미지만 실제 이미지 로드 -->
                     <img class="thumbnail"
-                         src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                         data-src="{{ url_for('image.get_image', filename=image) }}"
-                         alt="{{ image }}" onclick="moveImage('{{ image }}', {{ loop.index }})" data-index="{{ loop.index }}">
+                         src="{% if loop.index <= 5 %}{{ url_for('image.get_ref_image', filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                         data-src="{{ url_for('image.get_ref_image', filename=image) }}"
+                         alt="{{ image }}" {#onclick="moveImage('{{ image }}', {{ loop.index }})"#} data-index="{{ loop.index }}">
                     <input type="hidden" name="images[]" value="{{ image }}">
                 </div>
             {% endfor %}
         </div>
         <div class="pagination">
             {% if page > 1 %}
-                <a href="{{ url_for('image.image_list', page=1) }}">&laquo;</a>
-                <a href="{{ url_for('image.image_list', page=page-1) }}">&lt;</a>
+                <a href="{{ url_for('image.ref_image_list', page=1) }}">&laquo;</a>
+                <a href="{{ url_for('image.ref_image_list', page=page-1) }}">&lt;</a>
             {% endif %}
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-                <a href="{{ url_for('image.image_list', page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+                <a href="{{ url_for('image.ref_image_list', page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
             {% if page < total_pages %}
-                <a href="{{ url_for('image.image_list', page=page+1) }}">&gt;</a>
-                <a href="{{ url_for('image.image_list', page=total_pages) }}">&raquo;</a>
+                <a href="{{ url_for('image.ref_image_list', page=page+1) }}">&gt;</a>
+                <a href="{{ url_for('image.ref_image_list', page=total_pages) }}">&raquo;</a>
             {% endif %}
         </div>
-        <button type="submit" class="delete-button">Delete</button>
-    </form>
+        {#<button type="submit" class="delete-button">Delete</button>#}
+    </div>
 </div>
 
 <button type="button" class="scroll-bottom-button" onclick="scrollToBottom()">Scroll to Bottom</button>
@@ -166,7 +166,7 @@
                 const filename = centerImage.querySelector('img').getAttribute('alt');
                 const index = centerImage.querySelector('img').getAttribute('data-index');
                 if (filename && index) {
-                    moveImage(filename, index);
+                    {#moveImage(filename, index);#}
                 }
             }
         }
@@ -282,7 +282,7 @@
         });
     }
 
-    function moveImage(filename, index) {
+    {#function moveImage(filename, index) {
         console.log(filename, index)
         fetch(`/move_image/${filename}`, { method: 'POST' })
             .then(response => response.json())
@@ -300,7 +300,7 @@
             .catch(error => {
                 console.error('Error:', error);
             });
-    }
+    }#}
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>

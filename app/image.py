@@ -23,6 +23,11 @@ def get_images(start, count):
     images.sort()
     return images[start:start + count]
 
+def get_ref_images(start, count):
+    images = os.listdir(REF_IMAGE_DIR)
+    images.sort()
+    return images[start:start + count]
+
 @image_bp.route('/images', methods=['GET'])
 @login_required
 def image_list():
@@ -39,7 +44,7 @@ def image_list():
 def ref_image_list():
     page = int(request.args.get('page', 1))
     start = (page - 1) * limit_page_num
-    images = get_images(start, limit_page_num)
+    images = get_ref_images(start, limit_page_num)
     total_images = len(os.listdir(REF_IMAGE_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
