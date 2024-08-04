@@ -85,6 +85,17 @@ def move_image(filename):
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
+@image_bp.route('/move_image2/<filename>', methods=['POST'])
+@login_required
+def move_image2(filename):
+    src_path = os.path.join(REF_IMAGE_DIR, filename)
+    dest_path = os.path.join(MOVE_DIR, filename)
+    if os.path.exists(src_path):
+        os.rename(src_path, dest_path)
+        return jsonify({'status': 'success'})
+    else:
+        return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
 @image_bp.route('/delete_images', methods=['POST'])
 @login_required
 def delete_images():

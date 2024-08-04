@@ -92,6 +92,16 @@
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             img.addEventListener('click', () => setNextImage(item));
+
+            // 마우스 이벤트
+            imageItems.addEventListener('mousedown', startPress);
+            imageItems.addEventListener('mouseup', cancelPress);
+            imageItems.addEventListener('mouseleave', cancelPress);
+
+            // 터치 이벤트
+            imageItems.addEventListener('touchstart', startPress);
+            imageItems.addEventListener('touchend', cancelPress);
+            imageItems.addEventListener('touchcancel', cancelPress);
         });
 
         document.addEventListener('keydown', function(event) {
@@ -280,15 +290,37 @@
                 loadImagesAroundIndex(centerImageIndex);*/
             }, 100);
         });
+
+
+
+        /****************************************************************/
+
+            let pressTimer;
+            const longPressDuration = 1000;
+
+            const startPress = (event) => {
+                event.preventDefault();
+
+                pressTimer = setTimeout(() => {
+                    // 파일 삭제
+                    moveImage(event)
+                }, longPressDuration);
+            };
+
+            const cancelPress = () => {
+                clearTimeout(pressTimer);
+            };
     }
 
-    {#function moveImage(filename, index) {
-        console.log(filename, index)
-        fetch(`/move_image/${filename}`, { method: 'POST' })
+    function moveImage(event) {
+        const filename = event.target.art
+        fetch(`/move_image2/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const imageElement = document.getElementById(`image-${index}`);
+                    const imageElement = event.target.closest('.image-item')
+                    const nextImageElement = imageElement?.nextElementSibling;
+                    // const imageElement = document.getElementById(`image-${index}`);
                     if (imageElement) {
                         imageElement.remove();
                         if (nextImageElement) {
@@ -300,7 +332,7 @@
             .catch(error => {
                 console.error('Error:', error);
             });
-    }#}
+    }
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
