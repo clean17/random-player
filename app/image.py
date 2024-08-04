@@ -16,6 +16,7 @@ IMAGE_DIR = settings['IMAGE_DIR']
 # IMAGE_DIR = os.path.join(os.getcwd(), 'images')
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
+STOCK_DIR = settings['STOCK_DIR']
 # MOVE_DIR = os.path.join(os.getcwd(), 'move')
 os.makedirs(IMAGE_DIR, exist_ok=True)
 os.makedirs(MOVE_DIR, exist_ok=True)
@@ -30,6 +31,13 @@ def get_ref_images(start, count):
     random.seed(time.time())
     random.shuffle(images)
     return images[start:start + count]
+
+def get_stock_graphs(start, count):
+    images = os.listdir(STOCK_DIR)
+    images.sort()
+    return images[start:start + count]
+
+
 
 @image_bp.route('/images', methods=['GET'])
 @login_required
@@ -52,6 +60,19 @@ def ref_image_list():
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
     return render_template('ref_image_list.html', images=images, page=page, total_pages=total_pages)
+
+@image_bp.route('/stock_grahps', methods=['GET'])
+@login_required
+def stock_graph_list():
+    page = int(request.args.get('page', 1))
+    start = (page - 1) * limit_page_num
+    images = get_stock_graphs(start, limit_page_num)
+    total_images = len(os.listdir(STOCK_DIR))
+    total_pages = (total_images + limit_page_num-1) // limit_page_num
+
+    return render_template('stock_graph_list.html', images=images, page=page, total_pages=total_pages)
+
+
 
 @image_bp.route('/move_image/<filename>', methods=['POST'])
 @login_required
@@ -86,6 +107,13 @@ def get_image(filename):
 @login_required
 def get_ref_image(filename):
     return send_from_directory(REF_IMAGE_DIR, filename)
+
+@image_bp.route('/stock_graphs/<filename>')
+@login_required
+def get_stock_graph(filename):
+    return send_from_directory(STOCK_DIR, filename)
+
+
 
 # Jinja2 템플릿에서 max와 min 함수 사용을 위한 설정
 def environment(**options):

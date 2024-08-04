@@ -17,6 +17,7 @@ def load_config():
         'IMAGE_DIR': config['directories']['images_directory'],
         'MOVE_DIR': config['directories']['move_images_directory'],
         'REF_IMAGE_DIR': config['directories']['refined_images_directory'],
+        'STOCK_DIR': config['directories']['stocks_graph_directory'],
         'CRAWL_URL': config['urls']['crawl_url'],
         'CRAWL_HOST': config['urls']['crawl_host'],
         'SECRET_KEY': config['settings']['secret_key'],
