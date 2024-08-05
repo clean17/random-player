@@ -78,6 +78,21 @@
         return (window.innerHeight + window.scrollY) >= document.body.scrollHeight;
     }
 
+    let pressTimer;
+    const longPressDuration = 1000;
+
+    const startPress = (event) => {
+        event.preventDefault();
+
+        pressTimer = setTimeout(() => {
+            // 파일 삭제
+            moveImage(event)
+        }, longPressDuration);
+    };
+
+    const cancelPress = () => {
+        clearTimeout(pressTimer);
+    };
 
     function initPage() {
         // 전체 이미지 모두 로딩
@@ -94,14 +109,14 @@
             img.addEventListener('click', () => setNextImage(item));
 
             // 마우스 이벤트
-            imageItems.addEventListener('mousedown', startPress);
-            imageItems.addEventListener('mouseup', cancelPress);
-            imageItems.addEventListener('mouseleave', cancelPress);
+            item.addEventListener('mousedown', startPress);
+            item.addEventListener('mouseup', cancelPress);
+            item.addEventListener('mouseleave', cancelPress);
 
             // 터치 이벤트
-            imageItems.addEventListener('touchstart', startPress);
-            imageItems.addEventListener('touchend', cancelPress);
-            imageItems.addEventListener('touchcancel', cancelPress);
+            item.addEventListener('touchstart', startPress);
+            item.addEventListener('touchend', cancelPress);
+            item.addEventListener('touchcancel', cancelPress);
         });
 
         document.addEventListener('keydown', function(event) {
@@ -295,25 +310,11 @@
 
         /****************************************************************/
 
-            let pressTimer;
-            const longPressDuration = 1000;
 
-            const startPress = (event) => {
-                event.preventDefault();
-
-                pressTimer = setTimeout(() => {
-                    // 파일 삭제
-                    moveImage(event)
-                }, longPressDuration);
-            };
-
-            const cancelPress = () => {
-                clearTimeout(pressTimer);
-            };
     }
 
     function moveImage(event) {
-        const filename = event.target.art
+        const filename = event.target.alt
         fetch(`/move_image2/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
