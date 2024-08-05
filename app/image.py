@@ -9,7 +9,7 @@ import random
 import time
 
 image_bp = Blueprint('image', __name__)
-limit_page_num = 50
+limit_page_num = 100
 
 # 설정
 IMAGE_DIR = settings['IMAGE_DIR']
