@@ -140,7 +140,8 @@
                 case 'Delete':
                     event.preventDefault();
                     if (confirm('Are you sure ?')) {
-                        document.querySelector('.delete-button')?.click()
+                        moveImage(event)
+                        // document.querySelector('.delete-button')?.click()
                     }
                 default: break;
             }
