@@ -10,6 +10,29 @@ import time
 
 image_bp = Blueprint('image', __name__)
 limit_page_num = 100
+shuffled_images = None
+
+def initialize_images():
+    global shuffled_images
+    images = os.listdir(REF_IMAGE_DIR)
+    random.seed(time.time())
+    random.shuffle(images)
+    shuffled_images = images
+
+def get_ref_images(start, count):
+    global shuffled_images
+    if shuffled_images is None:
+        initialize_images()
+    return shuffled_images[start:start + count]
+
+# 애플리케이션 실행 시 한 번 셔플된 리스트를 초기화
+initialize_images()
+
+# 함수 호출 예제
+start_index = 0
+count = 5
+images = get_ref_images(start_index, count)
+print(images)
 
 # 설정
 IMAGE_DIR = settings['IMAGE_DIR']
@@ -26,15 +49,15 @@ def get_images(start, count):
     images.sort()
     return images[start:start + count]
 
-def get_ref_images(start, count):
+""" def get_ref_images(start, count):
     images = os.listdir(REF_IMAGE_DIR)
     random.seed(time.time())
     random.shuffle(images)
-    return images[start:start + count]
+    return images[start:start + count] """
 
 def get_stock_graphs(start, count):
     images = os.listdir(STOCK_DIR)
-    images.sort()
+    images.sort(reverse=True)
     return images[start:start + count]
 
 
