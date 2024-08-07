@@ -12,6 +12,16 @@ image_bp = Blueprint('image', __name__)
 limit_page_num = 100
 shuffled_images = None
 
+# 설정
+IMAGE_DIR = settings['IMAGE_DIR']
+# IMAGE_DIR = os.path.join(os.getcwd(), 'images')
+MOVE_DIR = settings['MOVE_DIR']
+REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
+STOCK_DIR = settings['STOCK_DIR']
+# MOVE_DIR = os.path.join(os.getcwd(), 'move')
+os.makedirs(IMAGE_DIR, exist_ok=True)
+os.makedirs(MOVE_DIR, exist_ok=True)
+
 def initialize_images():
     global shuffled_images
     images = os.listdir(REF_IMAGE_DIR)
@@ -28,21 +38,6 @@ def get_ref_images(start, count):
 # 애플리케이션 실행 시 한 번 셔플된 리스트를 초기화
 initialize_images()
 
-# 함수 호출 예제
-start_index = 0
-count = 5
-images = get_ref_images(start_index, count)
-print(images)
-
-# 설정
-IMAGE_DIR = settings['IMAGE_DIR']
-# IMAGE_DIR = os.path.join(os.getcwd(), 'images')
-MOVE_DIR = settings['MOVE_DIR']
-REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
-STOCK_DIR = settings['STOCK_DIR']
-# MOVE_DIR = os.path.join(os.getcwd(), 'move')
-os.makedirs(IMAGE_DIR, exist_ok=True)
-os.makedirs(MOVE_DIR, exist_ok=True)
 
 def get_images(start, count):
     images = os.listdir(IMAGE_DIR)
