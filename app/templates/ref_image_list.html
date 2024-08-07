@@ -94,19 +94,6 @@
         clearTimeout(pressTimer);
     };
 
-    function getCenterImageAlt() {
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-
-        const element = document.elementFromPoint(centerX, centerY);
-
-        if (element && element.tagName === 'IMG' && element.alt) {
-            return element.alt;
-        }
-
-        return 'No image with alt attribute found at the center of the viewport.';
-    }
-
     function initPage() {
         // 전체 이미지 모두 로딩
         {#const images = document.querySelectorAll('.thumbnail');
@@ -327,13 +314,27 @@
 
     }
 
+    function getCenterImage() {
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+
+        const element = document.elementFromPoint(centerX, centerY);
+
+        if (element && element.tagName === 'IMG') {
+            return element;
+        }
+
+        return 'No image with alt attribute found at the center of the viewport.';
+    }
+
     function moveImage(event) {
-        let filename = event ? event.target.alt : getCenterImageAlt();
+        const centerImage = getCenterImage();
+        const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
         fetch(`/move_image2/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const imageElement = event.target.closest('.image-item')
+                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
                     const nextImageElement = imageElement?.nextElementSibling;
                     // const imageElement = document.getElementById(`image-${index}`);
                     if (imageElement) {
