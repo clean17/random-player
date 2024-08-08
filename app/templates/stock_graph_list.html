@@ -83,25 +83,6 @@
         return (window.innerHeight + window.scrollY) >= document.body.scrollHeight;
     }
 
-    let pressTimer;
-    const longPressDuration = 3000;
-
-    const startPress = (event) => {
-        if (event.touches.length === 1) {
-            event.preventDefault(); // Prevent default behavior for single touch (long press download)
-        }
-        // event.preventDefault(); // 스크롤도 차단됨
-
-        pressTimer = setTimeout(() => {
-            // 파일 삭제
-            moveImage(event)
-        }, longPressDuration);
-    };
-
-    const cancelPress = () => {
-        clearTimeout(pressTimer);
-    };
-
 
     function initPage() {
         // 전체 이미지 모두 로딩
@@ -115,17 +96,11 @@
         const imageItems = document.querySelectorAll('.image-item');
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
-            img.addEventListener('click', () => setNextImage(item));
-
-            // 마우스 이벤트
-            item.addEventListener('mousedown', startPress);
-            item.addEventListener('mouseup', cancelPress);
-            item.addEventListener('mouseleave', cancelPress);
-
-            // 터치 이벤트
-            item.addEventListener('touchstart', startPress);
-            item.addEventListener('touchend', cancelPress);
-            item.addEventListener('touchcancel', cancelPress);
+            img.addEventListener('click', () => {
+                if (confirm('Are you sure ?')) {
+                    moveImage(event);
+                }
+            });
         });
 
         document.addEventListener('keydown', function(event) {
@@ -149,7 +124,7 @@
                 case 'Delete':
                     event.preventDefault();
                     if (confirm('Are you sure ?')) {
-                        document.querySelector('.delete-button')?.click()
+                        moveImage(event);
                     }
                 default: break;
             }

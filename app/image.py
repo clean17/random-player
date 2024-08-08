@@ -7,6 +7,8 @@ from jinja2 import Environment
 from config import settings
 import random
 import time
+import urllib.parse
+import shutil
 
 image_bp = Blueprint('image', __name__)
 limit_page_num = 100
@@ -103,14 +105,18 @@ def move_image(filename):
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
-@image_bp.route('/move_image2/<filename>', methods=['POST'])
+@image_bp.route('/move_image2/<path:filename>', methods=['POST'])
 @login_required
 def move_image2(filename):
-    src_path = os.path.join(REF_IMAGE_DIR, filename)
+    src_path = os.path.join(STOCK_DIR, filename)
     dest_path = os.path.join(MOVE_DIR, filename)
+
     if os.path.exists(src_path):
-        os.rename(src_path, dest_path)
-        return jsonify({'status': 'success'})
+        try:
+            shutil.move(src_path, dest_path)
+            return jsonify({'status': 'success'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
