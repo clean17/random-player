@@ -87,7 +87,10 @@
     const longPressDuration = 3000;
 
     const startPress = (event) => {
-        // event.preventDefault();
+        if (event.touches.length === 1) {
+            event.preventDefault(); // Prevent default behavior for single touch (long press download)
+        }
+        // event.preventDefault(); // 스크롤도 차단됨
 
         pressTimer = setTimeout(() => {
             // 파일 삭제
@@ -314,14 +317,14 @@
     }
 
     function moveImage(event) {
-        const centerImage = getCenterImage();
-        const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
-        fetch(`/move_image/${filename}`, { method: 'POST' })
+        const filename = event.target.alt
+        fetch(`/move_image2/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
+                    const imageElement = event.target.closest('.image-item')
                     const nextImageElement = imageElement?.nextElementSibling;
+                    // const imageElement = document.getElementById(`image-${index}`);
                     if (imageElement) {
                         imageElement.remove();
                         if (nextImageElement) {
