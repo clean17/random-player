@@ -18,7 +18,7 @@ def create_app():
     app.register_blueprint(auth, url_prefix='/auth')
     app.register_blueprint(video, url_prefix='/video')
     app.register_blueprint(m_ffmpeg, url_prefix='/ffmpeg')
-    app.register_blueprint(image_bp)
+    app.register_blueprint(image_bp, url_prefix='/image')
     app.jinja_env.globals.update(max=max, min=min)
 
     login_manager = LoginManager()
