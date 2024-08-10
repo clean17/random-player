@@ -320,7 +320,7 @@ def delete_short_videos():
 # threading.Thread(target=update_task_status, daemon=True).start()
 
 # 스케줄러에 작업 추가, max_instances 기본 1
-scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=5)
+scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=6, coalesce=True)
 scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
 scheduler.add_job(delete_short_videos, 'interval', minutes=10)
 
