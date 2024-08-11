@@ -333,7 +333,7 @@
 
     function moveImage(event) {
         const filename = event.target.alt
-        fetch(`/move_stock_image/kospi/${filename}`, { method: 'POST' })
+        fetch(`/image/move_stock_image/kospi/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
