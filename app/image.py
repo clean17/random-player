@@ -202,7 +202,8 @@ def get_stock_graph(market, filename):
 @image_bp.route('/move_stock_image/<path:filename>', methods=['POST'])
 @login_required
 def move_image2(filename):
-    src_path = os.path.join(REF_IMAGE_DIR, filename)
+    directory = DIRECTORY_MAP.get(market.lower())
+    src_path = os.path.join(directory, filename)
     dest_path = os.path.join(MOVE_DIR, filename)
     if os.path.exists(src_path):
         try:
