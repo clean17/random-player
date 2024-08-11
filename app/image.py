@@ -199,9 +199,9 @@ def get_stock_graph(market, filename):
     else:
         abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
 
-@image_bp.route('/move_stock_image/<path:filename>', methods=['POST'])
+@image_bp.route('/move_stock_image/<market>/<path:filename>', methods=['POST'])
 @login_required
-def move_image2(filename):
+def move_stock_image(market, filename):
     directory = DIRECTORY_MAP.get(market.lower())
     src_path = os.path.join(directory, filename)
     dest_path = os.path.join(MOVE_DIR, filename)
