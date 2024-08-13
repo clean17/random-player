@@ -11,14 +11,15 @@ import uuid
 # 게시글 목록 페이지 URL 템플릿
 url_template = settings['CRAWL_URL']
 url_host = settings['CRAWL_HOST']
+mud_vpn = settings['MUD_VPN']
 
 encoded_username = quote(settings['MUD_USERNAME'])
 encoded_password = quote(settings['MUD_PASSWORD'])
 
 # 프록시 설정 (미꾸라지 SOCKS5 프록시 서버 주소와 포트)
 proxies = {
-    'http': f'socks5://{encoded_username}:{encoded_password}@34.84.172.146:18081',
-    'https': f'socks5://{encoded_username}:{encoded_password}@34.84.172.146:18081'
+    'http': f'socks5://{encoded_username}:{encoded_password}@{mud_vpn}',
+    'https': f'socks5://{encoded_username}:{encoded_password}@{mud_vpn}'
 }
 
 # 헤더 설정 (예시: 브라우저의 User-Agent)
@@ -107,7 +108,8 @@ def crawl_images_from_page(page_num):
             # 중복된 파일명을 피하기 위해 고유 식별자 추가
             save_image_with_uuid(img_name, img_url, save_dir)
 
-# 페이지 1부터 10까지 크롤링
-for page_num in range(1, 11):
+# 페이지 1부터 10까지 크롤링 (1:11)
+# 프로젝트 경로에서 디렉토리로 이동해야함
+for page_num in range(1, 8):
     crawl_images_from_page(page_num)
     print(f' ##########################   page_num   ################################# : {page_num}')

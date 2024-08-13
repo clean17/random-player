@@ -21,6 +21,7 @@ def load_config():
         'KOSDAQ_DIR': config['directories']['kosdaq_stocks_directory'],
         'SP500_DIR': config['directories']['sp500_stocks_directory'],
         'CRAWL_URL': config['urls']['crawl_url'],
+        'MUD_VPN': config['urls']['mud_vpn'],
         'CRAWL_HOST': config['urls']['crawl_host'],
         'SECRET_KEY': config['settings']['secret_key'],
         'MUD_USERNAME': config['settings']['mudfish_username'],
