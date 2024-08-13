@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image List</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
@@ -333,7 +334,9 @@
 
     function moveImage(event) {
         const filename = event.target.alt
-        fetch(`/image/move_stock_image/kospi/${filename}`, { method: 'POST' })
+        const market = document.querySelector('#market-select')
+        const marketName = market.options[market.selectedIndex].text.toLowerCase()
+        fetch(`/image/move_stock_image/${marketName}/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {

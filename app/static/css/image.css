@@ -15,7 +15,7 @@ body {
 
 .container {
     background-color: white;
-    padding: 15px;
+    padding: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
     width: 100%;
@@ -31,7 +31,7 @@ body {
 }
 
 .image-item {
-    margin-bottom: 20px;
+    margin-bottom: 5px;
     position: relative;
     width: 100%;
 }
@@ -54,32 +54,15 @@ button {
     cursor: pointer;
 }
 
-.move-button {
-    position: absolute;
-    bottom: 30px;
-    right: 30px;
-    background-color: #0056b3;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    font-size: large;
-    padding: 15px 20px;
-    cursor: pointer;
-    opacity: 0.8;
-}
-
-.move-button:hover {
-    background-color: #007BFF;
-}
-
 button.delete-button {
-    margin: 40px 0px 20px 0px;
+    margin: 10px 0px 10px 0px;
     background-color: #d9534f;
     color: white;
     border: none;
     border-radius: 5px;
-    font-size: 2.5em;
-    padding: 35px 20px;
+    height: 50px;
+    width: 100%;
+    padding: 0 20px;
     cursor: pointer;
 }
 
@@ -95,9 +78,9 @@ button.delete-button:hover {
 }
 
 .pagination a {
-    margin: 0 10px;
-    padding: 30px 30px;
-    padding-bottom: 35px;
+    margin: 0 3px;
+    margin-bottom: 10px;
+    padding: 20px 14px;
     border-radius: 5px;
     background-color: #0056b3;
     color: white;
@@ -105,7 +88,7 @@ button.delete-button:hover {
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 2.5em;
+    font-size: 1.2em;
 }
 
 .pagination a:hover {
@@ -124,16 +107,17 @@ button.delete-button:hover {
 .floating-button {
     position: fixed;
     z-index: 5;
-    bottom: 350px;
-    right: 20px;
+    bottom: 150px;
+    right: 5px;
+    padding: 20px;
+    cursor: pointer;
     background-color: #007bff;
+    opacity: 0.7;
     color: white;
     border: none;
-    padding: 15px 20px;
-    font-size: 300%;
-    width: 35%;
-    max-width: 300px;
-    height: 8%;
+    font-size: 16px;
+    max-width: 150px;
+    /*height: 50px;*/
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     cursor: pointer;
     transition: background-color 0.3s ease;
@@ -158,4 +142,8 @@ button.delete-button:hover {
     background-color: #008CBA;
     color: white;
     border: none;
+}
+
+.top-bar {
+    opacity: 0.5;
 }
