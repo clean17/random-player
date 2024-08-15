@@ -164,9 +164,13 @@
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    if (confirm('Are you sure ?')) {
-                        moveImage(event);
+                    if (confirm('Are you sure?')) {
+                        const centerImage = getCenterImage();
+                        if (centerImage) {
+                            moveImage({ target: centerImage.querySelector('img') }); // 키보드 이벤트로 삭제
+                        }
                     }
+                    break;
                 default: break;
             }
         });
@@ -333,17 +337,18 @@
     }
 
     function moveImage(event) {
-        const filename = event.target.alt
-        const market = document.querySelector('#market-select')
-        const marketName = market.options[market.selectedIndex].text.toLowerCase()
+        const imgElement = event.target;
+        const filename = imgElement.getAttribute('alt');
+        const market = document.querySelector('#market-select');
+        const marketName = market.options[market.selectedIndex].text.toLowerCase();
+
         fetch(`/image/move_stock_image/${marketName}/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const imageElement = event.target.closest('.image-item')
-                    const nextImageElement = imageElement?.nextElementSibling;
-                    // const imageElement = document.getElementById(`image-${index}`);
+                    const imageElement = imgElement.closest('.image-item');
                     if (imageElement) {
+                        const nextImageElement = imageElement.nextElementSibling;
                         imageElement.remove();
                         if (nextImageElement) {
                             nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
