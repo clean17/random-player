@@ -22,6 +22,7 @@ def load_config():
         'SP500_DIR': config['directories']['sp500_stocks_directory'],
         'CRAWL_URL': config['urls']['crawl_url'],
         'MUD_VPN': config['urls']['mud_vpn'],
+        'COOKIE': config['urls']['cookie'],
         'CRAWL_HOST': config['urls']['crawl_host'],
         'SECRET_KEY': config['settings']['secret_key'],
         'MUD_USERNAME': config['settings']['mudfish_username'],

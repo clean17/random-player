@@ -1,7 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
 import os
-import time
 from urllib.parse import quote, urljoin
 from config import settings
 from PIL import Image
@@ -12,6 +11,8 @@ import uuid
 url_template = settings['CRAWL_URL']
 url_host = settings['CRAWL_HOST']
 mud_vpn = settings['MUD_VPN']
+cookie = settings['COOKIE']
+IMAGE_DIR = settings['IMAGE_DIR']
 
 encoded_username = quote(settings['MUD_USERNAME'])
 encoded_password = quote(settings['MUD_PASSWORD'])
@@ -24,12 +25,12 @@ proxies = {
 
 # 헤더 설정 (예시: 브라우저의 User-Agent)
 headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Cookie': cookie
 }
 
 # 이미지 저장 경로 설정
-save_dir = "images"
-os.makedirs(save_dir, exist_ok=True)
+os.makedirs(IMAGE_DIR, exist_ok=True)
 
 def download_image(img_url, save_path):
     try:
