@@ -208,10 +208,11 @@ def get_stock_graph(market, filename):
 def move_stock_image(market, filename):
     directory = DIRECTORY_MAP.get(market.lower())
     src_path = os.path.join(directory, filename)
-    dest_path = os.path.join(MOVE_DIR, filename)
+    # dest_path = os.path.join(MOVE_DIR, filename)
     if os.path.exists(src_path):
         try:
-            shutil.move(src_path, dest_path)
+            # shutil.move(src_path, dest_path)
+            send2trash(src_path)
             return jsonify({'status': 'success'})
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 500
