@@ -81,13 +81,16 @@ def get_stock_graphs(dir, start, count):
         #     return filename
 
         # match = re.match(r"(\d{4}-\d{2}-\d{2}|\d{8}) \[\s*(-?\d+\.\d+)", filename)
-        match = re.match(r"(\d{4}-\d{2}-\d{2}|\d{8}) \[\s*([-+]\d+\.\d+)", filename)
+        match = re.match(r"(\d{4}-\d{2}-\d{2}|\d{8}) \[\s*([-+]?\d+\.\d+)", filename)
         if match:
             # 날짜 부분에서 '-' 제거
             date_part = match.group(1).replace('-', '')
             number_part = float(match.group(2))
+
+            sort_number = 2 if number_part >= 0 else 1
+
             # 날짜는 숫자 그대로 비교, 숫자는 float로 변환하여 비교
-            return date_part, number_part
+            return date_part, sort_number, number_part
         else:
             # 패턴에 맞지 않는 경우를 대비하여 기본 정렬 키 반환
             return filename
