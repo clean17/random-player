@@ -8,7 +8,7 @@ from jinja2 import Environment
 from config import settings
 import random
 import time
-import urllib.parse
+from urllib.parse import unquote
 import shutil
 
 image_bp = Blueprint('image', __name__)
@@ -27,7 +27,7 @@ SP500_DIR = settings['SP500_DIR']
 # 시장 디렉터리 매핑
 DIRECTORY_MAP = {
     'kospi': KOSPI_DIR,
-    'kospi10': KOSDAQ_DIR,
+    'kospi_10': KOSDAQ_DIR,
     'sp500': SP500_DIR
 }
 
@@ -206,7 +206,12 @@ def get_stock_graph(market, filename):
 @image_bp.route('/move_stock_image/<market>/<path:filename>', methods=['POST'])
 @login_required
 def move_stock_image(market, filename):
+    # filename = unquote(filename)  # URL 디코딩 처리
     directory = DIRECTORY_MAP.get(market.lower())
+
+    if directory is None:
+        return jsonify({'status': 'error', 'message': 'Invalid market specified'}), 400
+
     src_path = os.path.join(directory, filename)
     # dest_path = os.path.join(MOVE_DIR, filename)
     if os.path.exists(src_path):
