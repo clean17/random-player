@@ -376,7 +376,7 @@ function initTriple() {
     setTimeout(() => {
         playTripleVideo()
         // checkDuration()
-    }, 500)
+    }, 600)
 }
 
 function checkDuration() {
