@@ -13,6 +13,8 @@ const volumeMessage = document.getElementById('volume-message');
 const filenameDisplay = document.getElementById('video-filename');
 const prevButton = document.getElementById('prevButton');
 const loopButton = document.getElementById('loopbutton');
+const aBtn  = document.getElementById('aButton');
+const bBtn  = document.getElementById('bButton');
 let mimeType;
 let audioContext;
 let delayNode;
@@ -20,7 +22,11 @@ let source;
 let audioOffset = 0;
 let hideControlsTimeout;
 let isLooping = false;
+let isClickAbtn = false;
+let isClickBbtn = false;
 let previousVolume = 1.0;
+let startTime = 0;
+let endTime = 0;
 
 /************************************************************************/
 /******************************   Common   ******************************/
@@ -190,8 +196,24 @@ function getVideoEvent() {
     document.title = videoFilename;
     // console.log('getvideo', videoFilename)
 
+    videoPlayer.addEventListener('timeupdate', function() {
+        if (isLooping && endTime > startTime) {
+            if (videoPlayer.currentTime >= endTime) {
+                videoPlayer.currentTime = startTime;
+                videoPlayer.play();
+            }
+        }
+    });
+
+    videoPlayer.addEventListener('ended', function() {
+        if (isLooping && endTime === 0) {
+            videoPlayer.currentTime = startTime;
+            videoPlayer.play();
+        }
+    });
+
     if (!threeSplitLayout()) {
-        changeVideo()
+        changeVideo() // change to videojs
     }
     addKeyboardControls();
 }
@@ -237,6 +259,22 @@ function changeVideo() {
                 event.preventDefault();
             }
         });
+    });
+    player.off('timeupdate');
+    player.on('timeupdate', function() {
+        if (isLooping && endTime > startTime) {
+            if (player.currentTime() >= endTime) {
+                player.currentTime(startTime);
+                player.play();
+            }
+        }
+    });
+    player.off('ended');
+    player.on('ended', function() {
+        if (isLooping && endTime === 0) {
+            player.currentTime(startTime);
+            player.play();
+        }
     });
 }
 
@@ -465,6 +503,32 @@ loopButton.addEventListener('click', function() {
     if (player) player.loop(isLooping);
     if (videoPlayer) videoPlayer.loop = isLooping;
     loopButton.classList.toggle('active', isLooping);
+});
+
+aBtn.addEventListener('click', function() {
+    isClickAbtn = !isClickAbtn;
+    if (player) startTime = player.currentTime();
+    if (videoPlayer) startTime = videoPlayer.currentTime;
+    isLooping = isClickAbtn && isClickBbtn
+    aBtn.classList.toggle('active', isClickAbtn);
+    if (isLooping && videoPlayer) {
+        videoPlayer.removeAttribute('controls');
+    } else {
+        videoPlayer.setAttribute('controls', 'controls');
+    }
+});
+
+bBtn.addEventListener('click', function() {
+    isClickBbtn = !isClickBbtn;
+    if (player) endTime = player.currentTime();
+    if (videoPlayer) endTime = videoPlayer.currentTime;
+    isLooping = isClickAbtn && isClickBbtn
+    bBtn.classList.toggle('active', isClickBbtn);
+    if (isLooping && videoPlayer) {
+        videoPlayer.removeAttribute('controls');
+    } else {
+        videoPlayer.setAttribute('controls', 'controls');
+    }
 });
 
 function showSyncMessage() {

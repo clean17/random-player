@@ -21,9 +21,6 @@ video::-webkit-media-controls {
 .loop .active {
     background-color: #0080ff;
 }
-.loop-button.active {
-    background-color: #0080ff;
-}
 
 #controls {
     position: absolute;
@@ -45,6 +42,17 @@ video::-webkit-media-controls {
 }
 #controls button:hover {
     opacity: 1;
+}
+
+#controls-repit {
+    position: absolute;
+    bottom: 150px;
+    right: 10px;
+    z-index: 5;
+}
+
+#controls .active {
+    background-color: #0080ff;
 }
 
 
