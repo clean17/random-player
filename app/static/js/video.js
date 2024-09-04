@@ -749,6 +749,19 @@ function videoKeyEvent(event) {
         case 'F11':
             event.preventDefault();
             break;
+        case '[':
+            event.preventDefault();
+            aBtn.click();
+            break;
+        case ']':
+            event.preventDefault();
+            bBtn.click();
+            break;
+        case '\\':
+            event.preventDefault();
+            resetLoop();
+            break;
+        default: break;
     }
 }
 
