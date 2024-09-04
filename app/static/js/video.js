@@ -143,11 +143,21 @@ function getDefaultVideoElem() {
     return video;
 }
 
+function resetLoop() {
+    isClickAbtn = false;
+    isClickBbtn = false;
+    isLooping = false;
+    aBtn.classList.remove('active');
+    bBtn.classList.remove('active');
+    loopButton.classList.remove('active');
+}
+
 /************************************************************************/
 /*************************   Video Function   ***************************/
 /************************************************************************/
 
 function getVideo() {
+    resetLoop();
     axios.get(`/video/videos?directory=${directory}`)
         .then(response => {
             let videos = response.data;
