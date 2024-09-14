@@ -90,3 +90,78 @@ Organizational Unit Name (eg, section) []:
 Common Name (e.g. server FQDN or YOUR name) []:
 Email Address []:
 ```
+### nginx 서버
+`https://nginx.org/en/download.html` 에서 zip 파일을 다운받고 푼다 <br>
+`nginx.exe` 파일이 있는 위치에서 아래 명령어로 실행
+```bash
+start nginx
+```
+아래 명령어로 종료
+```bash
+nginx -s quit
+```
+아래 명령어로 재시작
+```bash
+nginx -s reload
+```
+절대 경로로 실행(git bash)
+```bash
+C:/nginx/nginx-1.26.2/nginx.exe &
+C:/nginx/nginx-1.26.2/nginx.exe -s quit
+C:/nginx/nginx-1.26.2/nginx.exe -s reload
+```
+실행 결과 <br>
+
+![img.png](img.png)
+- Nginx와 Flask 연동 <br>
+  Flask 애플리케이션이 8090 포트에서 실행중이라면
+```bash
+waitress-serve --port=80 run:app
+```
+- nginx 설정 수정 (`/conf/nginx.conf`) <br>
+80 포트를 내부서버 8090으로 연결
+```bash
+server {
+    listen 80;
+    server_name localhost;
+
+    location / {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+### ssl 적용
+
+생성한 `cert.pem`, `key.pem`을 `conf`디렉토리의 `ssl`디렉토리에 넣는다<br>
+```bash
+server {
+    listen 443 ssl;  # 443 포트에서 SSL을 사용
+    server_name yourdomain.com;  # 또는 localhost
+
+    ssl_certificate     ssl/cert.pem;   # 인증서 파일 경로
+    ssl_certificate_key ssl/key.pem;    # 키 파일 경로
+    
+    ssl_session_cache    shared:SSL:1m;
+    ssl_session_timeout  5m;
+
+    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;  # SSL 프로토콜 (최신 TLS 버전을 사용하는 것이 좋음)
+    ssl_prefer_server_ciphers  on;
+    ssl_ciphers         HIGH:!aNULL:!MD5;       # 보안 설정
+
+    location / {
+        try_files $uri $uri/ =404;
+        root   html;
+        index  index.html index.htm;
+        proxy_pass http://127.0.0.1:8090;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+```

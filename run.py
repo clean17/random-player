@@ -4,6 +4,7 @@ import sys
 import logging
 from waitress import serve
 from app import create_app
+from werkzeug.middleware.proxy_fix import ProxyFix
 # from flask_cors import CORS
 
 '''
@@ -92,9 +93,24 @@ class HopByHopHeaderFilter(object):
             return start_response(status, filtered_headers, exc_info)
         return self.app(environ, custom_start_response)
 
+# 리버스 프록시 뒤에 있는 Flask를 처리하는 ProxyFix 미들웨어 적용, 헤더 전달용
+# x_proto=1: X-Forwarded-Proto 헤더에 담긴 정보를 Flask가 요청이 HTTPS로 들어왔는지 인식하도록 한다
+# x_host=1: X-Forwarded-Host 헤더에 담긴 호스트 정보를 Flask가 올바른 도메인/호스트를 인식하도록 한다
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# Hop-by-Hop 헤더 필터 미들웨어 적용
 app.wsgi_app = HopByHopHeaderFilter(app.wsgi_app)
 
+# nginx(ssl)를 추가하고 나서 아래 설정을 추가하면 /get_tasks의 _external=True가 https:// 로 이미지 경로를 생성한다
+class ReverseProxied:
+    def __init__(self, app):
+        self.app = app
 
+    def __call__(self, environ, start_response):
+        environ['wsgi.url_scheme'] = 'https'  # HTTPS로 설정
+        return self.app(environ, start_response)
+
+# app.wsgi_app = ReverseProxied(app.wsgi_app)
 
 def signal_handler(sig, frame):
     logger.info("#### Exiting server... ####")
@@ -108,9 +124,9 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     logger.info("#### Starting server.... ####")
     # app.run(debug=True, host='0.0.0.0', port=8090)
-    app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
+    # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
 
-    # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다
+    serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다
 
 '''
 Flask 내장 서버 - 코드 수정 시 자동 재시작, 부하처리 오류복구 기능 부족, threaded=True으로 멀티스레드 보장되지는 않는다, 개발용

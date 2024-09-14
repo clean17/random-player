@@ -57,7 +57,9 @@ def kill_task(pid):
 def get_tasks():
     task_list = []
     for task in tasks:
-        thumbnail_url = url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path), _external=True) if task.thumbnail_path else None
+        # thumbnail_url = url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path), _external=True) if task.thumbnail_path else None
+        # scheme을 붙일 필요가 없다..  src가 알아서 찾을테니
+        thumbnail_url = url_for('ffmpeg.thumbnail', filename=os.path.basename(task.thumbnail_path)) if task.thumbnail_path else None
         # thumbnail_url = url_for('ffmpeg.thumbnail', filename=quote(os.path.basename(task.thumbnail_path))) if task.thumbnail_path else None
         # if thumbnail_url:
         #     thumbnail_url = 'https://merci-seoul.iptime.org' + thumbnail_url
