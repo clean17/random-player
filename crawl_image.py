@@ -107,10 +107,11 @@ def crawl_images_from_page(page_num):
             img_name = os.path.basename(img_url.split('?')[0])  # 쿼리스트링 제거 후 파일명 추출
 
             # 중복된 파일명을 피하기 위해 고유 식별자 추가
-            save_image_with_uuid(img_name, img_url, save_dir)
+            # save_image_with_uuid(img_name, img_url, save_dir)
+            save_image_with_uuid(img_name, img_url, IMAGE_DIR)
 
 # 페이지 1부터 10까지 크롤링 (1:11)
-# 프로젝트 경로에서 디렉토리로 이동해야함
-for page_num in range(1, 8):
+# 24.08.13 ~ 24.09.14
+for page_num in range(1, 19):
     crawl_images_from_page(page_num)
     print(f' ##########################   page_num   ################################# : {page_num}')
