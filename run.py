@@ -108,6 +108,11 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     logger.info("#### Starting server.... ####")
     # app.run(debug=True, host='0.0.0.0', port=8090)
-    # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'))
+    app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
 
-    serve(app, host='0.0.0.0', port=8090, threads=6)  # SSL 설정은 nginx에서 처리
+    # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다
+
+'''
+Flask 내장 서버 - 코드 수정 시 자동 재시작, 부하처리 오류복구 기능 부족, threaded=True으로 멀티스레드 보장되지는 않는다, 개발용
+Waitress 서버 - Python WSGI 서버, Waitress는 워커(프로세스)와 스레드 설정을 통해 병렬 처리를 훨씬 더 세밀하게 제어, IO 바운드 작업에서 성능을 극대화 >> 대규모 트래픽과 안정성
+'''
