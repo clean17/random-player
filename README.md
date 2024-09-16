@@ -165,3 +165,25 @@ server {
 }
 
 ```
+
+### 작업 스케줄러
+
+작업 스케줄러 > 작업 만들기
+
+![img_3.png](img_3.png)
+
+트리거 > 새로 만들기
+
+![img_5.png](img_5.png)
+
+동작 > 새로 만들기
+
+![img_1.png](img_1.png) <br>
+스크립트 `"C:\Program Files\Git\bin\bash.exe"` <br>
+인수 `-c "cd /c/nginx/nginx-1.26.2 && ./nginx.exe &"`
+
+마찬가지로 python 서버 자동 시작<br>
+
+스크립트 `wt.exe
+`<br>
+인수 `new-tab -p "Command Prompt" -d C:\my-project\random-player cmd /k "venv\Scripts\activate && python run.py"`
