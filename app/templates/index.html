@@ -16,7 +16,7 @@
     </div>
 </div>
 <div class="container">
-    <h2>Select Directory</h2>
+    <h2>Select Menu</h2>
     <form action="{{ url_for('video.select_directory') }}" method="post">
         <div class="select-container">
             <select name="directory" id="directory-select" class="styled-select" onchange="this.form.submit()">
@@ -36,9 +36,20 @@
 <!--        <button type="submit" name="directory" value="0">TEST ts</button>-->
         <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button" id="btn5">FFmpeg Batch</button></a>
         <a href="{{ url_for('ffmpeg.status') }}"><button type="button" id="btn6">Check FFmpeg Status</button></a>
-        <a href="{{ url_for('image.image_list') }}"><button type="button" id="btn7">View Images</button></a>
+        <!--<a href="{{ url_for('image.image_list') }}"><button type="button" id="btn7">View Images</button></a>
         <a href="{{ url_for('image.ref_image_list') }}"><button type="button" id="btn8">REF Images</button></a>
-        <a href="/image/stock_grahps/kospi"><button type="button" id="btn9">Stocks_Graph</button></a>
+        <a href="/image/stock_grahps/kospi"><button type="button" id="btn9">Stocks_Graph</button></a>-->
+        <form id="image-select-form">
+            <div class="select-container">
+<!--                <label for="image-select">Select Image</label>-->
+                <select id="image-select" class="styled-select">
+                    <option value="">Select Image</option>
+                    <option value="{{ url_for('image.image_list') }}">View Images</option>
+                    <option value="{{ url_for('image.ref_image_list') }}">REF Images</option>
+                    <option value="/image/stock_grahps/kospi">Stocks Graph</option>
+                </select>
+            </div>
+        </form>
     </form>
 </div>
 </body>
@@ -76,18 +87,33 @@
                 document.getElementById('btn6').click();
                 break;
             case '7':
-                document.getElementById('btn7').click();
+                // document.getElementById('btn7').click();
+                var selectElement = document.getElementById('image-select');
+                selectElement.value = "{{ url_for('image.image_list') }}";
+                selectElement.dispatchEvent(new Event('change')); // change 이벤트 트리거
                 break;
             case '8':
-                document.getElementById('btn8').click();
+                // document.getElementById('btn8').click();
+                var selectElement = document.getElementById('image-select');
+                selectElement.value = "{{ url_for('image.ref_image_list') }}";
+                selectElement.dispatchEvent(new Event('change')); // change 이벤트 트리거
                 break;
             case '9':
-                document.getElementById('btn9').click();
+                // document.getElementById('btn9').click();
+                var selectElement = document.getElementById('image-select');
+                selectElement.value = "/image/stock_grahps/kospi";
+                selectElement.dispatchEvent(new Event('change')); // change 이벤트 트리거
                 break;
             default: break;
         }
     }
 
     document.addEventListener('keydown', keyEvent)
+    document.getElementById('image-select').addEventListener('change', function() {
+        var selectedValue = this.value;
+        if (selectedValue) {
+            window.location.href = selectedValue; // 선택된 URL로 이동
+        }
+    });
 </script>
 </html>
