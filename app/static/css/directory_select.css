@@ -19,3 +19,57 @@ button {
     padding: 15px;
     margin-bottom: 10px;
 }
+
+
+
+
+/* Container for the select dropdown */
+.select-container {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+/* Styled select box */
+.styled-select {
+    width: 100%;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 18px;
+    background-color: white;
+    color: #333;
+    appearance: none; /* Remove default arrow */
+    background-image: url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjMDA1NkIzIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSI2Ij48cGF0aCBkPSJNNSA2IDBMIDAgbDEwIDB6Ii8+PC9zdmc+'); /* Custom dropdown arrow */
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    background-size: 10px;
+    cursor: pointer;
+    text-align: center; /* Center align text */
+}
+
+/* Hover effect for the select box */
+.styled-select:hover {
+    border-color: #007BFF;
+}
+
+/* Option styling */
+.styled-select option {
+    padding: 10px;
+    background-color: white;
+    color: #333;
+    text-align: center; /* Center align text */
+}
+
+/* Make the select visually similar to buttons */
+button, select.styled-select {
+    border: none;
+    background-color: #0056b3;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+button:hover, select.styled-select:hover {
+    background-color: #007BFF;
+}

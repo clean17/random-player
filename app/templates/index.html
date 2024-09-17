@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Directory</title>
+    <title>Select Menu</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
 </head>
@@ -18,10 +18,21 @@
 <div class="container">
     <h2>Select Directory</h2>
     <form action="{{ url_for('video.select_directory') }}" method="post">
-        <button type="submit" name="directory" value="1" id="btn1">Directory T</button>
+        <div class="select-container">
+            <select name="directory" id="directory-select" class="styled-select" onchange="this.form.submit()">
+                <option value="">Select Directory</option>
+                <option value="1" id="btn1">Directory T</option>
+                <option value="2" id="btn2">Directory A</option>
+                <option value="3" id="btn3">Directory D120</option>
+                <option value="4" id="btn4">Directory R120</option>
+            </select>
+        </div>
+    </form>
+    <form action="{{ url_for('video.select_directory') }}" method="post">
+        <!--<button type="submit" name="directory" value="1" id="btn1">Directory T</button>
         <button type="submit" name="directory" value="2" id="btn2">Directory A</button>
         <button type="submit" name="directory" value="3" id="btn3">Directory D120</button>
-        <button type="submit" name="directory" value="4" id="btn4">Directory R120</button>
+        <button type="submit" name="directory" value="4" id="btn4">Directory R120</button>-->
 <!--        <button type="submit" name="directory" value="0">TEST ts</button>-->
         <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button" id="btn5">FFmpeg Batch</button></a>
         <a href="{{ url_for('ffmpeg.status') }}"><button type="button" id="btn6">Check FFmpeg Status</button></a>
@@ -35,16 +46,28 @@
     function keyEvent(event) {
         switch(event.key) {
             case '1':
-                document.getElementById('btn1').click();
+                // document.getElementById('btn1').click();
+                var selectElement = document.getElementById('directory-select');
+                selectElement.value = '1';
+                selectElement.form.submit();
                 break;
             case '2':
-                document.getElementById('btn2').click();
+                // document.getElementById('btn2').click();
+                var selectElement = document.getElementById('directory-select');
+                selectElement.value = '2';
+                selectElement.form.submit();
                 break;
             case '3':
-                document.getElementById('btn3').click();
-                break;
+                // document.getElementById('btn3').click();
+                var selectElement = document.getElementById('directory-select');
+                selectElement.value = '3';
+                selectElement.form.submit();
+                break;S
             case '4':
-                document.getElementById('btn4').click();
+                // document.getElementById('btn4').click();
+                var selectElement = document.getElementById('directory-select');
+                selectElement.value = '4';
+                selectElement.form.submit();
                 break;
             case '5':
                 document.getElementById('btn5').click();
