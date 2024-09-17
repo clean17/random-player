@@ -124,12 +124,35 @@
                     const button = document.createElement('button');
                     button.className = 'button';
                     button.textContent = 'Kill';
+                    button.style.marginRight = '10px';
                     button.onclick = function(event) {
                         if (!confirm('Are you sure you want to kill this task?')) {
                             event.preventDefault();
                         }
                     };
+                    const button2 = document.createElement('button');
+                    button2.className = 'button';
+                    button2.textContent = 'Copy';
+                    if (task.url) {
+                        button2.value = task.url
+                    }
+                    button2.onclick = function(event) {
+                        event.preventDefault();
+                        // copy value
+                        if (button2.value) {
+                            navigator.clipboard.writeText(button2.value)
+                                .then(function() {
+                                    console.log('success copy: ' + button2.value);
+                                })
+                                .catch(function(err) {
+                                    console.error('fail copy: ', err);
+                                });
+                        } else {
+                            console.log('no url');
+                        }
+                    };
                     form.appendChild(button);
+                    form.appendChild(button2);
                     actionCell.appendChild(form);
                     actionCell.colSpan = "2";
                     thumbnailRow.appendChild(actionCell);

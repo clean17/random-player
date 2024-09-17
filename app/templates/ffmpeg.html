@@ -29,11 +29,13 @@
 </div>
 <script>
     function pasteFromClipboard() {
+        // console.log('1')
         if (navigator.clipboard && navigator.clipboard.readText) {
             navigator.clipboard.readText()
                 .then(text => {
                     if (text) {
                         document.getElementById('hidden_input').value = text;
+                        console.log(text)
                     }
                 })
         }

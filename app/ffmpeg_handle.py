@@ -30,7 +30,7 @@ def run_batch():
     capture_output=True 표준 출력,오류 캡쳐
     stdout=subprocess.PIPE 파이프로 캡쳐 (capture_output=True 의 기본값)
     '''
-    tasks.append(Task(process.pid, file_pattern, settings['WORK_DIRECTORY']))
+    tasks.append(Task(process.pid, file_pattern, settings['WORK_DIRECTORY'], url))
 
     return redirect(url_for('ffmpeg.status'))
 
@@ -71,6 +71,7 @@ def get_tasks():
             'last_modified_time': task.last_modified_time,
             'thumbnail_path': thumbnail_url,
             'thumbnail_update_time': task.thumbnail_update_time,
+            'url': task.url,
         })
     return jsonify(task_list)
 

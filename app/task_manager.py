@@ -38,7 +38,7 @@ work_directory = settings['WORK_DIRECTORY']
 '''
 
 class Task:
-    def __init__(self, pid, file_pattern, work_directory):
+    def __init__(self, pid, file_pattern, work_directory, url):
         self.pid = pid
         self.file_pattern = file_pattern
         self.work_directory = work_directory
@@ -50,6 +50,7 @@ class Task:
         self.creation_time = datetime.now()
         self.initial_thumbnail_created = False
         self.thumbnail_duration = 0
+        self.url = url
         #self.executor = ThreadPoolExecutor(max_workers=10) # 스레드 풀
 
     def update_last_modified(self):
