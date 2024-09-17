@@ -28,6 +28,12 @@ video::-webkit-media-controls {
     right: 10px;
     z-index: 5;
 }
+#controls-top {
+    position: absolute;
+    bottom: 50px;
+    right: 10px;
+    z-index: 5;
+}
 #controls button {
     font-size: 16px;
     padding: 10px;
