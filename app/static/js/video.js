@@ -634,6 +634,30 @@ function adjustVolume(change) {
     showVolumeMessage();
 }
 
+function minusTecSec() {
+    var event = new KeyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        keyCode: 37, // ArrowLeft keyCode
+        which: 37,
+        bubbles: true,
+        shiftKey: true // Shift key가 눌린 상태로 이벤트 발생
+    });
+    document.dispatchEvent(event); // 키보드 이벤트를 전역에 전달
+}
+
+function plusTenSec() {
+    var event = new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        code: 'ArrowRight',
+        keyCode: 39, // ArrowRight keyCode
+        which: 39,
+        bubbles: true,
+        shiftKey: true // Shift key가 눌린 상태로 이벤트 발생
+    });
+    document.dispatchEvent(event); // 키보드 이벤트를 전역에 전달
+}
+
 function addKeyboardControls() {
     document.removeEventListener('keydown', videoKeyEvent)
     document.addEventListener('keydown', videoKeyEvent)
@@ -641,29 +665,10 @@ function addKeyboardControls() {
     document.addEventListener('wheel', wheelEvent)
     delayAudio();
 
-    document.getElementById('minusTenSec').addEventListener('click', function() {
-        var event = new KeyboardEvent('keydown', {
-            key: 'ArrowLeft',
-            code: 'ArrowLeft',
-            keyCode: 37, // ArrowLeft keyCode
-            which: 37,
-            bubbles: true,
-            shiftKey: true // Shift key가 눌린 상태로 이벤트 발생
-        });
-        document.dispatchEvent(event); // 키보드 이벤트를 전역에 전달
-    });
-
-    document.getElementById('plusTenSec').addEventListener('click', function() {
-        var event = new KeyboardEvent('keydown', {
-            key: 'ArrowRight',
-            code: 'ArrowRight',
-            keyCode: 39, // ArrowRight keyCode
-            which: 39,
-            bubbles: true,
-            shiftKey: true // Shift key가 눌린 상태로 이벤트 발생
-        });
-        document.dispatchEvent(event); // 키보드 이벤트를 전역에 전달
-    });
+    document.getElementById('minusTenSec').removeEventListener('click', minusTecSec);
+    document.getElementById('minusTenSec').addEventListener('click', minusTecSec);
+    document.getElementById('plusTenSec').removeEventListener('click', plusTenSec);
+    document.getElementById('plusTenSec').addEventListener('click', plusTenSec);
 }
 
 function wheelEvent(evnet) {
