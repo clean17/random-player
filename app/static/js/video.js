@@ -27,6 +27,7 @@ let isClickBbtn = false;
 let previousVolume = 1.0;
 let startTime = 0;
 let endTime = 0;
+let gainNode;
 
 /************************************************************************/
 /******************************   Common   ******************************/
@@ -799,6 +800,30 @@ function delayAudio() {
     let video = document.querySelector('#videoPlayer')
     if (video) {
         if (isVideoJs()) {
+            // 비디오 요소가 로드된 후 Web Audio API 연결
+            player.ready(function() {
+                // Video.js의 HTML5 비디오 요소 참조
+                var videoElement = player.el().getElementsByTagName('video')[0];
+
+                // Web Audio API 초기화
+                var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                var source = audioContext.createMediaElementSource(videoElement);
+                var gainNode = audioContext.createGain();
+
+                // 증폭률 설정 (1.0은 100%, 2.0은 200%)
+                gainNode.gain.value = 1.5;
+
+                // 오디오 노드를 연결합니다.
+                source.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                // Video.js 볼륨 변경 시 증폭 배율 조절
+                player.on('volumechange', function() {
+                    var volumeMultiplier = 1.5;  // 여기서 원하는 증폭 배율을 설정하세요
+                    gainNode.gain.value = player.volume() * volumeMultiplier;
+                });
+            });
+
             /*video = videojs.getPlayer(video.id);
 
             player.ready(() => {
