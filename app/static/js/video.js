@@ -15,6 +15,8 @@ const prevButton = document.getElementById('prevButton');
 const loopButton = document.getElementById('loopbutton');
 const aBtn  = document.getElementById('aButton');
 const bBtn  = document.getElementById('bButton');
+const fullScreenBtn = document.getElementById('fullScreen');
+const toggleGainBtn = document.getElementById('toggleGain');
 let mimeType;
 let audioContext;
 let delayNode;
@@ -22,8 +24,10 @@ let source;
 let audioOffset = 0;
 let hideControlsTimeout;
 let isLooping = false;
+let isSectionLooping = false;
 let isClickAbtn = false;
 let isClickBbtn = false;
+let isClickGain = false;
 let previousVolume = 1.0;
 let startTime = 0;
 let endTime = 0;
@@ -145,12 +149,15 @@ function getDefaultVideoElem() {
 }
 
 function resetLoop() {
+    console.log('resetLoop')
     isClickAbtn = false;
     isClickBbtn = false;
-    isLooping = false;
+    isClickGain = false;
     aBtn.classList.remove('active');
     bBtn.classList.remove('active');
-    loopButton.classList.remove('active');
+    toggleGainBtn.classList.remove('active');
+    isSectionLooping = false;
+    // loopButton.classList.remove('active');
 }
 
 /************************************************************************/
@@ -273,7 +280,7 @@ function changeVideo() {
     });
     player.off('timeupdate');
     player.on('timeupdate', function() {
-        if (isLooping && endTime > startTime) {
+        if (isSectionLooping && endTime > startTime) {
             if (player.currentTime() >= endTime) {
                 player.currentTime(startTime);
                 player.play();
@@ -462,6 +469,8 @@ document.getElementById('nextButton').removeEventListener('click', getVideo);
 document.getElementById('nextButton').addEventListener('click', getVideo);
 document.getElementById('deleteButton').removeEventListener('click', delVideo);
 document.getElementById('deleteButton').addEventListener('click', delVideo);
+document.getElementById('fullScreen').removeEventListener('click', toggleFullscreen);
+document.getElementById('fullScreen').addEventListener('click', toggleFullscreen);
 document.addEventListener('mousemove', showControls);
 
 function addVideoEvent() {
@@ -520,9 +529,9 @@ aBtn.addEventListener('click', function() {
     isClickAbtn = !isClickAbtn;
     if (player) startTime = player.currentTime();
     if (videoPlayer) startTime = videoPlayer.currentTime;
-    isLooping = isClickAbtn && isClickBbtn
+    isSectionLooping = isClickAbtn && isClickBbtn
     aBtn.classList.toggle('active', isClickAbtn);
-    if (isLooping && videoPlayer) {
+    if (isSectionLooping && videoPlayer) {
         videoPlayer.removeAttribute('controls');
     } else {
         videoPlayer.setAttribute('controls', 'controls');
@@ -533,13 +542,18 @@ bBtn.addEventListener('click', function() {
     isClickBbtn = !isClickBbtn;
     if (player) endTime = player.currentTime();
     if (videoPlayer) endTime = videoPlayer.currentTime;
-    isLooping = isClickAbtn && isClickBbtn
+    isSectionLooping = isClickAbtn && isClickBbtn
     bBtn.classList.toggle('active', isClickBbtn);
-    if (isLooping && videoPlayer) {
+    if (isSectionLooping && videoPlayer) {
         videoPlayer.removeAttribute('controls');
     } else {
         videoPlayer.setAttribute('controls', 'controls');
     }
+});
+
+toggleGainBtn.addEventListener('click', function() {
+    isClickGain = !isClickGain;
+    toggleGainBtn.classList.toggle('active', isClickGain);
 });
 
 function showSyncMessage() {
@@ -797,6 +811,7 @@ function videoKeyEvent(event) {
 
 
 function delayAudio() {
+    console.log('delayAudio')
     let video = document.querySelector('#videoPlayer')
     if (video) {
         if (isVideoJs()) {
@@ -811,16 +826,18 @@ function delayAudio() {
                 var gainNode = audioContext.createGain();
 
                 // 증폭률 설정 (1.0은 100%, 2.0은 200%)
-                gainNode.gain.value = 1.5;
+                gainNode.gain.value = 1.0;
 
-                // 오디오 노드를 연결합니다.
+                // 오디오 노드를 연결
                 source.connect(gainNode);
                 gainNode.connect(audioContext.destination);
 
-                // Video.js 볼륨 변경 시 증폭 배율 조절
-                player.on('volumechange', function() {
-                    var volumeMultiplier = 1.5;  // 여기서 원하는 증폭 배율을 설정하세요
-                    gainNode.gain.value = player.volume() * volumeMultiplier;
+                toggleGainBtn.addEventListener('click', function() {
+                    if (isClickGain) {
+                        gainNode.gain.value = 2.0;
+                    } else {
+                        gainNode.gain.value = 1.0;
+                    }
                 });
             });
 
