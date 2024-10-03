@@ -87,7 +87,9 @@
 
         pressTimer = setTimeout(() => {
             // 파일 삭제
-            moveImage(event)
+            if (confirm('Are you sure ?')) {
+                moveImage(event)
+            }
         }, longPressDuration);
     };
 
