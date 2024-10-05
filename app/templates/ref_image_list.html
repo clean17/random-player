@@ -18,6 +18,7 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+<button id="suffle-button" class="floating-button2">Suffle</button>
 <div class="container">
     <div id="delete-form" {#method="POST" action="{{ url_for('image.delete_images') }}"#}>
         <input type="hidden" name="page" value="{{ page }}">
@@ -58,6 +59,7 @@
     let nextImageElement = null;
     let loading_size = 8;
     const nextBtn = document.getElementById('next-image-button');
+    const suffleBtn = document.getElementById('suffle-button');
 
     function setNextImage(element) {
         nextImageElement = element.nextElementSibling;
@@ -151,6 +153,7 @@
         });
 
         nextBtn.addEventListener('click', nextImage);
+        suffleBtn.addEventListener('click', suffleImage);
         {#previousBtn.addEventListener('click', previousImage);#}
 
         function getCenterImage() {
@@ -177,6 +180,19 @@
                     nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
                 }
             }
+        }
+
+        function suffleImage() {
+            fetch(`/image/suffle/ref_images`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.location.href = "/image/ref_images?page=1";
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
         }
 
         function previousImage() {

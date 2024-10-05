@@ -171,6 +171,11 @@ def get_image(filename):
 def get_ref_image(filename):
     return send_from_directory(REF_IMAGE_DIR, filename)
 
+@image_bp.route('/suffle/ref_images/', methods=['POST'])
+@login_required
+def suffle_image():
+    initialize_images()
+    return jsonify({'status': 'success'})
 
 
 ###################### stock ##########################
