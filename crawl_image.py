@@ -112,6 +112,7 @@ def crawl_images_from_page(page_num):
 
 # 페이지 1부터 10까지 크롤링 (1:11)
 # 24.08.13 ~ 24.09.14
-for page_num in range(1, 19):
+# 24.09.15 ~ 24.10.04
+for page_num in range(1, 11):
     crawl_images_from_page(page_num)
     print(f' ##########################   page_num   ################################# : {page_num}')
