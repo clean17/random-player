@@ -1,10 +1,14 @@
+import io
+import logging
 import os
 import signal
 import sys
-import logging
+
 from waitress import serve
-from app import create_app
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+from app import create_app
+
 # from flask_cors import CORS
 
 '''
@@ -19,13 +23,18 @@ for handler in app.logger.handlers:
     handler.addFilter(NoHTTPRequestLogFilter())
 '''
 
+# stdout과 stderr 인코딩을 강제로 UTF-8로 설정
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 # Create a logger
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('### %(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # 전역 로거  (웹요청이 아닌 파이썬 내부 로그를 출력) - root
-console_handler = logging.StreamHandler()
+# console_handler = logging.StreamHandler()
+console_handler = logging.StreamHandler(sys.stdout)  # 콘솔 핸들러에 sys.stdout 사용
 console_handler.setLevel(logging.DEBUG)
 console_handler.setFormatter(formatter)
 
@@ -57,8 +66,14 @@ if not waitress_logger.handlers:  # 핸들러가 없다면 추가
     waitress_logger.addHandler(console_handler)
     waitress_logger.setLevel(logging.INFO)
 
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
+# sys.stdout.reconfigure(encoding='utf-8')
+# sys.stderr.reconfigure(encoding='utf-8')
+
+# sys.stdout과 sys.stderr를 UTF-8로 설정
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 
 app = create_app()
 
