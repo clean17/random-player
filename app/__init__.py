@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
-from flask import Flask, session, send_file, render_template_string
-from flask_login import LoginManager
+from flask import Flask, session, send_file, render_template_string, jsonify, request
+from flask_login import LoginManager, current_user
 from .auth import auth, User, users
 from config import load_config
 from .ffmpeg_handle import m_ffmpeg
@@ -33,6 +33,28 @@ def create_app():
                 session['attempts'] = 0
         if check_server_restarted():
             session.clear()
+
+    @app.before_request
+    def restrict_endpoints():
+        if request.path == '/auth/logout':
+            return
+
+        if request.path.startswith('/static'):
+            return
+
+        if not current_user.is_authenticated:
+            return  # 로그인하지 않은 사용자는 검증하지 않음
+
+        user_id = current_user.get_id()
+
+        # GUEST_USERNAME 사용자에 대한 검증
+        if user_id == app.config['GUEST_USERNAME']:
+            # GUEST_USERNAME 사용자가 /image/trip_images 경로가 아닌 경우만 제한
+            if not request.path.startswith('/image/trip_images'):
+                return jsonify({"error": "Forbidden"}), 403
+
+        # 다른 사용자는 제한하지 않음
+        return
 
     @login_manager.user_loader
     def load_user(user_id):

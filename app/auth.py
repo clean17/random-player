@@ -1,14 +1,20 @@
 from datetime import datetime, timedelta
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from flask_login import UserMixin, login_user, login_required, logout_user
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash
 
 from config import settings
 
 auth = Blueprint('auth', __name__)
 
-users = {settings['USERNAME']: {'password': settings['PASSWORD']}}
+users = {
+    settings['USERNAME']: {'password': settings['PASSWORD']},
+    settings['GUEST_USERNAME']: {'password': settings['GUEST_PASSWORD']}
+}
+
+ALLOWED_USER_ID = settings['GUEST_USERNAME']  # GUEST_USERNAME 지정
+
 class User(UserMixin):
     def __init__(self, username):
         self.id = username
@@ -38,6 +44,11 @@ def login():
             user = User(username)
             login_user(user)
             session['attempts'] = 0
+
+            # GUEST_USERNAME 사용자라면 특정 페이지로 이동
+            if username == settings['GUEST_USERNAME']:
+                return redirect(url_for('image.trip_image_list'))
+
             return redirect(url_for('main.home'))
         else:
             session['attempts'] += 1
