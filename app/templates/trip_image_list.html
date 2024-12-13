@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image List</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
+</head>
+<body>
+<div class="top-bar">
+    <div class="logout">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        {% endif %}
+    </div>
+    <div class="back">
+        {% if current_user.get_id() != config.GUEST_USERNAME %}
+            <a href="{{ url_for('main.home') }}">Back</a>
+        {% endif %}
+    </div>
+</div>
+<div class="container">
+    <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <div class="image-container">
+            {% for image in images %}
+            <div class="image-item" id="image-{{ loop.index }}">
+                <!-- 처음 5개 이미지만 실제 이미지 로드 -->
+                <img class="thumbnail"
+                     src="{% if loop.index <= 5 %}{{ url_for('image.get_trip_image', filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                     data-src="{{ url_for('image.get_trip_image', filename=image) }}"
+                     alt="{{ image }}" onclick="moveImage('{{ image }}', {{ loop.index }})" data-index="{{ loop.index }}">
+                <input type="hidden" name="images[]" value="{{ image }}">
+            </div>
+            {% endfor %}
+        </div>
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="{{ url_for('image.trip_image_list', page=1) }}">&laquo;</a>
+            <a href="{{ url_for('image.trip_image_list', page=page-1) }}">&lt;</a>
+            {% endif %}
+            {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
+            <a href="{{ url_for('image.trip_image_list', page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            {% endfor %}
+            {% if page < total_pages %}
+            <a href="{{ url_for('image.trip_image_list', page=page+1) }}">&gt;</a>
+            <a href="{{ url_for('image.trip_image_list', page=total_pages) }}">&raquo;</a>
+            {% endif %}
+        </div>
+        {% if current_user.get_id() != config.GUEST_USERNAME %}
+            <button type="submit" class="delete-button">Delete</button>
+        {% endif %}
+    </form>
+</div>
+
+{#<button type="button" class="scroll-bottom-button" onclick="scrollToBottom()">Scroll to Bottom</button>#}
+
+<button id="next-image-button" class="floating-button">Next Image</button>
+
+<script>
+    let nextImageElement = null;
+    let loading_size = 8;
+    const nextBtn = document.getElementById('next-image-button');
+
+    function setNextImage(element) {
+        nextImageElement = element.nextElementSibling;
+    }
+
+    function scrollToBottom() {
+        let scrollInterval = setInterval(() => {
+            window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: 'smooth'
+            });
+            if (isScrolledToBottom()) {
+                clearInterval(scrollInterval);
+            }
+        }, 100);
+    }
+
+    function isScrolledToBottom() {
+        return (window.innerHeight + window.scrollY) >= document.body.scrollHeight;
+    }
+
+
+    function initPage() {
+        // 전체 이미지 모두 로딩
+        {#const images = document.querySelectorAll('.thumbnail');
+            images.forEach(img => {
+                const tempSrc = img.getAttribute('data-src');
+                img.src = tempSrc;
+            });#}
+
+        // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
+        const imageItems = document.querySelectorAll('.image-item');
+        imageItems.forEach(item => {
+            const img = item.querySelector('.thumbnail');
+            img.addEventListener('click', () => setNextImage(item));
+        });
+
+        document.addEventListener('keydown', function(event) {
+            switch(event.key) {
+                case 'ArrowRight':
+                case 'ArrowDown':
+                case 'PageDown':
+                    event.preventDefault();
+                    nextImage();
+                    break;
+                case 'ArrowLeft':
+                case 'ArrowUp':
+                case 'PageUp':
+                    event.preventDefault();
+                    previousImage();
+                    break;
+                case ' ': case 'Enter':
+                    event.preventDefault();
+                    clickCenterImage();
+                    break;
+                case 'Delete':
+                    event.preventDefault();
+                    if (confirm('Are you sure ?')) {
+                        document.querySelector('.delete-button')?.click()
+                    }
+                default: break;
+            }
+        });
+
+        nextBtn.addEventListener('click', nextImage);
+        {#previousBtn.addEventListener('click', previousImage);#}
+
+        function getCenterImage() {
+            const centerY = window.innerHeight / 2;
+            let closestImage = null;
+            let minDistance = Infinity;
+            imageItems.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const itemCenterY = rect.top + rect.height / 2;
+                const distance = Math.abs(centerY - itemCenterY);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestImage = item;
+                }
+            });
+            return closestImage;
+        }
+
+        function nextImage() {
+            const centerImage = getCenterImage();
+            if (centerImage) {
+                const nextImage = centerImage.nextElementSibling;
+                if (nextImage && nextImage.classList.contains('image-item')) {
+                    nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }
+            }
+        }
+
+        function previousImage() {
+            const centerImage = getCenterImage();
+            if (centerImage) {
+                const previousImage = centerImage.previousElementSibling;
+                if (previousImage && previousImage.classList.contains('image-item')) {
+                    previousImage.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }
+            }
+        }
+
+        function clickCenterImage() {
+            const centerImage = getCenterImage();
+            if (centerImage) {
+                const filename = centerImage.querySelector('img').getAttribute('alt');
+                const index = centerImage.querySelector('img').getAttribute('data-index');
+                if (filename && index) {
+                    moveImage(filename, index);
+                }
+            }
+        }
+
+        /**************************************************************/
+
+        const lazyImages = document.querySelectorAll("img[data-src]");
+        let initialLoadComplete = false;
+
+        function preloadImage(img) {
+            const src = img.getAttribute('data-src');
+            if (src && img.src !== src) {
+                img.src = src;
+                img.removeAttribute('data-src'); // 이미 로드된 이미지는 data-src 속성 제거
+            }
+        }
+
+        // 화면 중앙의 이미지 인덱스 찾기
+        function findCenterImage() {
+            let centerPosition = window.innerHeight / 2 + window.scrollY;
+            let closestIndex = 0;
+            let minDistance = Infinity;
+            lazyImages.forEach((img, index) => {
+                let imgPosition = img.getBoundingClientRect().top + window.scrollY + img.getBoundingClientRect().height / 2;
+                let distance = Math.abs(centerPosition - imgPosition);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestIndex = index;
+                }
+            });
+            return closestIndex;
+        }
+
+        // 주어진 인덱스 기준으로 위 아래 이미지 로드
+        function loadImagesAroundIndex(index) {
+            let minIndex = Math.max(index - loading_size, 0);
+            let maxIndex = Math.min(index + loading_size, lazyImages.length - 1);
+            for (let i = minIndex; i <= maxIndex; i++) {
+                if (lazyImages[i] && lazyImages[i].hasAttribute('data-src')) {
+                    preloadImage(lazyImages[i]);
+                }
+            }
+        }
+
+        // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
+        function initialImageLoad() {
+            if (!initialLoadComplete) {
+                let centerIndex = findCenterImage();
+                loadImagesAroundIndex(centerIndex);
+                initialLoadComplete = true;
+            }
+        }
+
+        // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
+        window.onload = initialImageLoad;
+
+        // Throttling 적용
+        let throttleTimer;
+        const throttle = (callback, time) => {
+            if (throttleTimer) return;
+            throttleTimer = setTimeout(() => {
+                callback();
+                throttleTimer = null;
+            }, time);
+        };
+
+        /*****************************************************************/
+        // debounce
+        let lastScrollTop = 0;
+        let lastScrollTime = Date.now();
+        const SCROLL_DELAY = 400;
+        const SCROLL_THRESHOLD = 50000;  // px per second
+
+        function debounce(func, delay) {
+            let debounceTimer;
+            const context = this;
+            const args = arguments;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func.apply(context, args), delay);
+        }
+
+        function handleScroll() {
+            const currentScrollTop = window.scrollY;
+            const currentTime = Date.now();
+            const scrollDelta = Math.abs(currentScrollTop - lastScrollTop);
+            const timeDelta = currentTime - lastScrollTime;
+            const scrollSpeed = scrollDelta / (timeDelta / 1000);
+            /*if (scrollSpeed> 10000) {
+                console.log('scrollSpeed', scrollSpeed);
+            }*/
+
+            if (scrollSpeed < SCROLL_THRESHOLD) {
+                let centerImageIndex = findCenterImage();
+                loadImagesAroundIndex(centerImageIndex);
+            }
+
+            lastScrollTop = currentScrollTop;
+            lastScrollTime = currentTime;
+        }
+
+        /*****************************************************************/
+
+        window.addEventListener('scroll', () => {
+            if (!initialLoadComplete) return; // 초기 로드가 완료되지 않았으면 실행하지 않음
+
+            debounce(handleScroll, SCROLL_DELAY)
+
+            throttle(() => {
+                debounce(handleScroll, SCROLL_DELAY) // 디바운스 적용, 스크롤이 빠르면 이미지를 로딩하지 않는다
+                /*let centerImageIndex = findCenterImage();
+                loadImagesAroundIndex(centerImageIndex);*/
+            }, 100);
+        });
+    }
+
+    function moveImage(filename, index) {
+        console.log(filename, index)
+        fetch(`/image/move_image/trip_image/${filename}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const imageElement = document.getElementById(`image-${index}`);
+                    if (imageElement) {
+                        imageElement.remove();
+                        if (nextImageElement) {
+                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+
+    document.addEventListener("DOMContentLoaded", initPage)
+</script>
+</body>
+</html>

@@ -20,6 +20,7 @@ IMAGE_DIR = settings['IMAGE_DIR']
 # IMAGE_DIR = os.path.join(os.getcwd(), 'images')
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
+TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 KOSDAQ_DIR = settings['KOSDAQ_DIR']
 SP500_DIR = settings['SP500_DIR']
@@ -59,6 +60,11 @@ def get_images(start, count):
     images = os.listdir(IMAGE_DIR)
     images.sort()
     return images[start:start + count]
+
+def get_trip_images(start, count):
+    trip_images = os.listdir(TRIP_IMAGE_DIR)
+    trip_images.sort()
+    return trip_images[start:start + count]
 
 """ def get_ref_images(start, count):
     images = os.listdir(REF_IMAGE_DIR)
@@ -113,6 +119,16 @@ def image_list():
 
     return render_template('image_list.html', images=images, page=page, total_pages=total_pages)
 
+@image_bp.route('/trip_images', methods=['GET'])
+@login_required
+def trip_image_list():
+    page = int(request.args.get('page', 1))
+    start = (page - 1) * limit_page_num
+    images = get_trip_images(start, limit_page_num)
+    total_images = len(os.listdir(TRIP_IMAGE_DIR))
+    total_pages = (total_images + limit_page_num-1) // limit_page_num
+
+    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages)
 
 @image_bp.route('/ref_images', methods=['GET'])
 @login_required
@@ -125,7 +141,6 @@ def ref_image_list():
 
     return render_template('ref_image_list.html', images=images, page=page, total_pages=total_pages)
 
-
 @image_bp.route('/move_image/<imagepath>/<filename>', methods=['POST'])
 @login_required
 def move_image(imagepath, filename):
@@ -134,6 +149,8 @@ def move_image(imagepath, filename):
         src_path = os.path.join(IMAGE_DIR, filename)
     elif imagepath == "ref_image":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
+    elif imagepath == "trip_image":
+        src_path = os.path.join(TRIP_IMAGE_DIR, filename)
     else:
         return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
 
@@ -165,6 +182,10 @@ def delete_images():
 def get_image(filename):
     return send_from_directory(IMAGE_DIR, filename)
 
+@image_bp.route('/trip_images/<filename>')
+@login_required
+def get_trip_image(filename):
+    return send_from_directory(TRIP_IMAGE_DIR, filename)
 
 @image_bp.route('/ref_images/<filename>')
 @login_required

@@ -45,6 +45,7 @@
                 <select id="image-select" class="styled-select">
                     <option value="">Select Image</option>
                     <option value="{{ url_for('image.image_list') }}">View Images</option>
+                    <option value="{{ url_for('image.trip_image_list') }}">Trip Images</option>
                     <option value="{{ url_for('image.ref_image_list') }}">REF Images</option>
                     <option value="/image/stock_grahps/kospi">Stocks Graph</option>
                 </select>

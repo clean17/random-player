@@ -17,6 +17,7 @@ def load_config():
         'IMAGE_DIR': config['directories']['images_directory'],
         'MOVE_DIR': config['directories']['move_images_directory'],
         'REF_IMAGE_DIR': config['directories']['refined_images_directory'],
+        'TRIP_IMAGE_DIR': config['directories']['trip_images_directory'],
         'KOSPI_DIR': config['directories']['kospi_stocks_directory'],
         'KOSDAQ_DIR': config['directories']['kosdaq_stocks_directory'],
         'SP500_DIR': config['directories']['sp500_stocks_directory'],
@@ -29,6 +30,8 @@ def load_config():
         'MUD_PASSWORD': config['settings']['mudfish_password'],
         'USERNAME': config['settings']['username'],
         'PASSWORD': generate_password_hash(config['settings']['password']),
+        'GUEST_USERNAME': config['settings']['guest_username'],
+        'GUEST_PASSWORD': generate_password_hash(config['settings']['guest_password']),
         'FFMPEG_SCRIPT_PATH': config['paths']['ffmpeg_script_path'],
         'WORK_DIRECTORY': config['paths']['work_directory'],
     }
