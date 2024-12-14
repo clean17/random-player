@@ -18,6 +18,7 @@ ALLOWED_USER_ID = settings['GUEST_USERNAME']  # GUEST_USERNAME 지정
 class User(UserMixin):
     def __init__(self, username):
         self.id = username
+
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if 'attempts' not in session:
