@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from flask import Flask, session, send_file, render_template_string, jsonify, request
+from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect
 from flask_login import LoginManager, current_user
 from .auth import auth, User, users
 from config import load_config
