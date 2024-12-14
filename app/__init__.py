@@ -51,7 +51,7 @@ def create_app():
         if user_id == app.config['GUEST_USERNAME']:
             # GUEST_USERNAME 사용자가 /image/trip_images 경로가 아닌 경우만 제한
             if not request.path.startswith('/image/trip_images'):
-                return redirect(url_for('auth.login'))
+                return redirect(url_for('auth.logout'))
                 # return jsonify({"error": "Forbidden"}), 403
 
         # 다른 사용자는 제한하지 않음
