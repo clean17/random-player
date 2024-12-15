@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion Photo Viewer</title>
+</head>
+<body>
+    <h1>Motion Photo Viewer</h1>
+    <input type="file" id="upload" accept=".jpg" />
+    <div id="output"></div>
+
+    <!-- FFmpeg.wasm 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <script>
+        const upload = document.getElementById('upload');
+        const output = document.getElementById('output');
+
+        upload.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const { createFFmpeg, fetchFile } = FFmpeg;
+            const ffmpeg = createFFmpeg({ log: true });
+
+            // FFmpeg.wasm 초기화
+            try {
+                output.innerHTML = "Loading FFmpeg.wasm...";
+                await ffmpeg.load();
+                output.innerHTML = "FFmpeg loaded successfully!";
+            } catch (error) {
+                output.innerHTML = "Failed to load FFmpeg.wasm!";
+                console.error(error);
+                return;
+            }
+
+            // Convert file to ArrayBuffer and process
+            const buffer = await file.arrayBuffer();
+            ffmpeg.FS('writeFile', 'input.jpg', new Uint8Array(buffer));
+
+            // Extract MP4 from Motion Photo
+            try {
+                await ffmpeg.run('-i', 'input.jpg', '-codec', 'copy', 'output.mp4');
+                const data = ffmpeg.FS('readFile', 'output.mp4');
+                const blob = new Blob([data.buffer], { type: 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+
+                // Display video
+                output.innerHTML = `<video controls autoplay loop src="${url}" style="max-width: 100%;"></video>`;
+            } catch (error) {
+                output.innerHTML = "Failed to process Motion Photo!";
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>
