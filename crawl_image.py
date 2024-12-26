@@ -114,6 +114,7 @@ def crawl_images_from_page(page_num):
 # 24.08.13 ~ 24.09.14
 # 24.09.15 ~ 24.10.04
 # 24.10.04 ~ 24.10.30
-for page_num in range(1, 12):
+# 24.11.01 ~ 24.12.26
+for page_num in range(1, 45):
     crawl_images_from_page(page_num)
     print(f' ##########################   page_num   ################################# : {page_num}')
