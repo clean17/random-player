@@ -187,3 +187,23 @@ server {
 스크립트 `wt.exe
 `<br>
 인수 `new-tab -p "Command Prompt" -d C:\my-project\random-player cmd /k "venv\Scripts\activate && python run.py"`
+
+### nginx 재기동
+```bash
+cd /c/nginx/nginx-1.26.2
+# graceful 종료
+./nginx.exe -s quit
+# 즉시 종료
+./nginx.exe -s stop
+# 재기동
+./nginx.exe
+```
+작업스케줄러를 통해 실행되었다면 직접 제거 후 재기동한다
+```bash
+# Nginx 프로세스를 확인
+tasklist | findstr nginx
+# Nginx 프로세스를 강제 종료
+taskkill /F /IM nginx.exe
+# pid 파일 삭제
+logs\nginx.pid
+```
