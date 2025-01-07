@@ -124,7 +124,7 @@ def trip_image_list():
     total_images = len(os.listdir(TRIP_IMAGE_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, dir=TRIP_IMAGE_DIR)
+    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=TRIP_IMAGE_DIR)
 
 @image_bp.route('/temp_images', methods=['GET'])
 @login_required
@@ -135,7 +135,7 @@ def temp_image_list():
     total_images = len(os.listdir(TEMP_UPLOAD_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, dir=TEMP_UPLOAD_DIR)
+    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=TEMP_UPLOAD_DIR)
 
 @image_bp.route('/ref_images', methods=['GET'])
 @login_required
@@ -146,7 +146,7 @@ def ref_image_list():
     total_images = len(os.listdir(REF_IMAGE_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('ref_image_list.html', images=images, page=page, total_pages=total_pages, dir=REF_IMAGE_DIR)
+    return render_template('ref_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=REF_IMAGE_DIR)
 
 @image_bp.route('/move_image/<imagepath>/<filename>', methods=['POST'])
 @login_required

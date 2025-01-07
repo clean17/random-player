@@ -10,12 +10,15 @@ from .video import video
 from .image import image_bp, environment
 from .function import func
 from .upload import upload
+import fnmatch
 
 ALLOWED_PATHS = [
     '/image/trip_images',
     '/image/temp_images',
-    '/main',
-    '/upload'
+    '/image/images/',
+    '/main/',
+    '/upload/',
+    '/upload',
 ]
 
 def create_app():
@@ -65,7 +68,8 @@ def create_app():
             #     return redirect(url_for('auth.logout'))
                 # return jsonify({"error": "Forbidden"}), 403
 
-            if not any(request.path.startswith(path) for path in ALLOWED_PATHS):
+            print(request.path)
+            if not any(fnmatch.fnmatch(request.path, pattern) for pattern in ALLOWED_PATHS):
                 return redirect(url_for('auth.logout'))
 
         # 다른 사용자는 제한하지 않음

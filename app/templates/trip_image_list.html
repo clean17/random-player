@@ -33,6 +33,9 @@
             </div>
             {% endfor %}
         </div>
+        <div>
+            total : {{ total_images }}
+        </div>
         <div class="pagination">
             {% if page > 1 %}
             <a href="{{ url_for('image.trip_image_list', page=1) }}">&laquo;</a>
