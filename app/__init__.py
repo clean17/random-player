@@ -13,6 +13,7 @@ from .upload import upload
 
 ALLOWED_PATHS = [
     '/image/trip_images',
+    '/image/temp_images',
     '/main',
     '/upload'
 ]
