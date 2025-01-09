@@ -51,8 +51,9 @@
             <div class="select-container">
 <!--                <label for="image-select">Select Image</label>-->
                 <select id="image-select" class="styled-select">
-                    <option value="">View Image</option>
+                    <option value="">Select Image Dir</option>
                     <option value="{{ url_for('image.trip_image_list') }}">Trip Images</option>
+                    <option value="{{ url_for('image.temp_image_list') }}">Temp Images</option>
                     {% if current_user.get_id() != config.GUEST_USERNAME %}
                     <option value="{{ url_for('image.image_list') }}">View Images</option>
                     <option value="{{ url_for('image.ref_image_list') }}">REF Images</option>
