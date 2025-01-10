@@ -27,8 +27,8 @@
                 <div class="image-item" id="image-{{ loop.index }}">
                     <!-- 처음 5개 이미지만 실제 이미지 로드 -->
                     <img class="thumbnail"
-                         src="{% if loop.index <= 5 %}{{ url_for('image.get_ref_image', filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                         data-src="{{ url_for('image.get_ref_image', filename=image) }}"
+                         src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                         data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
                          alt="{{ image }}" {#onclick="moveImage('{{ image }}', {{ loop.index }})"#} data-index="{{ loop.index }}">
                     <input type="hidden" name="images[]" value="{{ image }}">
                 </div>

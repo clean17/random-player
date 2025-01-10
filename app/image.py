@@ -24,6 +24,7 @@ TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 KOSDAQ_DIR = settings['KOSDAQ_DIR']
 SP500_DIR = settings['SP500_DIR']
+TEMP_UPLOAD_DIR = 'E:\\merci_server_file_dir'
 
 # 시장 디렉터리 매핑
 DIRECTORY_MAP = {
@@ -56,15 +57,10 @@ def get_ref_images(start, count):
 initialize_images()
 
 
-def get_images(start, count):
-    images = os.listdir(IMAGE_DIR)
+def get_images(start, count, directory):
+    images = os.listdir(directory) # IMAGE_DIR, TRIP_IMAGE_DIR
     images.sort()
     return images[start:start + count]
-
-def get_trip_images(start, count):
-    trip_images = os.listdir(TRIP_IMAGE_DIR)
-    trip_images.sort()
-    return trip_images[start:start + count]
 
 """ def get_ref_images(start, count):
     images = os.listdir(REF_IMAGE_DIR)
@@ -113,22 +109,33 @@ def get_stock_graphs(dir, start, count):
 def image_list():
     page = int(request.args.get('page', 1))
     start = (page - 1) * limit_page_num
-    images = get_images(start, limit_page_num)
+    images = get_images(start, limit_page_num, IMAGE_DIR)
     total_images = len(os.listdir(IMAGE_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images)
+    return render_template('image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=IMAGE_DIR)
 
 @image_bp.route('/trip_images', methods=['GET'])
 @login_required
 def trip_image_list():
     page = int(request.args.get('page', 1))
     start = (page - 1) * limit_page_num
-    images = get_trip_images(start, limit_page_num)
+    images = get_images(start, limit_page_num, TRIP_IMAGE_DIR)
     total_images = len(os.listdir(TRIP_IMAGE_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages)
+    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, dir=TRIP_IMAGE_DIR)
+
+@image_bp.route('/temp_images', methods=['GET'])
+@login_required
+def temp_image_list():
+    page = int(request.args.get('page', 1))
+    start = (page - 1) * limit_page_num
+    images = get_images(start, limit_page_num, TEMP_UPLOAD_DIR)
+    total_images = len(os.listdir(TEMP_UPLOAD_DIR))
+    total_pages = (total_images + limit_page_num-1) // limit_page_num
+
+    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, dir=TEMP_UPLOAD_DIR)
 
 @image_bp.route('/ref_images', methods=['GET'])
 @login_required
@@ -139,7 +146,7 @@ def ref_image_list():
     total_images = len(os.listdir(REF_IMAGE_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('ref_image_list.html', images=images, page=page, total_pages=total_pages)
+    return render_template('ref_image_list.html', images=images, page=page, total_pages=total_pages, dir=REF_IMAGE_DIR)
 
 @image_bp.route('/move_image/<imagepath>/<filename>', methods=['POST'])
 @login_required
@@ -177,20 +184,12 @@ def delete_images():
     return redirect(url_for('image.image_list', page=page))
 
 
-@image_bp.route('/images/<filename>')
+@image_bp.route('/images/')
 @login_required
-def get_image(filename):
-    return send_from_directory(IMAGE_DIR, filename)
-
-@image_bp.route('/trip_images/<filename>')
-@login_required
-def get_trip_image(filename):
-    return send_from_directory(TRIP_IMAGE_DIR, filename)
-
-@image_bp.route('/ref_images/<filename>')
-@login_required
-def get_ref_image(filename):
-    return send_from_directory(REF_IMAGE_DIR, filename)
+def get_image():
+    filename = request.args.get('filename')
+    dir = request.args.get('dir')
+    return send_from_directory(dir, filename)
 
 @image_bp.route('/suffle/ref_images', methods=['POST'])
 @login_required
