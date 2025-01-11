@@ -9,18 +9,26 @@ from .main import main
 from .video import video
 from .image import image_bp, environment
 from .function import func
+from .upload import upload
+
+ALLOWED_PATHS = [
+    '/image/trip_images',
+    '/main',
+    '/upload'
+]
 
 def create_app():
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
     app.secret_key = app.config['SECRET_KEY']
 
-    app.register_blueprint(main, url_prefix='/')
+    app.register_blueprint(main, url_prefix='/main')
     app.register_blueprint(auth, url_prefix='/auth')
     app.register_blueprint(video, url_prefix='/video')
     app.register_blueprint(m_ffmpeg, url_prefix='/ffmpeg')
     app.register_blueprint(image_bp, url_prefix='/image')
     app.register_blueprint(func, url_prefix='/func')
+    app.register_blueprint(upload, url_prefix='/upload')
     app.jinja_env.globals.update(max=max, min=min)
 
     login_manager = LoginManager()
@@ -52,9 +60,12 @@ def create_app():
         # GUEST_USERNAME 사용자에 대한 검증
         if user_id == app.config['GUEST_USERNAME']:
             # GUEST_USERNAME 사용자가 /image/trip_images 경로가 아닌 경우만 제한
-            if not request.path.startswith('/image/trip_images'):
-                return redirect(url_for('auth.logout'))
+            # if not request.path.startswith('/image/trip_images'):
+            #     return redirect(url_for('auth.logout'))
                 # return jsonify({"error": "Forbidden"}), 403
+
+            if not any(request.path.startswith(path) for path in ALLOWED_PATHS):
+                return redirect(url_for('auth.logout'))
 
         # 다른 사용자는 제한하지 않음
         return
