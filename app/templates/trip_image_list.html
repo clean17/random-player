@@ -15,9 +15,7 @@
         {% endif %}
     </div>
     <div class="back">
-        {% if current_user.get_id() != config.GUEST_USERNAME %}
-            <a href="{{ url_for('main.home') }}">Back</a>
-        {% endif %}
+        <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
 <div class="container">
