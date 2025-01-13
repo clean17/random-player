@@ -117,7 +117,7 @@ def image_list():
     total_images = len(os.listdir(IMAGE_DIR))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('image_list.html', images=images, page=page, total_pages=total_pages)
+    return render_template('image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images)
 
 @image_bp.route('/trip_images', methods=['GET'])
 @login_required
