@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
 </head>
 <body>
+<div id="overlay" style="display: none">
+    <img src="/static/overlay-loading.svg" alt="Loading...">
+</div>
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -57,7 +60,9 @@
 <script>
     let nextImageElement = null;
     let loading_size = 8;
-    const nextBtn = document.getElementById('next-image-button');
+    const nextBtn = document.getElementById('next-image-button'),
+          delBtn = document.querySelector('.delete-button'),
+          form = document.getElementById('delete-form');
 
     function setNextImage(element) {
         nextImageElement = element.nextElementSibling;
@@ -280,6 +285,14 @@
                 /*let centerImageIndex = findCenterImage();
                 loadImagesAroundIndex(centerImageIndex);*/
             }, 100);
+        });
+
+        // 이중요청 방지
+        form.addEventListener('submit', (event) => {
+            delBtn.disabled = true;
+            delBtn.style.background = 'gray';
+            document.getElementById('overlay').style.display = 'block';
+            document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
         });
     }
 

@@ -179,3 +179,25 @@ button.delete-button:hover {
 .top-bar {
     opacity: 0.5;
 }
+
+#overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5); /* 반투명 배경 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    pointer-events: all; /* 모든 이벤트를 이 요소로 제한 */
+}
+
+#overlay img {
+    position: absolute;
+    top: 40%;
+    left: 47%;
+    width: 120px;
+    height: 120px;
+}
