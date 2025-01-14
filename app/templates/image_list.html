@@ -8,9 +8,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
 </head>
 <body>
-<div id="overlay" style="display: none">
+<!--<div id="overlay" style="display: none">
     <img src="/static/overlay-loading.svg" alt="Loading...">
-</div>
+</div>-->
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -287,12 +287,18 @@
             }, 100);
         });
 
-        // 이중요청 방지
+        // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
         form.addEventListener('submit', (event) => {
-            delBtn.disabled = true;
-            delBtn.style.background = 'gray';
+            const overlay = document.createElement('div');
+            overlay.id = 'overlay';
+            overlay.style.display = 'none';
+            overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+            document.body.appendChild(overlay);
+
             document.getElementById('overlay').style.display = 'block';
             document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+            delBtn.disabled = true;
+            delBtn.style.background = 'gray';
         });
     }
 
