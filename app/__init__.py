@@ -4,10 +4,11 @@ from flask import Flask, session, send_file, render_template_string, jsonify, re
 from flask_login import LoginManager, current_user
 from .auth import auth, User, users
 from config import load_config
-from .ffmpeg_handle import m_ffmpeg
+from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프린트를 import
 from .main import main
 from .video import video
 from .image import image_bp, environment
+from .function import func
 
 def create_app():
     app = Flask(__name__, static_folder='static')
@@ -19,6 +20,7 @@ def create_app():
     app.register_blueprint(video, url_prefix='/video')
     app.register_blueprint(m_ffmpeg, url_prefix='/ffmpeg')
     app.register_blueprint(image_bp, url_prefix='/image')
+    app.register_blueprint(func, url_prefix='/func')
     app.jinja_env.globals.update(max=max, min=min)
 
     login_manager = LoginManager()

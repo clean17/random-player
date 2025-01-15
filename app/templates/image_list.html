@@ -21,6 +21,7 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+<button id="empty-bin-button" class="floating-button2">Empty</button>
 <div class="container">
     <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
         <input type="hidden" name="page" value="{{ page }}">
@@ -63,6 +64,7 @@
     const nextBtn = document.getElementById('next-image-button'),
           delBtn = document.querySelector('.delete-button'),
           form = document.getElementById('delete-form');
+          emptyBinBtn = document.getElementById('empty-bin-button');
 
     function setNextImage(element) {
         nextImageElement = element.nextElementSibling;
@@ -128,6 +130,7 @@
         });
 
         nextBtn.addEventListener('click', nextImage);
+        emptyBinBtn.addEventListener('click', emptyTrash);
         {#previousBtn.addEventListener('click', previousImage);#}
 
         function getCenterImage() {
@@ -153,6 +156,35 @@
                 if (nextImage && nextImage.classList.contains('image-item')) {
                     nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
                 }
+            }
+        }
+
+        async function emptyTrash() {
+            const userConfirmed = confirm("휴지통을 비우시겠습니까?");
+            if (!userConfirmed) return;
+
+            try {
+                if (!document.getElementById('overlay')) {
+                    const overlay = document.createElement('div');
+                    overlay.id = 'overlay';
+                    overlay.style.display = 'none';
+                    overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+                    document.body.appendChild(overlay);
+                }
+
+                document.getElementById('overlay').style.display = 'block';
+                document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+
+                const response = await fetch("/func/empty-trash-bin", { method: "POST" });
+                const result = await response.json();
+
+                alert(result.message);
+                document.getElementById('overlay').style.display = 'none';
+                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+            } catch (error) {
+                alert("오류가 발생했습니다: " + error);
+                document.getElementById('overlay').style.display = 'none';
+                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
             }
         }
 
@@ -289,11 +321,13 @@
 
         // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
         form.addEventListener('submit', (event) => {
-            const overlay = document.createElement('div');
-            overlay.id = 'overlay';
-            overlay.style.display = 'none';
-            overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
-            document.body.appendChild(overlay);
+            if (!document.getElementById('overlay')) {
+                const overlay = document.createElement('div');
+                overlay.id = 'overlay';
+                overlay.style.display = 'none';
+                overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+                document.body.appendChild(overlay);
+            }
 
             document.getElementById('overlay').style.display = 'block';
             document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
