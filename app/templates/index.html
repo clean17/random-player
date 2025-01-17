@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
 </head>
 <body>
+<!--
+    url_for('blueprint_name.endpoint_function', **params)
+-->
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -17,10 +20,12 @@
 </div>
 <div class="container">
     <h2>Select Menu</h2>
+    {% if current_user.get_id() != config.GUEST_USERNAME %}
+<!--    <a href="{{ url_for('main.home') }}">Back</a>-->
     <form action="{{ url_for('video.select_directory') }}" method="post">
         <div class="select-container">
             <select name="directory" id="directory-select" class="styled-select" onchange="this.form.submit()">
-                <option value="">Select Directory</option>
+                <option value="">Video Directory</option>
                 <option value="1" id="btn1">Directory T</option>
                 <option value="2" id="btn2">Directory A</option>
                 <option value="3" id="btn3">Directory D120</option>
@@ -28,14 +33,17 @@
             </select>
         </div>
     </form>
-    <form action="{{ url_for('video.select_directory') }}" method="post">
+    {% endif %}
+<!--    <form action="{{ url_for('video.select_directory') }}" method="post">-->
         <!--<button type="submit" name="directory" value="1" id="btn1">Directory T</button>
         <button type="submit" name="directory" value="2" id="btn2">Directory A</button>
         <button type="submit" name="directory" value="3" id="btn3">Directory D120</button>
         <button type="submit" name="directory" value="4" id="btn4">Directory R120</button>-->
 <!--        <button type="submit" name="directory" value="0">TEST ts</button>-->
+        {% if current_user.get_id() != config.GUEST_USERNAME %}
         <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button" id="btn5">FFmpeg Batch</button></a>
         <a href="{{ url_for('ffmpeg.status') }}"><button type="button" id="btn6">Check FFmpeg Status</button></a>
+        {% endif %}
         <!--<a href="{{ url_for('image.image_list') }}"><button type="button" id="btn7">View Images</button></a>
         <a href="{{ url_for('image.ref_image_list') }}"><button type="button" id="btn8">REF Images</button></a>
         <a href="/image/stock_grahps/kospi"><button type="button" id="btn9">Stocks_Graph</button></a>-->
@@ -43,15 +51,19 @@
             <div class="select-container">
 <!--                <label for="image-select">Select Image</label>-->
                 <select id="image-select" class="styled-select">
-                    <option value="">Select Image</option>
-                    <option value="{{ url_for('image.image_list') }}">View Images</option>
+                    <option value="">Select Image Dir</option>
                     <option value="{{ url_for('image.trip_image_list') }}">Trip Images</option>
+                    <option value="{{ url_for('image.temp_image_list') }}">Temp Images</option>
+                    {% if current_user.get_id() != config.GUEST_USERNAME %}
+                    <option value="{{ url_for('image.image_list') }}">View Images</option>
                     <option value="{{ url_for('image.ref_image_list') }}">REF Images</option>
                     <option value="/image/stock_grahps/kospi">Stocks Graph</option>
+                    {% endif %}
                 </select>
             </div>
         </form>
-    </form>
+        <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922">Upload Image</button></a>
+<!--    </form>-->
 </div>
 </body>
 <script>
@@ -109,7 +121,7 @@
         }
     }
 
-    document.addEventListener('keydown', keyEvent)
+    // document.addEventListener('keydown', keyEvent)
     document.getElementById('image-select').addEventListener('change', function() {
         var selectedValue = this.value;
         if (selectedValue) {
