@@ -16,7 +16,7 @@ ALLOWED_PATHS = [
     '/image/trip_images',
     '/image/temp_images',
     '/image/images/',
-    '/main/',
+    # '/main/',
     '/upload/',
     '/upload',
 ]
@@ -26,7 +26,7 @@ def create_app():
     app.config.update(load_config())
     app.secret_key = app.config['SECRET_KEY']
 
-    app.register_blueprint(main, url_prefix='/main')
+    app.register_blueprint(main, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/auth')
     app.register_blueprint(video, url_prefix='/video')
     app.register_blueprint(m_ffmpeg, url_prefix='/ffmpeg')
@@ -51,6 +51,9 @@ def create_app():
     @app.before_request
     def restrict_endpoints():
         if request.path == '/auth/logout':
+            return
+
+        if request.path == '/':
             return
 
         if request.path.startswith('/static'):

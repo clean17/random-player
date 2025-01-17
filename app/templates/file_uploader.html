@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uppy Upload</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
+    <link href="https://releases.transloadit.com/uppy/v4.12.2/uppy.min.css" rel="stylesheet">
+    <script src="https://releases.transloadit.com/uppy/v4.12.2/uppy.min.js"></script>
+    <style>
+        .uppy-Dashboard-inner {
+            background-color: #f8f8f8;
+        }
+    </style>
+</head>
+<body>
+<div class="top-bar">
+    <div class="logout">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        {% endif %}
+    </div>
+    <div class="back">
+        <a href="{{ url_for('main.home') }}">Back</a>
+    </div>
+</div>
+<div class="container">
+    <h2>Upload File</h2>
+    <!--    <form action="{{ url_for('ffmpeg.run_batch') }}" method="post">-->
+    <!--        <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">-->
+    <!--        <input type="text" id="content" name="content" placeholder="Enter Content" class="input-size" autocomplete="off">-->
+    <div id="uppy-dashboard" style="background-color: white"></div>
+    <!--        <button type="submit" class="input-button-size">Upload File</button>-->
+    <!--    </form>-->
+</div>
+<script>
+    const screenHeight = window.innerHeight;
+    // 최신 Uppy 초기화 방식
+    const uppy = new Uppy.Uppy()
+        .use(Uppy.Dashboard, {
+            target: '#uppy-dashboard',
+            inline: true,
+            // width: 600,
+            height: screenHeight-300,
+            showProgressDetails: true,
+        })
+        .use(Uppy.Webcam, {
+            modes: ['video-audio', 'video-only', 'audio-only', 'picture'], // 사용할 모드 지정
+            countdown: false, // 사진 촬영 전에 카운트다운 비활성화
+            mirror: true, // 미러링 활성화
+        })
+        /*.use(Uppy.GoogleDrive, {
+            companionUrl: 'https://companion.uppy.io', // Companion 서버 URL
+        })
+        .use(Uppy.GooglePhotos, {
+            companionUrl: 'https://companion.uppy.io', // Companion 서버 URL
+        })*/
+        .use(Uppy.XHRUpload, {
+            endpoint: '/upload',
+            fieldName: 'files[]',
+            bundle: true,
+        });
+
+    uppy.on('complete', (result) => {
+        console.log('Upload complete! Files:', result.successful);
+        // alert('Upload complete!');
+    });
+</script>
+</body>
+</html>
