@@ -16,6 +16,8 @@ ALLOWED_PATHS = [
     '/image/trip_images',
     '/image/temp_images',
     '/image/images/',
+    # '/image/images',
+    '/image/move_image/',
     # '/main/',
     '/upload/',
     '/upload',
@@ -71,7 +73,7 @@ def create_app():
             #     return redirect(url_for('auth.logout'))
                 # return jsonify({"error": "Forbidden"}), 403
 
-            print(request.path)
+            # print('request.path', request.path)
             if not any(fnmatch.fnmatch(request.path, pattern) for pattern in ALLOWED_PATHS):
                 return redirect(url_for('auth.logout'))
 

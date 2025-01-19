@@ -2,7 +2,7 @@
 import os
 import re
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, send_from_directory, abort
-from flask_login import login_required
+from flask_login import login_required, current_user
 from send2trash import send2trash
 from jinja2 import Environment
 from config import settings
@@ -17,14 +17,13 @@ shuffled_images = None
 
 # 설정
 IMAGE_DIR = settings['IMAGE_DIR']
-# IMAGE_DIR = os.path.join(os.getcwd(), 'images')
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
+TEMP_UPLOAD_DIR = settings['TEMP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 KOSDAQ_DIR = settings['KOSDAQ_DIR']
 SP500_DIR = settings['SP500_DIR']
-TEMP_UPLOAD_DIR = 'E:\\merci_server_file_dir'
 
 # 시장 디렉터리 매핑
 DIRECTORY_MAP = {
@@ -107,46 +106,32 @@ def get_stock_graphs(dir, start, count):
 @image_bp.route('/images', methods=['GET'])
 @login_required
 def image_list():
+    dir = request.args.get('dir')
     page = int(request.args.get('page', 1))
     start = (page - 1) * limit_page_num
-    images = get_images(start, limit_page_num, IMAGE_DIR)
-    total_images = len(os.listdir(IMAGE_DIR))
+    images = get_images(start, limit_page_num, dir)
+    total_images = len(os.listdir(dir))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=IMAGE_DIR)
+    if current_user.username == settings['GUEST_USERNAME']:
+        template_html = 'trip_image_list.html'
+    else:
+        template_html = 'image_list.html'
+
+    return render_template(template_html, images=images, page=page, total_pages=total_pages, total_images=total_images, dir=dir)
 
 @image_bp.route('/trip_images', methods=['GET'])
 @login_required
 def trip_image_list():
+    dir = request.args.get('dir')
     page = int(request.args.get('page', 1))
     start = (page - 1) * limit_page_num
-    images = get_images(start, limit_page_num, TRIP_IMAGE_DIR)
-    total_images = len(os.listdir(TRIP_IMAGE_DIR))
+    images = get_images(start, limit_page_num, dir)
+    total_images = len(os.listdir(dir))
     total_pages = (total_images + limit_page_num-1) // limit_page_num
 
-    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=TRIP_IMAGE_DIR)
+    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=dir)
 
-@image_bp.route('/temp_images', methods=['GET'])
-@login_required
-def temp_image_list():
-    page = int(request.args.get('page', 1))
-    start = (page - 1) * limit_page_num
-    images = get_images(start, limit_page_num, TEMP_UPLOAD_DIR)
-    total_images = len(os.listdir(TEMP_UPLOAD_DIR))
-    total_pages = (total_images + limit_page_num-1) // limit_page_num
-
-    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=TEMP_UPLOAD_DIR)
-
-@image_bp.route('/ref_images', methods=['GET'])
-@login_required
-def ref_image_list():
-    page = int(request.args.get('page', 1))
-    start = (page - 1) * limit_page_num
-    images = get_ref_images(start, limit_page_num)
-    total_images = len(os.listdir(REF_IMAGE_DIR))
-    total_pages = (total_images + limit_page_num-1) // limit_page_num
-
-    return render_template('ref_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=REF_IMAGE_DIR)
 
 @image_bp.route('/move_image/<imagepath>/<filename>', methods=['POST'])
 @login_required

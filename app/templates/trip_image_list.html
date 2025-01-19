@@ -28,7 +28,8 @@
                 <img class="thumbnail"
                      src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
                      data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
-                     alt="{{ image }}" onclick="moveImage('{{ image }}', {{ loop.index }})" data-index="{{ loop.index }}">
+                     alt="{{ image }}"
+                     data-index="{{ loop.index }}">
                 <input type="hidden" name="images[]" value="{{ image }}">
             </div>
             {% endfor %}
@@ -38,15 +39,15 @@
         </div>
         <div class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('image.trip_image_list', page=1) }}">&laquo;</a>
-            <a href="{{ url_for('image.trip_image_list', page=page-1) }}">&lt;</a>
+            <a href="{{ url_for('image.trip_image_list', page=1, dir=dir) }}">&laquo;</a>
+            <a href="{{ url_for('image.trip_image_list', page=page-1, dir=dir) }}">&lt;</a>
             {% endif %}
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-            <a href="{{ url_for('image.trip_image_list', page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.trip_image_list', page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
             {% if page < total_pages %}
-            <a href="{{ url_for('image.trip_image_list', page=page+1) }}">&gt;</a>
-            <a href="{{ url_for('image.trip_image_list', page=total_pages) }}">&raquo;</a>
+            <a href="{{ url_for('image.trip_image_list', page=page+1, dir=dir) }}">&gt;</a>
+            <a href="{{ url_for('image.trip_image_list', page=total_pages, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>
         {% if current_user.get_id() != config.GUEST_USERNAME %}
