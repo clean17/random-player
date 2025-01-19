@@ -1,5 +1,6 @@
 from flask import Blueprint, Flask, render_template, jsonify
 import ctypes
+from flask_login import login_required
 
 func = Blueprint('func', __name__)
 
@@ -64,6 +65,7 @@ def empty_recycle_bin():
         return {"status": "error", "message": f"예기치 않은 오류가 발생했습니다: {e}"}
 
 @func.route('/empty-trash-bin', methods=['POST'])
+@login_required
 def handle_empty_recycle_bin():
     """휴지통 비우기 요청 처리"""
     result = empty_recycle_bin()
