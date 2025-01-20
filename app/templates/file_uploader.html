@@ -62,6 +62,19 @@
             bundle: true,
         });
 
+    uppy.setOptions({
+        /*restrictions: {
+            maxNumberOfFiles: maxNumberOfFiles,
+            maxFileSize: maxFileSize,
+        },
+        i18n: {
+            strings: {
+                youCanOnlyUploadX: `You can only upload up to ${maxNumberOfFiles} files.`,
+                exceedsSize: `This file exceeds the maximum size of ${maxFileSize / (1024 * 1024)} MB.`,
+            }
+        }*/
+    });
+
     uppy.on('complete', (result) => {
         console.log('Upload complete! Files:', result.successful);
         // alert('Upload complete!');

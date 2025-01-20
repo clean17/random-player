@@ -1,6 +1,9 @@
-from flask import Blueprint, Flask, render_template, jsonify
+from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort
 import ctypes
 from flask_login import login_required
+import zipfile
+import os
+import io
 
 func = Blueprint('func', __name__)
 
@@ -70,3 +73,39 @@ def handle_empty_recycle_bin():
     """휴지통 비우기 요청 처리"""
     result = empty_recycle_bin()
     return jsonify(result)
+
+@func.route('/download-zip', methods=['GET'])
+def download_zip():
+    try:
+        target_directory = request.args.get('dir')
+
+        if not target_directory:
+            return jsonify({"error": "Directory path not provided"}), 400
+
+        if not os.path.exists(target_directory) or not os.path.isdir(target_directory):
+            return jsonify({"error": "Invalid or non-existent directory path"}), 400
+
+        # ZIP 파일 이름 설정
+        zip_filename = "files.zip"
+
+        # 메모리에 ZIP 파일 생성
+        zip_stream = io.BytesIO()
+        with zipfile.ZipFile(zip_stream, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(target_directory):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, target_directory)  # 상대 경로로 추가
+                    zipf.write(file_path, arcname)
+
+        # 스트림의 시작 위치로 이동
+        zip_stream.seek(0)
+
+        # 클라이언트에게 ZIP 파일 반환
+        return send_file(
+            zip_stream,
+            as_attachment=True,
+            download_name=zip_filename,
+            mimetype='application/zip'
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
