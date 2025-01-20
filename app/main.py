@@ -9,7 +9,7 @@ IMAGE_DIR = settings['IMAGE_DIR']
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
-TEMP_UPLOAD_DIR = settings['TEMP_IMAGE_DIR']
+TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 KOSDAQ_DIR = settings['KOSDAQ_DIR']
 SP500_DIR = settings['SP500_DIR']
@@ -22,4 +22,4 @@ def home():
                            , IMAGE_DIR=IMAGE_DIR
                            , REF_IMAGE_DIR=REF_IMAGE_DIR
                            , TRIP_IMAGE_DIR=TRIP_IMAGE_DIR
-                           , TEMP_UPLOAD_DIR=TEMP_UPLOAD_DIR)
+                           , TEMP_IMAGE_DIR=TEMP_IMAGE_DIR)
