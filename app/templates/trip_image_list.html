@@ -18,6 +18,7 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+<!--<button id="download-zip-btn" class="floating-button2">Zip</button>-->
 <div class="container">
     <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
         <input type="hidden" name="page" value="{{ page }}">
@@ -64,6 +65,7 @@
     let nextImageElement = null;
     let loading_size = 8;
     const nextBtn = document.getElementById('next-image-button');
+    const dir = "{{ dir }}";
 
     function setNextImage(element) {
         nextImageElement = element.nextElementSibling;
@@ -85,6 +87,23 @@
         return (window.innerHeight + window.scrollY) >= document.body.scrollHeight;
     }
 
+    let pressTimer;
+    const longPressDuration = 1000;
+
+    const startPress = (event) => {
+        // event.preventDefault();
+
+        pressTimer = setTimeout(() => {
+            // 파일 삭제
+            if (confirm('Are you sure ?')) {
+                moveImage(event)
+            }
+        }, longPressDuration);
+    };
+
+    const cancelPress = () => {
+        clearTimeout(pressTimer);
+    };
 
     function initPage() {
         // 전체 이미지 모두 로딩
@@ -99,6 +118,16 @@
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             img.addEventListener('click', () => setNextImage(item));
+
+            // 마우스 이벤트
+            item.addEventListener('mousedown', startPress);
+            item.addEventListener('mouseup', cancelPress);
+            item.addEventListener('mouseleave', cancelPress);
+
+            // 터치 이벤트
+            item.addEventListener('touchstart', startPress);
+            item.addEventListener('touchend', cancelPress);
+            item.addEventListener('touchcancel', cancelPress);
         });
 
         document.addEventListener('keydown', function(event) {
@@ -289,7 +318,7 @@
         });
     }
 
-    function moveImage(filename, index) {
+    /*function moveImage(filename, index) {
         console.log(filename, index)
         fetch(`/image/move_image/trip_image/${filename}`, { method: 'POST' })
             .then(response => response.json())
@@ -307,7 +336,46 @@
             .catch(error => {
                 console.error('Error:', error);
             });
+    }*/
+
+
+    function getCenterImage() {
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+
+        const element = document.elementFromPoint(centerX, centerY);
+
+        if (element && element.tagName === 'IMG') {
+            return element;
+        }
+
+        return 'No image with alt attribute found at the center of the viewport.';
     }
+
+    function moveImage(event) {
+        const centerImage = getCenterImage();
+        const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
+        // fetch(`/image/move_image/${dir}/${filename}`, { method: 'POST' })
+        fetch(`/image/move_image/temp_image/${filename}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
+                    const nextImageElement = imageElement?.nextElementSibling;
+                    // const imageElement = document.getElementById(`image-${index}`);
+                    if (imageElement) {
+                        imageElement.remove();
+                        if (nextImageElement) {
+                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
