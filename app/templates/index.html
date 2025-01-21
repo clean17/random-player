@@ -41,8 +41,8 @@
         <button type="submit" name="directory" value="4" id="btn4">Directory R120</button>-->
 <!--        <button type="submit" name="directory" value="0">TEST ts</button>-->
         {% if current_user.get_id() != config.GUEST_USERNAME %}
-        <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button" id="btn5">FFmpeg Batch</button></a>
-        <a href="{{ url_for('ffmpeg.status') }}"><button type="button" id="btn6">Check FFmpeg Status</button></a>
+        <a href="{{ url_for('ffmpeg.ffmpeg') }}"><button type="button" id="btn5" class="btn-w100">FFmpeg Batch</button></a>
+        <a href="{{ url_for('ffmpeg.status') }}"><button type="button" id="btn6" class="btn-w100">Check FFmpeg Status</button></a>
         {% endif %}
         <!--<a href="{{ url_for('image.image_list', dir=IMAGE_DIR) }}"><button type="button" id="btn7">View Images</button></a>
         <a href="{{ url_for('image.image_list', dir=REF_IMAGE_DIR) }}"><button type="button" id="btn8">REF Images</button></a>
@@ -62,7 +62,7 @@
                 </select>
             </div>
         </form>
-        <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922">Upload Image</button></a>
+        <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload Image</button></a>
 <!--    </form>-->
 </div>
 </body>

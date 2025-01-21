@@ -91,13 +91,16 @@ body, html {
 
 
 button {
-    width: 100%;
+    /*width: 100%;*/
     border: none;
     border-radius: 5px;
     background-color: #0056b3;
     color: white;
     font-size: 18px;
     cursor: pointer;
+}
+.btn-w100 {
+    width: 100%;
 }
 button:hover {
     background-color: #007BFF;
