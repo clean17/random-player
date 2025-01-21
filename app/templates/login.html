@@ -31,7 +31,9 @@
     <script>
         document.querySelectorAll('input').forEach(input => {
             input.addEventListener('input', () => {
-                document.getElementById('error-messages').innerHTML = '';
+                if (document.getElementById('error-messages')) {
+                    document.getElementById('error-messages').innerHTML = '';
+                }
             });
         });
     </script>

@@ -27,12 +27,12 @@ def video_player(directory):
 @video.route('/videos', methods=['GET'])
 @login_required
 def get_videos():
-    directory = request.args.get('directory')
+    directory = request.args.get('dir')
     video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
     videos = []
     for root, dirs, files in os.walk(video_directory):
         for file in files:
-            if file.endswith(('.mp4', '.avi', '.mkv', 'ts')):
+            if file.endswith(('.mp4', '.avi', '.mkv', 'ts', 'mov')):
                 rel_dir = os.path.relpath(root, video_directory)
                 rel_file = os.path.join(rel_dir, file)
 
@@ -47,14 +47,14 @@ def get_videos():
 @video.route('/video/<path:filename>', methods=['GET'])
 @login_required
 def get_video(filename):
-    directory = request.args.get('directory')
+    directory = request.args.get('dir')
     video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
     return send_file(os.path.join(video_directory, filename))
 
 @video.route('/delete/<path:filename>', methods=['DELETE'])
 @login_required
 def delete_video(filename):
-    directory = request.args.get('directory')
+    directory = request.args.get('dir')
     video_directory = settings.get('VIDEO_DIRECTORY' + directory)  # 딕셔너리 접근 방식으로 수정
     if not video_directory:
         return '', 404
@@ -106,7 +106,7 @@ def generate_ffmpeg_command(input_path, start_time, output_codec='libx264'):
 @video.route('/stream/<path:filename>', methods=['GET'])
 def video_stream(filename):
     print('############### stream ###################')
-    directory = request.args.get('directory')
+    directory = request.args.get('dir')
     video_directory = settings['VIDEO_DIRECTORY' + directory]
     file_path = os.path.join(video_directory, filename)
 

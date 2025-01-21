@@ -60,8 +60,8 @@ function setVideoOptions(vodUrl, videoFileType) {
 }
 
 function makeGetUrl(filename) {
-    const prefixUrl = directory === '0' ? `/video/stream/` : `/video/video/`;
-    return prefixUrl + `${encodeURIComponent(filename)}?directory=${directory}`;
+    const prefixUrl = dir === '0' ? `/video/stream/` : `/video/video/`;
+    return prefixUrl + `${encodeURIComponent(filename)}?dir=${dir}`;
 }
 
 function extractFilename(url) {
@@ -166,12 +166,13 @@ function resetLoop() {
 
 function getVideo() {
     resetLoop();
-    axios.get(`/video/videos?directory=${directory}`)
+    axios.get(`/video/videos?dir=${dir}`)
         .then(response => {
             let videos = response.data;
             if (videos.length > 0) {
                 let randomIndex = Math.floor(Math.random() * videos.length);
                 currentVideo = videos[randomIndex]
+                console.log('currentVideo', currentVideo)
 
                 const previousVideo = previousVideos.slice(-1)[0]
                 if (currentVideo === previousVideo) {
@@ -179,6 +180,7 @@ function getVideo() {
                 }
 
                 const videoUrl = makeGetUrl(currentVideo);
+                console.log('videoUrl', videoUrl)
                 playVideo(videoUrl)
             } else {
                 alert('No videos found');
@@ -300,7 +302,7 @@ function delVideo() {
     if (currentVideo) {
         if (confirm(`Delete \r\n ${currentVideo} ?`)) {
             initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다
-            axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?directory=${directory}`)
+            axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?dir=${dir}`)
                 .then(response => {
                     if (response.status === 204) {
                         // alert(`${currentVideo}`+` is deleted`)
@@ -649,7 +651,7 @@ function adjustVolume(change) {
     showVolumeMessage();
 }
 
-function minusTecSec() {
+function minusTenSec() {
     var event = new KeyboardEvent('keydown', {
         key: 'ArrowLeft',
         code: 'ArrowLeft',
@@ -680,8 +682,8 @@ function addKeyboardControls() {
     document.addEventListener('wheel', wheelEvent)
     delayAudio();
 
-    document.getElementById('minusTenSec').removeEventListener('click', minusTecSec);
-    document.getElementById('minusTenSec').addEventListener('click', minusTecSec);
+    document.getElementById('minusTenSec').removeEventListener('click', minusTenSec);
+    document.getElementById('minusTenSec').addEventListener('click', minusTenSec);
     document.getElementById('plusTenSec').removeEventListener('click', plusTenSec);
     document.getElementById('plusTenSec').addEventListener('click', plusTenSec);
 }
