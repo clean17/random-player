@@ -17,10 +17,11 @@ ALLOWED_PATHS = [
     '/image/temp_images',
     '/image/images/',
     # '/image/images',
-    '/image/move_image/',
-    # '/main/',
+    '/image/move_image*',
     '/upload/',
     '/upload',
+    '/func/download-zip',
+    '/video/temp-video*',
 ]
 
 def create_app():
