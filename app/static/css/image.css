@@ -51,6 +51,7 @@ body {
 
 .thumbnail {
     height: auto;
+    max-height: 100vh;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     width: 100%;
@@ -148,7 +149,7 @@ button.delete-button:hover {
     color: white;
     border: none;
     font-size: 16px;
-    max-width: 80px;
+    max-width: 90px;
     /*height: 50px;*/
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     cursor: pointer;
@@ -201,4 +202,42 @@ button.delete-button:hover {
     transform: translate(-50%, -50%); /* 중심점 기준으로 이동 */
     width: 100px;
     height: 100px;
+}
+
+
+.pagination-buttons {
+    position: fixed;
+    bottom: 10px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 1000;
+}
+
+.pagination-button {
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    opacity: 0.4;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5em;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.pagination-button:hover {
+    background-color: #0056b3
+}
+
+.prev-button {
+    margin-left: 15px;
+}
+
+.next-button {
+    margin-right: 15px;
 }

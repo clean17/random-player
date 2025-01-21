@@ -6,9 +6,9 @@ $ python -m venv venv
 ```bash
 $ source venv/bin/activate 
 
-$ source venv/Scripts/activate  # windows
+$ source venv/Scripts/activate  # windows (git bash)
 
-$ venv\Scripts\activate.bat     # cmd
+$ venv\Scripts\activate.bat     # cmd (windows terminal)
 ```
 
 ### 2-1. push 전 requirements.txt 생성

@@ -22,12 +22,16 @@ button {
 }
 
 
+select {
 
+}
 
 /* Container for the select dropdown */
 .select-container {
     width: 100%;
     margin-bottom: 10px;
+    text-align: center; /* 텍스트를 가운데 정렬 */
+    text-align-last: center; /* 마지막 줄도 가운데 정렬 (크로스 브라우저 호환) */
 }
 
 /* Styled select box */
