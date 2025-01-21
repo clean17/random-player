@@ -51,6 +51,12 @@ def get_video(filename):
     video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
     return send_file(os.path.join(video_directory, filename))
 
+@video.route('/temp-video/<path:filename>', methods=['GET'])
+@login_required
+def get_temp_video(filename):
+    directory = request.args.get('dir')
+    return send_file(os.path.join(directory, filename))
+
 @video.route('/delete/<path:filename>', methods=['DELETE'])
 @login_required
 def delete_video(filename):
