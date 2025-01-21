@@ -31,53 +31,105 @@
     <!--        <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">-->
     <!--        <input type="text" id="content" name="content" placeholder="Enter Content" class="input-size" autocomplete="off">-->
     <div id="uppy-dashboard" style="background-color: white"></div>
+    <button id="start-upload-button" style="margin-top: 10px" class="btn-w100">Start Upload</button>
     <!--        <button type="submit" class="input-button-size">Upload File</button>-->
     <!--    </form>-->
 </div>
 <script>
-    const screenHeight = window.innerHeight;
-    // 최신 Uppy 초기화 방식
-    const uppy = new Uppy.Uppy()
+    const screenHeight = window.innerHeight,
+          uploadBatchSize = 20;
+    let currentBatchIndex = 0;
+
+    const uppy = new Uppy.Uppy({
+        debug: false,
+        autoProceed: false, // 파일 추가 시 자동으로 업로드 진행
+        restrictions: {
+            maxFileSize: 5000000000, // 5GB
+            maxNumberOfFiles: 5000,
+            minNumberOfFiles: 1,
+        },
+    })
         .use(Uppy.Dashboard, {
             target: '#uppy-dashboard',
             inline: true,
             // width: 600,
             height: screenHeight-300,
             showProgressDetails: true,
+            hideUploadButton: true,
+            // note: 'Maximum number of upload files limited: 5000',
         })
         .use(Uppy.Webcam, {
             modes: ['video-audio', 'video-only', 'audio-only', 'picture'], // 사용할 모드 지정
             countdown: false, // 사진 촬영 전에 카운트다운 비활성화
             mirror: true, // 미러링 활성화
         })
-        /*.use(Uppy.GoogleDrive, {
-            companionUrl: 'https://companion.uppy.io', // Companion 서버 URL
-        })
-        .use(Uppy.GooglePhotos, {
-            companionUrl: 'https://companion.uppy.io', // Companion 서버 URL
-        })*/
         .use(Uppy.XHRUpload, {
             endpoint: '/upload',
             fieldName: 'files[]',
             bundle: true,
+            limit: 5, // 한번에 업로드 가능한 파일수량 제한
         });
-
-    uppy.setOptions({
-        /*restrictions: {
-            maxNumberOfFiles: maxNumberOfFiles,
-            maxFileSize: maxFileSize,
-        },
-        i18n: {
-            strings: {
-                youCanOnlyUploadX: `You can only upload up to ${maxNumberOfFiles} files.`,
-                exceedsSize: `This file exceeds the maximum size of ${maxFileSize / (1024 * 1024)} MB.`,
-            }
-        }*/
-    });
+    /*.use(Uppy.Tus, { # 서버가 Tus를 지원해야 한다.. 구현이 필요
+        endpoint: '/upload', // Tus 서버 엔드포인트
+        chunkSize: 5 * 1024 * 1024, // 청크 크기 (5MB)
+        retryDelays: [0, 1000, 3000, 5000], // 재시도 지연 시간
+    })*/
 
     uppy.on('complete', (result) => {
-        console.log('Upload complete! Files:', result.successful);
-        // alert('Upload complete!');
+        document.querySelector('.container h2').textContent = `Upload File`
+    });
+
+    function uploadNextBatch(allFiles) {
+        // 파일이 유효하지 않을 경우 처리
+        if (!Array.isArray(allFiles) || allFiles.length === 0) {
+            console.error('No files to upload or invalid file list');
+            alert('No valid files to upload!');
+            return;
+        }
+
+        const totalBatches = Math.ceil(allFiles.length / uploadBatchSize);
+
+        if (currentBatchIndex >= totalBatches) {
+            console.log('All batches uploaded successfully!');
+            return;
+        }
+
+        // 현재 배치 계산
+        const batchStart = currentBatchIndex * uploadBatchSize;
+        const batchEnd = Math.min(batchStart + uploadBatchSize, allFiles.length);
+        const currentBatch = allFiles.slice(batchStart, batchEnd);
+
+        // console.log(`Uploading batch ${currentBatchIndex + 1} of ${totalBatches}`, currentBatch);
+        document.querySelector('.container h2').textContent = `Upload File [ ${currentBatchIndex + 1} / ${totalBatches} ]`
+
+        // 기존 대기열에서 모든 파일 제거
+        uppy.getFiles().forEach((file) => {
+            uppy.removeFile(file.id);
+        });
+
+        // 현재 배치의 파일 추가
+        currentBatch.forEach((file) => {
+            uppy.addFile(file);
+        });
+
+        // 현재 배치 업로드
+        uppy.upload().then((result) => {
+            console.log(`Batch ${currentBatchIndex + 1} uploaded successfully!`, result);
+            currentBatchIndex++;
+            uploadNextBatch(allFiles); // 다음 배치 업로드
+        }).catch((error) => {
+            console.error('Error uploading batch:', error);
+        });
+    }
+
+    document.getElementById('start-upload-button').addEventListener('click', () => {
+        const allFiles = uppy.getFiles();
+        if (!Array.isArray(allFiles) || allFiles.length === 0) {
+            alert('No files to upload!');
+            return;
+        }
+        currentBatchIndex = 0;
+        uploadNextBatch(allFiles);
     });
 </script>
 </body>

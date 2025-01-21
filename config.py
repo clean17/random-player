@@ -19,6 +19,7 @@ def load_config():
         'REF_IMAGE_DIR': config['directories']['refined_images_directory'],
         'TRIP_IMAGE_DIR': config['directories']['trip_images_directory'],
         'TEMP_IMAGE_DIR': config['directories']['temp_images_directory'],
+        'DEL_TEMP_IMAGE_DIR': config['directories']['del_temp_images_directory'],
         'KOSPI_DIR': config['directories']['kospi_stocks_directory'],
         'KOSDAQ_DIR': config['directories']['kosdaq_stocks_directory'],
         'SP500_DIR': config['directories']['sp500_stocks_directory'],
