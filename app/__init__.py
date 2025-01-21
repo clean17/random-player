@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for
 from flask_login import LoginManager, current_user
 from .auth import auth, User, users
@@ -41,12 +41,29 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
 
+    # 서버 시작 시 호출
     @app.before_request
     def handle_server_restart():
         if 'lockout_time' in session and session['lockout_time']:
-            if datetime.now() >= session['lockout_time']:
-                session.pop('lockout_time', None)
+            lockout_time = session['lockout_time']
+
+            # lockout_time 값이 문자열인지 확인
+            if isinstance(lockout_time, str):
+                # 문자열을 datetime 객체로 변환
+                lockout_time = datetime.fromisoformat(lockout_time)
+            else:
+                # 예상치 못한 데이터 타입이면 세션 초기화
+                session.pop('lockout_time', None) # dict.pop(key[, default]) default: null일경우 기본값
                 session['attempts'] = 0
+                return
+
+            # 현재 시간을 UTC로 설정
+            now = datetime.now(timezone.utc)
+
+            if now >= lockout_time:
+                session.pop('lockout_time', None)  # lockout_time 제거
+                session['attempts'] = 0
+
         if check_server_restarted():
             session.clear()
 
