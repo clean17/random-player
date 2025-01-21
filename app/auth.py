@@ -27,7 +27,7 @@ def login():
     now = datetime.now(timezone.utc)
 
     # 로그인 시도 제한을 초과했을 경우
-    if session['lockout_time']:
+    if 'lockout_time' in session and session['lockout_time']:
         # 문자열을 datetime으로 변환
         lockout_time = datetime.fromisoformat(session['lockout_time'])
         if now < lockout_time:
