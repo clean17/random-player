@@ -14,6 +14,7 @@ from moviepy.editor import VideoFileClip
 from send2trash import send2trash
 from concurrent.futures import ThreadPoolExecutor
 from config import settings
+import zipfile
 
 tasks = []
 
@@ -23,6 +24,7 @@ tasks = []
 # 스케줄리 인스턴스 생성 (논블로킹)
 scheduler = BackgroundScheduler()
 work_directory = settings['WORK_DIRECTORY']
+TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 
 '''
     # 1. multiprocessing는 메모리를 공유하지 않는다 -> class의 필드를 공유하지 않음
@@ -317,12 +319,47 @@ def delete_short_videos():
                     else:
                         print(f"File does not exist: {file_path}. Skipping deletion.")
 
+
+def compress_directory_to_zip():
+    """
+    지정된 디렉토리의 모든 파일을 압축하여 ZIP 파일로 저장합니다.
+    """
+    if not os.path.exists(TEMP_IMAGE_DIR):
+        print(f"Directory does not exist: {TEMP_IMAGE_DIR}")
+        return
+
+    # 압축 파일 이름 생성 (현재 날짜와 시간을 기준으로)
+    # zip_filename = f"compressed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    zip_filename = f"compressed_all_files.zip"
+    zip_filepath = os.path.join(TEMP_IMAGE_DIR, zip_filename)
+
+    try:
+        # 기존 파일이 존재하면 삭제
+        if os.path.exists(zip_filepath):
+            os.remove(zip_filepath)
+            print(f"Existing zip file removed: {zip_filepath}")
+
+        # ZIP 파일 생성
+        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(TEMP_IMAGE_DIR):
+                for file in files:
+                    # 압축 파일 자체는 포함하지 않음
+                    if file == zip_filename:
+                        continue
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, TEMP_IMAGE_DIR)
+                    zipf.write(file_path, arcname)
+        print(f"Directory successfully compressed to: {zip_filepath}")
+    except Exception as e:
+        print(f"Error while compressing directory: {e}")
+
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
 
 # 스케줄러에 작업 추가, max_instances 기본 1
-scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=6, coalesce=True)
-scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
-scheduler.add_job(delete_short_videos, 'interval', minutes=10)
+# scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=6, coalesce=True)
+# scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
+# scheduler.add_job(delete_short_videos, 'interval', minutes=10)
+scheduler.add_job(compress_directory_to_zip, 'interval', minutes=60)
 
 scheduler.start()
