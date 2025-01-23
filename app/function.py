@@ -4,6 +4,8 @@ from flask_login import login_required
 import zipfile
 import os
 import io
+from app.image import get_images
+from app.image import LIMIT_PAGE_NUM
 
 func = Blueprint('func', __name__)
 
@@ -78,12 +80,20 @@ def handle_empty_recycle_bin():
 def download_zip():
     try:
         target_directory = request.args.get('dir')
+        # print('target_directory', target_directory)
+        page = int(request.args.get('page', 1))
 
         if not target_directory:
-            return jsonify({"error": "Directory path not provided"}), 400
+            return jsonify({"error": "Directo`ry path not provided"}), 400
 
         if not os.path.exists(target_directory) or not os.path.isdir(target_directory):
             return jsonify({"error": "Invalid or non-existent directory path"}), 400
+
+        start = (page - 1) * LIMIT_PAGE_NUM
+        images = get_images(start, LIMIT_PAGE_NUM, target_directory)
+
+        if not images:
+            return jsonify({"error": "No files found for the specified page"}), 404
 
         # ZIP 파일 이름 설정
         zip_filename = "files.zip"
@@ -91,11 +101,14 @@ def download_zip():
         # 메모리에 ZIP 파일 생성
         zip_stream = io.BytesIO()
         with zipfile.ZipFile(zip_stream, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(target_directory):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, target_directory)  # 상대 경로로 추가
-                    zipf.write(file_path, arcname)
+            # for root, dirs, files in os.walk(target_directory): # 해당 디렉토리 모든 파일 압축
+            #     for file in files:
+            #         file_path = os.path.join(root, file)
+            #         arcname = os.path.relpath(file_path, target_directory)  # 상대 경로로 추가
+            #         zipf.write(file_path, arcname)
+            for image in images: # 선택된 배열만 압축
+                file_path = os.path.join(target_directory, image)
+                zipf.write(file_path, image)  # 파일 이름만 추가 (상대 경로)
 
         # 스트림의 시작 위치로 이동
         zip_stream.seek(0)
