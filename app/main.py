@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, session
+from flask import Blueprint, render_template, session, Flask, send_from_directory
 from flask_login import login_required
 from config import settings
 
@@ -23,3 +23,8 @@ def home():
                            , REF_IMAGE_DIR=REF_IMAGE_DIR
                            , TRIP_IMAGE_DIR=TRIP_IMAGE_DIR
                            , TEMP_IMAGE_DIR=TEMP_IMAGE_DIR)
+
+# Flask에서 favicon 설정 (동작확인은 안했음) 주석처리하고 nginx에서 /static/ 연결함
+# @main.route('/favicon.ico')
+# def favicon():
+#     return send_from_directory('static', 'favicon.ico')
