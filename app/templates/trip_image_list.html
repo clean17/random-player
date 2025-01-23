@@ -18,20 +18,48 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
-<!--<button id="download-zip-btn" class="floating-button2">Zip</button>-->
+<button id="download-zip-btn" class="floating-button2">Download Page</button>
+<div class="pagination-buttons">
+    <button class="pagination-button prev-button" id="prevButton">&lt;</button>
+    <button class="pagination-button next-button" id="nextButton">&gt;</button>
+</div>
 <div class="container">
     <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
-            {% for image in images %}
+            <!--{% for image in images %}
             <div class="image-item" id="image-{{ loop.index }}">
-                <!-- 처음 5개 이미지만 실제 이미지 로드 -->
+                &lt;!&ndash; 처음 5개 이미지만 실제 이미지 로드 &ndash;&gt;
                 <img class="thumbnail"
                      src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
                      data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
                      alt="{{ image }}"
                      data-index="{{ loop.index }}">
                 <input type="hidden" name="images[]" value="{{ image }}">
+            </div>
+            0
+            {% endfor %}-->
+            {% for image in images %}
+            <div class="image-item" id="image-{{ loop.index }}">
+                {% set video_extensions = ['mp4', 'mov', 'mkv', 'avi'] %}
+                {% set file_extension = image.split('.')[-1].lower() %}
+
+                <input type="hidden" name="images[]" value="{{ image }}">
+
+                {% if file_extension in video_extensions %}
+                <!-- 비디오 파일인 경우 -->
+                <video class="thumbnail" controls preload="auto">
+                    <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}"
+                            type="video/mp4">
+                </video>
+                {% else %}
+                <!-- 이미지 파일인 경우 -->
+                <img class="thumbnail"
+                     src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                     data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
+                     alt="{{ image }}"
+                     data-index="{{ loop.index }}">
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -62,10 +90,13 @@
 <button id="next-image-button" class="floating-button">Next Image</button>
 
 <script>
-    let nextImageElement = null;
-    let loading_size = 8;
-    const nextBtn = document.getElementById('next-image-button');
-    const dir = "{{ dir }}";
+    let nextImageElement = null,
+        loading_size = 8;
+
+    const nextBtn = document.getElementById('next-image-button'),
+          dir = "{{ dir }}",
+          page = "{{ page }}";
+
 
     function setNextImage(element) {
         nextImageElement = element.nextElementSibling;
@@ -376,6 +407,70 @@
             });
     }
 
+    document.getElementById("prevButton").addEventListener("click", () => {
+        if (page > 1) {
+            const previousBtn = document.querySelector('.pagination').children[1]
+            previousBtn.click();
+        }
+    });
+
+    document.getElementById("nextButton").addEventListener("click", () => {
+        const btnCount = document.querySelector('.pagination').childElementCount
+        const nextBtn = document.querySelector('.pagination').children[btnCount - 2];
+        if (nextBtn.textContent === '>') {
+            nextBtn.click();
+        }
+    });
+
+    document.getElementById('download-zip-btn').addEventListener('click', function () {
+        console.log(dir)
+
+        const today = new Date();
+        const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+
+        if (!document.getElementById('overlay')) {
+            const overlay = document.createElement('div');
+            overlay.id = 'overlay';
+            overlay.style.display = 'none';
+            overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+            document.body.appendChild(overlay);
+        }
+
+        document.getElementById('overlay').style.display = 'block';
+        document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+
+        // ZIP 파일 요청
+        // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
+        fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}&page=${page}`, {
+            method: 'GET'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.status);
+                }
+
+                // 다운로드 처리
+                return response.blob();
+            })
+            .then(blob => {
+                document.getElementById('overlay').style.display = 'none';
+                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${formattedDate}_page-${page}_files.zip`; // 파일 이름: 오늘 날짜 + _files.zip
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                document.getElementById('overlay').style.display = 'none';
+                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+                alert('다운로드 중 문제가 발생했습니다: ' + error.message);
+            });
+    })
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
