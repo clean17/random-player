@@ -18,7 +18,14 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
-<button id="download-zip-btn" class="floating-button2">Download Page</button>
+<button id="download-zip-btn" class="floating-button2">
+    <span class="icon">📂</span> Download
+</button>
+<ul id="dropdown-menu" class="dropdown-menu">
+    <li onclick="downloadThisPage()">Download This Page</li>
+    <li onclick="downloadAllFiles()">Download All Files</li>
+    <!-- <li onclick="showMessage()">Another Action</li> -->
+</ul>
 <div class="pagination-buttons">
     <button class="pagination-button prev-button" id="prevButton">&lt;</button>
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
@@ -91,18 +98,23 @@
 
 <script>
     let nextImageElement = null,
-        loading_size = 8;
+        loading_size = 8,
+        pressTimer;
 
     const nextBtn = document.getElementById('next-image-button'),
-          dir = "{{ dir }}",
-          page = "{{ page }}";
+        dir = "{{ dir }}",
+        page = "{{ page }}",
+        zipBtn = document.getElementById('download-zip-btn'),
+        dropdownMenu = document.getElementById('dropdown-menu'),
+        longPressDuration = 1000;
 
+    /*******************************************************************/
 
     function setNextImage(element) {
         nextImageElement = element.nextElementSibling;
     }
 
-    function scrollToBottom() {
+    /*function scrollToBottom() {
         let scrollInterval = setInterval(() => {
             window.scrollTo({
                 top: document.body.scrollHeight,
@@ -116,11 +128,10 @@
 
     function isScrolledToBottom() {
         return (window.innerHeight + window.scrollY) >= document.body.scrollHeight;
-    }
+    }*/
 
-    let pressTimer;
-    const longPressDuration = 1000;
 
+    // 영역을 몇 초간 클릭하고 있을 때 호출시킬 함수
     const startPress = (event) => {
         // event.preventDefault();
 
@@ -136,14 +147,142 @@
         clearTimeout(pressTimer);
     };
 
-    function initPage() {
-        // 전체 이미지 모두 로딩
-        {#const images = document.querySelectorAll('.thumbnail');
-            images.forEach(img => {
-                const tempSrc = img.getAttribute('data-src');
-                img.src = tempSrc;
-            });#}
+    /*function moveImage(filename, index) {
+        console.log(filename, index)
+        fetch(`/image/move_image/trip_image/${filename}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const imageElement = document.getElementById(`image-${index}`);
+                    if (imageElement) {
+                        imageElement.remove();
+                        if (nextImageElement) {
+                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }*/
 
+    // 화면 중심 좌표의 Element를 반환
+    function findCenterImageByCoordinates() {
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+
+        // elementFromPoint 좌표 위치의 요소를 가져온다
+        const element = document.elementFromPoint(centerX, centerY);
+
+        if (element && element.tagName === 'IMG') {
+            return element;
+        }
+
+        return 'No image with alt attribute found at the center of the viewport.';
+    }
+
+    function moveImage(event) {
+        const centerImage = findCenterImageByCoordinates();
+        const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
+        // fetch(`/image/move_image/${dir}/${filename}`, { method: 'POST' })
+        fetch(`/image/move_image/temp_image/${filename}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
+                    const nextImageElement = imageElement?.nextElementSibling;
+                    // const imageElement = document.getElementById(`image-${index}`);
+                    if (imageElement) {
+                        imageElement.remove();
+                        if (nextImageElement) {
+                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+
+    function downloadThisPage() {
+        console.log(dir)
+
+        const today = new Date();
+        const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+
+        if (!document.getElementById('overlay')) {
+            const overlay = document.createElement('div');
+            overlay.id = 'overlay';
+            overlay.style.display = 'none';
+            overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+            document.body.appendChild(overlay);
+        }
+
+        document.getElementById('overlay').style.display = 'block';
+        document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+
+        // ZIP 파일 요청
+        // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
+        fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}`, {
+            method: 'GET'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.status);
+                }
+
+                // 다운로드 처리
+                return response.blob();
+            })
+            .then(blob => {
+                document.getElementById('overlay').style.display = 'none';
+                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${formattedDate}_page-${page}_files.zip`; // 파일 이름: 오늘 날짜 + _files.zip
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                document.getElementById('overlay').style.display = 'none';
+                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+                alert('다운로드 중 문제가 발생했습니다: ' + error.message);
+            });
+
+        dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function downloadAllFiles() {
+        const today = new Date();
+        const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+
+        const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}`;
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${formattedDate}_all_files.zip`; // 파일 이름: 오늘 날짜 + _files.zip
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+
+    // Throttling 적용 - 고의로 성능을 낮춤, 주어진 시간 간격 내에 특정 함수가 최대 한 번만 실행되도록 제한하는 기술
+    let throttleTimer;
+    const throttle = (callback, time) => {
+        if (throttleTimer) return;
+        throttleTimer = setTimeout(() => {
+            callback();
+            throttleTimer = null;
+        }, time);
+    };
+
+    function initPage() {
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
         const imageItems = document.querySelectorAll('.image-item');
         imageItems.forEach(item => {
@@ -191,7 +330,8 @@
         nextBtn.addEventListener('click', nextImage);
         {#previousBtn.addEventListener('click', previousImage);#}
 
-        function getCenterImage() {
+        // 현재 화면의 세로 중심에 가장 가까운 이미지 요소를 찾는 함수
+        function findCenterImageElement() {
             const centerY = window.innerHeight / 2;
             let closestImage = null;
             let minDistance = Infinity;
@@ -207,8 +347,24 @@
             return closestImage;
         }
 
+        // 화면 중앙의 이미지 인덱스 찾기
+        function getCenterImageIndex() {
+            let centerPosition = window.innerHeight / 2 + window.scrollY;
+            let closestIndex = 0;
+            let minDistance = Infinity;
+            lazyImages.forEach((img, index) => {
+                let imgPosition = img.getBoundingClientRect().top + window.scrollY + img.getBoundingClientRect().height / 2;
+                let distance = Math.abs(centerPosition - imgPosition);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestIndex = index;
+                }
+            });
+            return closestIndex;
+        }
+
         function nextImage() {
-            const centerImage = getCenterImage();
+            const centerImage = findCenterImageElement();
             if (centerImage) {
                 const nextImage = centerImage.nextElementSibling;
                 if (nextImage && nextImage.classList.contains('image-item')) {
@@ -218,7 +374,7 @@
         }
 
         function previousImage() {
-            const centerImage = getCenterImage();
+            const centerImage = findCenterImageElement();
             if (centerImage) {
                 const previousImage = centerImage.previousElementSibling;
                 if (previousImage && previousImage.classList.contains('image-item')) {
@@ -228,7 +384,7 @@
         }
 
         function clickCenterImage() {
-            const centerImage = getCenterImage();
+            const centerImage = findCenterImageElement();
             if (centerImage) {
                 const filename = centerImage.querySelector('img').getAttribute('alt');
                 const index = centerImage.querySelector('img').getAttribute('data-index');
@@ -251,22 +407,6 @@
             }
         }
 
-        // 화면 중앙의 이미지 인덱스 찾기
-        function findCenterImage() {
-            let centerPosition = window.innerHeight / 2 + window.scrollY;
-            let closestIndex = 0;
-            let minDistance = Infinity;
-            lazyImages.forEach((img, index) => {
-                let imgPosition = img.getBoundingClientRect().top + window.scrollY + img.getBoundingClientRect().height / 2;
-                let distance = Math.abs(centerPosition - imgPosition);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestIndex = index;
-                }
-            });
-            return closestIndex;
-        }
-
         // 주어진 인덱스 기준으로 위 아래 이미지 로드
         function loadImagesAroundIndex(index) {
             let minIndex = Math.max(index - loading_size, 0);
@@ -281,7 +421,7 @@
         // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
         function initialImageLoad() {
             if (!initialLoadComplete) {
-                let centerIndex = findCenterImage();
+                let centerIndex = getCenterImageIndex();
                 loadImagesAroundIndex(centerIndex);
                 initialLoadComplete = true;
             }
@@ -290,18 +430,9 @@
         // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
         window.onload = initialImageLoad;
 
-        // Throttling 적용
-        let throttleTimer;
-        const throttle = (callback, time) => {
-            if (throttleTimer) return;
-            throttleTimer = setTimeout(() => {
-                callback();
-                throttleTimer = null;
-            }, time);
-        };
 
         /*****************************************************************/
-        // debounce
+        // debounce - 동일한 함수 호출이라면 마지막으로 호출한지 지정한 시간이 지났을 경우에만 실행, 중복으로 호출하면 시간은 계속 리셋
         let lastScrollTop = 0;
         let lastScrollTime = Date.now();
         const SCROLL_DELAY = 400;
@@ -326,7 +457,7 @@
             }*/
 
             if (scrollSpeed < SCROLL_THRESHOLD) {
-                let centerImageIndex = findCenterImage();
+                let centerImageIndex = getCenterImageIndex();
                 loadImagesAroundIndex(centerImageIndex);
             }
 
@@ -347,130 +478,52 @@
                 loadImagesAroundIndex(centerImageIndex);*/
             }, 100);
         });
-    }
 
-    /*function moveImage(filename, index) {
-        console.log(filename, index)
-        fetch(`/image/move_image/trip_image/${filename}`, { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    const imageElement = document.getElementById(`image-${index}`);
-                    if (imageElement) {
-                        imageElement.remove();
-                        if (nextImageElement) {
-                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    }*/
+        document.getElementById("prevButton").addEventListener("click", () => {
+            if (page > 1) {
+                const previousBtn = document.querySelector('.pagination').children[1]
+                previousBtn.click();
+            }
+        });
 
+        document.getElementById("nextButton").addEventListener("click", () => {
+            const btnCount = document.querySelector('.pagination').childElementCount
+            const nextBtn = document.querySelector('.pagination').children[btnCount - 2];
+            if (nextBtn.textContent === '>') {
+                nextBtn.click();
+            }
+        });
 
-    function getCenterImage() {
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
+        zipBtn.addEventListener('click', () => {
+            const rect = zipBtn.getBoundingClientRect();
+            dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
 
-        const element = document.elementFromPoint(centerX, centerY);
+            if (dropdownMenu.style.display === 'block') {
+                // 기본 위치 설정 (버튼 아래에 표시)
+                let dropdownLeft = rect.left + window.scrollX;
+                let dropdownTop = rect.bottom + window.scrollY;
 
-        if (element && element.tagName === 'IMG') {
-            return element;
-        }
-
-        return 'No image with alt attribute found at the center of the viewport.';
-    }
-
-    function moveImage(event) {
-        const centerImage = getCenterImage();
-        const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
-        // fetch(`/image/move_image/${dir}/${filename}`, { method: 'POST' })
-        fetch(`/image/move_image/temp_image/${filename}`, { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
-                    const nextImageElement = imageElement?.nextElementSibling;
-                    // const imageElement = document.getElementById(`image-${index}`);
-                    if (imageElement) {
-                        imageElement.remove();
-                        if (nextImageElement) {
-                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    }
-
-    document.getElementById("prevButton").addEventListener("click", () => {
-        if (page > 1) {
-            const previousBtn = document.querySelector('.pagination').children[1]
-            previousBtn.click();
-        }
-    });
-
-    document.getElementById("nextButton").addEventListener("click", () => {
-        const btnCount = document.querySelector('.pagination').childElementCount
-        const nextBtn = document.querySelector('.pagination').children[btnCount - 2];
-        if (nextBtn.textContent === '>') {
-            nextBtn.click();
-        }
-    });
-
-    document.getElementById('download-zip-btn').addEventListener('click', function () {
-        console.log(dir)
-
-        const today = new Date();
-        const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
-
-        if (!document.getElementById('overlay')) {
-            const overlay = document.createElement('div');
-            overlay.id = 'overlay';
-            overlay.style.display = 'none';
-            overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
-            document.body.appendChild(overlay);
-        }
-
-        document.getElementById('overlay').style.display = 'block';
-        document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
-
-        // ZIP 파일 요청
-        // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
-        fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}&page=${page}`, {
-            method: 'GET'
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(response.status);
+                // 화면 너비를 기준으로 드롭다운 메뉴가 우측 화면 밖으로 나가지 않도록 조정
+                const viewportWidth = window.innerWidth; // 현재 화면 너비
+                const dropdownWidth = dropdownMenu.offsetWidth; // 드롭다운 메뉴의 너비
+                if (dropdownLeft + dropdownWidth > viewportWidth) {
+                    dropdownLeft = viewportWidth - dropdownWidth - 10;
                 }
 
-                // 다운로드 처리
-                return response.blob();
-            })
-            .then(blob => {
-                document.getElementById('overlay').style.display = 'none';
-                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+                // 위치 설정
+                dropdownMenu.style.left = `${dropdownLeft}px`;
+                dropdownMenu.style.top = `${dropdownTop}px`;
+            }
+        });
 
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = `${formattedDate}_page-${page}_files.zip`; // 파일 이름: 오늘 날짜 + _files.zip
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-            })
-            .catch(error => {
-                document.getElementById('overlay').style.display = 'none';
-                document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
-                alert('다운로드 중 문제가 발생했습니다: ' + error.message);
-            });
-    })
+        // 외부 클릭 시 드롭다운 숨기기
+        document.addEventListener('click', (event) => {
+            if (!zipBtn.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.style.display = 'none';
+            }
+        });
+    }
+
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
