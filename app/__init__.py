@@ -20,7 +20,7 @@ ALLOWED_PATHS = [
     '/image/move_image*',
     '/upload/',
     '/upload',
-    '/func/download-zip',
+    '/func/download-zip*',
     '/video/temp-video*',
 ]
 

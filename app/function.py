@@ -1,4 +1,4 @@
-from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort
+from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort, send_from_directory
 import ctypes
 from flask_login import login_required
 import zipfile
@@ -6,6 +6,7 @@ import os
 import io
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
+from .task_manager import compress_directory_to_zip
 
 func = Blueprint('func', __name__)
 
@@ -76,8 +77,9 @@ def handle_empty_recycle_bin():
     result = empty_recycle_bin()
     return jsonify(result)
 
-@func.route('/download-zip', methods=['GET'])
-def download_zip():
+@func.route('/download-zip/page', methods=['GET'])
+@login_required
+def download_page_zip():
     try:
         target_directory = request.args.get('dir')
         # print('target_directory', target_directory)
@@ -122,3 +124,25 @@ def download_zip():
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@func.route('/download-zip/all', methods=['GET'])
+@login_required
+def download_all_zip():
+    directory = request.args.get('dir')
+
+    if not directory:
+        return jsonify({"error": "Missing 'dir' parameter"}), 400
+
+    # zip_filename = f"compressed_{os.path.basename(directory)}.zip"
+    zip_filename = f"compressed_all_files.zip"
+    zip_filepath = os.path.join(directory, zip_filename)
+
+    # ZIP 파일이 없으면 생성
+    if not os.path.exists(zip_filepath):
+        compress_directory_to_zip()
+
+    if not os.path.exists(zip_filepath):
+        return jsonify({"error": "ZIP file could not be created"}), 500
+
+    # 파일 다운로드
+    return send_from_directory(directory, zip_filename, as_attachment=True)
