@@ -49,6 +49,7 @@
             {% for image in images %}
             <div class="image-item" id="image-{{ loop.index }}">
                 {% set video_extensions = ['mp4', 'mov', 'mkv', 'avi'] %}
+                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'] %}
                 {% set file_extension = image.split('.')[-1].lower() %}
 
                 <input type="hidden" name="images[]" value="{{ image }}">
@@ -59,7 +60,7 @@
                     <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}"
                             type="video/mp4">
                 </video>
-                {% else %}
+                {% elif file_extension in image_extensions %}
                 <!-- 이미지 파일인 경우 -->
                 <img class="thumbnail"
                      src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
@@ -102,7 +103,7 @@
         pressTimer;
 
     const nextBtn = document.getElementById('next-image-button'),
-        dir = "{{ dir }}",
+        dir = {{ dir|tojson }},
         page = "{{ page }}",
         zipBtn = document.getElementById('download-zip-btn'),
         dropdownMenu = document.getElementById('dropdown-menu'),
@@ -287,7 +288,9 @@
         const imageItems = document.querySelectorAll('.image-item');
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
-            img.addEventListener('click', () => setNextImage(item));
+            if (img) {
+                img.addEventListener('click', () => setNextImage(item));
+            }
 
             // 마우스 이벤트
             item.addEventListener('mousedown', startPress);
