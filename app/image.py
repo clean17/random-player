@@ -12,7 +12,7 @@ from urllib.parse import unquote
 import shutil
 
 image_bp = Blueprint('image', __name__)
-limit_page_num = 100
+LIMIT_PAGE_NUM = 100
 shuffled_images = None
 
 # 설정
@@ -20,7 +20,8 @@ IMAGE_DIR = settings['IMAGE_DIR']
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
-TEMP_UPLOAD_DIR = settings['TEMP_IMAGE_DIR']
+TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
+DEL_TEMP_IMAGE_DIR = settings['DEL_TEMP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 KOSDAQ_DIR = settings['KOSDAQ_DIR']
 SP500_DIR = settings['SP500_DIR']
@@ -108,15 +109,16 @@ def get_stock_graphs(dir, start, count):
 def image_list():
     dir = request.args.get('dir')
     page = int(request.args.get('page', 1))
-    start = (page - 1) * limit_page_num
-    images = get_images(start, limit_page_num, dir)
+    start = (page - 1) * LIMIT_PAGE_NUM
+    images = get_images(start, LIMIT_PAGE_NUM, dir)
     total_images = len(os.listdir(dir))
-    total_pages = (total_images + limit_page_num-1) // limit_page_num
+    total_pages = (total_images + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
-    if current_user.username == settings['GUEST_USERNAME']:
-        template_html = 'trip_image_list.html'
-    else:
-        template_html = 'image_list.html'
+    # if current_user.username == settings['GUEST_USERNAME']:
+    #     template_html = 'trip_image_list.html'
+    # else:
+    #     template_html = 'image_list.html'
+    template_html = 'image_list.html'
 
     return render_template(template_html, images=images, page=page, total_pages=total_pages, total_images=total_images, dir=dir)
 
@@ -125,10 +127,10 @@ def image_list():
 def trip_image_list():
     dir = request.args.get('dir')
     page = int(request.args.get('page', 1))
-    start = (page - 1) * limit_page_num
-    images = get_images(start, limit_page_num, dir)
+    start = (page - 1) * LIMIT_PAGE_NUM
+    images = get_images(start, LIMIT_PAGE_NUM, dir)
     total_images = len(os.listdir(dir))
-    total_pages = (total_images + limit_page_num-1) // limit_page_num
+    total_pages = (total_images + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
     return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=dir)
 
@@ -137,16 +139,22 @@ def trip_image_list():
 @login_required
 def move_image(imagepath, filename):
     # imagepath의 값에 따라 src_path 결정
+    dest_path = os.path.join(MOVE_DIR, filename)
+    # dir = request.args.get('dir')
+
     if imagepath == "image":
         src_path = os.path.join(IMAGE_DIR, filename)
     elif imagepath == "ref_image":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
     elif imagepath == "trip_image":
         src_path = os.path.join(TRIP_IMAGE_DIR, filename)
+    elif imagepath == "temp_image":
+        dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
+        src_path = os.path.join(TEMP_IMAGE_DIR, filename)
     else:
         return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
 
-    dest_path = os.path.join(MOVE_DIR, filename)
+    # print('src_path', src_path)
     if os.path.exists(src_path):
         os.rename(src_path, dest_path)
         return jsonify({'status': 'success'})
@@ -166,7 +174,7 @@ def delete_images():
             send2trash(os.path.join(IMAGE_DIR, image))
 
     page = int(request.form.get('page', 1))
-    return redirect(url_for('image.image_list', page=page))
+    return redirect(url_for('image.image_list', page=page, dir=IMAGE_DIR))
 
 
 @image_bp.route('/images/')
@@ -190,15 +198,15 @@ def suffle_image():
 def stock_graph_list(market):
     directory = DIRECTORY_MAP.get(market.lower())
     page = int(request.args.get('page', 1))
-    start = (page - 1) * limit_page_num
+    start = (page - 1) * LIMIT_PAGE_NUM
 
     if directory is not None:
-        images = get_stock_graphs(directory, start, limit_page_num)
+        images = get_stock_graphs(directory, start, LIMIT_PAGE_NUM)
     else:
         abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
 
     total_images = len(os.listdir(directory))
-    total_pages = (total_images + limit_page_num-1) // limit_page_num
+    total_pages = (total_images + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
     # print(market, directory, total_pages, images)
     return render_template('stock_graph_list.html', images=images, page=page, total_pages=total_pages, market=market)
