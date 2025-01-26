@@ -8,13 +8,17 @@ import ffmpeg
 import psutil
 import subprocess
 from datetime import datetime, timedelta
-from multiprocessing import Process, Manager
+# from multiprocessing import Process, Manager
+import multiprocessing
 import logging
 from moviepy.editor import VideoFileClip
 from send2trash import send2trash
 from concurrent.futures import ThreadPoolExecutor
 from config import settings
 import zipfile
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.executors.asyncio import AsyncIOExecutor
 
 tasks = []
 
@@ -25,6 +29,10 @@ tasks = []
 scheduler = BackgroundScheduler()
 work_directory = settings['WORK_DIRECTORY']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
+TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
+TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
+directories_to_compress = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
+OUTPUT_ZIP_FILE = "compressed_all_files.zip"
 
 '''
     # 1. multiprocessing는 메모리를 공유하지 않는다 -> class의 필드를 공유하지 않음
@@ -319,39 +327,135 @@ def delete_short_videos():
                     else:
                         print(f"File does not exist: {file_path}. Skipping deletion.")
 
+# # 주기적으로 전체 파일을 압축한다
+# # async def compress_directory_to_zip():
+# def compress_directory_to_zip():
+#     print('task_manager.compress_directory_to_zip')
+#     """
+#     지정된 디렉토리의 모든 파일을 압축하여 ZIP 파일로 저장합니다.
+#     """
+#     directories_to_compress = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
+#
+#     loop = asyncio.get_event_loop()
+#     executor = ThreadPoolExecutor()
+#
+#     for directory in directories_to_compress:
+#         if not os.path.exists(directory):
+#             print(f"Directory does not exist: {directory}")
+#             continue
+#
+#         # 압축 파일 이름 생성
+#         # zip_filename = f"compressed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+#         zip_filename = f"compressed_all_files.zip"
+#         zip_filepath = os.path.join(directory, zip_filename)
+#
+#         try:
+#             # 기존 파일이 존재하면 삭제
+#             if os.path.exists(zip_filepath):
+#                 os.remove(zip_filepath)
+#                 print(f"Existing zip file removed: {zip_filepath}")
+#
+#             # ZIP 파일 생성
+#             with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+#                 for root, dirs, files in os.walk(directory):
+#                     for file in files:
+#                         # 압축 파일 자체는 포함하지 않음
+#                         if file == zip_filename:
+#                             continue
+#                         file_path = os.path.join(root, file)
+#                         arcname = os.path.relpath(file_path, directory)
+#                         zipf.write(file_path, arcname)
+#
+#             print(f"Directory successfully compressed to: {zip_filepath}")
+#         except Exception as e:
+#             print(f"Error while compressing directory: {e}")
+#
+#         # def compress():
+#         #     try:
+#         #         # 기존 파일이 존재하면 삭제
+#         #         if os.path.exists(zip_filepath):
+#         #             os.remove(zip_filepath)
+#         #             print(f"### Existing zip file removed: {zip_filepath}")
+#         #
+#         #         # ZIP 파일 생성
+#         #         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+#         #             for root, dirs, files in os.walk(directory):
+#         #                 for file in files:
+#         #                     if file == zip_filename:
+#         #                         continue
+#         #                     file_path = os.path.join(root, file)
+#         #                     arcname = os.path.relpath(file_path, directory)
+#         #                     zipf.write(file_path, arcname)
+#         #
+#         #         print(f"Directory successfully compressed to: {zip_filepath}")
+#         #     except Exception as e:
+#         #         print(f"Error while compressing directory: {e}")
+#         #
+#         # # 동기 함수 `compress`를 비동기로 실행
+#         # await loop.run_in_executor(executor, compress)
+#
+# # 비동기 실행
+# # asyncio.run(compress_directory_to_zip())
+#
+# # 스레드 시작 (썸네일 생성이 늘어진다..?)
+# # threading.Thread(target=update_task_status, daemon=True).start()
+#
+# # 스케줄러에 작업 추가, max_instances 기본 1
+# # scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=6, coalesce=True)
+# # scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
+# # scheduler.add_job(delete_short_videos, 'interval', minutes=10)
+# scheduler.add_job(compress_directory_to_zip, 'interval', minutes=60)
+#
+# #scheduler.start()
 
-def compress_directory_to_zip():
-    """
-    지정된 디렉토리의 모든 파일을 압축하여 ZIP 파일로 저장합니다.
-    """
-    if not os.path.exists(TEMP_IMAGE_DIR):
-        print(f"Directory does not exist: {TEMP_IMAGE_DIR}")
-        return
+# CPU 바운드 작업: 디렉토리를 압축하는 함수
+def compress_directory_to_zip(directory):
+    for dir_to_compress in directories_to_compress:
+        if dir_to_compress == directory:
+            if not os.path.exists(dir_to_compress):
+                print(f"Directory does not exist: {dir_to_compress}")
+                continue
+            print(f"Compressing directory: {dir_to_compress}")
+            # 압축 로직 추가
+            with zipfile.ZipFile(f"compressed_{os.path.basename(dir_to_compress)}.zip", 'w') as zipf:
+                for root, _, files in os.walk(dir_to_compress):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, dir_to_compress)
+                        zipf.write(file_path, arcname)
 
-    # 압축 파일 이름 생성 (현재 날짜와 시간을 기준으로)
-    # zip_filename = f"compressed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-    zip_filename = f"compressed_all_files.zip"
-    zip_filepath = os.path.join(TEMP_IMAGE_DIR, zip_filename)
+# 매시 정각마다 실행하는 함수
+def periodic_compression_task(directory):
+    while True:
+        now = datetime.now()
+        next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        sleep_duration = (next_hour - now).total_seconds()
+        # sleep_duration = 60 # 1분 테스트
+        print(f"4. periodic_compression_task: Sleeping for {sleep_duration} seconds")
+        time.sleep(sleep_duration)
+        compress_directory_to_zip(directory)
 
-    try:
-        # 기존 파일이 존재하면 삭제
-        if os.path.exists(zip_filepath):
-            os.remove(zip_filepath)
-            print(f"Existing zip file removed: {zip_filepath}")
+# 주기적 작업을 위한 프로세스 시작
+def start_periodic_task():
+    processes = []
+    for directory in directories_to_compress:
+        process = multiprocessing.Process(target=periodic_compression_task, args=(directory,))
+        process.daemon = True
+        process.start()
+        processes.append(process)
 
-        # ZIP 파일 생성
-        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(TEMP_IMAGE_DIR):
-                for file in files:
-                    # 압축 파일 자체는 포함하지 않음
-                    if file == zip_filename:
-                        continue
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, TEMP_IMAGE_DIR)
-                    zipf.write(file_path, arcname)
-        print(f"Directory successfully compressed to: {zip_filepath}")
-    except Exception as e:
-        print(f"Error while compressing directory: {e}")
+def start_periodic_task2():
+    print('1. start_periodic_task')
+    process = multiprocessing.Process(target=periodic_compression_task)
+    process.daemon = True
+    print(f"2. start_periodic_task: Process started with PID {process.pid}")
+    return process
+
+def initialize_directories():
+    for directory in directories_to_compress:
+        os.makedirs(directory, exist_ok=True)
+
+initialize_directories()
 
 # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # threading.Thread(target=update_task_status, daemon=True).start()
@@ -360,6 +464,22 @@ def compress_directory_to_zip():
 # scheduler.add_job(update_task_status, 'interval', seconds=10, max_instances=6, coalesce=True)
 # scheduler.add_job(cleanup_tasks, 'interval', minutes=1)
 # scheduler.add_job(delete_short_videos, 'interval', minutes=10)
-scheduler.add_job(compress_directory_to_zip, 'interval', minutes=60)
 
-scheduler.start()
+# scheduler.add_job(compress_directory_to_zip, 'interval', minutes=60)
+
+# scheduler.start()
+
+'''
+threading.Thread - 간단한 비동기 작업, GIL 문제
+CPU 바운드 작업에는 multiprocessing 모듈을 사용하는 것이 더 적합 - GIL의 제약을 받지 않는 별도의 프로세스
+
+asyncio - 비동기 I/O 작업에 효율적, 이벤트 루프 기반, 스레드보다 가벼운 구조
+
+concurrent.futures.ThreadPoolExecutor - 스레드 관리를 자동화하고, 실행 결과를 쉽게 추적
+
+---------------------------------------------------------
+
+multiprocessing - 프로세스를 기반으로 병렬 처리를 구현, GIL 영향이 없음, 다중 코어 CPU 활용, 프로세스 간 메모리 분리, 메모리 사용량 높음, 프로세스 생성비용은 스레드 생성비용 보다 높다
+
+concurrent.futures.ThreadPoolExecutor - 스레드를 기반으로 병렬 처리, GIL 영향을 받는다, I/O 바운드 작업에 적합, futures 객체로 작업의 완료 상태를 관리, concurrent.futures API는 작업 제출, 완료 추적, 결과 수집을 간단하게 처리, 다중 코어 활용이 제한적
+'''
