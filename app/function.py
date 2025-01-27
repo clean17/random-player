@@ -6,7 +6,8 @@ import os
 import io
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
-from .task_manager import compress_directory_to_zip
+from .task_manager import compress_directory_to_zip, OUTPUT_ZIP_FILE
+import multiprocessing
 
 func = Blueprint('func', __name__)
 
@@ -86,7 +87,7 @@ def download_page_zip():
         page = int(request.args.get('page', 1))
 
         if not target_directory:
-            return jsonify({"error": "Directo`ry path not provided"}), 400
+            return jsonify({"error": "Directory path not provided"}), 400
 
         if not os.path.exists(target_directory) or not os.path.isdir(target_directory):
             return jsonify({"error": "Invalid or non-existent directory path"}), 400
@@ -133,16 +134,17 @@ def download_all_zip():
     if not directory:
         return jsonify({"error": "Missing 'dir' parameter"}), 400
 
-    # zip_filename = f"compressed_{os.path.basename(directory)}.zip"
-    zip_filename = f"compressed_all_files.zip"
-    zip_filepath = os.path.join(directory, zip_filename)
+    zip_filepath = os.path.join(directory, OUTPUT_ZIP_FILE)
 
     # ZIP 파일이 없으면 생성
-    if not os.path.exists(zip_filepath):
-        compress_directory_to_zip()
-
-    if not os.path.exists(zip_filepath):
-        return jsonify({"error": "ZIP file could not be created"}), 500
+    if not os.path.isfile(zip_filepath):
+        compress_directory_to_zip(directory)
 
     # 파일 다운로드
-    return send_from_directory(directory, zip_filename, as_attachment=True)
+    return send_from_directory(directory, OUTPUT_ZIP_FILE, as_attachment=True)
+
+@func.route('/compress-zip', methods=['GET'])
+def compress_now():
+    process = multiprocessing.Process(target=compress_directory_to_zip)
+    process.start()
+    return jsonify({"status": "Compression started"}), 202
