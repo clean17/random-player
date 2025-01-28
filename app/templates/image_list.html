@@ -27,14 +27,28 @@
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
-                <div class="image-item" id="image-{{ loop.index }}">
-                    <!-- 처음 5개 이미지만 실제 이미지 로드 -->
-                    <img class="thumbnail"
-                         src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                         data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
-                         alt="{{ image }}" onclick="moveImage('{{ image }}', {{ loop.index }})" data-index="{{ loop.index }}">
-                    <input type="hidden" name="images[]" value="{{ image }}">
-                </div>
+            <div class="image-item" id="image-{{ loop.index }}">
+                {% set video_extensions = ['mp4', 'mov', 'mkv', 'avi'] %}
+                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'] %}
+                {% set file_extension = image.split('.')[-1].lower() %}
+
+                <input type="hidden" name="images[]" value="{{ image }}">
+
+                {% if file_extension in video_extensions %}
+                <!-- 비디오 파일인 경우 -->
+                <video class="thumbnail" controls preload="auto">
+                    <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}"
+                            type="video/mp4">
+                </video>
+                {% elif file_extension in image_extensions %}
+                <!-- 이미지 파일인 경우 -->
+                <img class="thumbnail"
+                     src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                     data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
+                     alt="{{ image }}"
+                     data-index="{{ loop.index }}">
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
         <div>
