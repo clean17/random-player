@@ -40,7 +40,7 @@ os.makedirs(MOVE_DIR, exist_ok=True)
 
 
 
-def initialize_images():
+def initialize_shuffle_images():
     global shuffled_images
     images = os.listdir(REF_IMAGE_DIR)
     random.seed(time.time())
@@ -50,23 +50,21 @@ def initialize_images():
 def get_ref_images(start, count):
     global shuffled_images
     if shuffled_images is None:
-        initialize_images()
+        initialize_shuffle_images()
     return shuffled_images[start:start + count]
 
 # 애플리케이션 실행 시 한 번 셔플된 리스트를 초기화
-initialize_images()
+initialize_shuffle_images()
 
 
-def get_images(start, count, directory):
-    images = os.listdir(directory) # IMAGE_DIR, TRIP_IMAGE_DIR
-    images.sort()
+def get_images(start, count, dir):
+    if dir == REF_IMAGE_DIR:
+        images = shuffled_images
+    else:
+        images = os.listdir(dir) # IMAGE_DIR, TRIP_IMAGE_DIR
+        images.sort()
     return images[start:start + count]
 
-""" def get_ref_images(start, count):
-    images = os.listdir(REF_IMAGE_DIR)
-    random.seed(time.time())
-    random.shuffle(images)
-    return images[start:start + count] """
 
 def get_stock_graphs(dir, start, count):
     images = os.listdir(dir)
@@ -108,17 +106,24 @@ def get_stock_graphs(dir, start, count):
 @login_required
 def image_list():
     dir = request.args.get('dir')
+    firstRequst = request.args.get('firstRequst')
+    # if current_user.username == settings['GUEST_USERNAME']:
+    if hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']:
+        template_html = 'trip_image_list.html'
+    elif dir == REF_IMAGE_DIR:
+        if firstRequst == 'True':
+            initialize_shuffle_images()
+        template_html = 'ref_image_list.html'
+    elif dir == IMAGE_DIR:
+        template_html = 'image_list.html'
+    else:
+        template_html = 'trip_image_list.html'
+
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
     images = get_images(start, LIMIT_PAGE_NUM, dir)
     total_images = len(os.listdir(dir))
     total_pages = (total_images + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
-
-    # if current_user.username == settings['GUEST_USERNAME']:
-    #     template_html = 'trip_image_list.html'
-    # else:
-    #     template_html = 'image_list.html'
-    template_html = 'image_list.html'
 
     return render_template(template_html, images=images, page=page, total_pages=total_pages, total_images=total_images, dir=dir)
 
@@ -184,10 +189,10 @@ def get_image():
     dir = request.args.get('dir')
     return send_from_directory(dir, filename)
 
-@image_bp.route('/suffle/ref_images', methods=['POST'])
+@image_bp.route('/shuffle/ref_images', methods=['POST'])
 @login_required
-def suffle_image():
-    initialize_images()
+def shuffle_image():
+    initialize_shuffle_images()
     return jsonify({'status': 'success'})
 
 
