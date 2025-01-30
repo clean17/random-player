@@ -18,18 +18,26 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
-<button id="suffle-button" class="floating-button2">Suffle</button>
+<button id="shuffle-button" class="floating-button2">Shuffle</button>
+<div class="pagination-buttons">
+    <button class="pagination-button prev-button" id="prevButton">&lt;</button>
+    <button class="pagination-button next-button" id="nextButton">&gt;</button>
+</div>
 <div class="container">
     <div id="delete-form" {#method="POST" action="{{ url_for('image.delete_images') }}"#}>
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
                 <div class="image-item" id="image-{{ loop.index }}">
+                    {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'] %}
+                    {% set file_extension = image.split('.')[-1].lower() %}
                     <!-- 처음 5개 이미지만 실제 이미지 로드 -->
+                    {% if file_extension in image_extensions %}
                     <img class="thumbnail"
                          src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
                          data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
                          alt="{{ image }}" {#onclick="moveImage('{{ image }}', {{ loop.index }})"#} data-index="{{ loop.index }}">
+                    {% endif %}
                     <input type="hidden" name="images[]" value="{{ image }}">
                 </div>
             {% endfor %}
@@ -56,10 +64,12 @@
 <button id="next-image-button" class="floating-button">Next Image</button>
 
 <script>
-    let nextImageElement = null;
-    let loading_size = 8;
-    const nextBtn = document.getElementById('next-image-button');
-    const suffleBtn = document.getElementById('suffle-button');
+    let nextImageElement = null,
+        loading_size = 8;
+
+    const nextBtn = document.getElementById('next-image-button'),
+          shuffleBtn = document.getElementById('shuffle-button'),
+          page = "{{ page }}";
 
     function setNextImage(element) {
         nextImageElement = element.nextElementSibling;
@@ -111,7 +121,7 @@
         const imageItems = document.querySelectorAll('.image-item');
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
-            img.addEventListener('click', () => setNextImage(item));
+            img?.addEventListener('click', () => setNextImage(item));
 
             // 마우스 이벤트
             item.addEventListener('mousedown', startPress);
@@ -153,7 +163,7 @@
         });
 
         nextBtn.addEventListener('click', nextImage);
-        suffleBtn.addEventListener('click', suffleImage);
+        shuffleBtn.addEventListener('click', shuffleImage);
         {#previousBtn.addEventListener('click', previousImage);#}
 
         function getCenterImage() {
@@ -182,12 +192,13 @@
             }
         }
 
-        function suffleImage() {
-            fetch(`/image/suffle/ref_images`, { method: 'POST' })
+        function shuffleImage() {
+            fetch(`/image/shuffle/ref_images`, { method: 'POST' })
                 .then(response => response.json())
                 .then(data => {
+                    console.log(data)
                     if (data.status === 'success') {
-                        window.location.href = "/image/ref_images?page=1";
+                        window.location.href = "{{ url_for('image.image_list', dir=dir) }}";
                     }
                 })
                 .catch(error => {
@@ -368,6 +379,21 @@
                 console.error('Error:', error);
             });
     }
+
+    document.getElementById("prevButton").addEventListener("click", () => {
+        if (page > 1) {
+            const previousBtn = document.querySelector('.pagination').children[1]
+            previousBtn.click();
+        }
+    });
+
+    document.getElementById("nextButton").addEventListener("click", () => {
+        const btnCount = document.querySelector('.pagination').childElementCount
+        const nextBtn = document.querySelector('.pagination').children[btnCount - 2];
+        if (nextBtn.textContent === '>') {
+            nextBtn.click();
+        }
+    });
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
