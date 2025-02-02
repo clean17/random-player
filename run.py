@@ -136,6 +136,7 @@ def signal_handler(sig, frame):
     # sys.exit(0)
 
 if __name__ == '__main__':
+    # 서버 종료 핸들러 등록
     signal.signal(signal.SIGINT, signal_handler)
     logger.info("#### Starting server.... ####")
     # app.run(debug=True, host='0.0.0.0', port=8090)
