@@ -417,11 +417,17 @@ def compress_directory_to_zip(directory):
                 continue
             print(f"Compressing directory: {dir_to_compress}")
             # 압축 로직 추가
-            with zipfile.ZipFile(f"compressed_{os.path.basename(dir_to_compress)}.zip", 'w') as zipf:
+            # with문은 컨텍스트 매니저 역할 + 블록이 끝나면 자동으로 리소스를 정리 (close() 호출)
+            # os.path.join(f"compressed_{os.path.basename(dir_to_compress)}.zip") : 현재 작업 디렉토리
+            # os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip") : 원본 디렉토리
+            zip_path = os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip")
+
+            with zipfile.ZipFile(zip_path, 'w') as zipf:
+                # os.walk()는 디렉터리 내의 모든 파일과 폴더를 재귀적으로 탐색하는 데 사용하는 Python의 내장 함수
                 for root, _, files in os.walk(dir_to_compress):
                     for file in files:
                         file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, dir_to_compress)
+                        arcname = os.path.relpath(file_path, dir_to_compress) # file과 명칭 동일
                         zipf.write(file_path, arcname)
 
 # 매시 정각마다 실행하는 함수
@@ -431,7 +437,6 @@ def periodic_compression_task(directory):
         next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         sleep_duration = (next_hour - now).total_seconds()
         # sleep_duration = 60 # 1분 테스트
-        print(f"4. periodic_compression_task: Sleeping for {sleep_duration} seconds")
         time.sleep(sleep_duration)
         compress_directory_to_zip(directory)
 
