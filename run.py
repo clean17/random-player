@@ -3,80 +3,17 @@ import logging
 import os
 import signal
 import sys
-
 from waitress import serve
 from werkzeug.middleware.proxy_fix import ProxyFix
-
-from app import create_app
-
-# from flask_cors import CORS
-
-'''
-127.0.0.1로 시작하는 로그 제거 필터링
-
-class NoHTTPRequestLogFilter(logging.Filter):
-    def filter(self, record):
-        return not record.getMessage().startswith('127.0.0.1')
-
-# 모든 로그 핸들러에 대해 필터 적용
-for handler in app.logger.handlers:
-    handler.addFilter(NoHTTPRequestLogFilter())
-'''
-
-# stdout과 stderr 인코딩을 강제로 UTF-8로 설정
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
-# Create a logger
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('### %(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-# 전역 로거  (웹요청이 아닌 파이썬 내부 로그를 출력) - root
-# console_handler = logging.StreamHandler()
-console_handler = logging.StreamHandler(sys.stdout)  # 콘솔 핸들러에 sys.stdout 사용
-console_handler.setLevel(logging.DEBUG)
-console_handler.setFormatter(formatter)
-
-# Create a file handler for logging
-file_handler = logging.FileHandler('logs/app.log', encoding='utf-8')
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(formatter)
-
-# Add the handlers to the logger
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+from app.task_manager import start_periodic_task
+from logger_config import setup_logging
 
 
+# 1️⃣ 로그 설정 적용
+logger = setup_logging()
 
-
-# APScheduler 로거
-logging.getLogger('apscheduler.executors.default').setLevel(logging.WARNING)
-
-# Flask가 내부적으로 사용하는 Werkzeug 서버 (app.run())
-# Werkzeug 로거    --- app.run()
-logging.getLogger('werkzeug').setLevel(logging.INFO)
-
-# Waitress 로거    --- serve()
-waitress_logger = logging.getLogger('waitress')
-# Waitress 로그를 root로 전파하지 않음
-# waitress_logger.propagate = False # 전파하지 않으면 file에 로그가 남지 않는다
-
-if not waitress_logger.handlers:  # 핸들러가 없다면 추가
-    waitress_logger.addHandler(console_handler)
-    waitress_logger.setLevel(logging.INFO)
-
-# sys.stdout.reconfigure(encoding='utf-8')
-# sys.stderr.reconfigure(encoding='utf-8')
-
-# sys.stdout과 sys.stderr를 UTF-8로 설정
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
-if hasattr(sys.stderr, 'reconfigure'):
-    sys.stderr.reconfigure(encoding='utf-8')
-
+# 2️⃣ Flask 앱 생성
 app = create_app()
-
 
 
 '''
@@ -108,6 +45,7 @@ class HopByHopHeaderFilter(object):
             return start_response(status, filtered_headers, exc_info)
         return self.app(environ, custom_start_response)
 
+# ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
 # 리버스 프록시 뒤에 있는 Flask를 처리하는 ProxyFix 미들웨어 적용, 헤더 전달용
 # x_proto=1: X-Forwarded-Proto 헤더에 담긴 정보를 Flask가 요청이 HTTPS로 들어왔는지 인식하도록 한다
 # x_host=1: X-Forwarded-Host 헤더에 담긴 호스트 정보를 Flask가 올바른 도메인/호스트를 인식하도록 한다
@@ -128,7 +66,7 @@ class ReverseProxied:
 # app.wsgi_app = ReverseProxied(app.wsgi_app)
 
 def signal_handler(sig, frame):
-    logger.info("#### Exiting server... ####")
+    logger.info("#### Register Server Shutdown Handler... ####")
     pid = os.getpid()
     os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
 
@@ -138,13 +76,12 @@ def signal_handler(sig, frame):
 if __name__ == '__main__':
     # 서버 종료 핸들러 등록
     signal.signal(signal.SIGINT, signal_handler)
-    logger.info("#### Starting server.... ####")
-    # app.run(debug=True, host='0.0.0.0', port=8090)
+    logger.info("################################### Starting server.... ####################################")
+
+    start_periodic_task() # 업로드 파일 압축파일 생성
+
+    app.run(debug=True, host='0.0.0.0', port=8090) # __init__.py 에서 WebSocket 기능을 추가함
+    # socketio.run(app, debug=True, host='0.0.0.0', port=8090) # Flask + WebSocket 서버 동시 실행
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
 
-    serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다
-
-'''
-Flask 내장 서버 - 코드 수정 시 자동 재시작, 부하처리 오류복구 기능 부족, threaded=True으로 멀티스레드 보장되지는 않는다, 개발용
-Waitress 서버 - Python WSGI 서버, Waitress는 워커(프로세스)와 스레드 설정을 통해 병렬 처리를 훨씬 더 세밀하게 제어, IO 바운드 작업에서 성능을 극대화 >> 대규모 트래픽과 안정성
-'''
+    # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다
