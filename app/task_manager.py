@@ -327,76 +327,7 @@ def delete_short_videos():
                     else:
                         print(f"File does not exist: {file_path}. Skipping deletion.")
 
-# # 주기적으로 전체 파일을 압축한다
-# # async def compress_directory_to_zip():
-# def compress_directory_to_zip():
-#     print('task_manager.compress_directory_to_zip')
-#     """
-#     지정된 디렉토리의 모든 파일을 압축하여 ZIP 파일로 저장합니다.
-#     """
-#     directories_to_compress = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
-#
-#     loop = asyncio.get_event_loop()
-#     executor = ThreadPoolExecutor()
-#
-#     for directory in directories_to_compress:
-#         if not os.path.exists(directory):
-#             print(f"Directory does not exist: {directory}")
-#             continue
-#
-#         # 압축 파일 이름 생성
-#         # zip_filename = f"compressed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-#         zip_filename = f"compressed_all_files.zip"
-#         zip_filepath = os.path.join(directory, zip_filename)
-#
-#         try:
-#             # 기존 파일이 존재하면 삭제
-#             if os.path.exists(zip_filepath):
-#                 os.remove(zip_filepath)
-#                 print(f"Existing zip file removed: {zip_filepath}")
-#
-#             # ZIP 파일 생성
-#             with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-#                 for root, dirs, files in os.walk(directory):
-#                     for file in files:
-#                         # 압축 파일 자체는 포함하지 않음
-#                         if file == zip_filename:
-#                             continue
-#                         file_path = os.path.join(root, file)
-#                         arcname = os.path.relpath(file_path, directory)
-#                         zipf.write(file_path, arcname)
-#
-#             print(f"Directory successfully compressed to: {zip_filepath}")
-#         except Exception as e:
-#             print(f"Error while compressing directory: {e}")
-#
-#         # def compress():
-#         #     try:
-#         #         # 기존 파일이 존재하면 삭제
-#         #         if os.path.exists(zip_filepath):
-#         #             os.remove(zip_filepath)
-#         #             print(f"### Existing zip file removed: {zip_filepath}")
-#         #
-#         #         # ZIP 파일 생성
-#         #         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-#         #             for root, dirs, files in os.walk(directory):
-#         #                 for file in files:
-#         #                     if file == zip_filename:
-#         #                         continue
-#         #                     file_path = os.path.join(root, file)
-#         #                     arcname = os.path.relpath(file_path, directory)
-#         #                     zipf.write(file_path, arcname)
-#         #
-#         #         print(f"Directory successfully compressed to: {zip_filepath}")
-#         #     except Exception as e:
-#         #         print(f"Error while compressing directory: {e}")
-#         #
-#         # # 동기 함수 `compress`를 비동기로 실행
-#         # await loop.run_in_executor(executor, compress)
-#
-# # 비동기 실행
-# # asyncio.run(compress_directory_to_zip())
-#
+
 # # 스레드 시작 (썸네일 생성이 늘어진다..?)
 # # threading.Thread(target=update_task_status, daemon=True).start()
 #
@@ -409,45 +340,63 @@ def delete_short_videos():
 # #scheduler.start()
 
 # CPU 바운드 작업: 디렉토리를 압축하는 함수
-def compress_directory_to_zip(directory):
+def compress_directory_to_zip():
     for dir_to_compress in directories_to_compress:
-        if dir_to_compress == directory:
-            if not os.path.exists(dir_to_compress):
-                print(f"Directory does not exist: {dir_to_compress}")
-                continue
-            print(f"Compressing directory: {dir_to_compress}")
-            # 압축 로직 추가
-            # with문은 컨텍스트 매니저 역할 + 블록이 끝나면 자동으로 리소스를 정리 (close() 호출)
-            # os.path.join(f"compressed_{os.path.basename(dir_to_compress)}.zip") : 현재 작업 디렉토리
-            # os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip") : 원본 디렉토리
-            zip_path = os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip")
-
-            with zipfile.ZipFile(zip_path, 'w') as zipf:
+        if not os.path.exists(dir_to_compress):
+            print(f"Directory does not exist: {dir_to_compress}")
+            continue
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+        # print(f"### {current_time} - Compressing directory: {dir_to_compress}")
+        # with문은 컨텍스트 매니저 역할 + 블록이 끝나면 자동으로 리소스를 정리 (close() 호출)
+        # os.path.join(f"compressed_{os.path.basename(dir_to_compress)}.zip") : 현재 작업 디렉토리
+        # os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip") : 원본 디렉토리
+        zip_filename = f"compressed_{os.path.basename(dir_to_compress)}.zip"
+        zip_filepath = os.path.join(dir_to_compress, zip_filename)
+        try:
+            # 기존 파일이 존재하면 삭제
+            """ if os.path.exists(zip_filepath):
+                os.remove(zip_filepath)
+                print(f"Existing zip file removed: {zip_filepath}") """
+            # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x)
+            with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 # os.walk()는 디렉터리 내의 모든 파일과 폴더를 재귀적으로 탐색하는 데 사용하는 Python의 내장 함수
-                for root, _, files in os.walk(dir_to_compress):
+                for root, dirs, files in os.walk(dir_to_compress):
                     for file in files:
+                        # 압축 파일 자체는 포함하지 않음
+                        if file == zip_filename:
+                            continue
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, dir_to_compress) # file과 명칭 동일
                         zipf.write(file_path, arcname)
+            # print(f"### {current_time} - Directory successfully compressed to: {zip_filepath}")
+        except Exception as e:
+            print(f"### {current_time} - Error while compressing directory: {e}")
+
+    print(f"### {current_time} - Directory successfully compressed")
+
+
+
+
+
 
 # 매시 정각마다 실행하는 함수
-def periodic_compression_task(directory):
+def periodic_compression_task():
     while True:
         now = datetime.now()
         next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         sleep_duration = (next_hour - now).total_seconds()
         # sleep_duration = 60 # 1분 테스트
         time.sleep(sleep_duration)
-        compress_directory_to_zip(directory)
+        compress_directory_to_zip()
 
 # 주기적 작업을 위한 프로세스 시작
 def start_periodic_task():
     processes = []
-    for directory in directories_to_compress:
-        process = multiprocessing.Process(target=periodic_compression_task, args=(directory,))
-        process.daemon = True
-        process.start()
-        processes.append(process)
+    # process = multiprocessing.Process(target=periodic_compression_task, args=(directory,))
+    process = multiprocessing.Process(target=periodic_compression_task)
+    process.daemon = True
+    process.start()
+    processes.append(process)
 
 def start_periodic_task2():
     print('1. start_periodic_task')
