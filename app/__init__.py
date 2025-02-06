@@ -8,7 +8,7 @@ from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프�
 from .main import main
 from .video import video
 from .image import image_bp, environment
-from .function import func
+from .function import func, socketio
 from .upload import upload
 import fnmatch
 
@@ -37,6 +37,9 @@ def create_app():
     app.register_blueprint(func, url_prefix='/func')
     app.register_blueprint(upload, url_prefix='/upload')
     app.jinja_env.globals.update(max=max, min=min)
+
+    # Flask 앱에 WebSocket 기능을 추가
+    socketio.init_app(app)
 
     login_manager = LoginManager()
     login_manager.init_app(app)

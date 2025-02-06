@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그 뷰어</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
+        #log-container { width: 100%; height: 700px; overflow-y: scroll; background: #fff; padding: 10px; border: 1px solid #ccc; }
+        .log-line { white-space: pre-wrap; font-family: monospace; }
+        #date-picker { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<h2>로그 뷰어</h2>
+<label for="date-picker">날짜 선택:</label>
+<input type="date" id="date-picker">
+<button onclick="loadLogs()">로그 가져오기</button>
+<p><strong>실시간 로그</strong></p>
+<div id="log-container"></div>
+
+<script>
+    const logContainer = document.getElementById("log-container");
+    const socket = io()  // WebSocket 연결
+
+    // 오늘 날짜 가져오기 (YYYY-MM-DD 형식)
+    function getTodayDate() {
+        const today = new Date();
+        return today.toISOString().split("T")[0]; // "YYYY-MM-DD" 형식 반환
+    }
+
+    // 오늘 날짜 자동 선택 및 로그 로드
+    window.onload = function() {
+        document.getElementById("date-picker").value = getTodayDate();
+        loadLogs();  // 자동으로 오늘 날짜 로그 가져오기
+    };
+
+    // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
+    socket.on("log_update", (data) => {
+        const selectedDate = document.getElementById("date-picker").value;
+        if (selectedDate === getTodayDate()) {
+            const logLine = document.createElement("div");
+            logLine.classList.add("log-line");
+            logLine.textContent = data.log;
+            logContainer.appendChild(logLine);
+            logContainer.scrollTop = logContainer.scrollHeight; // 자동 스크롤
+        }
+    });
+
+    // 날짜별 로그 가져오기
+    function loadLogs() {
+        const dateInput = document.getElementById("date-picker").value;
+        if (!dateInput) {
+            alert("날짜를 선택하세요.");
+            return;
+        }
+
+        // YYYY-MM-DD → YYMMDD 변환
+        const formattedDate = dateInput.replace(/-/g, "").slice(2);
+
+        fetch(`/func/logs/${formattedDate}`, { cache: "no-cache" })  // 🔥 캐싱 방지 추가
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    logContainer.innerHTML = `<p style="color:red;">${data.error}</p>`;
+                } else {
+                    logContainer.innerHTML = "";
+                    data.logs.forEach(log => {
+                        const logLine = document.createElement("div");
+                        logLine.classList.add("log-line");
+                        logLine.textContent = log;
+                        logContainer.appendChild(logLine);
+                    });
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+            })
+            .catch(error => console.error("로그 가져오기 실패:", error));
+    }
+</script>
+
+
+</body>
+</html>

@@ -7,6 +7,7 @@ from waitress import serve
 from werkzeug.middleware.proxy_fix import ProxyFix
 from app.task_manager import start_periodic_task
 from logger_config import setup_logging
+from app import create_app, socketio
 
 
 # 1️⃣ 로그 설정 적용
@@ -84,4 +85,4 @@ if __name__ == '__main__':
     # socketio.run(app, debug=True, host='0.0.0.0', port=8090) # Flask + WebSocket 서버 동시 실행
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
 
-    # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다
+    # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원

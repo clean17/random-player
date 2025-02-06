@@ -8,8 +8,15 @@ from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
 from .task_manager import compress_directory_to_zip, OUTPUT_ZIP_FILE
 import multiprocessing
+import time
+from flask_socketio import SocketIO
+from datetime import datetime
 
 func = Blueprint('func', __name__)
+
+socketio = SocketIO()
+
+LOG_DIR = "logs"
 
 # Windows API 상수
 SHERB_NOCONFIRMATION = 0x00000001  # 사용자 확인 대화 상자를 표시하지 않음
@@ -148,3 +155,55 @@ def compress_now():
     process = multiprocessing.Process(target=compress_directory_to_zip)
     process.start()
     return jsonify({"status": "Compression started"}), 202
+
+
+######################## log ##############################
+
+
+def get_log_filename(date=None):
+    """주어진 날짜(yyMMdd)의 로그 파일 경로 반환. 날짜가 없으면 오늘 날짜 사용"""
+    if date is None:
+        date = datetime.now().strftime("%y%m%d")
+    return os.path.join(LOG_DIR, f"app_{date}.log")
+
+@func.route("/logs/view")
+def get_log_viewer():
+    """로그 뷰어 HTML 페이지 제공"""
+    return render_template("log_viewer.html")
+
+@func.route("/logs")
+def get_latest_logs():
+    """최신 로그 파일 가져오기"""
+    return get_logs_by_date(datetime.now().strftime("%y%m%d"))
+
+@func.route("/logs/<date>")
+def get_logs_by_date(date):
+    """특정 날짜의 로그 파일 가져오기"""
+    log_file = get_log_filename(date)  # 클라이언트 요청 날짜의 로그 파일 읽기
+    if not os.path.exists(log_file):
+        return jsonify({"error": f"{date} 로그 파일이 없습니다."}), 404
+
+    with open(log_file, "r", encoding="utf-8") as f:
+        logs = f.readlines()
+
+    return jsonify({"logs": logs})
+
+
+def tail_log_file():
+    """실시간 로그를 WebSocket으로 전송하는 함수"""
+    log_file = get_log_filename()
+
+    with open(log_file, "r", encoding="utf-8") as f:
+        f.seek(0, os.SEEK_END)  # 파일 끝에서부터 읽기 시작
+
+        while True:
+            line = f.readline()
+            if line:
+                socketio.emit("log_update", {"log": line})  # 프론트로 로그 전송
+            else:
+                time.sleep(1)  # 새로운 로그가 없으면 잠시 대기
+
+@socketio.on("connect")
+def handle_connect():
+    """클라이언트가 WebSocket에 연결될 때 실행"""
+    socketio.start_background_task(tail_log_file)  # 백그라운드에서 로그 모니터링 시작
