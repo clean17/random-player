@@ -63,7 +63,10 @@
             </div>
         </form>
         <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload Image</button></a>
+    {% if current_user.get_id() != config.GUEST_USERNAME %}
         <a href="{{ url_for('func.get_log_viewer') }}"><button type="button" id="btn923" class="btn-w100">View Log</button></a>
+    {% endif %}
+        <a href="{{ url_for('func.get_chat_ui') }}"><button type="button" id="btn924" class="btn-w100">Chat</button></a>
 <!--    </form>-->
 </div>
 </body>

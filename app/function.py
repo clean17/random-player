@@ -206,4 +206,11 @@ def tail_log_file():
 @socketio.on("connect")
 def handle_connect():
     """클라이언트가 WebSocket에 연결될 때 실행"""
-    socketio.start_background_task(tail_log_file)  # 백그라운드에서 로그 모니터링 시작
+    socketio.start_background_task(tail_log_file)  # 백그라운드에서 로그 모니터링 시작\
+
+
+
+################################# Chat ######################################
+@func.route("/chat")
+def get_chat_ui():
+    return render_template("chat_ui.html")
