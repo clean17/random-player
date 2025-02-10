@@ -1,10 +1,14 @@
 import logging
+import logging.handlers
+import queue
+from threading import Thread
 import io
 import os
 import re
 import sys
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 # stdout과 stderr 인코딩을 강제로 UTF-8로 설정
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -53,15 +57,29 @@ def setup_logging():
     today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로 변환
     log_filename = f"logs/app_{today_str}.log"
     # file_handler = logging.FileHandler(log_filename, encoding="utf-8")
-    file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, encoding="utf-8", backupCount=7)
+    # file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, encoding="utf-8", backupCount=7)
+    file_handler = ConcurrentRotatingFileHandler(log_filename, maxBytes=5*1024*1024, encoding="utf-8", backupCount=7)
+
+    # 로그 메시지를 저장할 큐 생성
+    log_queue = queue.Queue()
+
     file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
     # file_handler.setFormatter(formatter)
     console_formatter = ColorFormatter("### %(asctime)s - %(name)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(console_formatter)
 
+    # QueueHandler 생성 (모든 로그를 큐로 보냄)
+    queue_handler = logging.handlers.QueueHandler(log_queue)
+    # logger = logging.getLogger("my_logger")
+
     # 5️⃣ 핸들러를 로거에 추가
     logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
+    # logger.addHandler(file_handler)
+    logger.addHandler(queue_handler)
+
+    # QueueListener: 백그라운드에서 로그 처리
+    listener = logging.handlers.QueueListener(log_queue, file_handler)
+    listener.start()
 
     # 6️⃣ 특정 모듈의 로그 레벨 조정
 
