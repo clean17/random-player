@@ -183,30 +183,61 @@ def get_logs_by_date(date):
     if not os.path.exists(log_file):
         return jsonify({"error": f"{date} 로그 파일이 없습니다."}), 404
 
-    with open(log_file, "r", encoding="utf-8") as f:
-        logs = f.readlines()
+    try:
+        with open(log_file, "r", encoding="utf-8") as f:
+            logs = f.readlines()
+    except PermissionError:
+        return jsonify({"error": "로그 파일을 현재 사용할 수 없습니다. 잠시 후 다시 시도하세요."}), 503
+    except Exception as e:
+        return jsonify({"error": f"로그 파일을 읽는 중 오류 발생: {e}"}), 500
 
     return jsonify({"logs": logs})
 
+
+# def tail_log_file():
+#     """실시간 로그를 WebSocket으로 전송하는 함수"""
+#     log_file = get_log_filename()
+#
+#     with open(log_file, "r", encoding="utf-8") as f:
+#         f.seek(0, os.SEEK_END)  # 파일 끝에서부터 읽기 시작
+#
+#         while True:
+#             line = f.readline()
+#             if line:
+#                 socketio.emit("log_update", {"log": line})  # 프론트로 로그 전송
+#             else:
+#                 time.sleep(1)  # 새로운 로그가 없으면 잠시 대기
 
 def tail_log_file():
     """실시간 로그를 WebSocket으로 전송하는 함수"""
     log_file = get_log_filename()
 
-    with open(log_file, "r", encoding="utf-8") as f:
-        f.seek(0, os.SEEK_END)  # 파일 끝에서부터 읽기 시작
+    last_position = 0  # 마지막으로 읽은 파일 위치 저장
 
-        while True:
-            line = f.readline()
-            if line:
-                socketio.emit("log_update", {"log": line})  # 프론트로 로그 전송
-            else:
-                time.sleep(1)  # 새로운 로그가 없으면 잠시 대기
+    while True:
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                f.seek(last_position)  # 마지막 읽은 위치로 이동
+
+                while True:
+                    line = f.readline()
+                    if not line:
+                        break  # 새로운 내용이 없으면 반복문 탈출
+
+                    socketio.emit("log_update", {"log": line})  # 프론트로 로그 전송
+                    last_position = f.tell()  # 읽은 위치 저장
+
+            time.sleep(1)  # 새로운 로그가 없으면 잠시 대기
+
+        except Exception as e:
+            print(f"로그 파일 읽기 오류: {e}")
+            time.sleep(1)  # 오류 발생 시 재시도
+
 
 @socketio.on("connect")
 def handle_connect():
     """클라이언트가 WebSocket에 연결될 때 실행"""
-    socketio.start_background_task(tail_log_file)  # 백그라운드에서 로그 모니터링 시작\
+    socketio.start_background_task(tail_log_file)  # 백그라운드에서 로그 모니터링 시작
 
 
 
