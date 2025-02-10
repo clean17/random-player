@@ -9,6 +9,8 @@ from app.task_manager import start_periodic_task
 from logger_config import setup_logging
 from app import create_app, socketio
 from flask_cors import CORS
+import subprocess
+
 
 
 # 1️⃣ 로그 설정 적용
@@ -16,7 +18,7 @@ logger = setup_logging()
 
 # 2️⃣ Flask 앱 생성
 app = create_app()
-CORS(app, origins=["http://127.0.0.1:3000", "http://localhost:8090"], supports_credentials=True)
+# CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True)
 
 '''
 Hop-by-Hop: HTTP/1.1 프로토콜에서 사용하는 헤더
@@ -81,6 +83,15 @@ if __name__ == '__main__':
     logger.info("################################### Starting server.... ####################################")
 
     start_periodic_task() # 업로드 파일 압축파일 생성
+
+    # Node.js 프로젝트 경로 (이스케이프 문제 해결)
+    node_project_path = r"C:\my-project\nodejs-wss"
+
+    # 'npm run dev' 실행 (백그라운드 실행)
+    process = subprocess.Popen(["cmd", "/c", "npm run dev"], cwd=node_project_path, text=True)
+
+    # 서버가 실행되는 동안 다른 작업을 수행할 수 있음
+    print("Node.js 서버가 실행되었습니다.")
 
     app.run(debug=True, host='0.0.0.0', port=8090) # __init__.py 에서 WebSocket 기능을 추가함
     # socketio.run(app, debug=True, host='0.0.0.0', port=8090) # Flask + WebSocket 서버 동시 실행
