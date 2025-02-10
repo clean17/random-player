@@ -5,18 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat UI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<!--    <script src="http://127.0.0.1:3000/socket.io/socket.io.js"></script>-->
 </head>
 <body class="flex justify-center items-center h-screen bg-gray-100">
 <!-- 컨테이너 스타일 반영 -->
 <div class="bg-white p-5 shadow-md rounded-lg w-full max-w-screen w-screen max-w-md mx-auto text-center overflow-hidden">
     <!-- 채팅 메시지 목록 -->
     <div class="flex flex-col h-full max-h-[80vh] overflow-y-auto space-y-2 p-4" id="chat-container">
-        {% for msg in messages %}
-        <div class="p-2 rounded-lg max-w-[70%] {% if msg.sender == 'me' %}bg-blue-200 self-end text-right{% else %}bg-gray-200 self-start{% endif %}">
-            {{ msg.text }}
-        </div>
-        {% endfor %}
+        <ul id="messages" class="space-y-2">
+            {% for msg in messages %}
+            <li class="p-2 rounded-lg max-w-[70%] {% if msg.sender == 'me' %}bg-blue-200 self-end text-right{% else %}bg-gray-200 self-start{% endif %}">
+                {{ msg.text }}
+            </li>
+            {% endfor %}
+        </ul>
     </div>
+
     <!-- 입력 영역 -->
     <div class="flex items-center border-t p-2 bg-white">
         <button class="p-2 text-gray-500 hover:text-gray-700">
@@ -28,20 +33,65 @@
 </div>
 
 <script>
-    document.getElementById("send-button").addEventListener("click", async function() {
-        let input = document.getElementById("chat-input");
-        let text = input.value.trim();
-        if (!text) return;
+    const socket = io("http://127.0.0.1:3000");
 
-        let response = await fetch('/send_message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text })
-        });
+    // Flask에서 렌더링한 username 값 가져오기
+    const username = "{{ username }}";
 
-        let newMessage = await response.json();
-        window.location.reload();  // Jinja will handle re-rendering
+    // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
+    socket.emit("user_info", { username });
+
+    function sendMsg(event) {
+        event.preventDefault();
+        const msg = document.getElementById("chat-input").value;
+        socket.emit("new_msg", { username, msg });
+        document.getElementById("chat-input").value = "";
+    }
+
+    /*socket.on("new_msg", function(data) {
+        const ul = document.getElementById("messages");
+        const li = document.createElement("li");
+        li.textContent = `${data.username}: ${data.msg}`;
+        ul.appendChild(li);
+    });*/
+    socket.on("new_msg", function(data) {
+        const chatContainer = document.getElementById("chat-container");
+
+        // 새로운 메시지 요소 생성
+        const messageDiv = document.createElement("div");
+        messageDiv.classList.add("p-2", "rounded-lg", "max-w-[70%]");
+
+        if (data.username === username) {
+            messageDiv.classList.add("bg-blue-200", "self-end", "text-right");
+        } else {
+            messageDiv.classList.add("bg-gray-200", "self-start");
+        }
+
+        // messageDiv.textContent = `${data.username}: ${data.msg}`;
+        messageDiv.textContent = `${data.msg}`;
+
+        // 메시지 목록에 추가
+        chatContainer.appendChild(messageDiv);
+
+        // 채팅 창을 자동으로 아래로 스크롤
+        chatContainer.scrollTop = chatContainer.scrollHeight;
     });
+
+    function enterEvent(event) {
+        if (event.key === 'Enter') {
+            sendMsg(event);
+        }
+    }
+
+    function initPage() {
+        document.getElementById('chat-input').removeEventListener('keyup', enterEvent)
+        document.getElementById('chat-input').addEventListener('keyup', enterEvent)
+
+        document.getElementById("send-button").removeEventListener("click", sendMsg);
+        document.getElementById("send-button").addEventListener("click", sendMsg);
+    }
+
+    document.addEventListener("DOMContentLoaded", initPage);
 </script>
 </body>
 </html>
