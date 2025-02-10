@@ -8,6 +8,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.task_manager import start_periodic_task
 from logger_config import setup_logging
 from app import create_app, socketio
+from flask_cors import CORS
 
 
 # 1️⃣ 로그 설정 적용
@@ -15,7 +16,7 @@ logger = setup_logging()
 
 # 2️⃣ Flask 앱 생성
 app = create_app()
-
+CORS(app, origins=["http://127.0.0.1:3000", "http://localhost:8090"], supports_credentials=True)
 
 '''
 Hop-by-Hop: HTTP/1.1 프로토콜에서 사용하는 헤더
