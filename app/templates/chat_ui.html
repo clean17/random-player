@@ -6,34 +6,44 @@
     <title>Chat UI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<!--    <script src="http://127.0.0.1:3000/socket.io/socket.io.js"></script>-->
+    <!--    <script src="http://127.0.0.1:3000/socket.io/socket.io.js"></script>-->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
 </head>
-<body class="flex justify-center items-center h-screen bg-gray-100">
-<!-- 컨테이너 스타일 반영 -->
-<div class="bg-white p-5 shadow-md rounded-lg w-full max-w-screen w-screen max-w-md mx-auto text-center overflow-hidden">
-    <!-- 채팅 메시지 목록 -->
-    <div class="flex flex-col h-full max-h-[80vh] overflow-y-auto space-y-2 p-4" id="chat-container">
-        <ul id="messages" class="space-y-2">
-            {% for msg in messages %}
-            <li class="p-2 rounded-lg max-w-[70%] {% if msg.sender == 'me' %}bg-blue-200 self-end text-right{% else %}bg-gray-200 self-start{% endif %}">
-                {{ msg.text }}
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
 
-    <!-- 입력 영역 -->
-    <div class="flex items-center border-t p-2 bg-white">
-        <button class="p-2 text-gray-500 hover:text-gray-700">
-            📷
-        </button>
-        <input type="text" id="chat-input" class="flex-1 p-2 border rounded-lg focus:outline-none" placeholder="Type a message...">
-        <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700">📤</button>
+<!--<body class="flex justify-center items-center h-screen bg-gray-100">-->
+<body class="">
+<div class="top-bar">
+    <div class="logout">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        {% endif %}
+    </div>
+    <div class="back">
+        <a href="{{ url_for('main.home') }}">Back</a>
+    </div>
+</div>
+
+<div class="container" style="height: 100vh; width: 30%;">
+    <div class="bg-white p-5 shadow-md rounded-lg w-full h-full text-center overflow-hidden flex flex-col">
+        <!-- 채팅 메시지 목록 -->
+        <div class="flex-1 overflow-y-auto space-y-2 p-4" id="chat-container">
+        </div>
+        <!-- 입력 영역 -->
+        <div class="flex items-center border-t p-2 bg-white">
+            <button class="p-2 text-gray-500 hover:text-gray-700 w-[5%] mr-4">📷</button>
+            <input type="text" id="chat-input" class="p-2 border rounded-lg focus:outline-none w-[86%]"
+                   placeholder="Type a message...">
+            <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[5%] ml-2">📤</button>
+        </div>
     </div>
 </div>
 
 <script>
-    const socket = io("http://127.0.0.1:3000");
+    /*const socket = io("https://merci-seoul.iptime.org", {
+        secure: true
+    });*/
+    const socket = io("http://localhost:3000");
 
     // Flask에서 렌더링한 username 값 가져오기
     const username = "{{ username }}";
@@ -41,41 +51,63 @@
     // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
     socket.emit("user_info", { username });
 
+    socket.on("new_msg", function(data) {
+        addMessage(data);
+    });
+
+    socket.on("bye", function(data) {
+        addMessage(data);
+    });
+
+    socket.on("enter_user", function(data) {
+        if (data.username !== username) {
+            addMessage(data);
+        }
+    });
+
+
+
+
     function sendMsg(event) {
         event.preventDefault();
-        const msg = document.getElementById("chat-input").value;
-        socket.emit("new_msg", { username, msg });
-        document.getElementById("chat-input").value = "";
+        const input = document.getElementById("chat-input");
+        const msg = input.value.trim();
+        if (msg !== "") {
+            socket.emit("new_msg", { username, msg });
+            input.value = "";
+        }
     }
 
-    /*socket.on("new_msg", function(data) {
-        const ul = document.getElementById("messages");
-        const li = document.createElement("li");
-        li.textContent = `${data.username}: ${data.msg}`;
-        ul.appendChild(li);
-    });*/
-    socket.on("new_msg", function(data) {
+    function addMessage(data) {
         const chatContainer = document.getElementById("chat-container");
 
-        // 새로운 메시지 요소 생성
         const messageDiv = document.createElement("div");
-        messageDiv.classList.add("p-2", "rounded-lg", "max-w-[70%]");
+        // messageDiv.classList.add("p-2", "rounded-lg", "max-w-[70%]");
+        messageDiv.classList.add(
+            "p-2",
+            "rounded-lg",
+            "max-w-[70%]",  // 최대 너비 70%
+            "w-fit",
+            "block", // 내용에 맞게 크기 조정
+            "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
+        );
+
 
         if (data.username === username) {
-            messageDiv.classList.add("bg-blue-200", "self-end", "text-right");
+            // 내가 보낸 메시지 (우측, 파란색)
+            messageDiv.classList.add("bg-blue-200", "self-end", "text-right", "ml-auto");
         } else {
-            messageDiv.classList.add("bg-gray-200", "self-start");
+            // 받은 메시지 (좌측, 회색)
+            messageDiv.classList.add("bg-gray-200", "self-start", "text-left", "mr-auto");
         }
 
         // messageDiv.textContent = `${data.username}: ${data.msg}`;
         messageDiv.textContent = `${data.msg}`;
-
-        // 메시지 목록에 추가
         chatContainer.appendChild(messageDiv);
 
         // 채팅 창을 자동으로 아래로 스크롤
         chatContainer.scrollTop = chatContainer.scrollHeight;
-    });
+    }
 
     function enterEvent(event) {
         if (event.key === 'Enter') {
