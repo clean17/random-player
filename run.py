@@ -85,15 +85,17 @@ if __name__ == '__main__':
     start_periodic_task() # 업로드 파일 압축파일 생성
 
     # Node.js 프로젝트 경로 (이스케이프 문제 해결)
-    node_project_path = r"C:\my-project\nodejs-wss"
+    # node_project_path = r"C:\my-project\nodejs-wss"
+    node_project_path = r"E:\my\nodejs-wss"
 
     # 'npm run dev' 실행 (백그라운드 실행)
+    # process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=node_project_path, text=True)
     process = subprocess.Popen(["cmd", "/c", "npm run dev"], cwd=node_project_path, text=True)
 
     # 서버가 실행되는 동안 다른 작업을 수행할 수 있음
     print("Node.js 서버가 실행되었습니다.")
 
-    app.run(debug=True, host='0.0.0.0', port=8090) # __init__.py 에서 WebSocket 기능을 추가함
+    app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False) # __init__.py 에서 WebSocket 기능을 추가함
     # socketio.run(app, debug=True, host='0.0.0.0', port=8090) # Flask + WebSocket 서버 동시 실행
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
 

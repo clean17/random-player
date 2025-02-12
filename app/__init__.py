@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone
-from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for
+from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for, send_from_directory
 from flask_login import LoginManager, current_user
 from .auth import auth, User, users
 from config import load_config
@@ -108,22 +108,9 @@ def create_app():
             return User(user_id)
         return None
 
-    @app.route('/logs')
-    def view_logs():
-        try:
-            return send_file('logs/app.log', mimetype='text/plain')
-        except Exception as e:
-            return str(e)
-
-    @app.route('/logs_html')
-    def view_logs_html():
-        try:
-            with open('logs/app.log', 'r', encoding='utf-8') as log_file:
-                log_content = log_file.read()
-            log_html = '<br>'.join(log_content.split('\n'))
-            return render_template_string('<pre>{{ logs }}</pre>', logs=log_html)
-        except Exception as e:
-            return str(e)
+     @app.route("/service-worker.js")
+     def service_worker():
+         return send_from_directory(".", "service-worker.js", mimetype="application/javascript")
 
     def check_server_restarted():
         restart_flag = 'server_status.txt'
