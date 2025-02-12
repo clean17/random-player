@@ -1,4 +1,4 @@
-from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort, send_from_directory
+from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort, send_from_directory, session, url_for, redirect
 import ctypes
 from flask_login import login_required
 import zipfile
@@ -22,6 +22,9 @@ LOG_DIR = "logs"
 SHERB_NOCONFIRMATION = 0x00000001  # 사용자 확인 대화 상자를 표시하지 않음
 SHERB_NOPROGRESSUI = 0x00000002   # 진행 UI를 표시하지 않음
 SHERB_NOSOUND = 0x00000004        # 소리를 재생하지 않음
+
+CHAT_FILENAME = f"logs/chat.log"
+
 
 # def empty_recycle_bin():
 #     """휴지통 비우기 함수"""
@@ -193,21 +196,6 @@ def get_logs_by_date(date):
 
     return jsonify({"logs": logs})
 
-
-# def tail_log_file():
-#     """실시간 로그를 WebSocket으로 전송하는 함수"""
-#     log_file = get_log_filename()
-#
-#     with open(log_file, "r", encoding="utf-8") as f:
-#         f.seek(0, os.SEEK_END)  # 파일 끝에서부터 읽기 시작
-#
-#         while True:
-#             line = f.readline()
-#             if line:
-#                 socketio.emit("log_update", {"log": line})  # 프론트로 로그 전송
-#             else:
-#                 time.sleep(1)  # 새로운 로그가 없으면 잠시 대기
-
 def tail_log_file():
     """실시간 로그를 WebSocket으로 전송하는 함수"""
     log_file = get_log_filename()
@@ -242,6 +230,41 @@ def handle_connect():
 
 
 ################################# Chat ######################################
+# 로그 파일에서 가장 최근 N개의 메시지 가져오기
+def get_last_n_lines(n):
+    try:
+        with open(CHAT_FILENAME, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        return lines[-n:]  # 가장 마지막 N개 줄 반환
+    except FileNotFoundError:
+        return []  # 파일이 없으면 빈 리스트 반환
+
 @func.route("/chat")
 def get_chat_ui():
-    return render_template("chat_ui.html")
+    if "_user_id" not in session:
+        return redirect(url_for('auth.logout'))  # 로그인 안 되어 있으면 로그인 페이지로 이동
+
+    latest_logs = get_last_n_lines(10)
+    return render_template("chat_ui.html", username=session["_user_id"])
+
+@func.route("/chat/save-file", methods=["POST"])
+def save_chat_message():
+    data = request.json
+    log_entry = f"{data['timestamp']} | {data['username']} | {data['message']}"
+    with open(CHAT_FILENAME, "a", encoding="utf-8") as log_file:
+        log_file.write(log_entry + "\n")
+    return {"status": "success"}, 200
+
+# 비동기로 추가 채팅 로그 요청 API
+@func.route("/chat/load-more-chat", methods=["POST"])
+def load_more_logs():
+    offset = int(request.json.get("offset", 0))  # 클라이언트가 요청한 로그 시작점
+    all_lines = get_last_n_lines(1000)  # 최대 로그 유지
+
+    start = max(0, len(all_lines) - offset - 20)
+    end = len(all_lines) - offset
+
+    if (end > 0):
+        return jsonify({"logs": all_lines[start:end]})
+    else:
+        return jsonify({"logs": []})
