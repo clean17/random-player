@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,6 +28,11 @@
     <div class="bg-white p-5 shadow-md rounded-lg w-full h-full text-center overflow-hidden flex flex-col">
         <!-- 채팅 메시지 목록 -->
         <div class="flex-1 overflow-y-auto space-y-2 p-4" id="chat-container">
+            {% for log in chat_logs %}
+            <div class="message">
+                {{ log }}
+            </div>
+            {% endfor %}
         </div>
         <!-- 입력 영역 -->
         <div class="flex items-center border-t p-2 bg-white">
@@ -44,15 +49,19 @@
         secure: true
     });*/
     const socket = io("http://localhost:3000");
-
-    // Flask에서 렌더링한 username 값 가져오기
-    const username = "{{ username }}";
+    const username = "{{ username }}";  // Flask에서 전달된 username
+    let offset = 0; // 가장 최근 10개는 이미 로드됨
+    let loading = false;
+    const chatContainer = document.getElementById("chat-container");
+    const chatInput = document.getElementById("chat-input");
+    const sendButton = document.getElementById("send-button");
 
     // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
     socket.emit("user_info", { username });
 
     socket.on("new_msg", function(data) {
         addMessage(data);
+        sendNotification(data);
     });
 
     socket.on("bye", function(data) {
@@ -65,24 +74,59 @@
         }
     });
 
+    // 📌 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
+    chatContainer.addEventListener("scroll", function () {
+        if (chatContainer.scrollTop === 0 && !loading) {
+            loadMoreChats();
+        }
+    });
 
+    function loadMoreChats() {
+        if (loading) return;  // 중복 호출 방지
+        loading = true;
 
+        // 현재 스크롤 위치 저장
+        const prevScrollHeight = chatContainer.scrollHeight;
+        const prevScrollTop = chatContainer.scrollTop;
 
+        fetch("/func/chat/load-more-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ offset: offset })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.logs.length > 0) {
+                    const tempArr = []
+                    offset += 20;
+
+                    data.logs.map(log => {
+                        tempArr.push(log)
+                    });
+
+                    tempArr.reverse().forEach(log => {
+                        const [timestamp, username, msg] = log.toString().split("|");
+                        chatObj = { username: username.trim(), msg: msg.replace('\n', '').trim() }
+                        addMessage(chatObj, true)
+                        chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
+                    });
+                }
+            })
+            .finally(() => { loading = false; });
+    }
+
+    // 📌 메시지 전송 후 아래쪽에 추가
     function sendMsg(event) {
         event.preventDefault();
-        const input = document.getElementById("chat-input");
-        const msg = input.value.trim();
+        const msg = chatInput.value.trim();
         if (msg !== "") {
             socket.emit("new_msg", { username, msg });
-            input.value = "";
+            chatInput.value = "";
         }
     }
 
-    function addMessage(data) {
-        const chatContainer = document.getElementById("chat-container");
-
+    function addMessage(data, load=false) {
         const messageDiv = document.createElement("div");
-        // messageDiv.classList.add("p-2", "rounded-lg", "max-w-[70%]");
         messageDiv.classList.add(
             "p-2",
             "rounded-lg",
@@ -91,7 +135,6 @@
             "block", // 내용에 맞게 크기 조정
             "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
         );
-
 
         if (data.username === username) {
             // 내가 보낸 메시지 (우측, 파란색)
@@ -103,10 +146,12 @@
 
         // messageDiv.textContent = `${data.username}: ${data.msg}`;
         messageDiv.textContent = `${data.msg}`;
-        chatContainer.appendChild(messageDiv);
-
-        // 채팅 창을 자동으로 아래로 스크롤
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        if (load) {
+            chatContainer.prepend(messageDiv);
+        } else {
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;  // 채팅 창 자동 스크롤
+        }
     }
 
     function enterEvent(event) {
@@ -116,11 +161,11 @@
     }
 
     function initPage() {
-        document.getElementById('chat-input').removeEventListener('keyup', enterEvent)
-        document.getElementById('chat-input').addEventListener('keyup', enterEvent)
-
-        document.getElementById("send-button").removeEventListener("click", sendMsg);
-        document.getElementById("send-button").addEventListener("click", sendMsg);
+        chatInput.removeEventListener('keyup', enterEvent);
+        chatInput.addEventListener('keyup', enterEvent);
+        sendButton.removeEventListener("click", sendMsg);
+        sendButton.addEventListener("click", sendMsg);
+        loadMoreChats();
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
