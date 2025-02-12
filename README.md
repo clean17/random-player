@@ -205,5 +205,6 @@ tasklist | findstr nginx
 # Nginx 프로세스를 강제 종료
 taskkill /F /IM nginx.exe
 # pid 파일 삭제
-logs\nginx.pid
+cd ..\..\nginx\nginx-1.26.2\logs
+del nginx.pid
 ```
