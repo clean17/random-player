@@ -29,13 +29,11 @@
 </div>
 <div class="container">
     <h2>Upload File</h2>
-    <!--    <form action="{{ url_for('ffmpeg.run_batch') }}" method="post">-->
-    <!--        <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">-->
-    <!--        <input type="text" id="content" name="content" placeholder="Enter Content" class="input-size" autocomplete="off">-->
+<!--            <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">-->
+<!--            <input type="text" id="content" name="content" placeholder="Enter Content" class="input-size" autocomplete="off">-->
     <div id="uppy-dashboard" style="background-color: white"></div>
     <button id="start-upload-button" style="margin-top: 10px" class="btn-w100">Start Upload</button>
-    <!--        <button type="submit" class="input-button-size">Upload File</button>-->
-    <!--    </form>-->
+<!--            <button type="submit" class="input-button-size">Upload File</button>-->
 </div>
 <script>
     const screenHeight = window.innerHeight,
@@ -47,7 +45,7 @@
         autoProceed: false, // 파일 추가 시 자동으로 업로드 진행
         restrictions: {
             maxFileSize: 5000000000, // 5GB
-            maxNumberOfFiles: 5000,
+            maxNumberOfFiles: 100,
             minNumberOfFiles: 1,
         },
     })
