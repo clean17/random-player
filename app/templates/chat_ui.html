@@ -24,7 +24,7 @@
     </div>
 </div>
 
-<div class="container" style="height: 100vh; width: 30%;">
+<div class="container" style="height: 100vh; width: 100%; max-width: 600px">
     <div class="bg-white p-5 shadow-md rounded-lg w-full h-full text-center overflow-hidden flex flex-col">
         <!-- 채팅 메시지 목록 -->
         <div class="flex-1 overflow-y-auto space-y-2 p-4" id="chat-container">
@@ -61,7 +61,7 @@
 
     socket.on("new_msg", function(data) {
         addMessage(data);
-        sendNotification(data);
+        // sendNotification(data);
     });
 
     socket.on("bye", function(data) {
