@@ -33,6 +33,10 @@ class ColorFormatter(logging.Formatter):
         log_message = super().format(record)
         return self.ANSI_ESCAPE_RE.sub('', log_message)  # ANSI 색상 코드 제거
 
+class NoImageLogsFilter(logging.Filter):
+    def filter(self, record):
+        return "/image/images" not in record.getMessage()
+
 
 def setup_logging():
     """
@@ -86,10 +90,12 @@ def setup_logging():
     # logging.getLogger("werkzeug").setLevel(logging.INFO)  # Flask 기본 서버 로그
     werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.setLevel(logging.INFO)
+    werkzeug_logger.addFilter(NoImageLogsFilter())
 
     # logging.getLogger("waitress").setLevel(logging.INFO)  # Waitress 로그
     waitress_logger = logging.getLogger('waitress')
     waitress_logger.setLevel(logging.INFO)
+    waitress_logger.addFilter(NoImageLogsFilter())
     # Waitress 로그를 root로 전파하지 않음 > file에 로그가 남지 않는다
     # waitress_logger.propagate = False
 

@@ -108,9 +108,9 @@ def create_app():
             return User(user_id)
         return None
 
-     @app.route("/service-worker.js")
-     def service_worker():
-         return send_from_directory(".", "service-worker.js", mimetype="application/javascript")
+#     @app.route("/service-worker.js")
+#     def service_worker():
+#         return send_from_directory(".", "service-worker.js", mimetype="application/javascript")
 
     def check_server_restarted():
         restart_flag = 'server_status.txt'
