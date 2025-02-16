@@ -11,6 +11,7 @@ import multiprocessing
 import time
 from flask_socketio import SocketIO
 from datetime import datetime
+from .lotto-schedule import buy_lotto
 
 func = Blueprint('func', __name__)
 
@@ -290,5 +291,9 @@ def load_more_logs():
 
     if (end > 0):
         return jsonify({"logs": all_lines[start:end]})
-    else:
+ _   else:
         return jsonify({"logs": []})
+
+@func.route("/buy/lotto-test")
+def test_lotto():
+    buy_lotto()

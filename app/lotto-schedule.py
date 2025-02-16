@@ -8,7 +8,7 @@ USER_PW = setting[LOTTO_PASSWORD]
 
 COUNT = 1 # 구매 수량
 
-def my_task():
+def buy_lotto():
     print("매주 토요일 09:00에 실행되는 작업")
 
     def run(playwright: Playwright) -> None:
@@ -81,7 +81,7 @@ def my_task():
         run(playwright)
 
 # 매주 토요일 09:00 실행
-schedule.every().saturday.at("09:00").do(my_task)
+schedule.every().saturday.at("09:00").do(buy_lotto)
 
 while True:
     schedule.run_pending()
