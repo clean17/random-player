@@ -48,7 +48,7 @@ def my_task():
         page.goto(url="https://ol.dhlottery.co.kr/olotto/game/game645.do")
         # "비정상적인 방법으로 접속하였습니다. 정상적인 PC 환경에서 접속하여 주시기 바랍니다." 우회하기
         # page.locator("#popupLayerAlert").get_by_role("button", name="확인").click()
-        print(page.content())
+        # print(page.content())
 
         # Click text=자동번호발급
         page.click("text=자동번호발급")
@@ -72,6 +72,7 @@ def my_task():
         page.click("input[name=\"closeLayer\"]")
         # assert page.url == "https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40"
 
+        print('구매 완료')
         # ---------------------
         context.close()
         browser.close()

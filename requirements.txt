@@ -37,6 +37,7 @@ python-socketio==5.12.1
 pytz==2024.1
 pywin32==306
 requests==2.32.3
+schedule==1.2.2
 Send2Trash==1.8.3
 simple-websocket==1.1.0
 six==1.16.0
