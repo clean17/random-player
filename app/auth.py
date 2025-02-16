@@ -57,7 +57,7 @@ def login():
 
             # GUEST_USERNAME 사용자라면 특정 페이지로 이동
             # if username == settings['GUEST_USERNAME']:
-            #     return redirect(url_for('image.trip_image_list'))
+            #     return redirect(url_for('image.image_list'))
 
             return redirect(url_for('main.home'))
         # 로그인 실패

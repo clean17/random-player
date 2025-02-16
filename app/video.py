@@ -12,6 +12,9 @@ from config import settings
 
 video = Blueprint('video', __name__)
 
+# 설정
+TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
+TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 
 @video.route('/select_directory', methods=['POST'])
 @login_required
@@ -54,8 +57,13 @@ def get_video(filename):
 @video.route('/temp-video/<path:filename>', methods=['GET'])
 @login_required
 def get_temp_video(filename):
-    directory = request.args.get('dir')
-    return send_file(os.path.join(directory, filename))
+    dir = request.args.get('dir')
+    if dir == 'temp':
+        dir = TEMP_IMAGE_DIR
+    else:
+        dir = TRIP_IMAGE_DIR
+
+    return send_file(os.path.join(dir, filename))
 
 @video.route('/delete/<path:filename>', methods=['DELETE'])
 @login_required

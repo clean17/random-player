@@ -72,19 +72,19 @@
             {% endfor %}
         </div>
         <div>
-            total : {{ total_images }}
+            total_count : {{ images_length }}
         </div>
         <div class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('image.trip_image_list', page=1, dir=dir) }}">&laquo;</a>
-            <a href="{{ url_for('image.trip_image_list', page=page-1, dir=dir) }}">&lt;</a>
+            <a href="{{ url_for('image.image_list', page=1, dir=dir) }}">&laquo;</a>
+            <a href="{{ url_for('image.image_list', page=page-1, dir=dir) }}">&lt;</a>
             {% endif %}
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-            <a href="{{ url_for('image.trip_image_list', page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.image_list', page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
             {% if page < total_pages %}
-            <a href="{{ url_for('image.trip_image_list', page=page+1, dir=dir) }}">&gt;</a>
-            <a href="{{ url_for('image.trip_image_list', page=total_pages, dir=dir) }}">&raquo;</a>
+            <a href="{{ url_for('image.image_list', page=page+1, dir=dir) }}">&gt;</a>
+            <a href="{{ url_for('image.image_list', page=total_pages, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>
         {% if current_user.get_id() != config.GUEST_USERNAME %}
