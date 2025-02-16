@@ -13,13 +13,10 @@ from .upload import upload
 import fnmatch
 
 ALLOWED_PATHS = [
-    '/image/trip_images',
-    '/image/temp_images',
-    '/image/images/',
-    # '/image/images',
+    '/image/images*',
+    '/image/pages',
     '/image/move_image*',
-    '/upload/',
-    '/upload',
+    '/upload*',
     '/func/download-zip*',
     '/video/temp-video*',
     '/func/chat*',

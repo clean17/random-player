@@ -57,7 +57,7 @@
             {% endfor %}
         </div>
         <div>
-            total : {{ total_images }}
+            total_count : {{ images_length }}
         </div>
         <div class="pagination">
             {% if page > 1 %}
@@ -72,7 +72,7 @@
                 <a href="{{ url_for('image.image_list', page=total_pages, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>
-        {% if total_images != 0 %}
+        {% if images_length != 0 %}
             <button type="submit" class="delete-button">Delete</button>
         {% endif %}
     </form>
@@ -80,7 +80,7 @@
 
 {#<button type="button" class="scroll-bottom-button" onclick="scrollToBottom()">Scroll to Bottom</button>#}
 
-{% if total_images != 0 %}
+{% if images_length != 0 %}
     <button id="next-image-button" class="floating-button">Next Image</button>
 {% endif %}
 

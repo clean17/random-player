@@ -102,42 +102,45 @@ def get_stock_graphs(dir, start, count):
 
 ###################### image ########################
 
-@image_bp.route('/images', methods=['GET'])
+@image_bp.route('/pages', methods=['GET'])
 @login_required
 def image_list():
+    # if current_user.username == settings['GUEST_USERNAME']:
     dir = request.args.get('dir')
     firstRequst = request.args.get('firstRequst')
-    # if current_user.username == settings['GUEST_USERNAME']:
+    images = []
+    images_length = 0
+    page = int(request.args.get('page', 1))
+    start = (page - 1) * LIMIT_PAGE_NUM
+
+
     if hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']:
-        template_html = 'trip_image_list.html'
-    elif dir == REF_IMAGE_DIR:
+        images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
+        images_length = len(os.listdir(TEMP_IMAGE_DIR))
+        template_html = 'temp_image_list.html'
+
+    elif dir == 'refine':
         if firstRequst == 'True':
-            initialize_shuffle_images()
+            initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
+        images = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR)
+        images_length = len(os.listdir(REF_IMAGE_DIR))
         template_html = 'ref_image_list.html'
-    elif dir == IMAGE_DIR:
+    elif dir == 'image':
+        images = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR)
+        images_length = len(os.listdir(IMAGE_DIR))
         template_html = 'image_list.html'
-    else:
+    elif dir == 'trip':
+        images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
+        images_length = len(os.listdir(TRIP_IMAGE_DIR))
+        template_html = 'trip_image_list.html'
+    elif dir == 'temp':
+        images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
+        images_length = len(os.listdir(TEMP_IMAGE_DIR))
         template_html = 'trip_image_list.html'
 
-    page = int(request.args.get('page', 1))
-    start = (page - 1) * LIMIT_PAGE_NUM
-    images = get_images(start, LIMIT_PAGE_NUM, dir)
-    total_images = len(os.listdir(dir))
-    total_pages = (total_images + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+    total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
-    return render_template(template_html, images=images, page=page, total_pages=total_pages, total_images=total_images, dir=dir)
-
-@image_bp.route('/trip_images', methods=['GET'])
-@login_required
-def trip_image_list():
-    dir = request.args.get('dir')
-    page = int(request.args.get('page', 1))
-    start = (page - 1) * LIMIT_PAGE_NUM
-    images = get_images(start, LIMIT_PAGE_NUM, dir)
-    total_images = len(os.listdir(dir))
-    total_pages = (total_images + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
-
-    return render_template('trip_image_list.html', images=images, page=page, total_pages=total_pages, total_images=total_images, dir=dir)
+    return render_template(template_html, images=images, page=page, total_pages=total_pages, images_length=images_length, dir=dir)
 
 
 @image_bp.route('/move_image/<imagepath>/<filename>', methods=['POST'])
@@ -188,6 +191,14 @@ def delete_images():
 def get_image():
     filename = request.args.get('filename')
     dir = request.args.get('dir')
+    if dir == 'image':
+        dir = IMAGE_DIR
+    elif dir == 'refine':
+        dir = REF_IMAGE_DIR
+    elif dir == 'trip':
+        dir = TRIP_IMAGE_DIR
+    elif dir == 'temp':
+        dir = TEMP_IMAGE_DIR
     return send_from_directory(dir, filename)
 
 @image_bp.route('/shuffle/ref_images', methods=['POST'])
@@ -211,8 +222,8 @@ def stock_graph_list(market):
     else:
         abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
 
-    total_images = len(os.listdir(directory))
-    total_pages = (total_images + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+    images_length = len(os.listdir(directory))
+    total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
     # print(market, directory, total_pages, images)
     return render_template('stock_graph_list.html', images=images, page=page, total_pages=total_pages, market=market)
