@@ -133,5 +133,10 @@
             window.location.href = selectedValue; // 선택된 URL로 이동
         }
     });
+
+    window.addEventListener("pageshow", function () {
+        document.getElementById("directory-select").selectedIndex = 0;
+        document.getElementById("image-select").selectedIndex = 0;
+    });
 </script>
 </html>
