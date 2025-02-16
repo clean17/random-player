@@ -243,6 +243,7 @@ button.delete-button:hover {
     justify-content: space-between;
     padding: 0 20px;
     z-index: 1000;
+    pointer-events: none;
 }
 
 .pagination-button {
@@ -258,6 +259,7 @@ button.delete-button:hover {
     align-items: center;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    pointer-events: auto;
 }
 
 .pagination-button:hover {
