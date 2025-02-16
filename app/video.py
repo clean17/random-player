@@ -47,7 +47,7 @@ def get_videos():
     random.shuffle(videos)
     return jsonify(videos)
 
-@video.route('/video/<path:filename>', methods=['GET'])
+@video.route('/videos/<path:filename>', methods=['GET'])
 @login_required
 def get_video(filename):
     directory = request.args.get('dir')

@@ -60,7 +60,7 @@ function setVideoOptions(vodUrl, videoFileType) {
 }
 
 function makeGetUrl(filename) {
-    const prefixUrl = dir === '0' ? `/video/stream/` : `/video/video/`;
+    const prefixUrl = dir === '0' ? `/video/stream/` : `/video/videos/`;
     return prefixUrl + `${encodeURIComponent(filename)}?dir=${dir}`;
 }
 
