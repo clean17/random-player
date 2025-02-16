@@ -37,7 +37,16 @@
 
 <script>
     const logContainer = document.getElementById("log-container");
-    const socket = io()  // WebSocket 연결
+    // const socket = io()  // WebSocket 연결
+    let eventSource = null; // SSE 연결
+
+    // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
+    /*socket.on("log_update", (data) => {
+        const selectedDate = document.getElementById("date-picker").value;
+        if (selectedDate === getTodayDate()) {
+            renderLogs(data.log)
+        }
+    });*/
 
     // 오늘 날짜 가져오기 (YYYY-MM-DD 형식)
     function getTodayDate() {
@@ -45,23 +54,33 @@
         return today.toISOString().split("T")[0]; // "YYYY-MM-DD" 형식 반환
     }
 
-    // 오늘 날짜 자동 선택 및 로그 로드
-    window.onload = function() {
-        document.getElementById("date-picker").value = getTodayDate();
-        loadLogs();  // 자동으로 오늘 날짜 로그 가져오기
-    };
-
-    // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
-    socket.on("log_update", (data) => {
-        const selectedDate = document.getElementById("date-picker").value;
-        if (selectedDate === getTodayDate()) {
-            const logLine = document.createElement("div");
-            logLine.classList.add("log-line");
-            logLine.textContent = data.log;
-            logContainer.appendChild(logLine);
-            logContainer.scrollTop = logContainer.scrollHeight; // 자동 스크롤
+    // SSE 스트림 시작
+    function startSSE() {
+        if (eventSource) {
+            eventSource.close(); // 기존 연결 종료
         }
-    });
+
+        eventSource = new EventSource("/func/logs/stream");
+
+        eventSource.onmessage = (event) => {
+            // console.log('msg', event.data)
+            renderLogs(event.data)
+        };
+
+        eventSource.onerror = () => {
+            console.error("SSE 연결 오류. 재연결 중...");
+            eventSource.close();
+            setTimeout(startSSE, 3000); // 3초 후 재연결
+        };
+    }
+
+    function renderLogs(log) {
+        const logLine = document.createElement("div");
+        logLine.classList.add("log-line");
+        logLine.textContent = log;
+        logContainer.appendChild(logLine);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
 
     // 날짜별 로그 가져오기
     function loadLogs() {
@@ -71,9 +90,23 @@
             return;
         }
 
+        // 오늘 날짜인 경우 SSE 사용
+        if (dateInput === getTodayDate()) {
+            logContainer.innerHTML = ""; // 기존 로그 초기화
+            startSSE(); // SSE 시작
+            return;
+        }
+
+        // 과거 로그 요청 시 SSE 종료
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+
         // YYYY-MM-DD → YYMMDD 변환
         const formattedDate = dateInput.replace(/-/g, "").slice(2);
 
+        // 이전 로그 호출
         fetch(`/func/logs/${formattedDate}`, { cache: "no-cache" })  // 🔥 캐싱 방지 추가
             .then(response => response.json())
             .then(data => {
@@ -81,17 +114,18 @@
                     logContainer.innerHTML = `<p style="color:red;">${data.error}</p>`;
                 } else {
                     logContainer.innerHTML = "";
-                    data.logs.forEach(log => {
-                        const logLine = document.createElement("div");
-                        logLine.classList.add("log-line");
-                        logLine.textContent = log;
-                        logContainer.appendChild(logLine);
-                    });
-                    logContainer.scrollTop = logContainer.scrollHeight;
+                    data.logs.forEach(log => renderLogs(log));
                 }
             })
             .catch(error => console.error("로그 가져오기 실패:", error));
     }
+
+    function initPage() {
+        document.getElementById("date-picker").value = getTodayDate();
+        loadLogs();
+    }
+
+    document.addEventListener("DOMContentLoaded", initPage);
 </script>
 
 

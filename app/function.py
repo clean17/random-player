@@ -1,4 +1,4 @@
-from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort, send_from_directory, session, url_for, redirect
+from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort, send_from_directory, session, url_for, redirect, Response
 import ctypes
 from flask_login import login_required
 import zipfile
@@ -196,6 +196,30 @@ def get_logs_by_date(date):
 
     return jsonify({"logs": logs})
 
+@func.route("/logs/stream")
+def stream_logs():
+    """SSE를 사용하여 실시간 로그 스트리밍"""
+    def generate():
+        log_file = get_log_filename()
+
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                f.seek(0, os.SEEK_END)  # 기존 로그 무시하고 새로운 로그만 읽음
+
+                while True:
+                    line = f.readline()
+                    if line:
+                        yield f"data: {line.strip()}\n\n"  # SSE 형식으로 로그 전송
+                    else:
+                        time.sleep(1)  # 새로운 로그가 없으면 대기
+
+        except Exception as e:
+            yield f"data: [ERROR] 로그 파일을 읽는 중 오류 발생: {e}\n\n"
+            time.sleep(3)  # 오류 발생 시 재시도
+
+    return Response(generate(), mimetype="text/event-stream")
+
+'''
 def tail_log_file():
     """실시간 로그를 WebSocket으로 전송하는 함수"""
     log_file = get_log_filename()
@@ -226,7 +250,7 @@ def tail_log_file():
 def handle_connect():
     """클라이언트가 WebSocket에 연결될 때 실행"""
     socketio.start_background_task(tail_log_file)  # 백그라운드에서 로그 모니터링 시작
-
+'''
 
 
 ################################# Chat ######################################
