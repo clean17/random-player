@@ -183,7 +183,7 @@ def delete_images():
             send2trash(os.path.join(IMAGE_DIR, image))
 
     page = int(request.form.get('page', 1))
-    return redirect(url_for('image.image_list', page=page, dir=IMAGE_DIR))
+    return redirect(url_for('image.image_list', page=page, dir='image'))
 
 
 @image_bp.route('/images/')
