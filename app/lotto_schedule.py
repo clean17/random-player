@@ -3,8 +3,8 @@ import time
 from playwright.sync_api import Playwright, sync_playwright
 from config import settings
 
-USER_ID = setting[LOTTO_USER_ID]
-USER_PW = setting[LOTTO_PASSWORD]
+USER_ID = settings['LOTTO_USER_ID']
+USER_PW = settings['LOTTO_PASSWORD']
 
 COUNT = 1 # 구매 수량
 
@@ -80,12 +80,12 @@ def buy_lotto():
     with sync_playwright() as playwright:
         run(playwright)
 
-# 매주 토요일 09:00 실행
+""" # 매주 토요일 09:00 실행
 schedule.every().saturday.at("09:00").do(buy_lotto)
 
 while True:
     schedule.run_pending()
-    time.sleep(60)  # 1분마다 체크
+    time.sleep(60)  # 1분마다 체크 """
 
 #########################################################
 
