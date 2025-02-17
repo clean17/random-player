@@ -38,7 +38,7 @@
 <script>
     const logContainer = document.getElementById("log-container");
     // const socket = io()  // WebSocket 연결
-    let eventSource = null; // SSE 연결
+    const eventSource = new EventSource("/func/logs/stream");
 
     // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
     /*socket.on("log_update", (data) => {
@@ -54,25 +54,13 @@
         return today.toISOString().split("T")[0]; // "YYYY-MM-DD" 형식 반환
     }
 
-    // SSE 스트림 시작
-    function startSSE() {
-        if (eventSource) {
-            eventSource.close(); // 기존 연결 종료
+    // 오늘 로그만 뷰어에 추가
+    eventSource.onmessage = (event) => {
+        const selectedDate = document.getElementById("date-picker").value;
+        if (selectedDate === getTodayDate()) {
+            renderLogs(event.data);
         }
-
-        eventSource = new EventSource("/func/logs/stream");
-
-        eventSource.onmessage = (event) => {
-            // console.log('msg', event.data)
-            renderLogs(event.data)
-        };
-
-        eventSource.onerror = () => {
-            console.error("SSE 연결 오류. 재연결 중...");
-            eventSource.close();
-            setTimeout(startSSE, 3000); // 3초 후 재연결
-        };
-    }
+    };
 
     function renderLogs(log) {
         const logLine = document.createElement("div");
@@ -88,19 +76,6 @@
         if (!dateInput) {
             alert("날짜를 선택하세요.");
             return;
-        }
-
-        // 오늘 날짜인 경우 SSE 사용
-        if (dateInput === getTodayDate()) {
-            logContainer.innerHTML = ""; // 기존 로그 초기화
-            startSSE(); // SSE 시작
-            return;
-        }
-
-        // 과거 로그 요청 시 SSE 종료
-        if (eventSource) {
-            eventSource.close();
-            eventSource = null;
         }
 
         // YYYY-MM-DD → YYMMDD 변환
@@ -126,6 +101,11 @@
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
+
+    // 페이지가 언로드될 때 SSE 연결 종료
+    window.addEventListener("beforeunload", () => {
+        eventSource.close();
+    });
 </script>
 
 
