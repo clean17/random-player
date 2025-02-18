@@ -48,6 +48,11 @@ class NoStaticLogsFilter(logging.Filter):
     def filter(self, record):
         return "/static/" not in record.getMessage()
 
+class NoSaveChatLogsFilter(logging.Filter):
+    """/func/chat/save-file로 시작하는 로그 기록하지 않음"""
+    def filter(self, record):
+        return "/func/chat/save-file" not in record.getMessage()
+
 class moveImageURLFilter(logging.Filter):
     """ /image/move_image/image/ 경로 이후의 파일명을 제거하는 로그 필터 """
 
@@ -122,6 +127,7 @@ def setup_logging():
     werkzeug_logger.addFilter(NoVideoLogsFilter())
     werkzeug_logger.addFilter(NoStaticLogsFilter())
     werkzeug_logger.addFilter(moveImageURLFilter())
+    werkzeug_logger.addFilter(NoSaveChatLogsFilter())
 
     # logging.getLogger("waitress").setLevel(logging.INFO)  # Waitress 로그
     waitress_logger = logging.getLogger('waitress')
@@ -130,6 +136,7 @@ def setup_logging():
     waitress_logger.addFilter(NoVideoLogsFilter())
     waitress_logger.addFilter(NoStaticLogsFilter())
     waitress_logger.addFilter(moveImageURLFilter())
+    waitress_logger.addFilter(NoSaveChatLogsFilter())
     # Waitress 로그를 root로 전파하지 않음 > file에 로그가 남지 않는다
     # waitress_logger.propagate = False
 
