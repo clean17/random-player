@@ -61,7 +61,7 @@
 
     socket.on("new_msg", function(data) {
         addMessage(data);
-        // sendNotification(data);
+        sendNotification(data);
     });
 
     socket.on("bye", function(data) {
@@ -165,7 +165,16 @@
         chatInput.addEventListener('keyup', enterEvent);
         sendButton.removeEventListener("click", sendMsg);
         sendButton.addEventListener("click", sendMsg);
+        document.body.removeEventListener('touchstart', requestNotificationPermission);
+        document.body.addEventListener('touchstart', requestNotificationPermission);
+        document.body.removeEventListener('ended', requestNotificationPermission);
+        document.body.addEventListener('ended', requestNotificationPermission);
+        document.body.removeEventListener('touchmove', requestNotificationPermission);
+        document.body.addEventListener('touchmove', requestNotificationPermission);
+        document.body.addEventListener('click', requestNotificationPermission);
+        document.body.addEventListener('click', requestNotificationPermission);
         loadMoreChats();
+        // requestNotificationPermission(); // 상호작용 시 권한 허용
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
