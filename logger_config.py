@@ -34,8 +34,20 @@ class ColorFormatter(logging.Formatter):
         return self.ANSI_ESCAPE_RE.sub('', log_message)  # ANSI 색상 코드 제거
 
 class NoImageLogsFilter(logging.Filter):
+    """/image/images로 시작하는 로그 기록하지 않음"""
     def filter(self, record):
         return "/image/images" not in record.getMessage()
+
+class NoVideoLogsFilter(logging.Filter):
+    """/video/videos/로 시작하는 로그 기록하지 않음"""
+    def filter(self, record):
+        return "/video/videos/" not in record.getMessage()
+
+class NoStaticLogsFilter(logging.Filter):
+    """/static/로 시작하는 로그 기록하지 않음"""
+    def filter(self, record):
+        return "/static/" not in record.getMessage()
+
 
 
 def setup_logging():
@@ -91,11 +103,15 @@ def setup_logging():
     werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.setLevel(logging.INFO)
     werkzeug_logger.addFilter(NoImageLogsFilter())
+    werkzeug_logger.addFilter(NoVideoLogsFilter())
+    werkzeug_logger.addFilter(NoStaticLogsFilter())
 
     # logging.getLogger("waitress").setLevel(logging.INFO)  # Waitress 로그
     waitress_logger = logging.getLogger('waitress')
     waitress_logger.setLevel(logging.INFO)
     waitress_logger.addFilter(NoImageLogsFilter())
+    waitress_logger.addFilter(NoVideoLogsFilter())
+    waitress_logger.addFilter(NoStaticLogsFilter())
     # Waitress 로그를 root로 전파하지 않음 > file에 로그가 남지 않는다
     # waitress_logger.propagate = False
 
