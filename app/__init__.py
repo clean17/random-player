@@ -13,6 +13,8 @@ from .upload import upload
 import fnmatch
 
 ALLOWED_PATHS = [
+    '/favicon.ico',       # nginx 서버리스
+    '/service-worker.js', # nginx 서버리스
     '/image/images*',
     '/image/pages',
     '/image/move_image*',
@@ -106,8 +108,12 @@ def create_app():
         return None
 
     @app.route("/service-worker.js")
-    def service_worker():
-        return send_from_directory(".", "service-worker.js", mimetype="application/javascript")
+    def get_service_worker():
+        return send_from_directory("static/js", "service-worker.js", mimetype="application/javascript")
+
+    @app.route("/favicon.ico")
+    def get_favicon():
+        return send_from_directory("static", "favicon.ico", mimetype="application/javascript")
 
     def check_server_restarted():
         restart_flag = 'server_status.txt'
