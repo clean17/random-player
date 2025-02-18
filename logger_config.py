@@ -48,6 +48,22 @@ class NoStaticLogsFilter(logging.Filter):
     def filter(self, record):
         return "/static/" not in record.getMessage()
 
+class moveImageURLFilter(logging.Filter):
+    """ /image/move_image/image/ 경로 이후의 파일명을 제거하는 로그 필터 """
+
+    def filter(self, record):
+        # 로그 메시지에서 특정 패턴을 감지하고 변경
+        pattern = r"(POST|GET|PUT|DELETE) (/image/move_image/image/)[^\s]+"
+        replacement = r"\1 \2"  # "/image/move_image/image/" 이후를 제거
+
+        # 로그 메시지를 안전하게 수정
+        new_msg = re.sub(pattern, replacement, record.getMessage(), count=1)
+
+        # 변경된 메시지를 기록
+        record.msg = new_msg
+        record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
+
+        return True  # 필터를 통과한 로그만 출력
 
 
 def setup_logging():
@@ -105,6 +121,7 @@ def setup_logging():
     werkzeug_logger.addFilter(NoImageLogsFilter())
     werkzeug_logger.addFilter(NoVideoLogsFilter())
     werkzeug_logger.addFilter(NoStaticLogsFilter())
+    werkzeug_logger.addFilter(moveImageURLFilter())
 
     # logging.getLogger("waitress").setLevel(logging.INFO)  # Waitress 로그
     waitress_logger = logging.getLogger('waitress')
@@ -112,6 +129,7 @@ def setup_logging():
     waitress_logger.addFilter(NoImageLogsFilter())
     waitress_logger.addFilter(NoVideoLogsFilter())
     waitress_logger.addFilter(NoStaticLogsFilter())
+    waitress_logger.addFilter(moveImageURLFilter())
     # Waitress 로그를 root로 전파하지 않음 > file에 로그가 남지 않는다
     # waitress_logger.propagate = False
 
