@@ -23,7 +23,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-NO_LOGS_URL = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file"]
+NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file"]
+HIDE_DETAIL_URLS = ["/image/move_image/image/", "/video/delete/"]
 
 class ColorFormatter(logging.Formatter):
     """모든 ANSI 색상 코드 제거"""
@@ -34,34 +35,60 @@ class ColorFormatter(logging.Formatter):
         log_message = super().format(record)
         return self.ANSI_ESCAPE_RE.sub('', log_message)  # ANSI 색상 코드 제거
 
+import logging
+
 class NoLogsFilter(logging.Filter):
-    """특정 경로 패턴을 포함하는 로그를 필터링"""
-    def __init__(self, *patterns):
+    """ 특정 URL 패턴을 포함하는 로그를 필터링 """
+
+    def __init__(self, patterns):
         super().__init__()
-        self.patterns = patterns  # 필터링할 문자열 리스트
+        if not isinstance(patterns, list):  # 리스트인지 확인
+            raise TypeError(f"patterns should be a list, got {type(patterns)} instead.")
+        self.patterns = patterns
 
     def filter(self, record):
-        # 로그 메시지에 필터링할 문자열이 포함되어 있는지 확인
-        return not any(pattern in record.getMessage() for pattern in self.patterns)
+        log_message = record.getMessage()
+        if not isinstance(log_message, str):  # 로그 메시지가 문자열인지 확인
+            return True
+        return not any(pattern in log_message for pattern in self.patterns)
 
+class HideDetailURLFilter(logging.Filter):
+    """ 특정 URL 패턴 이후의 세부 정보를 숨기는 로그 필터 """
 
-class moveImageURLFilter(logging.Filter):
-    """ /image/move_image/image/ 경로 이후의 파일명을 제거하는 로그 필터 """
+    def __init__(self, patterns):
+        super().__init__()
+        if not isinstance(patterns, list):  # 리스트인지 확인
+            raise TypeError(f"patterns should be a list, got {type(patterns)} instead.")
+        self.patterns = patterns
 
     def filter(self, record):
-        # 로그 메시지에서 특정 패턴을 감지하고 변경
-        pattern = r"(POST|GET|PUT|DELETE) (/image/move_image/image/)[^\s]+"
-        replacement = r"\1 \2"  # "/image/move_image/image/" 이후를 제거
+        log_message = record.getMessage()
+        if not isinstance(log_message, str):  # 로그 메시지가 문자열인지 확인
+            return True
 
-        # 로그 메시지를 안전하게 수정
-        new_msg = re.sub(pattern, replacement, record.getMessage(), count=1)
+        for pattern in self.patterns:
+            log_message = log_message.replace(pattern, pattern.rstrip('/') + '/[HIDDEN]')
 
-        # 변경된 메시지를 기록
-        record.msg = new_msg
+        record.msg = log_message
         record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
+        return True
 
-        return True  # 필터를 통과한 로그만 출력
-
+# class moveImageURLFilter(logging.Filter):
+#     """ /image/move_image/image/ 경로 이후의 파일명을 제거하는 로그 필터 """
+#
+#     def filter(self, record):
+#         # 로그 메시지에서 특정 패턴을 감지하고 변경
+#         pattern = r"(POST|GET|PUT|DELETE) (/image/move_image/image/)[^\s]+"
+#         replacement = r"\1 \2"  # "/image/move_image/image/" 이후를 제거
+#
+#         # 로그 메시지를 안전하게 수정
+#         new_msg = re.sub(pattern, replacement, record.getMessage(), count=1)
+#
+#         # 변경된 메시지를 기록
+#         record.msg = new_msg
+#         record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
+#
+#         return True  # 필터를 통과한 로그만 출력
 
 def setup_logging():
     """
@@ -115,14 +142,14 @@ def setup_logging():
     # logging.getLogger("werkzeug").setLevel(logging.INFO)  # Flask 기본 서버 로그
     werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.setLevel(logging.INFO)
-    werkzeug_logger.addFilter(NoLogsFilter(NO_LOGS_URL))
-    werkzeug_logger.addFilter(moveImageURLFilter())
+    werkzeug_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
+    werkzeug_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
     # logging.getLogger("waitress").setLevel(logging.INFO)  # Waitress 로그
     waitress_logger = logging.getLogger('waitress')
     waitress_logger.setLevel(logging.INFO)
-    waitress_logger.addFilter(NoLogsFilter(NO_LOGS_URL))
-    waitress_logger.addFilter(moveImageURLFilter())
+    waitress_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
+    waitress_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
     # Waitress 로그를 root로 전파하지 않음 > file에 로그가 남지 않는다
     # waitress_logger.propagate = False
 
