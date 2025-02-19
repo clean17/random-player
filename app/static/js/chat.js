@@ -1,10 +1,11 @@
-if ("serviceWorker" in navigator) {
+/*if ("serviceWorker" in navigator) {
+    // http + localhost, https(공인 ssl) 환경에서만 기동
     // navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
-    // navigator.serviceWorker.register("/static/js/service-worker.js", { scope: "/static/js/" })
-    navigator.serviceWorker.register("/service-worker.js")
+    navigator.serviceWorker.register("/static/js/service-worker.js", { scope: "/static/js/" })
+    // navigator.serviceWorker.register("/service-worker.js")
         .then(reg => console.log("서비스 워커 등록 완료:", reg))
         .catch(err => console.log("서비스 워커 등록 실패:", err));
-}
+}*/
 
 function requestNotificationPermission() {
     if (!("Notification" in window)) {
@@ -22,14 +23,21 @@ function requestNotificationPermission() {
 }
 
 function sendNotification(data) {
-    if (document.hidden && Notification.permission === "granted") {
-        navigator.serviceWorker.ready.then(registration => {
+    // if (document.hidden && Notification.permission === "granted") {
+    if (Notification.permission === "granted") {
+        /*navigator.serviceWorker.ready.then(registration => {
             registration.showNotification("새 메시지 도착!", {
                 body: `${data.username}: ${data.msg}`,
                 icon: "/static/favicon.ico",
                 badge: "/static/favicon.ico",
                 vibrate: [200, 100, 200],  // 진동 패턴 (안드로이드)
             });
+        });*/
+        new Notification('새 메시지 도착!', {
+            body: `${data.username}: ${data.msg}`,
+            icon: "/static/favicon.ico",
+            badge: "/static/favicon.ico",
+            vibrate: [200, 100, 200],  // 진동 패턴 (안드로이드)
         });
     }
 }
