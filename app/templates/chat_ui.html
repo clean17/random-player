@@ -44,35 +44,10 @@
     </div>
 </div>
 
-<!--<script type="module">
-    // Import the functions you need from the SDKs you need
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
-    // Add Firebase products that you want to use
-    import { getAuth } from 'https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js'
-    import { getFirestore } from 'https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js'
-    // TODO: Add SDKs for Firebase products that you want to use
-    // https://firebase.google.com/docs/web/setup#available-libraries
-
-    // Your web app's Firebase configuration
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-    const firebaseConfig = {
-        apiKey: "AIzaSyC_gy_FAFVNAqdSW9Ngt-Q5N-iONmiF6kc",
-        authDomain: "merci-chat.firebaseapp.com",
-        projectId: "merci-chat",
-        storageBucket: "merci-chat.firebasestorage.app",
-        messagingSenderId: "965632263247",
-        appId: "1:965632263247:web:e955f28a1702008960563a",
-        measurementId: "G-Y765H3FVFD"
-    };
-
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
-</script>-->
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 <script>
-    const socket = io("https://192.168.141.206:3000", {
+    // const socket = io("https://192.168.0.2:3000", {
+    const socket = io("https://merci-seoul.iptime.org:3000", {
         secure: true, // HTTPS 사용
         transports: ["websocket", "polling"],
     });
