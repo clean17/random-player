@@ -108,16 +108,27 @@ def image_list():
     # if current_user.username == settings['GUEST_USERNAME']:
     dir = request.args.get('dir')
     firstRequst = request.args.get('firstRequst')
+    selected_dir = request.args.get('title')
     images = []
     images_length = 0
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
 
 
-    if hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']:
-        images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
-        images_length = len(os.listdir(TEMP_IMAGE_DIR))
-        template_html = 'temp_image_list.html'
+    if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp':
+        # images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
+        # images_length = len(os.listdir(TEMP_IMAGE_DIR))
+        template_html = 'trip_image_list.html'
+        title_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
+
+        # 선택된 title 값 가져오기 (없다면 첫 번째 값 자동 선택)
+        if not selected_dir or selected_dir not in title_list:
+            # selected_dir = title_list[0] if title_list else ''  # 첫 번째 항목 자동 선택
+            selected_dir = title_list[0] if title_list else TEMP_IMAGE_DIR  # 첫 번째 항목 자동 선택
+
+        target_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
+        images = get_images(start, LIMIT_PAGE_NUM, target_dir)
+        images_length = len(os.listdir(target_dir))
 
     elif dir == 'refine':
         if firstRequst == 'True':
@@ -133,14 +144,10 @@ def image_list():
         images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
         images_length = len(os.listdir(TRIP_IMAGE_DIR))
         template_html = 'trip_image_list.html'
-    elif dir == 'temp':
-        images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
-        images_length = len(os.listdir(TEMP_IMAGE_DIR))
-        template_html = 'trip_image_list.html'
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
-    return render_template(template_html, images=images, page=page, total_pages=total_pages, images_length=images_length, dir=dir)
+    return render_template(template_html, images=images, page=page, total_pages=total_pages, images_length=images_length, dir=dir, selected_dir=selected_dir, title_list=title_list)
 
 
 @image_bp.route('/move_image/<imagepath>/<filename>', methods=['POST'])
@@ -191,6 +198,8 @@ def delete_images():
 def get_image():
     filename = request.args.get('filename')
     dir = request.args.get('dir')
+    selected_dir = request.args.get('selected_dir', '')
+
     if dir == 'image':
         dir = IMAGE_DIR
     elif dir == 'refine':
@@ -199,6 +208,9 @@ def get_image():
         dir = TRIP_IMAGE_DIR
     elif dir == 'temp':
         dir = TEMP_IMAGE_DIR
+        if selected_dir:
+            dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
+
     return send_from_directory(dir, filename)
 
 @image_bp.route('/shuffle/ref_images', methods=['POST'])

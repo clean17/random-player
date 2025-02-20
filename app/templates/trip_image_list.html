@@ -24,13 +24,31 @@
 <ul id="dropdown-menu" class="dropdown-menu">
     <li onclick="downloadThisPage()">Download This Page</li>
     <li onclick="downloadAllFiles()">Download All Files</li>
-    <!-- <li onclick="showMessage()">Another Action</li> -->
+    <!-- <li>Another Action</li> -->
 </ul>
 <div class="pagination-buttons">
     <button class="pagination-button prev-button" id="prevButton">&lt;</button>
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
 </div>
 <div class="container">
+    <!-- 드롭다운 리스트 추가 -->
+    {% if selected_dir %}
+    <div class="title-selector" style="margin-bottom: 10px">
+        <form id="title-form">
+            <label for="title-select">Select Title:</label>
+            <select id="title-select" name="title" onchange="location = this.value;" style="font-size: 12pt">
+                {% for title in title_list %}
+                <option value="{{ url_for('image.image_list', title=title, dir=dir) }}"
+                        {% if title == selected_dir %}selected{% endif %}>
+                    {{ title }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    {% endif %}
+
+
     <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
@@ -57,14 +75,18 @@
                 {% if file_extension in video_extensions %}
                 <!-- 비디오 파일인 경우 -->
                 <video class="thumbnail" controls preload="auto">
-                    <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}"
+                    <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
                             type="video/mp4">
                 </video>
                 {% elif file_extension in image_extensions %}
                 <!-- 이미지 파일인 경우 -->
                 <img class="thumbnail"
-                     src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                     data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
+                     src="{% if loop.index <= 5 %}
+                            {{ url_for('image.get_image', filename=image, dir=dir, selected_dir=selected_dir if selected_dir else None) }}
+                        {% else %}
+                            {{ url_for('static', filename='no-image.png') }}
+                        {% endif %}"
+                     data-src="{{ url_for('image.get_image', filename=image, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
                      alt="{{ image }}"
                      data-index="{{ loop.index }}">
                 {% endif %}
@@ -88,7 +110,7 @@
             {% endif %}
         </div>
         {% if current_user.get_id() != config.GUEST_USERNAME %}
-            <button type="submit" class="delete-button">Delete</button>
+        <button type="submit" class="delete-button">Delete</button>
         {% endif %}
     </form>
 </div>

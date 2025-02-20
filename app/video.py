@@ -58,8 +58,12 @@ def get_video(filename):
 @login_required
 def get_temp_video(filename):
     dir = request.args.get('dir')
+    selected_dir = request.args.get('selected_dir')
+
     if dir == 'temp':
         dir = TEMP_IMAGE_DIR
+        if selected_dir:
+            dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
     else:
         dir = TRIP_IMAGE_DIR
 
