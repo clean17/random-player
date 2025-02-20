@@ -3,14 +3,19 @@ body, html {
     justify-content: center;
     align-items: center;
     background-color: #f0f0f0;
+    overflow-x: hidden;
 }
 .container {
     min-width: 400px;
+    max-width: 70vw;
+    /*max-height: 88vh;*/
     background: white;
-    padding: 20px;
+    padding: 10px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     text-align: center;
+    box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
+    overflow-y: hidden;
 }
 h2 {
     margin-bottom: 20px;
@@ -19,11 +24,6 @@ h2 {
 button {
     padding: 15px;
     margin-bottom: 10px;
-}
-
-
-select {
-
 }
 
 /* Container for the select dropdown */

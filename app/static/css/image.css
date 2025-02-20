@@ -84,6 +84,7 @@ button.delete-button:hover {
     background-color: #c9302c;
 }
 
+/* 최하단 페이징 버튼 */
 .pagination {
     display: flex;
     justify-content: center;
@@ -113,11 +114,13 @@ button.delete-button:hover {
     background-color: #007BFF;
 }
 
-
+/* back, logout 투명도 */
 .top-bar {
     position: fixed;
+    opacity: 0.4;
 }
 
+/* NextImage */
 .floating-button {
     position: fixed;
     z-index: 5;
@@ -126,7 +129,7 @@ button.delete-button:hover {
     padding: 20px;
     cursor: pointer;
     background-color: #007bff;
-    opacity: 0.4;
+    opacity: 0.3;
     color: white;
     border: none;
     font-size: 16px;
@@ -137,6 +140,7 @@ button.delete-button:hover {
     transition: background-color 0.3s ease;
 }
 
+/* empty-trash-bin */
 .floating-button2 {
     position: fixed;
     z-index: 5;
@@ -145,7 +149,7 @@ button.delete-button:hover {
     padding: 10px;
     cursor: pointer;
     background-color: #007bff;
-    opacity: 0.4;
+    opacity: 0.3;
     color: white;
     border: none;
     font-size: 16px;
@@ -185,11 +189,12 @@ button.delete-button:hover {
     background-color: #f1f1f1;
 }
 
-/* 아이콘 스타일 */
+/* 아이콘 스타일 📂 */
 .icon {
     margin-right: 10px;
 }
 
+/* 최하단으로 이동 (사용하지 않음) */
 .scroll-bottom-button {
     top: 50px;
     left: 15px;
@@ -207,34 +212,7 @@ button.delete-button:hover {
     border: none;
 }
 
-.top-bar {
-    opacity: 0.5;
-}
-
-#overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.4); /* 반투명 배경 */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    pointer-events: all; /* 모든 이벤트를 이 요소로 제한 */
-}
-
-#overlay img {
-    position: absolute;
-    top: 45%;
-    left: 51%;
-    transform: translate(-50%, -50%); /* 중심점 기준으로 이동 */
-    width: 100px;
-    height: 100px;
-}
-
-
+/* 하단 이전/다음 네비게이터 버튼 */
 .pagination-buttons {
     position: fixed;
     bottom: 10px;
@@ -250,7 +228,7 @@ button.delete-button:hover {
     background-color: #007BFF;
     color: white;
     border: none;
-    opacity: 0.4;
+    opacity: 0.3;
     width: 50px;
     height: 50px;
     font-size: 1.5em;
@@ -272,4 +250,28 @@ button.delete-button:hover {
 
 .next-button {
     margin-right: 15px;
+}
+
+/* loading.svg */
+#overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.4); /* 반투명 배경 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    pointer-events: all; /* 모든 이벤트를 이 요소로 제한 */
+}
+
+#overlay img {
+    position: absolute;
+    top: 45%;
+    left: 51%;
+    transform: translate(-50%, -50%); /* 중심점 기준으로 이동 */
+    width: 100px;
+    height: 100px;
 }
