@@ -124,7 +124,8 @@
     }
 
     document.getElementById('start-upload-button').addEventListener('click', () => {
-        uppy.setMeta({ title: document.getElementById('title').value });
+        const title = document.getElementById('title').value || 'no_title';
+        uppy.setMeta({ title: title });
         const allFiles = uppy.getFiles();
         if (!Array.isArray(allFiles) || allFiles.length === 0) {
             alert('No files to upload!');
