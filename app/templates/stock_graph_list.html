@@ -7,44 +7,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .container {
-            max-width: 100%;
-        }
-        .market-selector {
-            margin: 20px 0;
-            display: flex;
-            justify-content: center;
-        }
-
-        .market-selector label {
-            margin-right: 10px;
-            font-weight: bold;
-            font-size: 18px;
-            align-self: center;
-        }
-
-        .market-selector select {
-            width: 200px;
-            height: 40px;
-            border-radius: 5px;
-            border: 1px solid #ced4da;
-            padding: 5px 10px;
-            font-size: 16px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        .market-selector select:focus {
-            border-color: #007bff;
-            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
-        }
-    </style>
 </head>
 <body>
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
-            <a href="{{ url_for('auth.logout') }}">Logout</a>
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
         {% endif %}
     </div>
     <div class="back">
@@ -68,34 +36,34 @@
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
-                <div class="image-item" id="image-{{ loop.index }}">
-                    <!-- 처음 5개 이미지만 실제 이미지 로드 -->
-                    <img class="thumbnail"
-                         src="{% if loop.index <= 5 %}{{ url_for('image.get_stock_graph', market=market, filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                         data-src="{{ url_for('image.get_stock_graph', market=market, filename=image) }}"
-                         alt="{{ image }}" data-index="{{ loop.index }}">
-                    <input type="hidden" name="images[]" value="{{ image }}">
-                </div>
+            <div class="image-item" id="image-{{ loop.index }}">
+                <!-- 처음 5개 이미지만 실제 이미지 로드 -->
+                <img class="thumbnail"
+                     src="{% if loop.index <= 5 %}{{ url_for('image.get_stock_graph', market=market, filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                     data-src="{{ url_for('image.get_stock_graph', market=market, filename=image) }}"
+                     alt="{{ image }}" data-index="{{ loop.index }}">
+                <input type="hidden" name="images[]" value="{{ image }}">
+            </div>
             {% endfor %}
         </div>
         <div class="pagination">
             {% if page > 1 %}
-                <a href="{{ url_for('image.stock_graph_list', market=market, page=1) }}">&laquo;</a>
-                <a href="{{ url_for('image.stock_graph_list', market=market, page=page-1) }}">&lt;</a>
+            <a href="{{ url_for('image.stock_graph_list', market=market, page=1) }}">&laquo;</a>
+            <a href="{{ url_for('image.stock_graph_list', market=market, page=page-1) }}">&lt;</a>
             {% endif %}
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-                <a href="{{ url_for('image.stock_graph_list', market=market, page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.stock_graph_list', market=market, page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
             {% if page < total_pages %}
-                <a href="{{ url_for('image.stock_graph_list', market=market, page=page+1) }}">&gt;</a>
-                <a href="{{ url_for('image.stock_graph_list', market=market, page=total_pages) }}">&raquo;</a>
+            <a href="{{ url_for('image.stock_graph_list', market=market, page=page+1) }}">&gt;</a>
+            <a href="{{ url_for('image.stock_graph_list', market=market, page=total_pages) }}">&raquo;</a>
             {% endif %}
         </div>
         {#<button type="submit" class="delete-button">Delete</button>#}
     </div>
 </div>
 
-<!--{#<button type="button" class="scroll-bottom-button" onclick="scrollToBottom()">Scroll to Bottom</button>#}-->
+<!--{#<button type="button" class="scroll-bottom-button">Scroll to Bottom</button>#}-->
 
 {#<button id="next-image-button" class="floating-button">Next Image</button>#}
 
@@ -128,10 +96,10 @@
     function initPage() {
         // 전체 이미지 모두 로딩
         {#const images = document.querySelectorAll('.thumbnail');
-        images.forEach(img => {
-            const tempSrc = img.getAttribute('data-src');
-            img.src = tempSrc;
-        });#}
+            images.forEach(img => {
+                const tempSrc = img.getAttribute('data-src');
+                img.src = tempSrc;
+            });#}
 
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
         const imageItems = document.querySelectorAll('.image-item');
