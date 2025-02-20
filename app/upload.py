@@ -16,17 +16,21 @@ def get_file_upload_html():
 @upload.route('/', methods=['POST'])
 @login_required
 def upload_file():
+    if 'files[]' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    uploaded_files = request.files.getlist("files[]")  # Uppy로 업로드된 파일 리스트
+    title = request.form.get("title", "Untitled")  # 'title' 데이터 받기
+    saved_files = []
+
     # 오늘 날짜로 디렉토리 생성
     today = datetime.now().strftime('%Y%m%d')
     # time_stamp = datetime.now().strftime('%H%M%S')
-    #     target_dir = os.path.join(TEMP_IMAGE_DIR, today)
-    target_dir = TEMP_IMAGE_DIR
+    target_dir = os.path.join(TEMP_IMAGE_DIR, title)
+    #target_dir = TEMP_IMAGE_DIR
 
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)  # 날짜별 디렉토리 생성
-
-    uploaded_files = request.files.getlist("files[]")  # Uppy로 업로드된 파일 리스트
-    saved_files = []
 
     for file in uploaded_files:
         if file.filename:  # 파일명이 있는 경우 저장
