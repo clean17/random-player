@@ -7,12 +7,18 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <!--    <script src="http://127.0.0.1:3000/socket.io/socket.io.js"></script>-->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+    <style>
+        .top-bar {
+            position: fixed;
+            opacity: 0.4;
+        }
+    </style>
+<!--    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">-->
 </head>
 
 <!--<body class="flex justify-center items-center h-screen bg-gray-100">-->
-<body class="">
+<body class="" style="!important; background-color: white; overflow-y: hidden">
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -23,9 +29,8 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
-
-<div class="container" style="height: 100vh; width: 100%; max-width: 600px">
-    <div class="bg-white p-5 shadow-md rounded-lg w-full h-full text-center overflow-hidden flex flex-col">
+<div class="container" style="height: 100%; width: 100%; max-width: 600px;">
+    <div class="bg-white p-2 shadow-md rounded-lg w-full h-full text-center overflow-hidden flex flex-col">
         <!-- 채팅 메시지 목록 -->
         <div class="flex-1 overflow-y-auto space-y-2 p-4" id="chat-container">
             {% for log in chat_logs %}
@@ -36,29 +41,29 @@
         </div>
         <!-- 입력 영역 -->
         <div class="flex items-center border-t p-2 bg-white">
-            <button class="p-2 text-gray-500 hover:text-gray-700 w-[5%] mr-4">📷</button>
-            <input type="text" id="chat-input" class="p-2 border rounded-lg focus:outline-none w-[86%]"
+            <button id="camera-button" class="p-2 text-gray-500 hover:text-gray-700 w-[10%] mr-2">📷</button>
+            <input type="text" id="chat-input" class="p-2 border rounded-lg focus:outline-none w-[90%]"
                    placeholder="Type a message...">
-            <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[5%] ml-2">📤</button>
         </div>
     </div>
 </div>
 
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 <script>
-    // const socket = io("https://192.168.0.2:3000", {
-    const socket = io("https://merci-seoul.iptime.org:3000", {
+    const socket = io("https://192.168.141.214:3000", {
+    // const socket = io("https://192.168.60.205:3000", {
+    // const socket = io("https://merci-seoul.iptime.org:3000", {
         secure: true, // HTTPS 사용
         transports: ["websocket", "polling"],
     });
     // const socket = io("http://localhost:3000");
     // const socket = io("http://192.168.60.205:3000");
-    const username = "{{ username }}";  // Flask에서 전달된 username
-    let offset = 0; // 가장 최근 10개는 이미 로드됨
-    let loading = false;
-    const chatContainer = document.getElementById("chat-container");
-    const chatInput = document.getElementById("chat-input");
-    const sendButton = document.getElementById("send-button");
+    const username = "{{ username }}",  // Flask에서 전달된 username
+          chatContainer = document.getElementById("chat-container"),
+          chatInput = document.getElementById("chat-input"),
+          cameraButton = document.getElementById("camera-button");
+    let offset = 0, // 가장 최근 10개는 이미 로드됨
+        loading = false;
 
     // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
     socket.emit("user_info", { username });
@@ -164,11 +169,15 @@
         }
     }
 
+    function cameraEvent(event) {
+
+    }
+
     function initPage() {
         chatInput.removeEventListener('keyup', enterEvent);
         chatInput.addEventListener('keyup', enterEvent);
-        sendButton.removeEventListener("click", sendMsg);
-        sendButton.addEventListener("click", sendMsg);
+        cameraButton.removeEventListener('click', cameraEvent);
+        cameraButton.addEventListener('click', cameraEvent);
         document.body.removeEventListener('touchstart', requestNotificationPermission);
         document.body.addEventListener('touchstart', requestNotificationPermission);
         document.body.removeEventListener('ended', requestNotificationPermission);
