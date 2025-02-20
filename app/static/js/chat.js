@@ -1,8 +1,9 @@
+// 도메인 구입 전까지 서비스 워커 기능 비활성화 > PWA 기능 or FCM 추가해야함
 /*if ("serviceWorker" in navigator) {
     // http + localhost, https(공인 ssl) 환경에서만 기동
     // navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
-    navigator.serviceWorker.register("/static/js/service-worker.js", { scope: "/static/js/" })
-    // navigator.serviceWorker.register("/service-worker.js")
+    // navigator.serviceWorker.register("/static/js/service-worker.js", { scope: "/static/js/" })
+    navigator.serviceWorker.register("/service-worker.js")
         .then(reg => console.log("서비스 워커 등록 완료:", reg))
         .catch(err => console.log("서비스 워커 등록 실패:", err));
 }*/
@@ -25,7 +26,7 @@ function requestNotificationPermission() {
 function sendNotification(data) {
     // if (document.hidden && Notification.permission === "granted") {
     if (Notification.permission === "granted") {
-        /*navigator.serviceWorker.ready.then(registration => {
+        /*navigator.serviceWorker.ready.then(registration => { // 서비스 워커 알림
             registration.showNotification("새 메시지 도착!", {
                 body: `${data.username}: ${data.msg}`,
                 icon: "/static/favicon.ico",
@@ -33,7 +34,7 @@ function sendNotification(data) {
                 vibrate: [200, 100, 200],  // 진동 패턴 (안드로이드)
             });
         });*/
-        new Notification('새 메시지 도착!', {
+        new Notification('새 메시지 도착!', { // 일반 알림
             body: `${data.username}: ${data.msg}`,
             icon: "/static/favicon.ico",
             badge: "/static/favicon.ico",
