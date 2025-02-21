@@ -151,12 +151,13 @@ def image_list():
     return render_template(template_html, images=images, page=page, total_pages=total_pages, images_length=images_length, dir=dir, selected_dir=selected_dir, title_list=title_list)
 
 
-@image_bp.route('/move_image/<imagepath>/<filename>', methods=['POST'])
+@image_bp.route('/move_image', methods=['POST'])
 @login_required
-def move_image(imagepath, filename):
+def move_image():
     # imagepath의 값에 따라 src_path 결정
+    imagepath = request.get_json().get('imagepath')
+    filename = request.get_json().get('filename')
     dest_path = os.path.join(MOVE_DIR, filename)
-    # dir = request.args.get('dir')
 
     if imagepath == "image":
         src_path = os.path.join(IMAGE_DIR, filename)

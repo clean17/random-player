@@ -365,7 +365,16 @@
 
     function moveImage(filename, index) {
         console.log(filename, index)
-        fetch(`/image/move_image/image/${filename}`, { method: 'POST' })
+        fetch(`/image/move_image`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                imagepath: 'image',
+                filename: filename
+            })
+        })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
