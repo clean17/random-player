@@ -7,10 +7,22 @@ from waitress import serve
 from werkzeug.middleware.proxy_fix import ProxyFix
 from app.task_manager import start_periodic_task
 from logger_config import setup_logging
-from app import create_app, socketio
+from app import create_app
 from flask_cors import CORS
 import subprocess
+import glob
+from config import settings
 
+
+NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
+
+lock_files = glob.glob("logs/.__app_*.lock")  # logs 폴더 내 __app_*.lock 파일 목록 가져오기
+
+for lock_file in lock_files:
+    try:
+        os.remove(lock_file)
+    except Exception as e:
+        print(f"Error deleting {lock_file}: {e}")  # 삭제 실패 시 오류 출력
 
 
 # 1️⃣ 로그 설정 적용
@@ -84,19 +96,11 @@ if __name__ == '__main__':
 
     start_periodic_task() # 업로드 파일 압축파일 생성
 
-    # Node.js 프로젝트 경로 (이스케이프 문제 해결)
-    # node_project_path = r"C:\my-project\nodejs-wss"
-    node_project_path = r"E:\my\nodejs-wss"
-
     # 'npm run dev' 실행 (백그라운드 실행)
-    # process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=node_project_path, text=True)
-    process = subprocess.Popen(["cmd", "/c", "npm run dev"], cwd=node_project_path, text=True)
+    process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
 
-    # 서버가 실행되는 동안 다른 작업을 수행할 수 있음
-    print("Node.js 서버가 실행되었습니다.")
 
     app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False) # __init__.py 에서 WebSocket 기능을 추가함
-    # socketio.run(app, debug=True, host='0.0.0.0', port=8090) # Flask + WebSocket 서버 동시 실행
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
 
     # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원
