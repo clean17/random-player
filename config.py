@@ -23,6 +23,7 @@ def load_config():
         'KOSPI_DIR': config['directories']['kospi_stocks_directory'],
         'KOSDAQ_DIR': config['directories']['kosdaq_stocks_directory'],
         'SP500_DIR': config['directories']['sp500_stocks_directory'],
+        'NODE_SERVER_PATH': config['directories']['node_server_path'],
         'CRAWL_URL': config['urls']['crawl_url'],
         'MUD_VPN': config['urls']['mud_vpn'],
         'COOKIE': config['urls']['cookie'],
