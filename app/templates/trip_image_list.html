@@ -33,10 +33,10 @@
 <div class="container">
     <!-- 드롭다운 리스트 추가 -->
     {% if selected_dir %}
-    <div class="title-selector" style="margin-bottom: 10px">
-        <form id="title-form">
+    <div class="dropdown-selector">
+        <form>
             <label for="title-select">Select Title:</label>
-            <select id="title-select" name="title" onchange="location = this.value;" style="font-size: 12pt">
+            <select id="title-select" name="title" onchange="location = this.value;">
                 {% for title in title_list %}
                 <option value="{{ url_for('image.image_list', title=title, dir=dir) }}"
                         {% if title == selected_dir %}selected{% endif %}>
