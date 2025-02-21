@@ -24,6 +24,7 @@ def load_config():
         'KOSDAQ_DIR': config['directories']['kosdaq_stocks_directory'],
         'SP500_DIR': config['directories']['sp500_stocks_directory'],
         'NODE_SERVER_PATH': config['directories']['node_server_path'],
+        'HTM_DIRECTORY': config['directories']['htm_directory'],
         'CRAWL_URL': config['urls']['crawl_url'],
         'MUD_VPN': config['urls']['mud_vpn'],
         'COOKIE': config['urls']['cookie'],

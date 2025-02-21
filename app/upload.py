@@ -7,6 +7,7 @@ from config import settings
 upload = Blueprint('upload', __name__)
 
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
+HTM_DIRECTORY = settings['HTM_DIRECTORY']
 
 @upload.route('/', methods=['GET'])
 @login_required
@@ -28,9 +29,10 @@ def upload_file():
     # time_stamp = datetime.now().strftime('%H%M%S')
     target_dir = os.path.join(TEMP_IMAGE_DIR, title)
     #target_dir = TEMP_IMAGE_DIR
+    if title == 'htm':
+        target_dir = HTM_DIRECTORY
 
-    if not os.path.exists(target_dir):
-        os.makedirs(target_dir)  # 날짜별 디렉토리 생성
+    os.makedirs(target_dir, exist_ok=True)  # 날짜별 디렉토리 생성
 
     for file in uploaded_files:
         if file.filename:  # 파일명이 있는 경우 저장
