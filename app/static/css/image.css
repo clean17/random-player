@@ -275,3 +275,32 @@ button.delete-button:hover {
     width: 100px;
     height: 100px;
 }
+
+/* 드롭다운 */
+.dropdown-selector {
+    margin: 20px 0;
+    display: flex;
+    justify-content: center;
+}
+
+.dropdown-selector label {
+    margin-right: 10px;
+    font-weight: bold;
+    font-size: 18px;
+    align-self: center;
+}
+
+.dropdown-selector select {
+    width: 200px;
+    height: 40px;
+    border-radius: 5px;
+    border: 1px solid #ced4da;
+    padding: 5px 10px;
+    font-size: 16px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-selector select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
