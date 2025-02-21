@@ -109,6 +109,7 @@ def image_list():
     dir = request.args.get('dir')
     firstRequst = request.args.get('firstRequst')
     selected_dir = request.args.get('title')
+    title_list = []
     images = []
     images_length = 0
     page = int(request.args.get('page', 1))

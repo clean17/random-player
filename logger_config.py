@@ -9,15 +9,10 @@ import sys
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from concurrent_log_handler import ConcurrentRotatingFileHandler
+import werkzeug
+from werkzeug.serving import WSGIRequestHandler
 
-# stdout과 stderr 인코딩을 강제로 UTF-8로 설정
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
-# sys.stdout.reconfigure(encoding='utf-8')
-# sys.stderr.reconfigure(encoding='utf-8')
-
-# sys.stdout과 sys.stderr를 UTF-8로 설정
+# sys.stdout과 sys.stderr를 UTF-8로 설정 (reconfigure: python 3.7부터 지원, hasattr: 3.6이하 안전하게)
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
@@ -26,16 +21,22 @@ if hasattr(sys.stderr, 'reconfigure'):
 NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
 HIDE_DETAIL_URLS = ["/image/move_image/image/", "/video/delete/"]
 
+class WerkzeugLogFilter(logging.Filter):
+    DATE_PATTERN = re.compile(r'\[\d{2}/[A-Za-z]{3}/\d{4} \d{2}:\d{2}:\d{2}\] ')
+
+    def filter(self, record):
+        record.msg = self.DATE_PATTERN.sub('', record.getMessage()).strip()
+        record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
+        return True
+
 class ColorFormatter(logging.Formatter):
-    """모든 ANSI 색상 코드 제거"""
+    """모든 ANSI 색상 코드 제거, log파일 색상정보 문자 제거용"""
 
     ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
     def format(self, record):
         log_message = super().format(record)
         return self.ANSI_ESCAPE_RE.sub('', log_message)  # ANSI 색상 코드 제거
-
-import logging
 
 class NoLogsFilter(logging.Filter):
     """ 특정 URL 패턴을 포함하는 로그를 필터링 """
@@ -73,90 +74,60 @@ class HideDetailURLFilter(logging.Filter):
         record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
         return True
 
-# class moveImageURLFilter(logging.Filter):
-#     """ /image/move_image/image/ 경로 이후의 파일명을 제거하는 로그 필터 """
-#
-#     def filter(self, record):
-#         # 로그 메시지에서 특정 패턴을 감지하고 변경
-#         pattern = r"(POST|GET|PUT|DELETE) (/image/move_image/image/)[^\s]+"
-#         replacement = r"\1 \2"  # "/image/move_image/image/" 이후를 제거
-#
-#         # 로그 메시지를 안전하게 수정
-#         new_msg = re.sub(pattern, replacement, record.getMessage(), count=1)
-#
-#         # 변경된 메시지를 기록
-#         record.msg = new_msg
-#         record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
-#
-#         return True  # 필터를 통과한 로그만 출력
-
 def setup_logging():
-    """
-    로그 설정을 초기화하는 함수
-    """
     # 로그 디렉토리 생성
     os.makedirs("logs", exist_ok=True)
 
-    # 1️⃣ 로거 설정
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    # 기본 로거 설정
+    root_logger = logging.getLogger() # root
+    werkzeug_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
+    waitress_logger = logging.getLogger('waitress') # Waitress 로그
+    root_logger.setLevel(logging.INFO)
 
-    # 2️⃣ 로그 포맷 설정
-    formatter = logging.Formatter("### %(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    # 로그 포맷 설정
+    formatting = "### %(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    formatter = logging.Formatter(formatting)
 
-    # 3️⃣ 콘솔 핸들러 (터미널 출력)
+    # 콘솔 핸들러 정의 (터미널 출력)
     console_handler = logging.StreamHandler(sys.stdout) # 설정하지 않으면 sys.stderr(표준 에러 스트림)에 로그를 출력, error.log
-    console_handler.setLevel(logging.DEBUG)  # 콘솔에서는 DEBUG부터 출력
+    console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
+    console_handler.addFilter(WerkzeugLogFilter())
 
-    # 4️⃣ 파일 핸들러 (날짜별 자동 로그 파일 관리)
+    # 파일 핸들러 (날짜별 자동 로그 파일 관리)
     today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로 변환
     log_filename = f"logs/app_{today_str}.log"
     # file_handler = logging.FileHandler(log_filename, encoding="utf-8")
     # file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, encoding="utf-8", backupCount=7)
     file_handler = ConcurrentRotatingFileHandler(log_filename, maxBytes=5*1024*1024, encoding="utf-8", backupCount=7)
+    file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
+    file_handler.setFormatter(ColorFormatter(formatting))
+    file_handler.addFilter(WerkzeugLogFilter())
 
+    """ 비동기 로깅 구현 > 멀티스레드/멀티프로세스 환경에서 로그 기록을 효율적으로 수행 """
     # 로그 메시지를 저장할 큐 생성
     log_queue = queue.Queue()
-
-    file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
-    # file_handler.setFormatter(formatter)
-    console_formatter = ColorFormatter("### %(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    file_handler.setFormatter(console_formatter)
-
-    # QueueHandler 생성 (모든 로그를 큐로 보냄)
+    # QueueHandler 생성 후 로거에 추가 (모든 로그를 큐로 보냄)
     queue_handler = logging.handlers.QueueHandler(log_queue)
-    # logger = logging.getLogger("my_logger")
-
-    # 5️⃣ 핸들러를 로거에 추가
-    logger.addHandler(console_handler)
-    # logger.addHandler(file_handler)
-    logger.addHandler(queue_handler)
-
-    # QueueListener: 백그라운드에서 로그 처리
+    root_logger.addHandler(queue_handler) # root로거에 큐 핸들러를 추가하지 않으면 '.propagate = False' 를  설정할 필요가 없다
+    # QueueListener: 백그라운드에서 로그 처리 (큐에서 로그 메시지를 하나씩 꺼내어 file_handler를 통해 파일에 기록)
     listener = logging.handlers.QueueListener(log_queue, file_handler)
     listener.start()
 
-    # 6️⃣ 특정 모듈의 로그 레벨 조정
-
-    # logging.getLogger("werkzeug").setLevel(logging.INFO)  # Flask 기본 서버 로그
-    werkzeug_logger = logging.getLogger("werkzeug")
+    # Flask 서버가 실행될 때 기본 요청 로그를 새 포맷으로 변경
+    werkzeug_logger.addHandler(console_handler) # 기본 로깅 형태를 변경
     werkzeug_logger.setLevel(logging.INFO)
+    # werkzeug_logger.propagate = False # root로 전파하지 않는다
     werkzeug_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
     werkzeug_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
-    # logging.getLogger("waitress").setLevel(logging.INFO)  # Waitress 로그
-    waitress_logger = logging.getLogger('waitress')
+    waitress_logger.addHandler(console_handler)
     waitress_logger.setLevel(logging.INFO)
+    # waitress_logger.propagate = False
     waitress_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
     waitress_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
-    # Waitress 로그를 root로 전파하지 않음 > file에 로그가 남지 않는다
-    # waitress_logger.propagate = False
 
-    if not waitress_logger.handlers:  # 핸들러가 없다면 추가
-        waitress_logger.addHandler(console_handler)
-
-    return logger
+    return werkzeug_logger
 
 '''
 Flask 내장 서버 - 코드 수정 시 자동 재시작, 부하처리 오류복구 기능 부족, threaded=True으로 멀티스레드 보장되지는 않는다, 개발용
