@@ -3,13 +3,18 @@ body, html {
     padding: 0;
     height: 100%;
     width: 100%;
-    background-color: black;
     font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+    overflow-y: hidden
 }
 
 
 .top-bar {
-    position: absolute;
+    position: fixed;
+    opacity: 0.4;
     top: 15px;
     left: 0;
     width: 100%;
@@ -61,4 +66,26 @@ body, html {
 }
 .back a:hover, .logout a:hover {
     background-color: #0056b3;
+}
+
+/* 스크롤 조금 올리면 최하단으로 스크롤되는 버튼 생성 */
+#scroll-button {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    color: #000000;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    display: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    text-align: center; /* 텍스트 중앙 정렬 */
+    line-height: 50px; /* 버튼 높이와 동일하게 설정하여 아이콘 정중앙 */
+    opacity: 0.4;
 }

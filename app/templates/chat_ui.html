@@ -8,17 +8,9 @@
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <!--    <script src="http://127.0.0.1:3000/socket.io/socket.io.js"></script>-->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
-    <style>
-        .top-bar {
-            position: fixed;
-            opacity: 0.4;
-        }
-    </style>
-<!--    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">-->
 </head>
 
-<!--<body class="flex justify-center items-center h-screen bg-gray-100">-->
-<body class="" style="!important; background-color: white; overflow-y: hidden">
+<body>
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -50,20 +42,19 @@
 
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 <script>
-    const socket = io("https://192.168.141.214:3000", {
+    // const socket = io("https://192.168.141.214:3000", {
     // const socket = io("https://192.168.60.205:3000", {
-    // const socket = io("https://merci-seoul.iptime.org:3000", {
+    const socket = io("https://merci-seoul.iptime.org:3000", {
         secure: true, // HTTPS 사용
         transports: ["websocket", "polling"],
     });
-    // const socket = io("http://localhost:3000");
-    // const socket = io("http://192.168.60.205:3000");
     const username = "{{ username }}",  // Flask에서 전달된 username
-          chatContainer = document.getElementById("chat-container"),
-          chatInput = document.getElementById("chat-input"),
-          cameraButton = document.getElementById("camera-button");
+        chatContainer = document.getElementById("chat-container"),
+        chatInput = document.getElementById("chat-input"),
+        cameraButton = document.getElementById("camera-button");
     let offset = 0, // 가장 최근 10개는 이미 로드됨
-        loading = false;
+        loading = false,
+        scrollButton = undefined;
 
     // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
     socket.emit("user_info", { username });
@@ -83,7 +74,7 @@
         }
     });
 
-    // 📌 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
+    // 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
     chatContainer.addEventListener("scroll", function () {
         if (chatContainer.scrollTop === 0 && !loading) {
             loadMoreChats();
@@ -124,7 +115,7 @@
             .finally(() => { loading = false; });
     }
 
-    // 📌 메시지 전송 후 아래쪽에 추가
+    // 메시지 전송 후 아래쪽에 추가
     function sendMsg(event) {
         event.preventDefault();
         const msg = chatInput.value.trim();
@@ -173,6 +164,29 @@
 
     }
 
+    function checkScroll() {
+        const scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
+        const scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
+
+        if ((scrollHeight > 1500 && scrollHeight - scrollTop > 1000)) {
+            scrollButton.style.display = "block";
+        } else {
+            scrollButton.style.display = "none";
+        }
+    }
+
+    function moveBottonScroll() {
+        chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
+    }
+
+    function renderBottomScrollButton() {
+        scrollButton = document.createElement("button");
+        scrollButton.id = "scroll-button";
+        scrollButton.innerHTML = "↓";
+        document.body.appendChild(scrollButton);
+    }
+
+
     function initPage() {
         chatInput.removeEventListener('keyup', enterEvent);
         chatInput.addEventListener('keyup', enterEvent);
@@ -187,7 +201,13 @@
         document.body.addEventListener('click', requestNotificationPermission);
         document.body.addEventListener('click', requestNotificationPermission);
         loadMoreChats();
+        renderBottomScrollButton();
         // requestNotificationPermission(); // 상호작용 시 권한 허용
+
+        chatContainer.removeEventListener("scroll", checkScroll);
+        chatContainer.addEventListener("scroll", checkScroll);
+        scrollButton.removeEventListener("click", moveBottonScroll);
+        scrollButton.addEventListener("click", moveBottonScroll);
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
