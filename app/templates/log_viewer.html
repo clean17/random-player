@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>로그 뷰어</title>
+    <title>Log Viewer</title>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
     <style>
-        /*body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }*/
-        #log-container { width: 99%; height: 700px; overflow-y: scroll; background: #fff; padding: 10px; border: 1px solid #ccc; text-align: left }
+        body { font-family: Arial, sans-serif; background: #f4f4f4;}
+        #log-container {height: 71vh; overflow-y: scroll; background: #fff; padding: 10px; border: 1px solid #ccc; text-align: left }
         .log-line { white-space: pre-wrap; font-family: monospace; }
         #date-picker { margin: 0px 10px 10px 10px}
     </style>
@@ -25,24 +25,24 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
-<div class="container" style="height: 96%; width: 100%">
+<div class="container" style="height: 100%; width: 100%;">
     <h2>로그 뷰어</h2>
     <div style="display: flex; justify-content: center;">
         <label for="date-picker">날짜 선택:</label>
         <input type="date" id="date-picker">
-        <button onclick="loadLogs()" style="max-width: 12%; height: 22px; font-size: 12pt; padding: 0px 10px">로그 가져오기</button>
     </div>
     <div id="log-container"></div>
 </div>
 
 <script>
-    const logContainer = document.getElementById("log-container");
     // const socket = io()  // WebSocket 연결
-    const eventSource = new EventSource("/func/logs/stream");
+    const logContainer = document.getElementById("log-container"),
+        datePicker = document.getElementById("date-picker"),
+        eventSource = new EventSource("/func/logs/stream");
 
     // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
     /*socket.on("log_update", (data) => {
-        const selectedDate = document.getElementById("date-picker").value;
+        const selectedDate = datePicker.value;
         if (selectedDate === getTodayDate()) {
             renderLogs(data.log)
         }
@@ -56,7 +56,7 @@
 
     // 오늘 로그만 뷰어에 추가
     eventSource.onmessage = (event) => {
-        const selectedDate = document.getElementById("date-picker").value;
+        const selectedDate = datePicker.value;
         if (selectedDate === getTodayDate()) {
             renderLogs(event.data);
         }
@@ -72,7 +72,7 @@
 
     // 날짜별 로그 가져오기
     function loadLogs() {
-        const dateInput = document.getElementById("date-picker").value;
+        const dateInput = datePicker.value;
         if (!dateInput) {
             alert("날짜를 선택하세요.");
             return;
@@ -96,8 +96,10 @@
     }
 
     function initPage() {
-        document.getElementById("date-picker").value = getTodayDate();
+        datePicker.value = getTodayDate();
         loadLogs();
+        datePicker.removeEventListener('change', loadLogs)
+        datePicker.addEventListener('change', loadLogs)
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
