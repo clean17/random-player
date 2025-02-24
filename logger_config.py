@@ -68,7 +68,9 @@ class HideDetailURLFilter(logging.Filter):
             return True
 
         for pattern in self.patterns:
-            log_message = log_message.replace(pattern, pattern.rstrip('/') + '/[HIDDEN]')
+#             log_message = log_message.replace(pattern, pattern.rstrip('/') + '/[HIDDEN]')
+            log_message = re.sub(f"{re.escape(pattern)}.*", pattern.rstrip('/') + '/[HIDDEN]', log_message)
+
 
         record.msg = log_message
         record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
