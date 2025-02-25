@@ -156,6 +156,7 @@ def image_list():
 def move_image():
     # imagepath의 값에 따라 src_path 결정
     imagepath = request.get_json().get('imagepath')
+    subpath = request.get_json().get('subpath', '')
     filename = request.get_json().get('filename')
     dest_path = os.path.join(MOVE_DIR, filename)
 
@@ -167,14 +168,14 @@ def move_image():
         src_path = os.path.join(TRIP_IMAGE_DIR, filename)
     elif imagepath == "temp_image":
         dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
-        src_path = os.path.join(TEMP_IMAGE_DIR, filename)
+        src_path = os.path.join(TEMP_IMAGE_DIR, subpath, filename)
     else:
         return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
 
     # print('src_path', src_path)
     if os.path.exists(src_path):
         # os.rename(src_path, dest_path) # OS ERROR : 다른 드라이브로 이동시킬 수 없다, shutil 사용을 권장
-        shutil.move(src_path, dest_path)
+        shutil.move(src_path, dest_path) # src_path > dest_path 이동
         return jsonify({'status': 'success'})
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404

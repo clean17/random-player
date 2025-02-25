@@ -122,6 +122,7 @@
 <script>
     let nextImageElement = null,
         loading_size = 8,
+        selectedIndex, selectedOption, titleText = undefined,
         pressTimer;
 
     const nextBtn = document.getElementById('next-image-button'),
@@ -129,7 +130,13 @@
         page = "{{ page }}",
         zipBtn = document.getElementById('download-zip-btn'),
         dropdownMenu = document.getElementById('dropdown-menu'),
+        title = document.getElementById('title-select'),
         longPressDuration = 1000;
+
+    if (title) {
+        selectedOption = title.options[title.selectedIndex];
+        titleText = selectedOption.text;
+    }
 
     /*******************************************************************/
 
@@ -209,7 +216,17 @@
         const centerImage = findCenterImageByCoordinates();
         const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
         // fetch(`/image/move_image/${dir}/${filename}`, { method: 'POST' })
-        fetch(`/image/move_image/temp_image/${filename}`, { method: 'POST' })
+        fetch(`/image/move_image`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                imagepath: dir === 'temp' ? 'temp_image' : 'trip_image',
+                subpath: titleText,
+                filename: filename
+            })
+        })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
