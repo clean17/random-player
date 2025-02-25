@@ -56,6 +56,7 @@
 
 <script>
     const saveButton = document.getElementById('save-memo-button');
+    let saveTimeout;
 
     // saveButton.removeEventListener('click', saveMemo)
     // saveButton.addEventListener('click', saveMemo)
@@ -98,7 +99,12 @@
         }, 2000);
     }
 
-
+    document.getElementById("log-container").addEventListener("input", function() {
+        clearTimeout(saveTimeout);  // 기존 타이머 제거 (입력할 때마다 초기화)
+        saveTimeout = setTimeout(() => {
+            saveMemo();  // 5초 후 자동 저장
+        }, 1000);
+    });
 </script>
 
 </body>
