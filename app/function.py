@@ -18,6 +18,8 @@ func = Blueprint('func', __name__)
 socketio = SocketIO()
 
 LOG_DIR = "logs"
+MEMO_FILE = 'memo.txt'
+MEMO_PATH = os.path.join(LOG_DIR, MEMO_FILE)
 
 # Windows API 상수
 SHERB_NOCONFIRMATION = 0x00000001  # 사용자 확인 대화 상자를 표시하지 않음
@@ -298,6 +300,28 @@ def load_more_logs():
         return jsonify({"logs": all_lines[start:end]})
     else:
         return jsonify({"logs": []})
+
+
+################################# Memo ######################################
+@func.route('/memo', methods=['GET', 'POST'])
+def memo():
+    if request.method == 'POST':
+        # textarea의 내용 가져오기
+        content = request.form.get('memo_content', '')
+        # 줄바꿈 문자 통일 (\r\n -> \n)
+        content = content.replace('\r\n', '\n')
+        # 파일에 내용 저장
+        with open(MEMO_PATH, 'w', encoding='utf-8') as f:
+            f.write(content)
+    else:
+        # GET 요청 시 기존 메모 내용 읽기
+        if os.path.exists(MEMO_PATH):
+            with open(MEMO_PATH, 'r', encoding='utf-8') as f:
+                content = f.read()
+        else:
+            content = ''
+    return render_template('memo.html', content=content)
+
 
 
 
