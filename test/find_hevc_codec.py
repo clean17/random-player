@@ -19,8 +19,7 @@ def get_video_codec(file_path):
         return None
 
 def move_hevc_files(source_dir, target_dir):
-    if not os.path.exists(target_dir):
-        os.makedirs(target_dir)  # 새로운 디렉토리 생성
+    os.makedirs(target_dir, exist_ok=True)  # 새로운 디렉토리 생성
     for root, dirs, files in os.walk(source_dir):
         for file in files:
             if file.endswith(('.mp4', '.mkv', '.mov', '.avi')):  # 비디오 파일 확장자
