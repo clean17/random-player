@@ -1,12 +1,21 @@
 // 도메인 구입 전까지 서비스 워커 기능 비활성화 > PWA 기능 or FCM 추가해야함
-/*if ("serviceWorker" in navigator) {
+if ("serviceWorker" in navigator) {
     // http + localhost, https(공인 ssl) 환경에서만 기동
     // navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
     // navigator.serviceWorker.register("/static/js/service-worker.js", { scope: "/static/js/" })
-    navigator.serviceWorker.register("/service-worker.js")
+    /*navigator.serviceWorker.register("/service-worker.js")
         .then(reg => console.log("서비스 워커 등록 완료:", reg))
-        .catch(err => console.log("서비스 워커 등록 실패:", err));
-}*/
+        .catch(err => console.log("서비스 워커 등록 실패:", err));*/
+
+    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+        return registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: "BM3Xq3X-hbmCtGvoJv3Dl-WmW1nTYenl4tKQtE4pdcMTK0XDxjrECQSmtFgnPd1aqUoBINRCKrLqfqwIdemSXZs" // YOUR_PUBLIC_VAPID_KEY
+        });
+    }).then(subscription => {
+        console.log("Push Subscription:", JSON.stringify(subscription));
+    });
+}
 
 function requestNotificationPermission() {
     if (!("Notification" in window)) {
