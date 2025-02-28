@@ -33,8 +33,8 @@ function requestNotificationPermission() {
 }
 
 function sendNotification(data) {
-    // if (document.hidden && Notification.permission === "granted") {
-    if (Notification.permission === "granted") {
+    if (document.hidden && Notification.permission === "granted") {
+    // if (Notification.permission === "granted") {
         /*navigator.serviceWorker.ready.then(registration => { // 서비스 워커 알림
             registration.showNotification("새 메시지 도착!", {
                 body: `${data.username}: ${data.msg}`,
