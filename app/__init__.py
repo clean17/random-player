@@ -22,6 +22,7 @@ ALLOWED_PATHS = [
     '/func/download-zip*',
     '/video/temp-video*',
     '/func/chat*',
+    '/func/memo*',
 ]
 
 def create_app():
