@@ -64,6 +64,12 @@
             countdown: false, // 사진 촬영 전에 카운트다운 비활성화
             mirror: true, // 미러링 활성화
         })
+        .use(Uppy.GoogleDrive, {
+            companionUrl: 'https://companion.uppy.io', // Companion 서버 URL
+        })
+        .use(Uppy.GooglePhotos, {
+            companionUrl: 'https://companion.uppy.io', // Companion 서버 URL
+        })
         .use(Uppy.XHRUpload, {
             endpoint: '/upload',
             fieldName: 'files[]',
