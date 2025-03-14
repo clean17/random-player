@@ -1,5 +1,6 @@
 import time
 from playwright.sync_api import Playwright, sync_playwright
+from playwright.async_api import Playwright, async_playwright
 from config import settings
 
 USER_ID = settings['LOTTO_USER_ID']
@@ -83,7 +84,8 @@ if __name__ == "__main__":
 # task_manager.py 에서 호출
 async def run(playwright):
     """비동기 Playwright 로또 구매 실행"""
-    browser = await playwright.chromium.launch(headless=True)  # await 추가
+    print('### 로또 구매 시작')
+    browser = await playwright.chromium.launch(headless=False)  # await 추가
     context = await browser.new_context()
     page = await context.new_page()
 
@@ -100,29 +102,32 @@ async def run(playwright):
     async with page.expect_navigation():
         await page.press("form[name=\"jform\"] >> text=로그인", "Enter")
 
-    await asyncio.sleep(5)
-
     # 로또 구매 페이지 이동
     await page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do")
+    await page.wait_for_load_state("networkidle")
 
     # 자동번호 발급 클릭
+    await page.wait_for_selector("text=자동번호발급")
     await page.click("text=자동번호발급")
 
     # 구매 개수 선택
+    await page.wait_for_selector("select")
     await page.select_option("select", str(COUNT))
 
     # 확인 버튼 클릭
+    await page.wait_for_selector("text=확인")
     await page.click("text=확인")
 
     # 구매하기 버튼 클릭
+    await page.wait_for_selector("input:has-text(\"구매하기\")")
     await page.click("input:has-text(\"구매하기\")")
 
-    await asyncio.sleep(2)
-
     # 최종 확인 버튼 클릭
+    await page.wait_for_selector("text=확인 취소 >> input[type=\"button\"]")
     await page.click("text=확인 취소 >> input[type=\"button\"]")
 
     # 닫기
+    await page.wait_for_selector("input[name=\"closeLayer\"]")
     await page.click("input[name=\"closeLayer\"]")
 
     print(f'### async_buy_lotto 자동 {COUNT}장 구매 완료 ###')
