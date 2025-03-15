@@ -11,7 +11,7 @@ import multiprocessing
 import time
 from flask_socketio import SocketIO
 from datetime import datetime
-from .lotto_schedule import buy_lotto
+from lotto_schedule import buy_lotto
 
 func = Blueprint('func', __name__)
 
