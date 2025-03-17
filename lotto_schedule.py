@@ -7,7 +7,7 @@ USER_PW = settings['LOTTO_PASSWORD']
 
 COUNT = 1 # 구매 수량
 
-def run(playwright: Playwright) -> None:
+def buy_lotto(playwright: Playwright) -> None:
 
     # chrome 브라우저를 실행
     browser = playwright.chromium.launch(headless=True)
@@ -68,10 +68,13 @@ def run(playwright: Playwright) -> None:
     page.click("input[name=\"closeLayer\"]")
     # assert page.url == "https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40"
 
-    print(f'### 로또 자동 {COUNT}장 구매 완료')
+    print(f'### 로또 자동 {COUNT}장 구매 완료 !!')
     # ---------------------
     context.close()
     browser.close()
 
-with sync_playwright() as playwright:
-    run(playwright)
+# with sync_playwright() as playwright:
+#     buy_lotto(playwright) # ✅ 모듈이 import될 때 자동 실행됨!
+if __name__ == "__main__":
+    with sync_playwright() as playwright:
+        buy_lotto(playwright)  # ✅ import해도 실행되지 않음
