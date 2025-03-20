@@ -12,17 +12,10 @@ from flask_cors import CORS
 import subprocess
 import glob
 from config import settings
+import atexit
 
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
-
-lock_files = glob.glob("logs/.__app_*.lock")  # logs 폴더 내 __app_*.lock 파일 목록 가져오기
-
-for lock_file in lock_files:
-    try:
-        os.remove(lock_file)
-    except Exception as e:
-        print(f"Error deleting {lock_file}: {e}")  # 삭제 실패 시 오류 출력
 
 
 # 1️⃣ 로그 설정 적용
@@ -88,6 +81,19 @@ def signal_handler(sig, frame):
 
     # os.system('taskkill /f /im python.exe')
     # sys.exit(0)
+
+# 애플리케이션 종료 후 실행
+def on_exit():
+    print("프로그램이 종료됩니다.")
+    lock_files = glob.glob("logs/.__app_*.lock")  # logs 폴더 내 __app_*.lock 파일 목록 가져오기
+
+    for lock_file in lock_files:
+        try:
+            os.remove(lock_file)
+        except Exception as e:
+            print(f"Error deleting {lock_file}: {e}")  # 삭제 실패 시 오류 출력
+
+atexit.register(on_exit)
 
 if __name__ == '__main__':
     # 서버 종료 핸들러 등록
