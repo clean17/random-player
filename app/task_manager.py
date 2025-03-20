@@ -17,8 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 from config import settings
 import zipfile
 import asyncio
+import schedule
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.executors.asyncio import AsyncIOExecutor
+from lotto_schedule import async_buy_lotto
 
 tasks = []
 
@@ -389,6 +391,25 @@ def periodic_compression_task():
         time.sleep(sleep_duration)
         compress_directory_to_zip()
 
+def run_async_function(coroutine):
+    """ 스케줄러에서 비동기 함수를 실행하는 래퍼 함수 """
+    loop = asyncio.get_event_loop()
+    asyncio.run_coroutine_threadsafe(coroutine, loop)
+
+async def run_schedule():
+#     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
+    schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
+
+    while True:
+        schedule.run_pending()
+        await asyncio.sleep(60)  # 1분마다 체크
+
+def start_scheduler():
+    """멀티프로세싱 환경에서 비동기 스케줄러 실행"""
+    loop = asyncio.new_event_loop()  # 새로운 이벤트 루프 생성
+    asyncio.set_event_loop(loop)  # 이벤트 루프 설정
+    loop.run_until_complete(run_schedule())  # 비동기 코드 실행
+
 # 주기적 작업을 위한 프로세스 시작
 def start_periodic_task():
     processes = []
@@ -398,12 +419,12 @@ def start_periodic_task():
     process.start()
     processes.append(process)
 
-def start_periodic_task2():
-    print('1. start_periodic_task')
-    process = multiprocessing.Process(target=periodic_compression_task)
-    process.daemon = True
-    print(f"2. start_periodic_task: Process started with PID {process.pid}")
-    return process
+    process2 = multiprocessing.Process(target=start_scheduler)
+    process2.daemon = True
+    process2.start()
+    processes.append(process2)
+
+    return processes
 
 def initialize_directories():
     for directory in directories_to_compress:

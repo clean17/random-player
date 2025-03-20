@@ -85,7 +85,7 @@ if __name__ == "__main__":
 async def run(playwright):
     """비동기 Playwright 로또 구매 실행"""
     print('### 로또 구매 시작')
-    browser = await playwright.chromium.launch(headless=False)  # await 추가
+    browser = await playwright.chromium.launch(headless=True)  # await 추가
     context = await browser.new_context()
     page = await context.new_page()
 
