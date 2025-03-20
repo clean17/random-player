@@ -103,7 +103,7 @@ def setup_logging():
     # file_handler = logging.FileHandler(log_filename, encoding="utf-8")
     # file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, encoding="utf-8", backupCount=7) # 시간 기준으로 회전, 단일 프로세스
     # file_handler = ConcurrentRotatingFileHandler(log_filename, maxBytes=5*1024*1024, encoding="utf-8", backupCount=7) # 크기 기준으로 회전, 동시성 지원
-    file_handler = ConcurrentTimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding="utf-8", delay=True) # 시간 기준, 동시성
+    file_handler = ConcurrentTimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding="utf-8", delay=False) # 시간 기준, 동시성
     file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
     file_handler.setFormatter(ColorFormatter(formatting))
     file_handler.addFilter(WerkzeugLogFilter())
