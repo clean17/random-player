@@ -25,6 +25,8 @@ ALLOWED_PATHS = [
     '/func/memo*',
 ]
 
+BLOCKED_IPS = {'170.39.218.12'}
+
 def create_app():
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
@@ -46,7 +48,15 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
 
-    # 서버 시작 시 호출
+    # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
+    @app.before_request
+    def block_ip():
+        # 실 IP 추출 (프록시 뒤에 있을 경우)
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+
+        if ip in BLOCKED_IPS:
+            abort(403)  # 차단된 IP는 접근 불가
+
     @app.before_request
     def handle_server_restart():
         if 'lockout_time' in session and session['lockout_time']:
