@@ -106,7 +106,7 @@
 
                     tempArr.reverse().forEach(log => {
                         const [timestamp, username, msg] = log.toString().split("|");
-                        chatObj = { username: username.trim(), msg: msg.replace('\n', '').trim() }
+                        chatObj = { timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
                         addMessage(chatObj, true)
                         chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
                     });
@@ -136,16 +136,44 @@
             "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
         );
 
+        // 시간 데이터가 data.time에 들어있다고 가정 (예: "250211221528")
+        let timeStr = "";
+        if (data.timestamp && data.timestamp.length >= 10) {
+            // HH:MM 형식으로 자르기 (인덱스 6~7: 시, 8~9: 분)
+            const hour = data.timestamp.slice(6, 8);
+            const minute = data.timestamp.slice(8, 10);
+            timeStr = `${hour}:${minute}`;
+        }
+
+        // 메시지 내용과 시간용 span 요소 생성
+        const messageSpan = document.createElement("span");
+        messageSpan.textContent = data.msg;
+
+        const timeSpan = document.createElement("span");
+        timeSpan.textContent = timeStr;
+        // 시간 텍스트는 좀 더 작은 글씨나 여백을 주고 싶다면 아래처럼 클래스나 인라인 스타일을 추가할 수 있음
+        timeSpan.style.fontSize = "0.8em";
+
+        // flex 컨테이너로 한 줄에 배치
+        messageDiv.style.display = "flex";
+        messageDiv.style.alignItems = "center";
+
         if (data.username === username) {
             // 내가 보낸 메시지 (우측, 파란색)
             messageDiv.classList.add("bg-blue-200", "self-end", "text-right", "ml-auto");
+            // 시간과 메시지 사이에 약간의 간격을 주기 위해 marginRight 추가
+            timeSpan.style.marginRight = "8px";
+            messageDiv.appendChild(timeSpan);
+            messageDiv.appendChild(messageSpan);
         } else {
             // 받은 메시지 (좌측, 회색)
             messageDiv.classList.add("bg-gray-200", "self-start", "text-left", "mr-auto");
+            // 시간과 메시지 사이에 약간의 간격을 주기 위해 marginLeft 추가
+            timeSpan.style.marginLeft = "8px";
+            messageDiv.appendChild(messageSpan);
+            messageDiv.appendChild(timeSpan);
         }
 
-        // messageDiv.textContent = `${data.username}: ${data.msg}`;
-        messageDiv.textContent = `${data.msg}`;
         if (load) {
             chatContainer.prepend(messageDiv);
         } else {
