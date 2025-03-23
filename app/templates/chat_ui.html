@@ -138,10 +138,26 @@
 
         // 시간 데이터가 data.time에 들어있다고 가정 (예: "250211221528")
         let timeStr = "";
+
         if (data.timestamp && data.timestamp.length >= 10) {
             // HH:MM 형식으로 자르기 (인덱스 6~7: 시, 8~9: 분)
             const hour = data.timestamp.slice(6, 8);
             const minute = data.timestamp.slice(8, 10);
+            timeStr = `${hour}:${minute}`;
+        } else {
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+
+            timeStr =
+                pad(now.getFullYear() % 100) +
+                pad(now.getMonth() + 1) +
+                pad(now.getDate()) +
+                pad(now.getHours()) +
+                pad(now.getMinutes()) +
+                pad(now.getSeconds());
+
+            const hour = timeStr.slice(6, 8);
+            const minute = timeStr.slice(8, 10);
             timeStr = `${hour}:${minute}`;
         }
 
@@ -160,14 +176,14 @@
 
         if (data.username === username) {
             // 내가 보낸 메시지 (우측, 파란색)
-            messageDiv.classList.add("bg-blue-200", "self-end", "text-right", "ml-auto");
+            messageSpan.classList.add("bg-blue-200", "self-end", "text-right", "ml-auto");
             // 시간과 메시지 사이에 약간의 간격을 주기 위해 marginRight 추가
             timeSpan.style.marginRight = "8px";
             messageDiv.appendChild(timeSpan);
             messageDiv.appendChild(messageSpan);
         } else {
             // 받은 메시지 (좌측, 회색)
-            messageDiv.classList.add("bg-gray-200", "self-start", "text-left", "mr-auto");
+            messageSpan.classList.add("bg-gray-200", "self-start", "text-left", "mr-auto");
             // 시간과 메시지 사이에 약간의 간격을 주기 위해 marginLeft 추가
             timeSpan.style.marginLeft = "8px";
             messageDiv.appendChild(messageSpan);
