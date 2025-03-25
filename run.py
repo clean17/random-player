@@ -13,6 +13,7 @@ import subprocess
 import glob
 from config import settings
 import atexit
+from collections import defaultdict
 
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
@@ -83,15 +84,58 @@ def signal_handler(sig, frame):
     # sys.exit(0)
 
 # 애플리케이션 종료 후 실행
+# def on_exit():
+#     print("프로그램이 종료됩니다.")
+#     lock_files = glob.glob("logs/.__app_*.lock")  # logs 폴더 내 __app_*.lock 파일 목록 가져오기
+#
+#     for lock_file in lock_files:
+#         try:
+#             os.remove(lock_file)
+#         except Exception as e:
+#             print(f"Error deleting {lock_file}: {e}")  # 삭제 실패 시 오류 출력
+
 def on_exit():
     print("프로그램이 종료됩니다.")
-    lock_files = glob.glob("logs/.__app_*.lock")  # logs 폴더 내 __app_*.lock 파일 목록 가져오기
 
+    # 로그 파일 패턴 읽기
+    log_files = glob.glob("logs/app_*.log.20-*")
+
+    if not log_files:
+        print("병합할 로그 파일이 없습니다.")
+        return
+
+    # 로그 그룹화: "app_250320.log" 같은 base 경로를 key로 묶기
+    grouped_logs = defaultdict(list)
+    for path in log_files:
+        # 예: logs/app_250320.log.2025-03-20 → logs/app_250320.log
+        base_path = path.rsplit('.', 1)[0]  # 마지막 .을 기준으로 자르기
+        grouped_logs[base_path].append(path)
+
+    # 각 그룹별로 병합 처리
+    for base_log_path, files in grouped_logs.items():
+        files.sort()  # 날짜순 정렬
+
+        try:
+            with open(base_log_path, 'a', encoding='utf-8') as merged_file:
+                for file_path in files:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        merged_file.write(f.read())
+                        merged_file.write("\n")
+                    os.remove(file_path)
+                    print(f"{file_path} → 병합 후 삭제됨")
+
+            print(f"📦 모든 로그가 {base_log_path} 에 병합되었습니다.\n")
+
+        except Exception as e:
+            print(f"❌ 병합 중 오류 발생 ({base_log_path}): {e}")
+
+    # 락 파일 삭제 (기존 코드 유지)
+    lock_files = glob.glob("logs/.__app_*.lock")
     for lock_file in lock_files:
         try:
             os.remove(lock_file)
         except Exception as e:
-            print(f"Error deleting {lock_file}: {e}")  # 삭제 실패 시 오류 출력
+            print(f"Error deleting {lock_file}: {e}")
 
 atexit.register(on_exit)
 
