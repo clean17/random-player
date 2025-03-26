@@ -54,6 +54,7 @@
         cameraButton = document.getElementById("camera-button");
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         loading = false,
+        lastMessageDate = null,
         scrollButton = undefined;
 
     // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
@@ -160,10 +161,18 @@
 
         // 시간 계산
         let timeStr = "";
+        let dateStr = "";
+        const now = new Date();
+
         if (data.timestamp && data.timestamp.length >= 10) {
             const hour = data.timestamp.slice(6, 8);
             const minute = data.timestamp.slice(8, 10);
             timeStr = `${hour}:${minute}`;
+
+            const yy = data.timestamp.slice(0, 2);
+            const mm = data.timestamp.slice(2, 4);
+            const dd = data.timestamp.slice(4, 6);
+            dateStr = `20${yy}.${mm}.${dd}`;
         } else {
             const now = new Date();
             const pad = (n) => String(n).padStart(2, '0');
@@ -177,7 +186,30 @@
             const hour = fullStr.slice(6, 8);
             const minute = fullStr.slice(8, 10);
             timeStr = `${hour}:${minute}`;
+
+            dateStr = `20${String(now.getFullYear() % 100).padStart(2, '0')}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
         }
+
+        // 날짜 구분선이 필요한 경우 추가
+        let shouldAddDivider = false;
+        if (dateStr !== lastMessageDate) {
+            shouldAddDivider = true;
+            lastMessageDate = dateStr;
+        }
+
+        if (load) {
+            chatContainer.prepend(messageRow); // 그 다음 메시지
+        } else {
+            chatContainer.appendChild(messageRow);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        if (shouldAddDivider) {
+            const divider = createDateDivider(dateStr);
+            chatContainer.prepend(divider); // 먼저 구분선
+            console.log('--------------', divider.querySelector('span').textContent);
+        }
+        console.log(dateStr, data.msg)
 
         // 시간 박스
         const timeDiv = document.createElement("div");
@@ -194,13 +226,24 @@
             messageRow.appendChild(messageDiv);
             messageRow.appendChild(timeDiv);
         }
+    }
 
-        if (load) {
-            chatContainer.prepend(messageRow);
-        } else {
-            chatContainer.appendChild(messageRow);
-            chatContainer.scrollTop = chatContainer.scrollHeight;  // 채팅 창 자동 스크롤
-        }
+    function createDateDivider(dateStr) {
+        const divider = document.createElement("div");
+        divider.style.display = "flex";
+        divider.style.alignItems = "center";
+        divider.style.textAlign = "center";
+        divider.style.margin = "16px 0";
+        divider.style.color = "#999";
+        divider.style.fontSize = "0.9em";
+
+        divider.innerHTML = `
+        <hr style="flex:1; border:none; border-top:1px solid #ccc;" />
+        <span style="margin: 0 10px;">${dateStr}</span>
+        <hr style="flex:1; border:none; border-top:1px solid #ccc;" />
+    `;
+
+        return divider;
     }
 
     function enterEvent(event) {
