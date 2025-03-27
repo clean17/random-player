@@ -52,10 +52,11 @@
         chatContainer = document.getElementById("chat-container"),
         chatInput = document.getElementById("chat-input"),
         cameraButton = document.getElementById("camera-button");
+    const MAX_FETCH_MESSAGE_SIZE = 20;
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         loading = false,
         lastMessageDate = null,
-        scrollButton = undefined;
+        dateStr, scrollButton = undefined;
 
     // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
     socket.emit("user_info", { username });
@@ -99,7 +100,10 @@
             .then(data => {
                 if (data.logs.length > 0) {
                     const tempArr = []
-                    offset += 20;
+                    let isFisrtMsg = false;
+                    offset += MAX_FETCH_MESSAGE_SIZE;
+
+                    if (data.logs.length !== MAX_FETCH_MESSAGE_SIZE) isFisrtMsg = true;
 
                     data.logs.map(log => {
                         tempArr.push(log)
@@ -108,9 +112,14 @@
                     tempArr.reverse().forEach(log => {
                         const [timestamp, username, msg] = log.toString().split("|");
                         chatObj = { timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
-                        addMessage(chatObj, true)
+                        addMessage(chatObj, true, isFisrtMsg)
                         chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
                     });
+
+                    if (isFisrtMsg) {
+                        const divider = createDateDivider(dateStr);
+                        chatContainer.prepend(divider);
+                    }
                 }
             })
             .finally(() => { loading = false; });
@@ -126,7 +135,7 @@
         }
     }
 
-    function addMessage(data, load = false) {
+    function addMessage(data, load = false, isFisrtMsg = false) {
         // 바깥 컨테이너: 메시지 한 줄을 구성
         const messageRow = document.createElement("div");
         messageRow.style.display = "flex";
@@ -161,7 +170,7 @@
 
         // 시간 계산
         let timeStr = "";
-        let dateStr = "";
+        dateStr = "";
         const now = new Date();
 
         if (data.timestamp && data.timestamp.length >= 10) {
@@ -187,29 +196,31 @@
             const minute = fullStr.slice(8, 10);
             timeStr = `${hour}:${minute}`;
 
-            dateStr = `20${String(now.getFullYear() % 100).padStart(2, '0')}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+            dateStr, lastMessageDate = `20${String(now.getFullYear() % 100).padStart(2, '0')}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
         }
 
         // 날짜 구분선이 필요한 경우 추가
         let shouldAddDivider = false;
         if (dateStr !== lastMessageDate) {
             shouldAddDivider = true;
+        }
+
+        if (shouldAddDivider) {
+            if (lastMessageDate) {
+                const divider = createDateDivider(lastMessageDate);
+                chatContainer.prepend(divider);
+            }
             lastMessageDate = dateStr;
         }
 
         if (load) {
-            chatContainer.prepend(messageRow); // 그 다음 메시지
+            // 저장된 메세지 렌더링
+            chatContainer.prepend(messageRow);
         } else {
+            // 새로운 메세지 렌더링
             chatContainer.appendChild(messageRow);
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
-
-        if (shouldAddDivider) {
-            const divider = createDateDivider(dateStr);
-            chatContainer.prepend(divider); // 먼저 구분선
-            console.log('--------------', divider.querySelector('span').textContent);
-        }
-        console.log(dateStr, data.msg)
 
         // 시간 박스
         const timeDiv = document.createElement("div");
