@@ -12,6 +12,8 @@ from concurrent_log_handler import ConcurrentRotatingFileHandler
 from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
 import werkzeug
 from werkzeug.serving import WSGIRequestHandler
+import time
+import threading
 
 # sys.stdout과 sys.stderr를 UTF-8로 설정 (reconfigure: python 3.7부터 지원, hasattr: 3.6이하 안전하게)
 if hasattr(sys.stdout, 'reconfigure'):
@@ -77,9 +79,20 @@ class HideDetailURLFilter(logging.Filter):
         record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
         return True
 
+log_dir = "logs"
+current_date_str = None
+file_handler = None
+root_logger = None
+
+def get_log_filename():
+    today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로
+    return f"logs/app_{today_str}.log"
+
 def setup_logging():
     # 로그 디렉토리 생성
     os.makedirs("logs", exist_ok=True)
+
+    global root_logger, file_handler
 
     # 기본 로거 설정
     root_logger = logging.getLogger() # root
@@ -98,12 +111,11 @@ def setup_logging():
     console_handler.addFilter(WerkzeugLogFilter())
 
     # 파일 핸들러 (날짜별 자동 로그 파일 관리)
-    today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로 변환
-    log_filename = f"logs/app_{today_str}.log"
-    # file_handler = logging.FileHandler(log_filename, encoding="utf-8")
+    log_filename = get_log_filename()
+    file_handler = logging.FileHandler(log_filename, encoding="utf-8")
     # file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, encoding="utf-8", backupCount=7) # 시간 기준으로 회전, 단일 프로세스
     # file_handler = ConcurrentRotatingFileHandler(log_filename, maxBytes=5*1024*1024, encoding="utf-8", backupCount=7) # 크기 기준으로 회전, 동시성 지원
-    file_handler = ConcurrentTimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding="utf-8", delay=False) # 시간 기준, 동시성
+    # file_handler = ConcurrentTimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding="utf-8", delay=False) # 시간 기준, 동시성
     file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
     file_handler.setFormatter(ColorFormatter(formatting))
     file_handler.addFilter(WerkzeugLogFilter())
@@ -132,6 +144,38 @@ def setup_logging():
     waitress_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
     return werkzeug_logger
+
+def setup_logger():
+    global file_handler, current_date_str
+
+    # 날짜 문자열
+    new_date_str = datetime.now().strftime('%Y%m%d')
+
+    # 날짜가 바뀌었으면 교체
+    if new_date_str != current_date_str:
+        if file_handler:
+            # root_logger.removeHandler(file_handler)
+            file_handler.close()
+
+        log_filename = get_log_filename()
+        file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
+        formatting = "### %(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        file_handler.setFormatter(ColorFormatter(formatting))
+        file_handler.addFilter(WerkzeugLogFilter())
+
+        # root_logger.addHandler(file_handler)
+        current_date_str = new_date_str
+
+# 백그라운드에서 날짜 변경 감지
+def log_monitor():
+    time.sleep(60)
+    while True:
+        setup_logger()
+        time.sleep(60)  # 매 60초마다 체크
+
+# 로그 감시 쓰레드 시작
+threading.Thread(target=log_monitor, daemon=True).start()
 
 '''
 Flask 내장 서버 - 코드 수정 시 자동 재시작, 부하처리 오류복구 기능 부족, threaded=True으로 멀티스레드 보장되지는 않는다, 개발용
