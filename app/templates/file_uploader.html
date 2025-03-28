@@ -29,14 +29,18 @@
 </div>
 <div class="container">
     <h2>Upload File</h2>
-    <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">
+    <!--    <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">-->
     <!--            <input type="text" id="content" name="content" placeholder="Enter Content" class="input-size" autocomplete="off">-->
-    <div id="uppy-dashboard" style="background-color: white"></div>
-    <button id="start-upload-button" style="margin-top: 10px" class="btn-w100">Start Upload</button>
-    <!--            <button type="submit" class="input-button-size">Upload File</button>-->
+    <!--    <div id="uppy-dashboard" style="background-color: white"></div>-->
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">
+        <input type="file" name="files[]" multiple style="margin-bottom: 10px">
+        <button type="submit" class="input-button-size">Upload File</button>
+    </form>
+    <!--    <button id="start-upload-button" style="margin-top: 10px" class="btn-w100">Start Upload</button>-->
 </div>
 <script>
-    const screenHeight = window.innerHeight,
+    /*const screenHeight = window.innerHeight,
           containerHeight = document.querySelector('.container').scrollHeight,
           uploadBatchSize = 20;
     let currentBatchIndex = 0;
@@ -76,11 +80,11 @@
             bundle: true,
             limit: 5, // 한번에 업로드 가능한 파일수량 제한
         });
-    /*.use(Uppy.Tus, { # 서버가 Tus를 지원해야 한다.. 구현이 필요
+    /!*.use(Uppy.Tus, { # 서버가 Tus를 지원해야 한다.. 구현이 필요
         endpoint: '/upload', // Tus 서버 엔드포인트
         chunkSize: 5 * 1024 * 1024, // 청크 크기 (5MB)
         retryDelays: [0, 1000, 3000, 5000], // 재시도 지연 시간
-    })*/
+    })*!/
 
     uppy.on('complete', (result) => {
         document.querySelector('.container h2').textContent = `Upload File`
@@ -139,7 +143,7 @@
         }
         currentBatchIndex = 0;
         uploadNextBatch(allFiles);
-    });
+    });*/
 </script>
 </body>
 </html>

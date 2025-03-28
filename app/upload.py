@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from flask_login import login_required
 from config import settings
+from werkzeug.utils import secure_filename
 
 upload = Blueprint('upload', __name__)
 
@@ -35,8 +36,9 @@ def upload_file():
     os.makedirs(target_dir, exist_ok=True)  # 날짜별 디렉토리 생성
 
     for file in uploaded_files:
-        if file.filename:  # 파일명이 있는 경우 저장
-            file_path = os.path.join(target_dir, f"{file.filename}")
+        if file and file.filename:  # 파일명이 있는 경우 저장
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(target_dir, f"{filename}")
             file.save(file_path)
             saved_files.append(file_path)
 
