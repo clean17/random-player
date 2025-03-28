@@ -56,7 +56,8 @@
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         loading = false,
         lastMessageDate = null,
-        dateStr, scrollButton = undefined;
+        dateStr,
+        scrollButton = undefined;
 
     // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
     socket.emit("user_info", { username });
@@ -135,16 +136,15 @@
         }
     }
 
-    function addMessage(data, load = false, isFisrtMsg = false) {
+    function addMessage(data, load = false) {
+        const isMine = data.username === username;
+
         // 바깥 컨테이너: 메시지 한 줄을 구성
         const messageRow = document.createElement("div");
         messageRow.style.display = "flex";
         messageRow.style.alignItems = "flex-end";
         messageRow.style.marginBottom = "6px";
         messageRow.style.maxWidth = "100%";
-
-        const isMine = data.username === username;
-
         messageRow.style.justifyContent = isMine ? "flex-end" : "flex-start";
 
         // 메시지 박스
@@ -183,20 +183,13 @@
             const dd = data.timestamp.slice(4, 6);
             dateStr = `20${yy}.${mm}.${dd}`;
         } else {
-            const now = new Date();
             const pad = (n) => String(n).padStart(2, '0');
-            const fullStr =
-                pad(now.getFullYear() % 100) +
-                pad(now.getMonth() + 1) +
-                pad(now.getDate()) +
-                pad(now.getHours()) +
-                pad(now.getMinutes()) +
-                pad(now.getSeconds());
-            const hour = fullStr.slice(6, 8);
-            const minute = fullStr.slice(8, 10);
+            const hour = pad(now.getHours());
+            const minute = pad(now.getMinutes());
             timeStr = `${hour}:${minute}`;
 
-            dateStr, lastMessageDate = `20${String(now.getFullYear() % 100).padStart(2, '0')}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+            dateStr = `20${pad(now.getFullYear() % 100)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+            lastMessageDate = dateStr;
         }
 
         // 날짜 구분선이 필요한 경우 추가
