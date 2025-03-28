@@ -32,12 +32,18 @@
     <!--    <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">-->
     <!--            <input type="text" id="content" name="content" placeholder="Enter Content" class="input-size" autocomplete="off">-->
     <!--    <div id="uppy-dashboard" style="background-color: white"></div>-->
-    <form action="/upload" method="post" enctype="multipart/form-data">
+    <form id="uploadForm" enctype="multipart/form-data">
         <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">
         <input type="file" name="files[]" multiple style="margin-bottom: 10px">
         <button type="submit" class="input-button-size">Upload File</button>
     </form>
     <!--    <button id="start-upload-button" style="margin-top: 10px" class="btn-w100">Start Upload</button>-->
+
+    <!-- 진행률 표시 영역 -->
+    <div id="progressContainer" style="margin-top: 10px; display: none;">
+        <progress id="progressBar" value="0" max="100" style="width: 300px;"></progress>
+        <span id="percentText">0%</span>
+    </div>
 </div>
 <script>
     /*const screenHeight = window.innerHeight,
@@ -144,6 +150,40 @@
         currentBatchIndex = 0;
         uploadNextBatch(allFiles);
     });*/
+
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        e.preventDefault(); // 기본 제출 막기
+
+        const form = e.target;
+        const formData = new FormData(form);
+        const xhr = new XMLHttpRequest();
+
+        xhr.open('POST', '/upload', true);
+
+        // 진행률 표시
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                document.getElementById('progressContainer').style.display = 'block';
+                document.getElementById('progressBar').value = percent;
+                document.getElementById('percentText').textContent = percent + '%';
+            }
+        };
+
+        // 완료 후 리다이렉트
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                // 성공하면 1초 뒤 /upload GET으로 이동
+                setTimeout(() => {
+                    window.location.href = '/upload';
+                }, 1000);
+            } else {
+                alert('업로드 실패: ' + xhr.statusText);
+            }
+        };
+
+        xhr.send(formData);
+    });
 </script>
 </body>
 </html>
