@@ -98,15 +98,15 @@
         </div>
         <div class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('image.image_list', page=1, dir=dir) }}">&laquo;</a>
-            <a href="{{ url_for('image.image_list', page=page-1, dir=dir) }}">&lt;</a>
+            <a href="{{ url_for('image.image_list', page=1, title=title, dir=dir) }}">&laquo;</a>
+            <a href="{{ url_for('image.image_list', page=page-1, title=title, dir=dir) }}">&lt;</a>
             {% endif %}
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-            <a href="{{ url_for('image.image_list', page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.image_list', page=p, title=title, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
             {% if page < total_pages %}
-            <a href="{{ url_for('image.image_list', page=page+1, dir=dir) }}">&gt;</a>
-            <a href="{{ url_for('image.image_list', page=total_pages, dir=dir) }}">&raquo;</a>
+            <a href="{{ url_for('image.image_list', page=page+1, title=title, dir=dir) }}">&gt;</a>
+            <a href="{{ url_for('image.image_list', page=total_pages, title=title, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>
         {% if current_user.get_id() != config.GUEST_USERNAME %}
@@ -247,7 +247,7 @@
     }
 
     function downloadThisPage() {
-        console.log(dir)
+        // console.log(dir)
 
         const today = new Date();
         const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
