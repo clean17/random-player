@@ -25,7 +25,7 @@ ALLOWED_PATHS = [
     '/func/memo*',
 ]
 
-BLOCKED_IPS = {'170.39.218.12'}
+BLOCKED_IPS = {'170.39.218.12', '111.61.123.99', '51.15.184.67', '138.197.150.30', '125.124.210.198', '45.82.78.104'}
 
 def create_app():
     app = Flask(__name__, static_folder='static')
