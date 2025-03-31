@@ -148,7 +148,9 @@ def image_list():
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
-    return render_template(template_html, images=images, page=page, total_pages=total_pages, images_length=images_length, dir=dir, selected_dir=selected_dir, title_list=title_list)
+    return render_template(template_html, images=images, page=page, title=selected_dir,
+                           total_pages=total_pages, images_length=images_length, dir=dir,
+                           selected_dir=selected_dir, title_list=title_list)
 
 
 @image_bp.route('/move_image', methods=['POST'])
