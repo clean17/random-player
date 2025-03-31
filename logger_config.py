@@ -83,6 +83,7 @@ log_dir = "logs"
 current_date_str = None
 file_handler = None
 root_logger = None
+listener = None
 
 def get_log_filename():
     today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로
@@ -146,7 +147,7 @@ def setup_logging():
     return werkzeug_logger
 
 def setup_logger():
-    global file_handler, current_date_str
+    global file_handler, current_date_str, listener
 
     # 날짜 문자열
     new_date_str = datetime.now().strftime('%Y%m%d')
@@ -154,7 +155,6 @@ def setup_logger():
     # 날짜가 바뀌었으면 교체
     if new_date_str != current_date_str:
         if file_handler:
-            # root_logger.removeHandler(file_handler)
             file_handler.close()
 
         log_filename = get_log_filename()
@@ -164,7 +164,10 @@ def setup_logger():
         file_handler.setFormatter(ColorFormatter(formatting))
         file_handler.addFilter(WerkzeugLogFilter())
 
-        # root_logger.addHandler(file_handler)
+        listener.stop()
+        listener = logging.handlers.QueueListener(log_queue, file_handler)
+        listener.start()
+
         current_date_str = new_date_str
 
 # 백그라운드에서 날짜 변경 감지
