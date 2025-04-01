@@ -12,6 +12,7 @@ import time
 from flask_socketio import SocketIO
 from datetime import datetime
 from lotto_schedule import buy_lotto
+from config import settings
 
 func = Blueprint('func', __name__)
 
@@ -20,6 +21,7 @@ socketio = SocketIO()
 LOG_DIR = "logs"
 MEMO_FILE = 'memo.txt'
 MEMO_PATH = os.path.join(LOG_DIR, MEMO_FILE)
+TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 
 # Windows API 상수
 SHERB_NOCONFIRMATION = 0x00000001  # 사용자 확인 대화 상자를 표시하지 않음
@@ -96,11 +98,14 @@ def handle_empty_recycle_bin():
 def download_page_zip():
     try:
         target_directory = request.args.get('dir')
-        # print('target_directory', target_directory)
+        title_directory = request.args.get('title')
         page = int(request.args.get('page', 1))
 
         if not target_directory:
             return jsonify({"error": "Directory path not provided"}), 400
+
+        if target_directory == 'temp':
+            target_directory = os.path.join(TEMP_IMAGE_DIR, title_directory)
 
         if not os.path.exists(target_directory) or not os.path.isdir(target_directory):
             return jsonify({"error": "Invalid or non-existent directory path"}), 400

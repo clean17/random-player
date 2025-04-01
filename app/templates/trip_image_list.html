@@ -130,11 +130,11 @@
         page = "{{ page }}",
         zipBtn = document.getElementById('download-zip-btn'),
         dropdownMenu = document.getElementById('dropdown-menu'),
-        title = document.getElementById('title-select'),
+        $title = document.getElementById('title-select'),
         longPressDuration = 1000;
 
-    if (title) {
-        selectedOption = title.options[title.selectedIndex];
+    if ($title) {
+        selectedOption = $title.options[$title.selectedIndex];
         titleText = selectedOption.text;
     }
 
@@ -247,10 +247,9 @@
     }
 
     function downloadThisPage() {
-        // console.log(dir)
-
         const today = new Date();
         const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+        const titleName = $title.options[$title.selectedIndex].textContent.trim();
 
         if (!document.getElementById('overlay')) {
             const overlay = document.createElement('div');
@@ -265,7 +264,7 @@
 
         // ZIP 파일 요청
         // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
-        fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}`, {
+        fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}&title=${titleName}`, {
             method: 'GET'
         })
             .then(response => {
