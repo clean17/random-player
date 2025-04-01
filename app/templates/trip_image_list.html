@@ -300,8 +300,9 @@
     function downloadAllFiles() {
         const today = new Date();
         const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+        const titleName = $title.options[$title.selectedIndex].textContent.trim();
 
-        const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}`;
+        const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}&title=${titleName}`;
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;

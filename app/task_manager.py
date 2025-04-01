@@ -347,34 +347,87 @@ def compress_directory_to_zip():
         if not os.path.exists(dir_to_compress):
             print(f"Directory does not exist: {dir_to_compress}")
             continue
+
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-        # print(f"### {current_time} - Compressing directory: {dir_to_compress}")
-        # with문은 컨텍스트 매니저 역할 + 블록이 끝나면 자동으로 리소스를 정리 (close() 호출)
-        # os.path.join(f"compressed_{os.path.basename(dir_to_compress)}.zip") : 현재 작업 디렉토리
-        # os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip") : 원본 디렉토리
-        zip_filename = f"compressed_{os.path.basename(dir_to_compress)}.zip"
-        zip_filepath = os.path.join(dir_to_compress, zip_filename)
+
+        # 하위 디렉토리만 탐색
+        for subdir_name in os.listdir(dir_to_compress):
+            subdir_path = os.path.join(dir_to_compress, subdir_name)
+
+            if not os.path.isdir(subdir_path):
+                continue  # 파일은 건너뜀
+
+            # 압축 파일 이름 생성 (예: compressed_<하위폴더명>.zip)
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # zip_filename = f"compressed_{os.path.basename(dir_to_compress)}.zip"
+            zip_filename = f"OUTPUT_ZIP_FILE"
+            zip_filepath = os.path.join(subdir_path, zip_filename)
+
+            # 압축 생성
+            with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, _, files in os.walk(subdir_path):
+                    for file in files:
+                        if file == zip_filename:
+                            continue  # 방금 만드는 zip 파일은 제외
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, subdir_path)
+                        zipf.write(file_path, arcname)
+
+            print(f"✅ Compressed: {zip_filepath}")
+
         try:
-            # 기존 파일이 존재하면 삭제
-            """ if os.path.exists(zip_filepath):
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+            zip_filepath = os.path.join(dir_to_compress, zip_filename)
+
+            """ # 기존 파일이 존재하면 삭제
+            if os.path.exists(zip_filepath):
                 os.remove(zip_filepath)
                 print(f"Existing zip file removed: {zip_filepath}") """
-            # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x)
+
+            # ZIP 파일 생성 (압축 방식: ZIP_DEFLATED)
             with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                # os.walk()는 디렉터리 내의 모든 파일과 폴더를 재귀적으로 탐색하는 데 사용하는 Python의 내장 함수
                 for root, dirs, files in os.walk(dir_to_compress):
                     for file in files:
                         # 압축 파일 자체는 포함하지 않음
                         if file == zip_filename:
                             continue
                         file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, dir_to_compress) # file과 명칭 동일
+                        arcname = os.path.relpath(file_path, dir_to_compress)
                         zipf.write(file_path, arcname)
-            # print(f"### {current_time} - Directory successfully compressed to: {zip_filepath}")
-        except Exception as e:
-            print(f"### {current_time} - Error while compressing directory: {e}")
 
-    print(f"### {current_time} - Directory successfully compressed")
+            print(f"✅ {current_time} - Directory successfully compressed to: {zip_filepath}")
+
+        except Exception as e:
+            print(f"❌ {current_time} - Error while compressing directory: {e}")
+
+# def compress_directory_to_zip():
+#     for dir_to_compress in directories_to_compress:
+#         if not os.path.exists(dir_to_compress):
+#             print(f"Directory does not exist: {dir_to_compress}")
+#             continue
+#
+#         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+#         # with문은 컨텍스트 매니저 역할 + 블록이 끝나면 자동으로 리소스를 정리 (close() 호출)
+#         # os.path.join(f"compressed_{os.path.basename(dir_to_compress)}.zip") : 현재 작업 디렉토리
+#         # os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip") : 원본 디렉토리
+#         zip_filename = f"compressed_{os.path.basename(dir_to_compress)}.zip"
+#         zip_filepath = os.path.join(dir_to_compress, zip_filename)
+#         try:
+#             # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x)
+#             with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+#                 # os.walk()는 디렉터리 내의 모든 파일과 폴더를 재귀적으로 탐색하는 데 사용하는 Python의 내장 함수
+#                 for root, dirs, files in os.walk(dir_to_compress):
+#                     for file in files:
+#                         # 압축 파일 자체는 포함하지 않음
+#                         if file == zip_filename:
+#                             continue
+#                         file_path = os.path.join(root, file)
+#                         arcname = os.path.relpath(file_path, dir_to_compress) # file과 명칭 동일
+#                         zipf.write(file_path, arcname)
+#         except Exception as e:
+#             print(f"### {current_time} - Error while compressing directory: {e}")
+#
+#     print(f"### {current_time} - Directory successfully compressed")
 
 
 
