@@ -116,7 +116,7 @@ def image_list():
     start = (page - 1) * LIMIT_PAGE_NUM
 
 
-    if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp':
+    if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
         # images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
         # images_length = len(os.listdir(TEMP_IMAGE_DIR))
         template_html = 'trip_image_list.html'
@@ -130,6 +130,7 @@ def image_list():
         target_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
         images = get_images(start, LIMIT_PAGE_NUM, target_dir)
         images_length = len(os.listdir(target_dir))
+        dir = 'temp'
 
     elif dir == 'refine':
         if firstRequst == 'True':
@@ -141,10 +142,10 @@ def image_list():
         images = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR)
         images_length = len(os.listdir(IMAGE_DIR))
         template_html = 'image_list.html'
-    elif dir == 'trip':
-        images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
-        images_length = len(os.listdir(TRIP_IMAGE_DIR))
-        template_html = 'trip_image_list.html'
+    # elif dir == 'trip':
+    #     images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
+    #     images_length = len(os.listdir(TRIP_IMAGE_DIR))
+    #     template_html = 'trip_image_list.html'
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
