@@ -359,7 +359,7 @@ def compress_directory_to_zip():
             compress_directory(subdir_path)
 
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-    print(f"### {current_time} {subdir_path} - Directory successfully compressed")
+    print(f"### {current_time} - Directory successfully compressed")
 
 def compress_directory(directory):
     today_str = datetime.now().strftime("%y%m%d")
