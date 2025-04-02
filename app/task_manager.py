@@ -343,25 +343,31 @@ def delete_short_videos():
 # CPU 바운드 작업: 디렉토리를 압축하는 함수
 def compress_directory_to_zip():
     for dir_to_compress in DIRECTORIES_TO_COMPRESS:
-        print('dir_to_compress', dir_to_compress)
 
         if not os.path.exists(dir_to_compress):
             print(f"Directory does not exist: {dir_to_compress}")
             continue
 
-        # 하위 디렉토리만 탐색
-        for subdir_name in os.listdir(dir_to_compress):
-            subdir_path = os.path.join(dir_to_compress, subdir_name)
+        # 하위 디렉토리 목록 수집
+        subdirs = []
+        for item in os.listdir(dir_to_compress):
+            subdir_path = os.path.join(dir_to_compress, item)
+            if os.path.isdir(subdir_path):
+                subdirs.append(subdir_path)
 
-            if not os.path.isdir(subdir_path):
-                continue  # 파일은 건너뜀
-
-            compress_directory(subdir_path)
+        if subdirs:
+            # 하위 디렉토리가 있으면 각 하위 디렉토리를 압축
+            for subdir_path in subdirs:
+                compress_directory(subdir_path)
+        else:
+            # 하위 디렉토리가 없으면 현재 디렉토리 내의 파일들을 압축
+            compress_directory(dir_to_compress)
 
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-    print(f"### {current_time} - Directory successfully compressed")
+    print(f"### {current_time} - All Directory successfully compressed")
 
 def compress_directory(directory):
+#     print(f'compressing to {directory}')
     today_str = datetime.now().strftime("%y%m%d")
     new_zip_filename = f"compressed_{os.path.basename(directory)}_{today_str}.zip"
     new_zip_filepath = os.path.join(directory, new_zip_filename)
