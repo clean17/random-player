@@ -32,8 +32,7 @@ scheduler = BackgroundScheduler()
 work_directory = settings['WORK_DIRECTORY']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
-TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
-directories_to_compress = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
+DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
 OUTPUT_ZIP_FILE = "compressed_all_files.zip"
 
 '''
@@ -343,91 +342,46 @@ def delete_short_videos():
 
 # CPU 바운드 작업: 디렉토리를 압축하는 함수
 def compress_directory_to_zip():
-    for dir_to_compress in directories_to_compress:
+    for dir_to_compress in DIRECTORIES_TO_COMPRESS:
+        print('dir_to_compress', dir_to_compress)
+
         if not os.path.exists(dir_to_compress):
             print(f"Directory does not exist: {dir_to_compress}")
             continue
 
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-
         # 하위 디렉토리만 탐색
         for subdir_name in os.listdir(dir_to_compress):
             subdir_path = os.path.join(dir_to_compress, subdir_name)
+            print('subdir_path', subdir_path)
 
             if not os.path.isdir(subdir_path):
                 continue  # 파일은 건너뜀
 
-            # 압축 파일 이름 생성 (예: compressed_<하위폴더명>.zip)
-            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # zip_filename = f"compressed_{os.path.basename(dir_to_compress)}.zip"
-            zip_filename = f"OUTPUT_ZIP_FILE"
-            zip_filepath = os.path.join(subdir_path, zip_filename)
+            compress_directory(subdir_path)
 
-            # 압축 생성
-            with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, _, files in os.walk(subdir_path):
-                    for file in files:
-                        if file == zip_filename:
-                            continue  # 방금 만드는 zip 파일은 제외
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, subdir_path)
-                        zipf.write(file_path, arcname)
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+    print(f"### {current_time} {subdir_path} - Directory successfully compressed")
 
-            print(f"✅ Compressed: {zip_filepath}")
+def compress_directory(directory):
+    zip_filename = f"compressed_{os.path.basename(directory)}.zip"
+    zip_filepath = os.path.join(directory, zip_filename)
 
-        try:
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-            zip_filepath = os.path.join(dir_to_compress, zip_filename)
-
-            """ # 기존 파일이 존재하면 삭제
-            if os.path.exists(zip_filepath):
-                os.remove(zip_filepath)
-                print(f"Existing zip file removed: {zip_filepath}") """
-
-            # ZIP 파일 생성 (압축 방식: ZIP_DEFLATED)
-            with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, dirs, files in os.walk(dir_to_compress):
-                    for file in files:
-                        # 압축 파일 자체는 포함하지 않음
-                        if file == zip_filename:
-                            continue
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, dir_to_compress)
-                        zipf.write(file_path, arcname)
-
-            print(f"✅ {current_time} - Directory successfully compressed to: {zip_filepath}")
-
-        except Exception as e:
-            print(f"❌ {current_time} - Error while compressing directory: {e}")
-
-# def compress_directory_to_zip():
-#     for dir_to_compress in directories_to_compress:
-#         if not os.path.exists(dir_to_compress):
-#             print(f"Directory does not exist: {dir_to_compress}")
-#             continue
-#
-#         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-#         # with문은 컨텍스트 매니저 역할 + 블록이 끝나면 자동으로 리소스를 정리 (close() 호출)
-#         # os.path.join(f"compressed_{os.path.basename(dir_to_compress)}.zip") : 현재 작업 디렉토리
-#         # os.path.join(dir_to_compress, f"compressed_{os.path.basename(dir_to_compress)}.zip") : 원본 디렉토리
-#         zip_filename = f"compressed_{os.path.basename(dir_to_compress)}.zip"
-#         zip_filepath = os.path.join(dir_to_compress, zip_filename)
-#         try:
-#             # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x)
-#             with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-#                 # os.walk()는 디렉터리 내의 모든 파일과 폴더를 재귀적으로 탐색하는 데 사용하는 Python의 내장 함수
-#                 for root, dirs, files in os.walk(dir_to_compress):
-#                     for file in files:
-#                         # 압축 파일 자체는 포함하지 않음
-#                         if file == zip_filename:
-#                             continue
-#                         file_path = os.path.join(root, file)
-#                         arcname = os.path.relpath(file_path, dir_to_compress) # file과 명칭 동일
-#                         zipf.write(file_path, arcname)
-#         except Exception as e:
-#             print(f"### {current_time} - Error while compressing directory: {e}")
-#
-#     print(f"### {current_time} - Directory successfully compressed")
+    try:
+        # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x, ZIP_DEFLATED : deflate 알고리즘으로 압축)
+        # with문은 컨텍스트 매니저 역할 + 블록이 끝나면 자동으로 리소스를 정리 (close() 호출)
+        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # os.walk()는 디렉터리 내의 모든 파일과 폴더를 재귀적으로 탐색하는 데 사용하는 Python의 내장 함수
+            for root, dirs, files in os.walk(directory):
+                for file in files:
+                    # 압축 파일 자체는 포함하지 않음
+                    if file == zip_filename:
+                        continue
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, directory) # file과 명칭 동일
+                    zipf.write(file_path, arcname)
+    except Exception as e:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+        print(f"### {current_time} - Error while compressing {directory}: {e}")
 
 
 
@@ -480,7 +434,7 @@ def start_periodic_task():
     return processes
 
 def initialize_directories():
-    for directory in directories_to_compress:
+    for directory in DIRECTORIES_TO_COMPRESS:
         os.makedirs(directory, exist_ok=True)
 
 initialize_directories()

@@ -6,7 +6,7 @@ import os
 import io
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
-from .task_manager import compress_directory_to_zip, OUTPUT_ZIP_FILE
+from .task_manager import compress_directory, compress_directory_to_zip, OUTPUT_ZIP_FILE
 import multiprocessing
 import time
 from flask_socketio import SocketIO
@@ -155,18 +155,17 @@ def download_all_zip():
 
     if directory == 'temp':
         directory = os.path.join(TEMP_IMAGE_DIR, title_directory)
-        print(directory)
+        print('download_all_zip - directory', directory)
 
-    zip_filepath = os.path.join(directory, OUTPUT_ZIP_FILE)
-    print(zip_filepath)
+    zip_filename = f"compressed_{os.path.basename(directory)}.zip"
+    zip_filepath = os.path.join(directory, zip_filename)
 
     # ZIP 파일이 없으면 생성
     if not os.path.isfile(zip_filepath):
-        compress_directory_to_zip()
+        compress_directory(directory)
 
     # 파일 다운로드
-    return send_from_directory(directory, OUTPUT_ZIP_FILE, as_attachment=True)
-#     return send_from_directory(zip_filepath, as_attachment=True)
+    return send_from_directory(directory, zip_filename, as_attachment=True)
 
 @func.route('/compress-zip', methods=['GET'])
 def compress_now():
