@@ -371,6 +371,8 @@ def compress_directory(directory):
     today_str = datetime.now().strftime("%y%m%d")
     new_zip_filename = f"compressed_{os.path.basename(directory)}_{today_str}.zip"
     new_zip_filepath = os.path.join(directory, new_zip_filename)
+    old_zip_filename = f"compressed_{os.path.basename(directory)}.zip"
+    old_zip_filepath = os.path.join(directory, old_zip_filename)
 
     try:
         # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x, ZIP_DEFLATED : deflate 알고리즘으로 압축)
@@ -380,7 +382,7 @@ def compress_directory(directory):
             for root, dirs, files in os.walk(directory):
                 for file in files:
                     # 압축 파일 자체는 포함하지 않음
-                    if file == new_zip_filename:
+                    if file == old_zip_filename or file.lower().endswith('.zip'):
                         continue
                     file_path = os.path.join(root, file)
                     arcname = os.path.relpath(file_path, directory) # file과 명칭 동일
@@ -389,10 +391,6 @@ def compress_directory(directory):
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
         print(f"### {current_time} - Error while compressing {directory}: {e}")
         return
-
-    # 기존 압축파일명 (예: compressed_test.zip)
-    old_zip_filename = f"compressed_{os.path.basename(directory)}.zip"
-    old_zip_filepath = os.path.join(directory, old_zip_filename)
 
     try:
         # 기존 압축파일이 있다면 삭제
