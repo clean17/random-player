@@ -25,7 +25,9 @@ def upload_file():
         return jsonify({"error": "No file uploaded"}), 400
 
     uploaded_files = request.files.getlist("files[]")  # Uppy로 업로드된 파일 리스트
-    title = request.form.get("title", "Untitled")  # 'title' 데이터 받기
+    title = request.form.get("title", "no_title")  # 'title' 데이터 받기
+    if title == "":
+        title = "no_title"
     saved_files = []
 
     # 오늘 날짜로 디렉토리 생성

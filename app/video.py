@@ -87,7 +87,7 @@ def delete_video(filename):
         except TrashPermissionError as e:
             print(f"Permission Error: {e}")
 
-        print(f"[ {filename} ] is successfully deleted")
+        # print(f"[ {filename} ] is successfully deleted")
         # os.remove(file_path)
         return '', 204
     return '', 404
