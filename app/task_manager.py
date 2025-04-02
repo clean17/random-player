@@ -352,7 +352,6 @@ def compress_directory_to_zip():
         # 하위 디렉토리만 탐색
         for subdir_name in os.listdir(dir_to_compress):
             subdir_path = os.path.join(dir_to_compress, subdir_name)
-            print('subdir_path', subdir_path)
 
             if not os.path.isdir(subdir_path):
                 continue  # 파일은 건너뜀
