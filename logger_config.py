@@ -84,6 +84,8 @@ current_date_str = None
 file_handler = None
 root_logger = None
 listener = None
+log_queue = queue.Queue()
+
 
 def get_log_filename():
     today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로
@@ -93,7 +95,7 @@ def setup_logging():
     # 로그 디렉토리 생성
     os.makedirs("logs", exist_ok=True)
 
-    global root_logger, file_handler
+    global root_logger, file_handler, listener, log_queue
 
     # 기본 로거 설정
     root_logger = logging.getLogger() # root
@@ -123,7 +125,6 @@ def setup_logging():
 
     """ 비동기 로깅 구현 > 멀티스레드/멀티프로세스 환경에서 로그 기록을 효율적으로 수행 """
     # 로그 메시지를 저장할 큐 생성
-    log_queue = queue.Queue()
     # QueueHandler 생성 후 로거에 추가 (모든 로그를 큐로 보냄)
     queue_handler = logging.handlers.QueueHandler(log_queue)
     root_logger.addHandler(queue_handler) # root로거에 큐 핸들러를 추가하지 않으면 '.propagate = False' 를  설정할 필요가 없다
@@ -147,7 +148,7 @@ def setup_logging():
     return werkzeug_logger
 
 def setup_logger():
-    global file_handler, current_date_str, listener
+    global file_handler, current_date_str, listener, log_queue
 
     # 날짜 문자열
     new_date_str = datetime.now().strftime('%Y%m%d')
@@ -164,7 +165,8 @@ def setup_logger():
         file_handler.setFormatter(ColorFormatter(formatting))
         file_handler.addFilter(WerkzeugLogFilter())
 
-        listener.stop()
+        if listener is not None:
+            listener.stop()
         listener = logging.handlers.QueueListener(log_queue, file_handler)
         listener.start()
 
