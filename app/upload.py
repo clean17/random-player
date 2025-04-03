@@ -74,37 +74,3 @@ def upload_file():
                 saved_files.append(file_path)
 
     return jsonify({"status": "success", "files": saved_files})
-
-# def handle_uploaded_files(saved_files, title):
-#     # 예: 압축 작업, 이미지 처리 등
-#     if title != 'htm':
-#         zip_path = os.path.join(TEMP_IMAGE_DIR, f"{title}.zip")
-#         with ZipFile(zip_path, 'w') as zipf:
-#             for f in saved_files:
-#                 zipf.write(f, arcname=os.path.basename(f))
-#         print(f"압축 완료: {zip_path}")
-#
-# @upload.route('/', methods=['POST'])
-# @login_required
-# def upload_file():
-#     if 'files[]' not in request.files:
-#         return jsonify({"error": "No file uploaded"}), 400
-#
-#     uploaded_files = request.files.getlist("files[]")
-#     title = request.form.get("title", "Untitled")
-#     saved_files = []
-#
-#     target_dir = HTM_DIRECTORY if title == 'htm' else os.path.join(TEMP_IMAGE_DIR, title)
-#     os.makedirs(target_dir, exist_ok=True)
-#
-#     for file in uploaded_files:
-#         if file and file.filename:
-#             filename = secure_filename(file.filename)
-#             file_path = os.path.join(target_dir, filename)
-#             file.save(file_path)
-#             saved_files.append(file_path)
-#
-#     # 후처리 비동기로 실행
-#     Thread(target=handle_uploaded_files, args=(saved_files, title)).start()
-#
-#     return jsonify({"status": "success", "files": saved_files})
