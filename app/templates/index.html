@@ -73,29 +73,31 @@
 </body>
 
 <script>
+    const videoOption = document.getElementById("directory-select");
+    const imageOption = document.getElementById("image-select");
     function keyEvent(event) {
         switch(event.key) {
             case '1':
                 // document.getElementById('btn1').click();
-                var selectElement = document.getElementById('directory-select');
+                var selectElement = videoOption;
                 selectElement.value = '1';
                 selectElement.form.submit();
                 break;
             case '2':
                 // document.getElementById('btn2').click();
-                var selectElement = document.getElementById('directory-select');
+                var selectElement = videoOption;
                 selectElement.value = '2';
                 selectElement.form.submit();
                 break;
             case '3':
                 // document.getElementById('btn3').click();
-                var selectElement = document.getElementById('directory-select');
+                var selectElement = videoOption;
                 selectElement.value = '3';
                 selectElement.form.submit();
                 break;S
             case '4':
                 // document.getElementById('btn4').click();
-                var selectElement = document.getElementById('directory-select');
+                var selectElement = videoOption;
                 selectElement.value = '4';
                 selectElement.form.submit();
                 break;
@@ -135,9 +137,21 @@
         }
     });
 
+    // 페이지가 보여질 때 발생 (캐시에서 복원 시, 앞, 뒤 이동에도 동작함)
     window.addEventListener("pageshow", function () {
-        document.getElementById("directory-select").selectedIndex = 0;
-        document.getElementById("image-select").selectedIndex = 0;
+        if (videoOption) videoOption.selectedIndex = 0;
+        if (imageOption) imageOption.selectedIndex = 0;
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        if (imageOption.options.length === 2) {
+            imageOption.addEventListener("click", function () {
+                const url = imageOption.options[1].value;
+                if (url) {
+                    window.location.href = url;
+                }
+            });
+        }
     });
 </script>
 </html>
