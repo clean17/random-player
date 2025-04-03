@@ -43,9 +43,35 @@ def upload_file():
     for file in uploaded_files:
         if file and file.filename:  # 파일명이 있는 경우 저장
             filename = secure_filename(file.filename)
-            file_path = os.path.join(target_dir, f"{filename}")
-            file.save(file_path)
-            saved_files.append(file_path)
+            file_ext = os.path.splitext(filename)[1].lower()
+
+            # 압축 파일인 경우
+            if file_ext in ['.zip']:
+                # 임시로 업로드된 압축파일 저장
+                archive_path = os.path.join(target_dir, filename)
+                file.save(archive_path)
+
+                # 압축 해제 후, 추출된 파일들의 경로를 saved_files에 추가
+                try:
+                    with ZipFile(archive_path, 'r') as zip_ref:
+                        zip_ref.extractall(target_dir)
+                        # zip 파일 내 모든 파일 경로 추가 (디렉터리 구조 유지)
+                        for extracted_file in zip_ref.namelist():
+                            extracted_path = os.path.join(target_dir, extracted_file)
+                            # 파일인 경우에만 추가
+                            if os.path.isfile(extracted_path):
+                                saved_files.append(extracted_path)
+                except Exception as e:
+                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+                    print(f"### {current_time} - Error while extracting {archive_path}: {e}")
+                finally:
+                    # 압축 해제 후 임시 압축파일은 삭제 (필요시)
+                    if os.path.exists(archive_path):
+                        os.remove(archive_path)
+            else:
+                file_path = os.path.join(target_dir, f"{filename}")
+                file.save(file_path)
+                saved_files.append(file_path)
 
     return jsonify({"status": "success", "files": saved_files})
 
