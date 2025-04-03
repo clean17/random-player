@@ -150,7 +150,7 @@ if __name__ == '__main__':
     process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
 
 
-    app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False) # __init__.py 에서 WebSocket 기능을 추가함
+    app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False, threaded=True) # __init__.py 에서 WebSocket 기능을 추가함
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
 
     # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원
