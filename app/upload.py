@@ -42,7 +42,9 @@ def upload_file():
 
     for file in uploaded_files:
         if file and file.filename:  # 파일명이 있는 경우 저장
-            filename = secure_filename(file.filename)
+            # filename = secure_filename(file.filename)
+            filename = file.filename
+            print('filename', filename)
             file_ext = os.path.splitext(filename)[1].lower()
 
             # 압축 파일인 경우

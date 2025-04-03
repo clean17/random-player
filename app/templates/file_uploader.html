@@ -69,7 +69,7 @@
 </div>
 <div class="container">
     <h2>Upload File</h2>
-    <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">
+    <!--<input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">
     <select id="title-select" name="title" onchange="enterTitle()" class="input-size">
         <option value="">제목 없음</option>
         {% for title in title_list %}
@@ -77,9 +77,9 @@
         {% endfor %}
     </select>
     <div id="uppy-dashboard" style="background-color: white"></div>
-    <button id="start-upload-button" style="margin-top: 10px" class="btn-w100">Start Upload</button>
+    <button id="start-upload-button" style="margin-top: 10px" class="btn-w100">Start Upload</button>-->
 
-    <!--<form id="uploadForm" enctype="multipart/form-data">
+    <form id="uploadForm" enctype="multipart/form-data">
         <input type="text" id="title" name="title" placeholder="Enter Title" class="input-size" autocomplete="off">
         <select id="title-select" name="title" onchange="enterTitle()" class="input-size">
             <option value="">제목 없음</option>
@@ -89,7 +89,7 @@
         </select>
         <input type="file" name="files[]" multiple style="margin-bottom: 10px" id="fileInput" class="input-size">
         <button type="submit" class="input-button-size">Start Upload</button>
-    </form>-->
+    </form>
 
     <!-- 진행률 표시 영역 -->
     <div id="progressContainer" style="margin-top: 10px; display: none;">
@@ -127,7 +127,7 @@
 
 
     // UPPY //
-    const uppy = new Uppy.Uppy({
+    /*const uppy = new Uppy.Uppy({
         debug: false,
         autoProceed: false, // 파일 추가 시 자동으로 업로드 진행
         restrictions: {
@@ -162,11 +162,11 @@
             bundle: true,
             limit: 5, // 한번에 업로드 가능한 파일수량 제한
         });
-    /*.use(Uppy.Tus, { # 서버가 Tus를 지원해야 한다.. 구현이 필요
+    /!*.use(Uppy.Tus, { # 서버가 Tus를 지원해야 한다.. 구현이 필요
         endpoint: '/upload', // Tus 서버 엔드포인트
         chunkSize: 5 * 1024 * 1024, // 청크 크기 (5MB)
         retryDelays: [0, 1000, 3000, 5000], // 재시도 지연 시간
-    })*/
+    })*!/
 
     uppy.on('complete', (result) => {
         document.querySelector('.container h2').textContent = `Upload File`
@@ -225,7 +225,7 @@
         }
         currentBatchIndex = 0;
         uploadNextBatch(allFiles);
-    });
+    });*/
 
 
 
