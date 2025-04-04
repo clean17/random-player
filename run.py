@@ -4,9 +4,8 @@ import os
 import signal
 import sys
 from waitress import serve
-from werkzeug.middleware.proxy_fix import ProxyFix
 from app.task_manager import start_periodic_task
-from logger_config import setup_logging
+
 from app import create_app
 from flask_cors import CORS
 import subprocess
@@ -14,67 +13,35 @@ import glob
 from config import settings
 import atexit
 from collections import defaultdict
+from wsgi_midleware import RequestLoggingMiddleware, HopByHopHeaderFilter, ReverseProxied, logger
 
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
 
 
-# 1️⃣ 로그 설정 적용
-logger = setup_logging()
-
-# 2️⃣ Flask 앱 생성
+# Flask 앱 생성
 app = create_app()
-# CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True)
 
-'''
-Hop-by-Hop: HTTP/1.1 프로토콜에서 사용하는 헤더
-프록시나 게이트웨이를 통과하는 동안 다른 연결로 전달되지 않아야 한다
+# CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True) # 해당 출처를 통해서만 리소스 접근 허용
 
-Connection, Keep-Alive, ...
-
-서버-애플리케이션 인터페이스에서 사용하면 안된다
-Hop-by-Hop 헤더를 제거하는 미들웨어
-'''
-class HopByHopHeaderFilter(object):
-    hop_by_hop_headers = {
-        'connection',
-        'keep-alive',
-        'proxy-authenticate',
-        'proxy-authorization',
-        'te',
-        'trailer',
-        'transfer-encoding',
-        'upgrade',
-    }
-    def __init__(self, app):
-        self.app = app
-
-    def __call__(self, environ, start_response):
-        def custom_start_response(status, headers, exc_info=None):
-            filtered_headers = [(key, value) for key, value in headers if key.lower() not in self.hop_by_hop_headers]
-            return start_response(status, filtered_headers, exc_info)
-        return self.app(environ, custom_start_response)
-
-# ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
-# 리버스 프록시 뒤에 있는 Flask를 처리하는 ProxyFix 미들웨어 적용, 헤더 전달용
-# x_proto=1: X-Forwarded-Proto 헤더에 담긴 정보를 Flask가 요청이 HTTPS로 들어왔는지 인식하도록 한다
-# x_host=1: X-Forwarded-Host 헤더에 담긴 호스트 정보를 Flask가 올바른 도메인/호스트를 인식하도록 한다
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+# 커스텀 로깅 설정 미들웨어 적용
+app.wsgi_app = RequestLoggingMiddleware(app.wsgi_app)
 
 # Hop-by-Hop 헤더 필터 미들웨어 적용
-app.wsgi_app = HopByHopHeaderFilter(app.wsgi_app)
+# app.wsgi_app = HopByHopHeaderFilter(app.wsgi_app)
 
-# nginx(ssl)를 추가하고 나서 아래 설정을 추가하면 /get_tasks의 _external=True가 https:// 로 이미지 경로를 생성한다
-class ReverseProxied:
-    def __init__(self, app):
-        self.app = app
+# ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
+# Flask가 실제로 클라이언트 요청을 처리할 때, 리버스 프록시(Nginx, Apache) 뒤에 있으면 원래 클라이언트의 정보(프로토콜, 호스트 등)가 프록시의 정보로 덮어쓰여질 수 있다
+# ProxyFix는 프록시가 제공하는 HTTP 헤더(예: X-Forwarded-Proto, X-Forwarded-Host)를 읽어 원래 요청 정보를 복원한다
+# x_proto=1: X-Forwarded-Proto 헤더에 담긴 정보를 Flask가 요청이 HTTPS로 들어왔는지 인식하도록 한다
+# x_host=1: X-Forwarded-Host 헤더에 담긴 호스트 정보를 Flask가 올바른 도메인/호스트를 인식하도록 한다
+# app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-    def __call__(self, environ, start_response):
-        environ['wsgi.url_scheme'] = 'https'  # HTTPS로 설정
-        return self.app(environ, start_response)
-
+# 모든 요청에 대해 URL 스킴(scheme)을 강제로 HTTPS로 설정, 리버스 프록시 환경에서도 클라이언트 요청을 HTTPS로 인식하여 보안 기능 동작하도록 함
 # app.wsgi_app = ReverseProxied(app.wsgi_app)
 
+
+# Ctrl+C 이벤트 핸들러
 def signal_handler(sig, frame):
     logger.info("#### Register Server Shutdown Handler... ####")
     pid = os.getpid()
@@ -84,16 +51,6 @@ def signal_handler(sig, frame):
     # sys.exit(0)
 
 # 애플리케이션 종료 후 실행
-# def on_exit():
-#     print("프로그램이 종료됩니다.")
-#     lock_files = glob.glob("logs/.__app_*.lock")  # logs 폴더 내 __app_*.lock 파일 목록 가져오기
-#
-#     for lock_file in lock_files:
-#         try:
-#             os.remove(lock_file)
-#         except Exception as e:
-#             print(f"Error deleting {lock_file}: {e}")  # 삭제 실패 시 오류 출력
-
 def on_exit():
     print("프로그램이 종료됩니다.")
 
@@ -137,20 +94,25 @@ def on_exit():
         except Exception as e:
             print(f"Error deleting {lock_file}: {e}")
 
-atexit.register(on_exit)
+atexit.register(on_exit) #  프로그램이 정상적으로 종료될 때 호출될 함수를 등록
+
 
 if __name__ == '__main__':
-    # 서버 종료 핸들러 등록
-    signal.signal(signal.SIGINT, signal_handler)
     logger.info("################################### Starting server.... ####################################")
 
-    start_periodic_task() # 업로드 파일 압축파일 생성
+    # SIGINT(인터럽트 시그널, 보통 Ctrl+C 누름)에 대한 핸들러를 등록
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # 업로드 디렉토리 압축파일 생성 배치
+    start_periodic_task()
 
     # 'npm run dev' 실행 (백그라운드 실행)
-    process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
+    subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
 
 
-    app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False, threaded=True) # __init__.py 에서 WebSocket 기능을 추가함
-    # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True) # Flask 내장 서버
+    # Flask 내장 서버
+    # __init__.py 에서 WebSocket 기능을 추가함
+    # app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False, threaded=True)
+    # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True)
 
-    # serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원
+    serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원

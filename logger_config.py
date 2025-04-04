@@ -99,9 +99,10 @@ def setup_logging():
 
     # 기본 로거 설정
     root_logger = logging.getLogger() # root
-    werkzeug_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
-    waitress_logger = logging.getLogger('waitress') # Waitress 로그
     root_logger.setLevel(logging.INFO)
+
+    werkzeug_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
+    waitress_logger = logging.getLogger("waitress") # Waitress 로그
 
     # 로그 포맷 설정
     formatting = "### %(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -127,7 +128,8 @@ def setup_logging():
     # 로그 메시지를 저장할 큐 생성
     # QueueHandler 생성 후 로거에 추가 (모든 로그를 큐로 보냄)
     queue_handler = logging.handlers.QueueHandler(log_queue)
-    root_logger.addHandler(queue_handler) # root로거에 큐 핸들러를 추가하지 않으면 '.propagate = False' 를  설정할 필요가 없다
+    werkzeug_logger.addHandler(queue_handler)
+    waitress_logger.addHandler(queue_handler) # root로거에 큐 핸들러를 추가하지 않으면 '.propagate = False' 를  설정할 필요가 없다
     # QueueListener: 백그라운드에서 로그 처리 (큐에서 로그 메시지를 하나씩 꺼내어 file_handler를 통해 파일에 기록)
     listener = logging.handlers.QueueListener(log_queue, file_handler)
     listener.start()
@@ -135,19 +137,19 @@ def setup_logging():
     # Flask 서버가 실행될 때 기본 요청 로그를 새 포맷으로 변경
     werkzeug_logger.addHandler(console_handler) # 기본 로깅 형태를 변경
     werkzeug_logger.setLevel(logging.INFO)
-    # werkzeug_logger.propagate = False # root로 전파하지 않는다
+    werkzeug_logger.propagate = False # root로 전파하지 않는다
     werkzeug_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
     werkzeug_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
     waitress_logger.addHandler(console_handler)
     waitress_logger.setLevel(logging.INFO)
-    # waitress_logger.propagate = False
+    waitress_logger.propagate = False
     waitress_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
     waitress_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
-    return werkzeug_logger
+    return waitress_logger
 
-def setup_logger():
+def check_logger():
     global file_handler, current_date_str, listener, log_queue
 
     # 날짜 문자열
@@ -176,7 +178,7 @@ def setup_logger():
 def log_monitor():
     time.sleep(60)
     while True:
-        setup_logger()
+        check_logger()
         time.sleep(60)  # 매 60초마다 체크
 
 # 로그 감시 쓰레드 시작
