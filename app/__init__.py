@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone
-from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for, send_from_directory
+from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
 from flask_login import LoginManager, current_user
 from .auth import auth, User, users
 from config import load_config
@@ -11,6 +11,10 @@ from .image import image_bp, environment
 from .function import func, socketio
 from .upload import upload
 import fnmatch
+from datetime import datetime, timedelta
+from werkzeug.exceptions import RequestEntityTooLarge
+import uuid
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 ALLOWED_PATHS = [
     '/favicon.ico',       # nginx 서버리스
@@ -25,11 +29,30 @@ ALLOWED_PATHS = [
     '/func/memo*',
 ]
 
-BLOCKED_IPS = {'170.39.218.12', '111.61.123.99', '51.15.184.67', '138.197.150.30', '125.124.210.198', '45.82.78.104'}
+# 차단된 IP: {ip: block_until_time}
+BLOCKED_IPS = {
+    '170.39.218.12': datetime.now() + timedelta(days=365),
+    '111.61.123.99': datetime.now() + timedelta(days=365),
+    '138.197.150.30': datetime.now() + timedelta(days=365),
+    '51.15.184.67': datetime.now() + timedelta(days=365),
+    '125.124.210.198': datetime.now() + timedelta(days=365),
+    '45.82.78.104': datetime.now() + timedelta(days=365),
+}
+
+# IP 기록: {ip: [404_count, last_404_time]}
+ip_404_counts = {}
+
+
+# 설정값
+BLOCK_THRESHOLD = 5
+BLOCK_DURATION = timedelta(days=7)
+
 
 def create_app():
+    print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
+    app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
     app.secret_key = app.config['SECRET_KEY']
 
     app.register_blueprint(main, url_prefix='/')
@@ -41,6 +64,13 @@ def create_app():
     app.register_blueprint(upload, url_prefix='/upload')
     app.jinja_env.globals.update(max=max, min=min)
 
+    # ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
+    # Flask가 실제로 클라이언트 요청을 처리할 때, 리버스 프록시(Nginx, Apache) 뒤에 있으면 원래 클라이언트의 정보(프로토콜, 호스트 등)가 프록시의 정보로 덮어쓰여질 수 있다
+    # ProxyFix는 프록시가 제공하는 HTTP 헤더(예: X-Forwarded-Proto, X-Forwarded-Host)를 읽어 원래 요청 정보를 복원한다
+    # x_proto=1: X-Forwarded-Proto 헤더에 담긴 정보를 Flask가 요청이 HTTPS로 들어왔는지 인식하도록 한다
+    # x_host=1: X-Forwarded-Host 헤더에 담긴 호스트 정보를 Flask가 올바른 도메인/호스트를 인식하도록 한다
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     # Flask 앱에 WebSocket 기능을 추가
     socketio.init_app(app)
 
@@ -50,15 +80,21 @@ def create_app():
 
     # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
     @app.before_request
-    def block_ip():
+    def before_request():
         # 실 IP 추출 (프록시 뒤에 있을 경우)
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = request.environ.get("HTTP_X_REAL_IP")
+        # if ip == '127.0.0.1':
+        #     ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        # print(ip)
 
+        # 차단된 경우 -> 시간 지난 건 해제
         if ip in BLOCKED_IPS:
-            abort(403)  # 차단된 IP는 접근 불가
+            if datetime.now() >= BLOCKED_IPS[ip]:
+                del BLOCKED_IPS[ip]  # 차단 해제
+            else:
+                return abort(403, description="접근이 차단된 IP입니다.")
 
-    @app.before_request
-    def handle_server_restart():
+        ###################### 세션 잠금 확인 ######################
         if 'lockout_time' in session and session['lockout_time']:
             lockout_time = session['lockout_time']
 
@@ -82,8 +118,8 @@ def create_app():
         if check_server_restarted():
             session.clear()
 
-    @app.before_request
-    def restrict_endpoints():
+
+        ###################### 엔드포인트 제한 ######################
         if request.path == '/auth/logout':
             return
 
@@ -125,6 +161,41 @@ def create_app():
     @app.route("/favicon.ico")
     def get_favicon():
         return send_from_directory("static", "favicon.ico", mimetype="application/javascript")
+
+    @app.after_request
+    def track_404(response):
+        # ip = request.remote_addr
+        ip = request.environ.get("HTTP_X_REAL_IP")
+
+        # 404 응답이었으면 카운트 증가
+        if response.status_code == 404:
+            count, _ = ip_404_counts.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
+            count += 1
+            ip_404_counts[ip] = (count, datetime.now())
+
+            # 5번 넘으면 차단
+            if count >= BLOCK_THRESHOLD:
+                BLOCKED_IPS[ip] = datetime.now() + BLOCK_DURATION # value
+                print(f"IP {ip} is blocked until {BLOCKED_IPS[ip]}")
+                del ip_404_counts[ip]  # 초기화
+
+        return response
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_413(e):
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+        print(f"### {current_time} - 🚫 413 RequestEntityTooLarge: 요청 크기 초과")
+        return jsonify({'error': '업로드 파일이 너무 큽니다. 최대 30GB까지 허용됩니다.'}), 413
+
+    # @app.route('/check-headers')
+    def check_headers():
+        return jsonify({
+            "REMOTE_ADDR": request.environ.get("REMOTE_ADDR"),
+            "HTTP_X_FORWARDED_FOR": request.environ.get("HTTP_X_FORWARDED_FOR"),
+            "HTTP_X_REAL_IP": request.environ.get("HTTP_X_REAL_IP"),
+            "HTTP_X_FORWARDED_PROTO": request.environ.get("HTTP_X_FORWARDED_PROTO"),
+            "HTTP_HOST": request.environ.get("HTTP_HOST"),
+            "request.remote_addr": request.remote_addr,
+        })
 
     def check_server_restarted():
         restart_flag = 'server_status.txt'
