@@ -101,8 +101,11 @@
 <script>
     const screenHeight = window.innerHeight,
           containerHeight = document.querySelector('.container').scrollHeight,
-          uploadBatchSize = 20;
-    let currentBatchIndex = 0;
+          uploadBatchSize = 20,
+          uploadForm = document.getElementById('uploadForm');
+    let currentBatchIndex = 0,
+        submitted = false;
+
 
     // 공통 //
     function showMessagePopup(text = '기본메세지', state = 'success') {
@@ -157,13 +160,13 @@
             companionUrl: 'https://companion.uppy.io', // Companion 서버 URL
         })
         .use(Uppy.XHRUpload, {
-            endpoint: '/upload',
+            endpoint: '/upload/',
             fieldName: 'files[]',
             bundle: true,
             limit: 5, // 한번에 업로드 가능한 파일수량 제한
         });
     /!*.use(Uppy.Tus, { # 서버가 Tus를 지원해야 한다.. 구현이 필요
-        endpoint: '/upload', // Tus 서버 엔드포인트
+        endpoint: '/upload/', // Tus 서버 엔드포인트
         chunkSize: 5 * 1024 * 1024, // 청크 크기 (5MB)
         retryDelays: [0, 1000, 3000, 5000], // 재시도 지연 시간
     })*!/
@@ -248,47 +251,83 @@
         document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
     });*/
 
-    document.getElementById('uploadForm').addEventListener('submit', function(e) {
-        e.preventDefault(); // 기본 제출 막기
 
-        const fileInput = document.getElementById('fileInput');
+    document.addEventListener('DOMContentLoaded', () => {
+        uploadForm.addEventListener('submit', function (e) {
+            e.preventDefault(); // 기본 제출 막기
 
-        if (!fileInput.files || fileInput.files.length === 0) {
-            alert('파일을 선택해주세요!');
-            return false;
-        }
+            const form = e.target;  // 🔧 이걸 먼저 정의해줘야 아래에서 사용 가능
 
-        const form = e.target;
-        const formData = new FormData(form);
-        const xhr = new XMLHttpRequest();
-
-        xhr.open('POST', '/upload', true);
-
-        // 진행률 표시
-        xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable) {
-                const percent = Math.round((e.loaded / e.total) * 100);
-                document.getElementById('progressContainer').style.display = 'block';
-                document.getElementById('progressBar').value = percent;
-                document.getElementById('percentText').textContent = percent + '%';
+            if (submitted) {
+                return;  // 이미 제출한 경우
             }
-        };
+            submitted = true;
 
-        // 완료 후 리다이렉트
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                showMessagePopup('✔ 저장되었습니다', 'success');
-                // 성공하면 1초 뒤 /upload GET으로 이동
-                setTimeout(() => {
-                    window.location.href = '/upload';
-                }, 1000);
-            } else {
-                alert('업로드 실패: ' + xhr.statusText);
+            // 버튼 비활성화해서 UI도 중복 방지
+            const button = form.querySelector('button[type="submit"]');
+            if (button) {
+                button.disabled = true;
+                button.innerText = "Uploading..."; // UX 개선
             }
-        };
 
-        xhr.send(formData);
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('파일을 선택해주세요!');
+                submitted = false; // 다시 전송 가능하게
+                if (button) {
+                    button.disabled = false;
+                    button.innerText = "Start Upload";
+                }
+                return;
+            }
+
+            const formData = new FormData(form);
+            const xhr = new XMLHttpRequest();
+
+            xhr.open('POST', '/upload/', true);
+
+            // 진행률 표시
+            xhr.upload.onprogress = function (e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    document.getElementById('progressContainer').style.display = 'block';
+                    document.getElementById('progressBar').value = percent;
+                    document.getElementById('percentText').textContent = percent + '%';
+                }
+            };
+
+            // 완료 후 리다이렉트
+            xhr.onload = function () {
+                // submitted = false; // 다시 전송 가능하게
+                if (xhr.status === 200) {
+                    submitted = false; // 다시 전송 가능하게
+                    showMessagePopup('✔ 저장되었습니다', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/upload/';
+                    }, 1000);
+                } else {
+                    submitted = false; // 다시 전송 가능하게
+                    alert('업로드 실패: ' + xhr.statusText);
+                    if (button) {
+                        button.disabled = false;
+                        button.innerText = 'Start Upload';
+                    }
+                }
+            };
+
+            xhr.onerror = function () {
+                submitted = false;
+                alert('서버에 연결할 수 없습니다.');
+                if (button) {
+                    button.disabled = false;
+                    button.innerText = 'Start Upload';
+                }
+            };
+
+            xhr.send(formData);
+        });
     });
+
 </script>
 </body>
 </html>
