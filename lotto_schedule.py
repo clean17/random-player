@@ -6,7 +6,7 @@ from config import settings
 USER_ID = settings['LOTTO_USER_ID']
 USER_PW = settings['LOTTO_PASSWORD']
 
-COUNT = 1 # 구매 수량
+COUNT = 2 # 구매 수량
 
 def buy_lotto(playwright: Playwright) -> None:
 
@@ -84,7 +84,7 @@ if __name__ == "__main__":
 # task_manager.py 에서 호출
 async def run(playwright):
     """비동기 Playwright 로또 구매 실행"""
-    print('### 로또 구매 시작')
+    print('### 로또 구매 시작 ###')
     browser = await playwright.chromium.launch(headless=True)  # await 추가
     context = await browser.new_context()
     page = await context.new_page()

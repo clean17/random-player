@@ -49,6 +49,8 @@ def login():
                 session['attempts'] = 0
                 session['lockout_time'] = None
 
+        print('attempt_username', username)
+
         # 로그인 검증
         if username in users and check_password_hash(users[username]['password'], password):
             user = User(username)
