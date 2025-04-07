@@ -85,7 +85,7 @@ file_handler = None
 root_logger = None
 listener = None
 log_queue = queue.Queue()
-
+formatting = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 def get_log_filename():
     today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로
@@ -95,7 +95,7 @@ def setup_logging():
     # 로그 디렉토리 생성
     os.makedirs("logs", exist_ok=True)
 
-    global root_logger, file_handler, listener, log_queue
+    global root_logger, file_handler, listener, log_queue, formatting
 
     # 기본 로거 설정
     root_logger = logging.getLogger() # root
@@ -105,7 +105,6 @@ def setup_logging():
     waitress_logger = logging.getLogger("waitress") # Waitress 로그
 
     # 로그 포맷 설정
-    formatting = "### %(asctime)s - %(name)s - %(levelname)s - %(message)s"
     formatter = logging.Formatter(formatting)
 
     # 콘솔 핸들러 정의 (터미널 출력)
@@ -150,7 +149,7 @@ def setup_logging():
     return waitress_logger
 
 def check_logger():
-    global file_handler, current_date_str, listener, log_queue
+    global file_handler, current_date_str, listener, log_queue, formatting
 
     # 날짜 문자열
     new_date_str = datetime.now().strftime('%Y%m%d')
@@ -163,7 +162,6 @@ def check_logger():
         log_filename = get_log_filename()
         file_handler = logging.FileHandler(log_filename, encoding='utf-8')
         file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
-        formatting = "### %(asctime)s - %(name)s - %(levelname)s - %(message)s"
         file_handler.setFormatter(ColorFormatter(formatting))
         file_handler.addFilter(WerkzeugLogFilter())
 
