@@ -118,7 +118,7 @@ def image_list():
 
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
         # images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
-        # images_length = len(os.listdir(TEMP_IMAGE_DIR))
+        # images_length = count_non_zip_files(TEMP_IMAGE_DIR)
         template_html = 'trip_image_list.html'
         title_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
 
@@ -129,22 +129,22 @@ def image_list():
 
         target_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
         images = get_images(start, LIMIT_PAGE_NUM, target_dir)
-        images_length = len(os.listdir(target_dir))
+        images_length = count_non_zip_files(target_dir)
         dir = 'temp'
 
     elif dir == 'refine':
         if firstRequst == 'True':
             initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
         images = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR)
-        images_length = len(os.listdir(REF_IMAGE_DIR))
+        images_length = count_non_zip_files(REF_IMAGE_DIR)
         template_html = 'ref_image_list.html'
     elif dir == 'image':
         images = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR)
-        images_length = len(os.listdir(IMAGE_DIR))
+        images_length = count_non_zip_files(IMAGE_DIR)
         template_html = 'image_list.html'
     # elif dir == 'trip':
     #     images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
-    #     images_length = len(os.listdir(TRIP_IMAGE_DIR))
+    #     images_length = count_non_zip_files(TRIP_IMAGE_DIR)
     #     template_html = 'trip_image_list.html'
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
@@ -283,3 +283,11 @@ def environment(**options):
     env = Environment(**options)
     env.globals.update(max=max, min=min)
     return env
+
+import os
+
+def count_non_zip_files(directory):
+    return len([
+        f for f in os.listdir(directory)
+        if os.path.isfile(os.path.join(directory, f)) and not f.lower().endswith('.zip')
+    ])
