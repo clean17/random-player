@@ -13,8 +13,10 @@ from .upload import upload
 import fnmatch
 from datetime import datetime, timedelta
 from werkzeug.exceptions import RequestEntityTooLarge
-import uuid
 from werkzeug.middleware.proxy_fix import ProxyFix
+import uuid
+
+
 
 ALLOWED_PATHS = [
     '/favicon.ico',       # nginx 서버리스
@@ -29,23 +31,41 @@ ALLOWED_PATHS = [
     '/func/memo*',
 ]
 
+# 파일 읽기
+def load_blocked_ips(filepath='blocked_ips.txt'):
+    blocked = {}
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                ip, until_str = line.strip().split(',')
+                until = datetime.strptime(until_str, "%Y-%m-%d %H:%M:%S")
+                blocked[ip] = until
+    except FileNotFoundError:
+        pass  # 파일 없으면 빈 딕셔너리로 시작
+    return blocked
+
+# 파일 저장
+def save_blocked_ip(ip, until, filepath='blocked_ips.txt'):
+    with open(filepath, 'a') as f:
+        f.write(f"{ip},{until.strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+# block 만료 처리
+def clean_expired_blocked_ips():
+    now = datetime.now()
+    expired = [ip for ip, until in BLOCKED_IPS.items() if until < now]
+    for ip in expired:
+        del BLOCKED_IPS[ip]
+
 # 차단된 IP: {ip: block_until_time}
-BLOCKED_IPS = {
-    '170.39.218.12': datetime.now() + timedelta(days=365),
-    '111.61.123.99': datetime.now() + timedelta(days=365),
-    '138.197.150.30': datetime.now() + timedelta(days=365),
-    '51.15.184.67': datetime.now() + timedelta(days=365),
-    '125.124.210.198': datetime.now() + timedelta(days=365),
-    '45.82.78.104': datetime.now() + timedelta(days=365),
-}
+BLOCKED_IPS = load_blocked_ips()
 
 # IP 기록: {ip: [404_count, last_404_time]}
-ip_404_counts = {}
+IP_404_COUNTS = {}
 
 
 # 설정값
-BLOCK_THRESHOLD = 5
-BLOCK_DURATION = timedelta(days=7)
+BLOCK_THRESHOLD = 3
+BLOCK_DURATION = timedelta(days=365)
 
 
 def create_app():
@@ -169,15 +189,17 @@ def create_app():
 
         # 404 응답이었으면 카운트 증가
         if response.status_code == 404:
-            count, _ = ip_404_counts.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
+            count, _ = IP_404_COUNTS.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
             count += 1
-            ip_404_counts[ip] = (count, datetime.now())
+            IP_404_COUNTS[ip] = (count, datetime.now())
 
             # 5번 넘으면 차단
             if count >= BLOCK_THRESHOLD:
-                BLOCKED_IPS[ip] = datetime.now() + BLOCK_DURATION # value
-                print(f"IP {ip} is blocked until {BLOCKED_IPS[ip]}")
-                del ip_404_counts[ip]  # 초기화
+                until = datetime.now() + BLOCK_DURATION # value
+                BLOCKED_IPS[ip] = until
+                save_blocked_ip(ip, until)  # ✅ 파일에 추가 저장
+                print(f"🚫 IP {ip} is blocked until {until}")
+                del IP_404_COUNTS[ip]
 
         return response
     @app.errorhandler(RequestEntityTooLarge)
