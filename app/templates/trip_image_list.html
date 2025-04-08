@@ -461,12 +461,14 @@
         function playCenterVideo() {
             const centerImage = findCenterImageElement();
             const video = centerImage.querySelector('video');
-            if (video.paused) {
-                video.play();
-            } else {
-                video.pause();
+            if (video) {
+                if (video.paused) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+                video.blur();
             }
-            video.blur();
         }
 
         /**************************************************************/
