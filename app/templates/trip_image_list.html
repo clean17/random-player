@@ -7,6 +7,33 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
 </head>
+<style>
+    .image-item {
+        position: relative;
+        display: inline-block;
+    }
+
+    .delete-btn {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 48px;         /* 24px → 48px */
+        height: 48px;        /* 24px → 48px */
+        font-size: 28px;     /* 16px → 더 큼 */
+        cursor: pointer;
+        z-index: 10;
+        transition: background 0.2s;
+    }
+
+    .delete-btn:hover {
+        background: red;
+    }
+</style>
+
 <body>
 <div class="top-bar">
     <div class="logout">
@@ -73,12 +100,16 @@
                 <input type="hidden" name="images[]" value="{{ image }}">
 
                 {% if file_extension in video_extensions %}
+                <button class="delete-btn" type="button">×</button>
+
                 <!-- 비디오 파일인 경우 -->
                 <video class="thumbnail" controls preload="auto">
                     <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
                             type="video/mp4">
                 </video>
                 {% elif file_extension in image_extensions %}
+                <button class="delete-btn" type="button">×</button>
+
                 <!-- 이미지 파일인 경우 -->
                 <img class="thumbnail"
                      src="{% if loop.index <= 5 %}
@@ -177,26 +208,6 @@
         clearTimeout(pressTimer);
     };
 
-    /*function moveImage(filename, index) {
-        console.log(filename, index)
-        fetch(`/image/move_image/trip_image/${filename}`, { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    const imageElement = document.getElementById(`image-${index}`);
-                    if (imageElement) {
-                        imageElement.remove();
-                        if (nextImageElement) {
-                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    }*/
-
     // 화면 중심 좌표의 Element를 반환
     function findCenterImageByCoordinates() {
         const centerX = window.innerWidth / 2;
@@ -212,10 +223,12 @@
         return 'No image with alt attribute found at the center of the viewport.';
     }
 
-    function moveImage(event) {
+    function moveImage(event, name, index) {
         const centerImage = findCenterImageByCoordinates();
-        const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
-        // fetch(`/image/move_image/${dir}/${filename}`, { method: 'POST' })
+        let filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
+        if (name) {
+            filename = name
+        }
         fetch(`/image/move_image`, {
             method: 'POST',
             headers: {
@@ -230,9 +243,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
+                    let imageElement;
                     const nextImageElement = imageElement?.nextElementSibling;
-                    // const imageElement = document.getElementById(`image-${index}`);
+                    if (index) {
+                        imageElement = document.getElementById(`image-${index}`);
+                    } else {
+                        imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
+                    }
                     if (imageElement) {
                         imageElement.remove();
                         if (nextImageElement) {
@@ -363,7 +380,8 @@
                 case 'Delete':
                     event.preventDefault();
                     if (confirm('Are you sure ?')) {
-                        document.querySelector('.delete-button')?.click()
+                        // document.querySelector('.delete-button')?.click()
+                        moveImage();
                     }
                 default: break;
             }
@@ -431,7 +449,9 @@
                 const filename = centerImage.querySelector('img').getAttribute('alt');
                 const index = centerImage.querySelector('img').getAttribute('data-index');
                 if (filename && index) {
-                    moveImage(filename, index);
+                    if (confirm('Are you sure ?')) {
+                        moveImage(null, filename, index);
+                    }
                 }
             }
         }
@@ -565,6 +585,19 @@
             }
         });
     }
+
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const imageItem = e.target.closest('.image-item');
+            const filename = imageItem.querySelector('.thumbnail')?.alt;
+            if (imageItem) {
+                // imageItem.remove(); // 화면에서 제거 (실제 삭제 아님)
+                if (confirm('Are you sure ?')) {
+                    moveImage(e, filename);
+                }
+            }
+        });
+    });
 
 
     document.addEventListener("DOMContentLoaded", initPage)
