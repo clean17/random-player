@@ -24,18 +24,12 @@ app = create_app()
 
 # CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True) # 해당 출처를 통해서만 리소스 접근 허용
 
-# 커스텀 로깅 설정 미들웨어 적용
-app.wsgi_app = RequestLoggingMiddleware(app.wsgi_app)
-
 # Hop-by-Hop 헤더 필터 미들웨어 적용
 # app.wsgi_app = HopByHopHeaderFilter(app.wsgi_app)
 
-# ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
-# Flask가 실제로 클라이언트 요청을 처리할 때, 리버스 프록시(Nginx, Apache) 뒤에 있으면 원래 클라이언트의 정보(프로토콜, 호스트 등)가 프록시의 정보로 덮어쓰여질 수 있다
-# ProxyFix는 프록시가 제공하는 HTTP 헤더(예: X-Forwarded-Proto, X-Forwarded-Host)를 읽어 원래 요청 정보를 복원한다
-# x_proto=1: X-Forwarded-Proto 헤더에 담긴 정보를 Flask가 요청이 HTTPS로 들어왔는지 인식하도록 한다
-# x_host=1: X-Forwarded-Host 헤더에 담긴 호스트 정보를 Flask가 올바른 도메인/호스트를 인식하도록 한다
-# app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+# 커스텀 로깅 설정 미들웨어 적용
+app.wsgi_app = RequestLoggingMiddleware(app.wsgi_app)
+
 
 # 모든 요청에 대해 URL 스킴(scheme)을 강제로 HTTPS로 설정, 리버스 프록시 환경에서도 클라이언트 요청을 HTTPS로 인식하여 보안 기능 동작하도록 함
 # app.wsgi_app = ReverseProxied(app.wsgi_app)
@@ -43,7 +37,7 @@ app.wsgi_app = RequestLoggingMiddleware(app.wsgi_app)
 
 # Ctrl+C 이벤트 핸들러
 def signal_handler(sig, frame):
-    logger.info("#### Register Server Shutdown Handler... ####")
+    logger.info("############################### Shutdown server.... ####################################")
     pid = os.getpid()
     os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
 
@@ -98,12 +92,12 @@ atexit.register(on_exit) #  프로그램이 정상적으로 종료될 때 호출
 
 
 if __name__ == '__main__':
-    logger.info("################################### Starting server.... ####################################")
+    logger.info("############################### Starting server.... ####################################")
 
     # SIGINT(인터럽트 시그널, 보통 Ctrl+C 누름)에 대한 핸들러를 등록
     signal.signal(signal.SIGINT, signal_handler)
 
-    # 업로드 디렉토리 압축파일 생성 배치
+    # 업로드 디렉토리 압축파일 생성, 로또 구매 배치
     start_periodic_task()
 
     # 'npm run dev' 실행 (백그라운드 실행)
@@ -115,4 +109,4 @@ if __name__ == '__main__':
     # app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False, threaded=True)
     # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True)
 
-    serve(app, host='0.0.0.0', port=8090, threads=6)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원
+    serve(app, host='0.0.0.0', port=8090, threads=6, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
