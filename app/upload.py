@@ -15,8 +15,9 @@ HTM_DIRECTORY = settings['HTM_DIRECTORY']
 @upload.route('/', methods=['GET'])
 @login_required
 def get_file_upload_html():
+    title = request.args.get('title')
     title_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
-    return render_template('file_uploader.html', title_list=title_list)
+    return render_template('file_uploader.html', title_list=title_list, previous_title=title)
 
 @upload.route('/', methods=['POST'], strict_slashes=False)
 @login_required

@@ -6,55 +6,11 @@
     <title>Uppy Upload</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/file_uploader.css') }}">
     <!--    <link href="https://releases.transloadit.com/uppy/v4.12.2/uppy.min.css" rel="stylesheet">-->
     <!--    <script src="https://releases.transloadit.com/uppy/v4.12.2/uppy.min.js"></script>-->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/uppy.css') }}">
     <script src="{{ url_for('static', filename='js/uppy.min.js') }}"></script>
-    <style>
-        .uppy-Dashboard-inner {
-            background-color: #f8f8f8;
-        }
-
-        /* loading.svg */
-        #overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.4); /* 반투명 배경 */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            pointer-events: all; /* 모든 이벤트를 이 요소로 제한 */
-        }
-
-        #overlay img {
-            position: absolute;
-            top: 45%;
-            left: 51%;
-            transform: translate(-50%, -50%); /* 중심점 기준으로 이동 */
-            width: 100px;
-            height: 100px;
-        }
-
-        /* 저장 완료 메시지 스타일 */
-        .save-message {
-            position: absolute;
-            top: 35%;
-            right: 47%;
-            /*transform: translate(-50%, -50%); !* 중심점 기준으로 이동 *!*/
-            background: rgba(0, 128, 0, 0.8);
-            color: white;
-            padding: 8px 15px;
-            border-radius: 5px;
-            font-size: 14pt;
-            font-weight: bold;
-            display: none;
-            z-index: 10;
-        }
-    </style>
 </head>
 <body>
 <div class="top-bar">
@@ -102,7 +58,10 @@
     const screenHeight = window.innerHeight,
           containerHeight = document.querySelector('.container').scrollHeight,
           uploadBatchSize = 20,
-          uploadForm = document.getElementById('uploadForm');
+          uploadForm = document.getElementById('uploadForm'),
+          previous_title = `{{ previous_title }}`,
+          titleSelect = document.getElementById('title-select'),
+          titleInput = document.getElementById('title');
     let currentBatchIndex = 0,
         submitted = false;
 
@@ -123,9 +82,7 @@
     }
 
     function enterTitle() {
-        const selectTitle = document.getElementById('title-select');
-        const inputTitle=  document.getElementById('title');
-        inputTitle.value = selectTitle.value;
+        titleInput.value = titleSelect.value;
     }
 
 
@@ -219,7 +176,7 @@
     }
 
     document.getElementById('start-upload-button').addEventListener('click', () => {
-        const title = document.getElementById('title').value || 'no_title';
+        const title = titleInput.value || 'no_title';
         uppy.setMeta({ title: title });
         const allFiles = uppy.getFiles();
         if (!Array.isArray(allFiles) || allFiles.length === 0) {
@@ -253,6 +210,11 @@
 
 
     document.addEventListener('DOMContentLoaded', () => {
+        if (previous_title && previous_title !== 'None') {
+            titleSelect.value = previous_title;
+            titleInput.value = previous_title;
+        }
+
         uploadForm.addEventListener('submit', function (e) {
             e.preventDefault(); // 기본 제출 막기
 
@@ -303,7 +265,7 @@
                     submitted = false; // 다시 전송 가능하게
                     showMessagePopup('✔ 저장되었습니다', 'success');
                     setTimeout(() => {
-                        window.location.href = '/upload/';
+                        window.location.href = `/upload/?title=${encodeURIComponent(titleInput.value)}`;
                     }, 1000);
                 } else {
                     submitted = false; // 다시 전송 가능하게
