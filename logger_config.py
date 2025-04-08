@@ -103,6 +103,7 @@ def setup_logging():
 
     werkzeug_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
     waitress_logger = logging.getLogger("waitress") # Waitress 로그
+    active_logger = None
 
     # 로그 포맷 설정
     formatter = logging.Formatter(formatting)
@@ -146,7 +147,25 @@ def setup_logging():
     waitress_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
     waitress_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
-    return waitress_logger
+    active_loggers = get_active_loggers()
+    for name, logger in active_loggers.items():
+        # print(f"Logger name: {name}, Level: {logging.getLevelName(logger.level)}")
+        if name == "waitress":
+            active_logger = waitress_logger
+        if name == "werkzeug":
+            active_logger = werkzeug_logger
+
+    return active_logger
+
+def get_active_loggers():
+    # 로거들을 담고 있는 내부 딕셔너리
+    logger_dict = logging.root.manager.loggerDict
+    active_loggers = {}
+    for logger_name, logger_obj in logger_dict.items():
+        # 일부 항목은 아직 완전히 초기화되지 않은 PlaceHolder일 수 있으므로 실제 Logger 객체만 필터링
+        if isinstance(logger_obj, logging.Logger):
+            active_loggers[logger_name] = logger_obj
+    return active_loggers
 
 def check_logger():
     global file_handler, current_date_str, listener, log_queue, formatting
