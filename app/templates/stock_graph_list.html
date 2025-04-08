@@ -106,7 +106,7 @@
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             img.addEventListener('click', () => {
-                if (confirm('Are you sure ?')) {
+                if (confirm('Delete the file ?')) {
                     moveImage(event);
                 }
             });

@@ -99,7 +99,7 @@
 
         pressTimer = setTimeout(() => {
             // 파일 삭제
-            if (confirm('Are you sure ?')) {
+            if (confirm('Delete the file ?')) {
                 moveImage(event)
             }
         }, longPressDuration);
@@ -154,7 +154,7 @@
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    if (confirm('Are you sure ?')) {
+                    if (confirm('Delete the file ?')) {
                         moveImage(event)
                         // document.querySelector('.delete-button')?.click()
                     }

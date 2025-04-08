@@ -126,7 +126,7 @@
         const imageItems = document.querySelectorAll('.image-item');
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
-            img.addEventListener('click', () => setNextImage(item));
+            img?.addEventListener('click', () => setNextImage(item));
         });
 
         document.addEventListener('keydown', function(event) {
@@ -149,7 +149,7 @@
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    if (confirm('Are you sure ?')) {
+                    if (confirm('Delete the file ?')) {
                         document.querySelector('.delete-button')?.click()
                     }
                 default: break;

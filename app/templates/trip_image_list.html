@@ -105,7 +105,7 @@
                 <!-- 비디오 파일인 경우 -->
                 <video class="thumbnail" controls preload="auto">
                     <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
-                            type="video/mp4">
+                            type="video/mp4" data-filename="{{ image|urlencode }}">
                 </video>
                 {% elif file_extension in image_extensions %}
                 <button class="delete-btn" type="button">×</button>
@@ -198,7 +198,7 @@
 
         pressTimer = setTimeout(() => {
             // 파일 삭제
-            if (confirm('Are you sure ?')) {
+            if (confirm('Delete the file ?')) {
                 moveImage(event)
             }
         }, longPressDuration);
@@ -216,7 +216,7 @@
         // elementFromPoint 좌표 위치의 요소를 가져온다
         const element = document.elementFromPoint(centerX, centerY);
 
-        if (element && element.tagName === 'IMG') {
+        if (element && (element.tagName === 'IMG' || element.tagName === 'VIDEO')) {
             return element;
         }
 
@@ -237,7 +237,7 @@
             body: JSON.stringify({
                 imagepath: dir === 'temp' ? 'temp_image' : 'trip_image',
                 subpath: titleText,
-                filename: filename
+                filename: `${decodeURIComponent(filename)}`
             })
         })
             .then(response => response.json())
@@ -375,11 +375,12 @@
                     break;
                 case ' ': case 'Enter':
                     event.preventDefault();
-                    clickCenterImage();
+                    // clickCenterImage();
+                    playCenterVideo();
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    if (confirm('Are you sure ?')) {
+                    if (confirm('Delete the file ?')) {
                         // document.querySelector('.delete-button')?.click()
                         moveImage();
                     }
@@ -446,14 +447,26 @@
         function clickCenterImage() {
             const centerImage = findCenterImageElement();
             if (centerImage) {
-                const filename = centerImage.querySelector('img').getAttribute('alt');
-                const index = centerImage.querySelector('img').getAttribute('data-index');
-                if (filename && index) {
-                    if (confirm('Are you sure ?')) {
-                        moveImage(null, filename, index);
-                    }
+                let filename = centerImage.querySelector('img')?.getAttribute('alt');
+                const index = centerImage.querySelector('img')?.getAttribute('data-index');
+                if (!filename) {
+                    filename = centerImage.querySelector('source').dataset.filename;
+                }
+                if (confirm('Delete the file ?')) {
+                    moveImage(null, filename, index);
                 }
             }
+        }
+
+        function playCenterVideo() {
+            const centerImage = findCenterImageElement();
+            const video = centerImage.querySelector('video');
+            if (video.paused) {
+                video.play();
+            } else {
+                video.pause();
+            }
+            video.blur();
         }
 
         /**************************************************************/
@@ -589,10 +602,12 @@
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', e => {
             const imageItem = e.target.closest('.image-item');
-            const filename = imageItem.querySelector('.thumbnail')?.alt;
+            let filename = imageItem.querySelector('.thumbnail')?.alt;
             if (imageItem) {
-                // imageItem.remove(); // 화면에서 제거 (실제 삭제 아님)
-                if (confirm('Are you sure ?')) {
+                if (!filename) {
+                    filename = imageItem.querySelector('source').dataset.filename;
+                }
+                if (confirm('Delete the file ?')) {
                     moveImage(e, filename);
                 }
             }
