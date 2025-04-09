@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live TS Video Streaming</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<!--    <script src="https://vjs.zencdn.net/8.3.0/video.min.js"></script>-->
+    <style>
+        video {
+            max-width: 1500px;
+            width: 100%;
+            max-height: 1500px;
+            height: 100%;
+            object-fit: fill;
+        }
+    </style>
+</head>
+<body>
+<video id="video" controls playsinline autoplay></video>
+<button onclick="loadVideo()">Load Video</button>
+
+<script>
+    const video = document.querySelector('#video');
+    const videoSrc = 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8'
+
+    function loadVideo() {
+        var video = document.getElementById('video');
+        var hls = new Hls();
+        // var url = '/video/stream'; // HLS 플레이리스트 파일의 경로
+        var url = videoSrc; // HLS 플레이리스트 파일의 경로
+
+        // 브라우저가 Media Source Extensions (MSE)를 지원하는지 확인 -> MSE를 지원하면, Hls.js를 통해 HLS 스트리밍을 재생
+        if (Hls.isSupported()) {
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, function() { // HLS의 manifest 파일(M3U8)이 파싱된 후 실행할 콜백
+                video.play();
+            });
+        // Hls.js 없이 브라우저 자체적으로 HLS를 지원하는 경우 (사파리)
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+            video.addEventListener('loadedmetadata', function() {
+                video.play();
+            });
+        }
+    }
+</script>
+</body>
+</html>
