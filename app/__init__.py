@@ -185,10 +185,10 @@ def create_app():
     @app.after_request
     def track_404(response):
         # ip = request.remote_addr
-        ip = request.environ.get("HTTP_X_REAL_IP")
+        ip = request.environ.get("HTTP_X_REAL_IP", request.environ.get("REMOTE_ADDR", "-"))
 
         # 404 응답이었으면 카운트 증가
-        if response.status_code == 404:
+        if not current_user.is_authenticated and response.status_code == 404:
             count, _ = IP_404_COUNTS.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
             count += 1
             IP_404_COUNTS[ip] = (count, datetime.now())
