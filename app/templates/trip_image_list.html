@@ -76,7 +76,7 @@
     {% endif %}
 
 
-    <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
+    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images') }}">
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             <!--{% for image in images %}
@@ -229,7 +229,7 @@
         if (name) {
             filename = name
         }
-        fetch(`/image/move_image`, {
+        fetch(`/image/move-image`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

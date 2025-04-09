@@ -16,13 +16,13 @@ video = Blueprint('video', __name__)
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 
-@video.route('/select_directory', methods=['POST'])
+@video.route('/select-directory', methods=['POST'], endpoint='select-directory')
 @login_required
 def select_directory():
     directory = request.form.get('directory')
     return redirect(url_for('video.video_player', directory=directory))
 
-@video.route('/video_player/<directory>')
+@video.route('/video-player/<directory>')
 @login_required
 def video_player(directory):
     return render_template('video.html', directory=directory)

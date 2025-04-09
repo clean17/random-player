@@ -96,7 +96,7 @@
                         {#img.addEventListener('click', () => {
                             const form = document.createElement('form');
                             form.method = 'POST';
-                            form.action = '{{ url_for("video.select_directory") }}';
+                            form.action = '{{ url_for("video.select-directory") }}';
 
                             const input = document.createElement('input');
                             input.type = 'hidden';
@@ -119,7 +119,7 @@
 
                     const actionCell = document.createElement('td');
                     const form = document.createElement('form');
-                    form.action = `{{ url_for('ffmpeg.kill_task', pid=0) }}`.replace('0', task.pid);
+                    form.action = `{{ url_for('ffmpeg.kill-task', pid=0) }}`.replace('0', task.pid);
                     form.method = 'post';
                     const button = document.createElement('button');
                     button.className = 'button';

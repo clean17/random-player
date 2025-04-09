@@ -23,7 +23,7 @@ ALLOWED_PATHS = [
     '/service-worker.js', # nginx 서버리스
     '/image/images*',
     '/image/pages',
-    '/image/move_image*',
+    '/image/move-image*',
     '/upload*',
     '/func/download-zip*',
     '/video/temp-video*',
@@ -156,8 +156,8 @@ def create_app():
 
         # GUEST_USERNAME 사용자에 대한 검증
         if user_id == app.config['GUEST_USERNAME']:
-            # GUEST_USERNAME 사용자가 /image/trip_images 경로가 아닌 경우만 제한
-            # if not request.path.startswith('/image/trip_images'):
+            # GUEST_USERNAME 사용자가 /image/trip-images 경로가 아닌 경우만 제한
+            # if not request.path.startswith('/image/trip-images'):
             #     return redirect(url_for('auth.logout'))
                 # return jsonify({"error": "Forbidden"}), 403
 

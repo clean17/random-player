@@ -27,7 +27,7 @@
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
 </div>
 <div class="container">
-    <form id="delete-form" method="POST" action="{{ url_for('image.delete_images') }}">
+    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images') }}">
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
@@ -364,8 +364,8 @@
     }
 
     function moveImage(filename, index) {
-        console.log(filename, index)
-        fetch(`/image/move_image`, {
+        // console.log(filename, index)
+        fetch(`/image/move-image`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

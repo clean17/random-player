@@ -24,7 +24,7 @@
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
 </div>
 <div class="container">
-    <div id="delete-form" {#method="POST" action="{{ url_for('image.delete_images') }}"#}>
+    <div id="delete-form" {#method="POST" action="{{ url_for('image.delete-images') }}"#}>
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
@@ -193,7 +193,7 @@
         }
 
         function shuffleImage() {
-            fetch(`/image/shuffle/ref_images`, { method: 'POST' })
+            fetch(`/image/shuffle/ref-images`, { method: 'POST' })
                 .then(response => response.json())
                 .then(data => {
                     console.log(data)
@@ -360,7 +360,7 @@
     function moveImage(event) {
         const centerImage = getCenterImage();
         const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
-        fetch(`/image/move_image/ref_image/${filename}`, { method: 'POST' })
+        fetch(`/image/move-image/ref-image/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {

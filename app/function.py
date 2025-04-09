@@ -333,8 +333,11 @@ def memo():
             content = ''
     return render_template('memo.html', content=content)
 
+################################# HLS ######################################
 
-
+@func.route('/get-hls', methods=['GET'])
+def get_hls():
+    return render_template('hls/test_hls.html')
 
 @func.route("/buy/lotto-test")
 def test_lotto():

@@ -25,22 +25,22 @@
         <form id="market-form">
             <label for="market-select">Select Market:</label>
             <select id="market-select" name="market" onchange="location = this.value;">
-                <option value="{{ url_for('image.stock_graph_list', market='kospi', page=1) }}" {% if market == 'kospi' %}selected{% endif %}>KOSPI</option>
-                <option value="{{ url_for('image.stock_graph_list', market='kospi_10', page=1) }}" {% if market == 'kospi_10' %}selected{% endif %}>KOSPI_10</option>
-                <option value="{{ url_for('image.stock_graph_list', market='sp500', page=1) }}" {% if market == 'sp500' %}selected{% endif %}>SP500</option>
+                <option value="{{ url_for('image.stock-graph-list', market='kospi', page=1) }}" {% if market == 'kospi' %}selected{% endif %}>KOSPI</option>
+                <option value="{{ url_for('image.stock-graph-list', market='kospi_10', page=1) }}" {% if market == 'kospi_10' %}selected{% endif %}>KOSPI_10</option>
+                <option value="{{ url_for('image.stock-graph-list', market='sp500', page=1) }}" {% if market == 'sp500' %}selected{% endif %}>SP500</option>
             </select>
         </form>
     </div>
 
-    <div id="delete-form" {#method="POST" action="{{ url_for('image.delete_images') }}"#}>
+    <div id="delete-form" {#method="POST" action="{{ url_for('image.delete-images') }}"#}>
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
             <div class="image-item" id="image-{{ loop.index }}">
                 <!-- 처음 5개 이미지만 실제 이미지 로드 -->
                 <img class="thumbnail"
-                     src="{% if loop.index <= 5 %}{{ url_for('image.get_stock_graph', market=market, filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                     data-src="{{ url_for('image.get_stock_graph', market=market, filename=image) }}"
+                     src="{% if loop.index <= 5 %}{{ url_for('image.stock-graphs', market=market, filename=image) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                     data-src="{{ url_for('image.stock-graphs', market=market, filename=image) }}"
                      alt="{{ image }}" data-index="{{ loop.index }}">
                 <input type="hidden" name="images[]" value="{{ image }}">
             </div>
@@ -48,15 +48,15 @@
         </div>
         <div class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('image.stock_graph_list', market=market, page=1) }}">&laquo;</a>
-            <a href="{{ url_for('image.stock_graph_list', market=market, page=page-1) }}">&lt;</a>
+            <a href="{{ url_for('image.stock-graph-list', market=market, page=1) }}">&laquo;</a>
+            <a href="{{ url_for('image.stock-graph-list', market=market, page=page-1) }}">&lt;</a>
             {% endif %}
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-            <a href="{{ url_for('image.stock_graph_list', market=market, page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.stock-graph-list', market=market, page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
             {% if page < total_pages %}
-            <a href="{{ url_for('image.stock_graph_list', market=market, page=page+1) }}">&gt;</a>
-            <a href="{{ url_for('image.stock_graph_list', market=market, page=total_pages) }}">&raquo;</a>
+            <a href="{{ url_for('image.stock-graph-list', market=market, page=page+1) }}">&gt;</a>
+            <a href="{{ url_for('image.stock-graph-list', market=market, page=total_pages) }}">&raquo;</a>
             {% endif %}
         </div>
         {#<button type="submit" class="delete-button">Delete</button>#}
@@ -310,7 +310,7 @@
         const market = document.querySelector('#market-select');
         const marketName = market.options[market.selectedIndex].text.toLowerCase();
 
-        fetch(`/image/move_stock_image/${marketName}/${filename}`, { method: 'POST' })
+        fetch(`/image/move-stock-image/${marketName}/${filename}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {

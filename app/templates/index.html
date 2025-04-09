@@ -22,7 +22,7 @@
     <h2>Select Menu</h2>
     {% if current_user.get_id() != config.GUEST_USERNAME %}
 <!--    <a href="{{ url_for('main.home') }}">Back</a>-->
-    <form action="{{ url_for('video.select_directory') }}" method="post">
+    <form action="/video/select-directory" method="post">
         <div class="select-container">
             <select name="directory" id="directory-select" class="styled-select" onchange="this.form.submit()">
                 <option value="">Video Directory</option>
@@ -34,7 +34,7 @@
         </div>
     </form>
     {% endif %}
-<!--    <form action="{{ url_for('video.select_directory') }}" method="post">-->
+<!--    <form action="{{ url_for('video.select-directory') }}" method="post">-->
         <!--<button type="submit" name="directory" value="1" id="btn1">Directory T</button>
         <button type="submit" name="directory" value="2" id="btn2">Directory A</button>
         <button type="submit" name="directory" value="3" id="btn3">Directory D120</button>
@@ -46,7 +46,7 @@
         {% endif %}
         <!--<a href="{{ url_for('image.image_list', dir=IMAGE_DIR) }}"><button type="button" id="btn7">View Images</button></a>
         <a href="{{ url_for('image.image_list', dir=REF_IMAGE_DIR) }}"><button type="button" id="btn8">REF Images</button></a>
-        <a href="/image/stock_grahps/kospi"><button type="button" id="btn9">Stocks_Graph</button></a>-->
+        <a href="/image/stock-graph-list/kospi"><button type="button" id="btn9">Stocks_Graph</button></a>-->
         <form id="image-select-form">
             <div class="select-container">
 <!--                <label for="image-select">Select Image</label>-->
@@ -57,7 +57,7 @@
                     {% if current_user.get_id() != config.GUEST_USERNAME %}
                     <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
                     <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
-                    <option value="/image/stock_grahps/kospi">Stocks Graph</option>
+                    <option value="/image/stock-graph-list/kospi">Stocks Graph</option>
                     {% endif %}
                 </select>
             </div>
@@ -122,7 +122,7 @@
             case '9':
                 // document.getElementById('btn9').click();
                 var selectElement = document.getElementById('image-select');
-                selectElement.value = "/image/stock_grahps/kospi";
+                selectElement.value = "/image/stock-graph-list/kospi";
                 selectElement.dispatchEvent(new Event('change')); // change 이벤트 트리거
                 break;
             default: break;

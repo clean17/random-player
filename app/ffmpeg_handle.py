@@ -15,7 +15,7 @@ m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
 def ffmpeg():
     return render_template('ffmpeg.html')
 
-@m_ffmpeg.route('/run_batch', methods=['POST'])
+@m_ffmpeg.route('/run-batch', methods=['POST'], endpoint='run-batch')
 @login_required
 def run_batch():
     keyword = request.form['keyword']
@@ -40,19 +40,19 @@ def status():
     free_space_gb = get_drive_free_space('F:')
     return render_template('status.html', tasks=tasks, free_space_gb=free_space_gb)
 
-@m_ffmpeg.route('/get_free_size')
+@m_ffmpeg.route('/get-free-size')
 @login_required
 def get_free_size():
     free_space_gb = get_drive_free_space('F:')
     return jsonify(free_space_gb)
 
-@m_ffmpeg.route('/kill_task/<int:pid>', methods=['POST'])
+@m_ffmpeg.route('/kill-task/<int:pid>', methods=['POST'], endpoint='kill-task')
 @login_required
 def kill_task(pid):
     terminate_task(pid)
     return redirect(url_for('ffmpeg.status'))
 
-@m_ffmpeg.route('/get_tasks', methods=['GET'])
+@m_ffmpeg.route('/get-tasks', methods=['GET'])
 @login_required
 def get_tasks():
     task_list = []

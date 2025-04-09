@@ -22,7 +22,7 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
-HIDE_DETAIL_URLS = ["/image/move_image/image/", "/video/delete/"]
+HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 
 class WerkzeugLogFilter(logging.Filter):
     DATE_PATTERN = re.compile(r'\[\d{2}/[A-Za-z]{3}/\d{4} \d{2}:\d{2}:\d{2}\] ')

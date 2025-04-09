@@ -67,7 +67,8 @@ def get_images(start, count, dir):
 
 
 def get_stock_graphs(dir, start, count):
-    images = os.listdir(dir)
+    all_items = os.listdir(dir)
+    images = [f for f in all_items if os.path.isfile(os.path.join(dir, f))]
     # 정규식을 사용하여 날짜와 숫자 부분을 추출
     def sort_key(filename):
         # match = re.match(r"(\d{8}) \[\s*(-?\d+\.\d+)", filename)
@@ -154,7 +155,7 @@ def image_list():
                            selected_dir=selected_dir, title_list=title_list)
 
 
-@image_bp.route('/move_image', methods=['POST'])
+@image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
 @login_required
 def move_image():
     # imagepath의 값에 따라 src_path 결정
@@ -184,8 +185,8 @@ def move_image():
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
 
-# @image_bp.route('/delete_images/<path:filename>', methods=['POST'])
-@image_bp.route('/delete_images', methods=['POST'])
+# @image_bp.route('/delete-images/<path:filename>', methods=['POST'], endpoint='delete-images')
+@image_bp.route('/delete-images', methods=['POST'], endpoint='delete-images')
 @login_required
 def delete_images():
     images_to_delete = request.form.getlist('images[]')
@@ -219,7 +220,7 @@ def get_image():
 
     return send_from_directory(dir, filename)
 
-@image_bp.route('/shuffle/ref_images', methods=['POST'])
+@image_bp.route('/shuffle/ref-images', methods=['POST'], endpoint='shuffle/ref-images')
 @login_required
 def shuffle_image():
     initialize_shuffle_images()
@@ -228,7 +229,7 @@ def shuffle_image():
 
 ###################### stock ##########################
 
-@image_bp.route('/stock_grahps/<market>', methods=['GET'])
+@image_bp.route('/stock-graph-list/<market>', methods=['GET'], endpoint='stock-graph-list')
 @login_required
 def stock_graph_list(market):
     directory = DIRECTORY_MAP.get(market.lower())
@@ -246,7 +247,7 @@ def stock_graph_list(market):
     # print(market, directory, total_pages, images)
     return render_template('stock_graph_list.html', images=images, page=page, total_pages=total_pages, market=market)
 
-@image_bp.route('/stock_graphs/<market>/<filename>')
+@image_bp.route('/stock-graphs/<market>/<filename>', endpoint='stock-graphs')
 @login_required
 def get_stock_graph(market, filename):
     directory = DIRECTORY_MAP.get(market.lower())
@@ -256,7 +257,7 @@ def get_stock_graph(market, filename):
     else:
         abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
 
-@image_bp.route('/move_stock_image/<market>/<path:filename>', methods=['POST'])
+@image_bp.route('/move-stock-image/<market>/<path:filename>', methods=['POST'], endpoint='move-stock-image')
 @login_required
 def move_stock_image(market, filename):
     # filename = unquote(filename)  # URL 디코딩 처리

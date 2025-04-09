@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <!--    <script src="https://vjs.zencdn.net/8.3.0/video.min.js"></script>-->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
         video {
             max-width: 1500px;
@@ -45,6 +46,16 @@
             });
         }
     }
+
+    function fetchSize() {
+        axios.get('/ffmpeg/get-free-size')
+            .then(res => console.log("Success:", res))
+            .catch(err => console.error("Error:", err.response?.status, err.response?.data));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchSize();
+    })
 </script>
 </body>
 </html>
