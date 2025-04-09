@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 from urllib.parse import quote, urljoin
-from config import settings
+from config.config import settings
 from PIL import Image
 from io import BytesIO
 import uuid

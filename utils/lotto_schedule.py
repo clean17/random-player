@@ -1,7 +1,8 @@
 import time
 from playwright.sync_api import Playwright, sync_playwright
 from playwright.async_api import Playwright, async_playwright
-from config import settings
+from config.config import settings
+import asyncio
 
 USER_ID = settings['LOTTO_USER_ID']
 USER_PW = settings['LOTTO_PASSWORD']
@@ -136,5 +137,7 @@ async def run(playwright):
     await browser.close()
 
 async def async_buy_lotto():
+#     print('async_buy_lotto')
+#     await asyncio.sleep(2)
     async with async_playwright() as playwright:
         await run(playwright)  # ✅ 올바른 await 사용

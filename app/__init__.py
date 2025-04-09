@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
 from flask_login import LoginManager, current_user
 from .auth import auth, User, users
-from config import load_config
+from config.config import load_config
 from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프린트를 import
 from .main import main
 from .video import video
@@ -32,7 +32,7 @@ ALLOWED_PATHS = [
 ]
 
 # 파일 읽기
-def load_blocked_ips(filepath='blocked_ips.txt'):
+def load_blocked_ips(filepath='data/blocked_ips.txt'):
     blocked = {}
     try:
         with open(filepath, 'r') as f:
@@ -45,7 +45,7 @@ def load_blocked_ips(filepath='blocked_ips.txt'):
     return blocked
 
 # 파일 저장
-def save_blocked_ip(ip, until, filepath='blocked_ips.txt'):
+def save_blocked_ip(ip, until, filepath='data/blocked_ips.txt'):
     with open(filepath, 'a') as f:
         f.write(f"{ip},{until.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
@@ -69,7 +69,7 @@ BLOCK_DURATION = timedelta(days=365)
 
 
 def create_app():
-    print("✅ create_app() called", uuid.uuid4())
+    # print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
@@ -202,6 +202,7 @@ def create_app():
                 del IP_404_COUNTS[ip]
 
         return response
+
     @app.errorhandler(RequestEntityTooLarge)
     def handle_413(e):
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
@@ -220,7 +221,7 @@ def create_app():
         })
 
     def check_server_restarted():
-        restart_flag = 'server_status.txt'
+        restart_flag = 'data/server_status.txt'
         if not os.path.exists(restart_flag):
             with open(restart_flag, 'w') as f:
                 f.write('restarted')

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, session, Flask, send_from_directory
 from flask_login import login_required
-from config import settings
+from config.config import settings
 
 main = Blueprint('main', __name__)
 

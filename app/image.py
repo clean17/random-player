@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from send2trash import send2trash
 from jinja2 import Environment
-from config import settings
+from config.config import settings
 import random
 import time
 from urllib.parse import unquote

@@ -8,7 +8,7 @@ from send2trash import send2trash, TrashPermissionError
 from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for, Response, abort
 from flask_login import login_required
 
-from config import settings
+from config.config import settings
 
 video = Blueprint('video', __name__)
 

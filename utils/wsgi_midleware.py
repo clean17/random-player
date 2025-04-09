@@ -1,4 +1,4 @@
-from logger_config import setup_logging
+from config.logger_config import setup_logging
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 

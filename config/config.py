@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash
 # class Config:
 def load_config():
     config = configparser.ConfigParser()
-    with open('config.ini', 'r', encoding='utf-8') as configfile:
+    with open('config/config.ini', 'r', encoding='utf-8') as configfile:
         config.read_file(configfile)
     return {
         'VIDEO_DIRECTORY0': config['directories']['ffmpeg_directory'],

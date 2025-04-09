@@ -14,13 +14,13 @@ import logging
 from moviepy.editor import VideoFileClip
 from send2trash import send2trash
 from concurrent.futures import ThreadPoolExecutor
-from config import settings
+from config.config import settings
 import zipfile
 import asyncio
 import schedule
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.executors.asyncio import AsyncIOExecutor
-from lotto_schedule import async_buy_lotto
+from utils.lotto_schedule import async_buy_lotto
 
 tasks = []
 

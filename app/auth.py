@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash
 
-from config import settings
+from config.config import settings
 
 auth = Blueprint('auth', __name__)
 

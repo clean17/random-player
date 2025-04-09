@@ -2,7 +2,7 @@ from flask import Blueprint, Flask, render_template, request, jsonify
 import os
 from datetime import datetime
 from flask_login import login_required
-from config import settings
+from config.config import settings
 from werkzeug.utils import secure_filename
 from threading import Thread
 from zipfile import ZipFile

@@ -10,10 +10,10 @@ from app import create_app
 from flask_cors import CORS
 import subprocess
 import glob
-from config import settings
+from config.config import settings
 import atexit
 from collections import defaultdict
-from wsgi_midleware import RequestLoggingMiddleware, HopByHopHeaderFilter, ReverseProxied, logger
+from utils.wsgi_midleware import RequestLoggingMiddleware, HopByHopHeaderFilter, ReverseProxied, logger
 
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
@@ -46,13 +46,13 @@ def signal_handler(sig, frame):
 
 # 애플리케이션 종료 후 실행
 def on_exit():
-    print("프로그램이 종료됩니다.")
+    # print("프로그램이 종료됩니다.")
 
     # 로그 파일 패턴 읽기
     log_files = glob.glob("logs/app_*.log.20-*")
 
     if not log_files:
-        print("병합할 로그 파일이 없습니다.")
+        # print("병합할 로그 파일이 없습니다.")
         return
 
     # 로그 그룹화: "app_250320.log" 같은 base 경로를 key로 묶기
