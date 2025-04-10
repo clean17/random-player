@@ -21,6 +21,8 @@ NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
 
 # Flask 앱 생성
 app = create_app()
+node_process = None
+already_cleaned = False
 
 # CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True) # 해당 출처를 통해서만 리소스 접근 허용
 
@@ -44,9 +46,26 @@ def signal_handler(sig, frame):
     # os.system('taskkill /f /im python.exe')
     # sys.exit(0)
 
+def cleanup():
+    global already_cleaned
+    if already_cleaned:
+        return
+    already_cleaned = True
+
+    print("🧹 서버 종료 중: 자식 프로세스 정리")
+    if node_process is not None and node_process.poll() is None:
+        try:
+            if os.name == 'nt':
+                subprocess.call(['taskkill', '/F', '/T', '/PID', str(node_process.pid)])
+            else:
+                node_process.terminate()
+        except Exception as e:
+            print(f"⚠️ 종료 중 예외: {e}")
+
 # 애플리케이션 종료 후 실행
 def on_exit():
-    # print("프로그램이 종료됩니다.")
+    print("프로그램이 종료됩니다.")
+    cleanup()
 
     # 로그 파일 패턴 읽기
     log_files = glob.glob("logs/app_*.log.20-*")
@@ -101,7 +120,7 @@ if __name__ == '__main__':
     start_periodic_task()
 
     # 'npm run dev' 실행 (백그라운드 실행)
-    subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
+    node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
 
 
     # Flask 내장 서버
