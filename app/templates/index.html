@@ -68,6 +68,8 @@
     {% endif %}
         <a href="{{ url_for('func.get_chat_ui') }}"><button type="button" id="btn924" class="btn-w100">Chat</button></a>
         <a href="{{ url_for('func.memo') }}"><button type="button" id="btn925" class="btn-w100">Memo</button></a>
+        <button type="button" id="buy-lotto" class="btn-w100">Buy Lotto</button>
+        <a href="{{ url_for('func.get_hls') }}"><button type="button" id="btn927" class="btn-w100">HLS</button></a>
 <!--    </form>-->
 </div>
 </body>
@@ -75,6 +77,8 @@
 <script>
     const videoOption = document.getElementById("directory-select");
     const imageOption = document.getElementById("image-select");
+    const buyLottoBtn = document.getElementById("buy-lotto");
+
     function keyEvent(event) {
         switch(event.key) {
             case '1':
@@ -143,6 +147,36 @@
         if (imageOption) imageOption.selectedIndex = 0;
     });
 
+    async function buy_lotto() {
+        try {
+            if (!document.getElementById('overlay')) {
+                const overlay = document.createElement('div');
+                overlay.id = 'overlay';
+                overlay.style.display = 'none';
+                overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+                document.body.appendChild(overlay);
+            }
+
+            document.getElementById('overlay').style.display = 'flex';
+            document.body.style.pointerEvents = "none";
+
+            const response = await fetch("/func/buy/lotto-test");
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(result.message);
+            } else {
+                alert("요청 실패: 서버 오류");
+            }
+
+        } catch (error) {
+            alert("오류가 발생했습니다: " + error);
+        } finally {
+            document.getElementById('overlay').style.display = 'none';
+            document.body.style.pointerEvents = "auto";
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         if (imageOption.options.length === 2) {
             imageOption.addEventListener("click", function () {
@@ -152,6 +186,9 @@
                 }
             });
         }
+
+        buyLottoBtn.removeEventListener('click', buy_lotto);
+        buyLottoBtn.addEventListener('click', buy_lotto);
     });
 </script>
 </html>
