@@ -408,13 +408,16 @@ def compress_directory(directory):
 
 # 매시 정각마다 실행하는 함수
 def periodic_compression_task():
-    while True:
-        now = datetime.now()
-        next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-        sleep_duration = (next_hour - now).total_seconds()
-        # sleep_duration = 60 # 1분 테스트
-        time.sleep(sleep_duration)
-        compress_directory_to_zip()
+    try:
+        while True:
+            now = datetime.now()
+            next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            sleep_duration = (next_hour - now).total_seconds()
+            # sleep_duration = 60 # 1분 테스트
+            time.sleep(sleep_duration)
+            compress_directory_to_zip()
+    except KeyboardInterrupt:
+        print("압축 작업 중단됨")
 
 def run_async_function(coroutine):
     """ 스케줄러에서 비동기 함수를 실행하는 래퍼 함수 """
@@ -431,9 +434,13 @@ async def run_schedule():
 
 def start_scheduler():
     """멀티프로세싱 환경에서 비동기 스케줄러 실행"""
-    loop = asyncio.new_event_loop()  # 새로운 이벤트 루프 생성
+#     loop = asyncio.new_event_loop()  # 새로운 이벤트 루프 생성
+    loop = asyncio.get_event_loop()
     asyncio.set_event_loop(loop)  # 이벤트 루프 설정
-    loop.run_until_complete(run_schedule())  # 비동기 코드 실행
+    try:
+        loop.run_until_complete(run_schedule())  # 비동기 코드 실행
+    except KeyboardInterrupt:
+        print("스케줄러 종료됨")
 
 # 주기적 작업을 위한 프로세스 시작
 def start_periodic_task():
