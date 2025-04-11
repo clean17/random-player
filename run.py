@@ -4,7 +4,7 @@ import os
 import signal
 import sys
 from waitress import serve
-from app.task_manager import start_periodic_task
+from app.task_manager import start_periodic_task, start_background_tasks
 
 from app import create_app
 from flask_cors import CORS
@@ -117,7 +117,8 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
 
     # 업로드 디렉토리 압축파일 생성, 로또 구매 배치
-    start_periodic_task()
+    # start_periodic_task()
+    start_background_tasks()
 
     # 'npm run dev' 실행 (백그라운드 실행)
     node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)

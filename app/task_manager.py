@@ -434,18 +434,24 @@ async def run_schedule():
 
 def start_scheduler():
     """멀티프로세싱 환경에서 비동기 스케줄러 실행"""
-#     loop = asyncio.new_event_loop()  # 새로운 이벤트 루프 생성
-    loop = asyncio.get_event_loop()
+    # loop = asyncio.get_event_loop()
+    # RuntimeError: There is no current event loop in thread 에러 발생
+    # 즉, asyncio는 기본적으로 메인 스레드에서만 event loop를 자동으로 만들어줌
+    # 서브 스레드에서는 직접 만들어야 한다
+
+    loop = asyncio.new_event_loop()  # 새로운 이벤트 루프 생성
     asyncio.set_event_loop(loop)  # 이벤트 루프 설정
     try:
         loop.run_until_complete(run_schedule())  # 비동기 코드 실행
     except KeyboardInterrupt:
         print("스케줄러 종료됨")
 
-# 주기적 작업을 위한 프로세스 시작
+# 주기적 작업을 위한 프로세스 시작 (두 개의 별도 프로세스를 데몬으로 실행, 앱이 또 생성됨)
+# asyncio 또는 threading.Thread를 사용하면, Waitress 앱 하나 안에서 주기작업, 스케줄러 등을 백그라운드에서 실행 가능
+# 압축, 스케줄러, 로그 체크 같은 작업이 I/O 중심이면 → threading 또는 asyncio로 충분
+# 진짜 병렬 CPU 계산이라면 → multiprocessing
 def start_periodic_task():
     processes = []
-    # process = multiprocessing.Process(target=periodic_compression_task, args=(directory,))
     process = multiprocessing.Process(target=periodic_compression_task)
     process.daemon = True
     process.start()
@@ -457,6 +463,10 @@ def start_periodic_task():
     processes.append(process2)
 
     return processes
+
+def start_background_tasks():
+    threading.Thread(target=periodic_compression_task, daemon=True).start()
+    threading.Thread(target=start_scheduler, daemon=True).start()
 
 def initialize_directories():
     for directory in DIRECTORIES_TO_COMPRESS:

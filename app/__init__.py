@@ -69,7 +69,7 @@ BLOCK_DURATION = timedelta(days=365)
 
 
 def create_app():
-    # print("✅ create_app() called", uuid.uuid4())
+    print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
