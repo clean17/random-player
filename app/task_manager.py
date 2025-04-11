@@ -27,7 +27,7 @@ tasks = []
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
 
-# 스케줄리 인스턴스 생성 (논블로킹)
+# 스케줄러 인스턴스 생성 (논블로킹)
 scheduler = BackgroundScheduler()
 work_directory = settings['WORK_DIRECTORY']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
@@ -487,7 +487,7 @@ initialize_directories()
 # scheduler.start()
 
 '''
-threading.Thread - 간단한 비동기 작업, GIL 문제
+threading.Thread - 간단한 비동기 작업, GIL(Global Interpreter Lock) 문제 - 하나의 쓰레드만 인터프리터의 모든 자원을 사용 > 컨텍스트 스위칭 비용이 발생
 CPU 바운드 작업에는 multiprocessing 모듈을 사용하는 것이 더 적합 - GIL의 제약을 받지 않는 별도의 프로세스
 
 asyncio - 비동기 I/O 작업에 효율적, 이벤트 루프 기반, 스레드보다 가벼운 구조
@@ -499,4 +499,82 @@ concurrent.futures.ThreadPoolExecutor - 스레드 관리를 자동화하고, 실
 multiprocessing - 프로세스를 기반으로 병렬 처리를 구현, GIL 영향이 없음, 다중 코어 CPU 활용, 프로세스 간 메모리 분리, 메모리 사용량 높음, 프로세스 생성비용은 스레드 생성비용 보다 높다
 
 concurrent.futures.ThreadPoolExecutor - 스레드를 기반으로 병렬 처리, GIL 영향을 받는다, I/O 바운드 작업에 적합, futures 객체로 작업의 완료 상태를 관리, concurrent.futures API는 작업 제출, 완료 추적, 결과 수집을 간단하게 처리, 다중 코어 활용이 제한적
+'''
+
+'''
+1. APScheduler
+예약된 작업을 등록해서 자동으로 실행하는 "스케줄러" 라이브러리
+(정해진 시간, 주기, 크론 등 지원)
+- 실행 방식 : 내부적으로 threading, asyncio, processpool 중 선택 가능
+- 사용 예 : 주기적 DB 정리, 백업, 알람, 리포트 작업 등
+
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    def job():
+        print("작업 실행!")
+
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(job, 'interval', seconds=5)
+    scheduler.start()
+'''
+
+'''
+2. threading
+병렬로 코드를 돌리기 위한 Python 내장 방식
+실제는 진짜 병렬은 아님 (GIL 영향 받음)
+- 실행 방식 : OS 쓰레드를 이용하되 GIL 공유
+- 병렬성 : ❌ CPU 병렬성 없음 (단일 Python 인터프리터)
+- 적합 작업 : I/O 위주의 반복 작업, 로그 수집, 폴링 등
+
+    import threading
+
+    def background_task():
+        while True:
+            print("백그라운드 동작")
+
+    t = threading.Thread(target=background_task, daemon=True)
+    t.start()
+
+3. asyncio
+Python의 비동기 처리 프레임워크 (싱글 스레드 기반)
+await, async def, 이벤트 루프 기반으로 작동
+- 목적 : 비동기 I/O, 고성능 서버, 병렬 요청 처리
+- 실행 방식 : 단일 쓰레드 + 논블로킹 방식 (코루틴 스케줄링)
+- 병렬성 : ❌ CPU 병렬은 아님 (하지만 I/O 병렬화에 매우 효율적)
+- 적합 작업 : API 호출, 비동기 DB, 파일 I/O 등
+
+    import asyncio
+
+    async def async_task():
+        while True:
+            print("비동기 작업 중")
+            await asyncio.sleep(5)
+
+    asyncio.run(async_task())
+
+4. concurrent.futures.ThreadPoolExecutor
+스레드를 풀로 묶어서, 작업 큐 기반으로 동시에 여러 작업을 처리하게 해주는 고수준 비동기 API
+- 실행 방식 : 쓰레드 풀 (큐 기반)
+- 병렬성 : 제한된 수의 스레드로 병렬 처리
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    def task(x):
+        return x * x
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(task, i) for i in range(5)]
+        results = [f.result() for f in futures]
+
+- 스레드 수를 제한해서 동시에 실행
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        executor.submit(task1)
+        executor.submit(task2)
+
+- Future 객체로 결과/예외를 다룰 수 있음
+    future = executor.submit(task)
+    try:
+        result = future.result(timeout=5)
+    except Exception as e:
+        print(f"에러 발생: {e}")
 '''
