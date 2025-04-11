@@ -11,8 +11,9 @@ import multiprocessing
 import time
 from flask_socketio import SocketIO
 from datetime import datetime
-from lotto_schedule import buy_lotto
-from config import settings
+from utils.lotto_schedule import buy_lotto, async_buy_lotto
+from config.config import settings
+import asyncio
 
 func = Blueprint('func', __name__)
 
@@ -30,17 +31,6 @@ SHERB_NOSOUND = 0x00000004        # 소리를 재생하지 않음
 
 CHAT_FILENAME = f"logs/chat.log"
 
-
-# def empty_recycle_bin():
-#     """휴지통 비우기 함수"""
-#     try:
-#         result = ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND)
-#         if result == 0:
-#             return {"status": "success", "message": "휴지통이 성공적으로 비워졌습니다."}
-#         else:
-#             return {"status": "error", "message": f"휴지통을 비우는 데 실패했습니다. 오류 코드: {result}"}
-#     except Exception as e:
-#         return {"status": "error", "message": f"예기치 않은 오류가 발생했습니다: {e}"}
 
 def check_recycle_bin():
     """휴지통 상태 확인"""
@@ -341,4 +331,5 @@ def get_hls():
 
 @func.route("/buy/lotto-test")
 def test_lotto():
-    buy_lotto()
+    asyncio.run(async_buy_lotto())  # 코루틴 실행
+    return {"status": "success", "message": "로또 구매 완료!!"}
