@@ -210,3 +210,11 @@ taskkill /F /IM nginx.exe
 cd ..\..\nginx\nginx-1.26.2\logs
 del nginx.pid
 ```
+### 병렬 작업 비교
+![img_6.png](app/static/readme/img_6.png)
+![img_11.png](app/static/readme/img_11.png)
+### 멀티스레드, 멀티프로세스, asyncio I/O 처리 관점
+![img_7.png](app/static/readme/img_7.png)
+![img_8.png](app/static/readme/img_8.png)
+![img_9.png](app/static/readme/img_9.png)
+![img_10.png](app/static/readme/img_10.png)
