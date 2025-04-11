@@ -101,9 +101,15 @@ def setup_logging():
     root_logger = logging.getLogger() # root
     root_logger.setLevel(logging.INFO)
 
-    werkzeug_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
-    waitress_logger = logging.getLogger("waitress") # Waitress 로그
+    active_loggers = get_active_loggers()
     active_logger = None
+    for name, logger in active_loggers.items():
+        # print(f"Logger name: {name}, Level: {logging.getLevelName(logger.level)}")
+        if name == "waitress":
+            active_logger = logging.getLogger("waitress") # Waitress 로그
+        if name == "werkzeug":
+            active_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
+
 
     # 로그 포맷 설정
     formatter = logging.Formatter(formatting)
@@ -128,32 +134,17 @@ def setup_logging():
     # 로그 메시지를 저장할 큐 생성
     # QueueHandler 생성 후 로거에 추가 (모든 로그를 큐로 보냄)
     queue_handler = logging.handlers.QueueHandler(log_queue)
-    werkzeug_logger.addHandler(queue_handler)
-    waitress_logger.addHandler(queue_handler) # root로거에 큐 핸들러를 추가하지 않으면 '.propagate = False' 를  설정할 필요가 없다
+    active_logger.addHandler(queue_handler) # root로거에 큐 핸들러를 추가하지 않으면 '.propagate = False' 를  설정할 필요가 없다
     # QueueListener: 백그라운드에서 로그 처리 (큐에서 로그 메시지를 하나씩 꺼내어 file_handler를 통해 파일에 기록)
     listener = logging.handlers.QueueListener(log_queue, file_handler)
     listener.start()
 
     # Flask 서버가 실행될 때 기본 요청 로그를 새 포맷으로 변경
-    werkzeug_logger.addHandler(console_handler) # 기본 로깅 형태를 변경
-    werkzeug_logger.setLevel(logging.INFO)
-    werkzeug_logger.propagate = False # root로 전파하지 않는다
-    werkzeug_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
-    werkzeug_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
-
-    waitress_logger.addHandler(console_handler)
-    waitress_logger.setLevel(logging.INFO)
-    waitress_logger.propagate = False
-    waitress_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
-    waitress_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
-
-    active_loggers = get_active_loggers()
-    for name, logger in active_loggers.items():
-        # print(f"Logger name: {name}, Level: {logging.getLevelName(logger.level)}")
-        if name == "waitress":
-            active_logger = waitress_logger
-        if name == "werkzeug":
-            active_logger = werkzeug_logger
+    active_logger.addHandler(console_handler) # 기본 로깅 형태를 변경
+    active_logger.setLevel(logging.INFO)
+    active_logger.propagate = False # root로 전파하지 않는다
+    active_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
+    active_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
     return active_logger
 
