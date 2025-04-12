@@ -57,7 +57,7 @@
     <button class="pagination-button prev-button" id="prevButton">&lt;</button>
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
 </div>
-<div class="container">
+<div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
     <!-- 드롭다운 리스트 추가 -->
     {% if selected_dir %}
     <div class="dropdown-selector">
@@ -157,8 +157,10 @@
         pressTimer;
 
     const nextBtn = document.getElementById('next-image-button'),
-        dir = {{ dir|tojson }},
-        page = "{{ page }}",
+        dir = '{{ dir }}',
+        page = '{{ page }}',
+        currentUserName = '{{ current_user.get_id() }}',
+        guestName = '{{ config.GUEST_USERNAME }}',
         zipBtn = document.getElementById('download-zip-btn'),
         dropdownMenu = document.getElementById('dropdown-menu'),
         $title = document.getElementById('title-select'),
@@ -168,6 +170,7 @@
         selectedOption = $title.options[$title.selectedIndex];
         titleText = selectedOption.text;
     }
+
 
     /*******************************************************************/
 
@@ -196,12 +199,12 @@
     const startPress = (event) => {
         // event.preventDefault();
 
-        pressTimer = setTimeout(() => {
+        /*pressTimer = setTimeout(() => {
             // 파일 삭제
             if (confirm('Delete the file ?')) {
                 moveImage(event)
             }
-        }, longPressDuration);
+        }, longPressDuration);*/
     };
 
     const cancelPress = () => {
@@ -380,8 +383,15 @@
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    if (confirm('Delete the file ?')) {
+                    /*if (confirm('Delete the file ?')) {
                         // document.querySelector('.delete-button')?.click()
+                        moveImage();
+                    }*/
+                    if (currentUserName === guestName) {
+                        if (confirm('Delete the file ?')) {
+                            moveImage();
+                        }
+                    } else {
                         moveImage();
                     }
                 default: break;
@@ -609,8 +619,12 @@
                 if (!filename) {
                     filename = imageItem.querySelector('source').dataset.filename;
                 }
-                if (confirm('Delete the file ?')) {
-                    moveImage(e, filename);
+                if (currentUserName === guestName) {
+                    if (confirm('Delete the file ?')) {
+                        moveImage();
+                    }
+                } else {
+                    moveImage();
                 }
             }
         });
