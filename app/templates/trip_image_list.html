@@ -621,10 +621,10 @@
                 }
                 if (currentUserName === guestName) {
                     if (confirm('Delete the file ?')) {
-                        moveImage();
+                        moveImage(e, filename);
                     }
                 } else {
-                    moveImage();
+                    moveImage(e, filename);
                 }
             }
         });
