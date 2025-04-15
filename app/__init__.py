@@ -64,7 +64,7 @@ IP_404_COUNTS = {}
 
 
 # 설정값
-BLOCK_THRESHOLD = 3
+BLOCK_THRESHOLD = 5
 BLOCK_DURATION = timedelta(days=365)
 
 
@@ -185,21 +185,22 @@ def create_app():
     @app.after_request
     def track_404(response):
         # ip = request.remote_addr
-        ip = request.environ.get("HTTP_X_REAL_IP", request.environ.get("REMOTE_ADDR", "-"))
+        ip = request.environ.get("HTTP_X_REAL_IP", request.environ.get("REMOTE_ADDR", "-")).strip()
+        # 223.38 로 시작하고 나머지 변함
 
         # 404 응답이었으면 카운트 증가
-        if not current_user.is_authenticated and response.status_code == 404:
-            count, _ = IP_404_COUNTS.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
-            count += 1
-            IP_404_COUNTS[ip] = (count, datetime.now())
-
-            # 5번 넘으면 차단
-            if count >= BLOCK_THRESHOLD:
-                until = datetime.now() + BLOCK_DURATION # value
-                BLOCKED_IPS[ip] = until
-                save_blocked_ip(ip, until)  # ✅ 파일에 추가 저장
-                print(f"🚫 IP {ip} is blocked until {until}")
-                del IP_404_COUNTS[ip]
+        # if not current_user.is_authenticated and response.status_code == 404:
+        #     count, _ = IP_404_COUNTS.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
+        #     count += 1
+        #     IP_404_COUNTS[ip] = (count, datetime.now())
+        #
+        #     # 5번 넘으면 차단
+        #     if count >= BLOCK_THRESHOLD:
+        #         until = datetime.now() + BLOCK_DURATION # value
+        #         BLOCKED_IPS[ip] = until
+        #         save_blocked_ip(ip, until)  # ✅ 파일에 추가 저장
+        #         print(f"🚫 IP {ip} is blocked until {until}")
+        #         del IP_404_COUNTS[ip]
 
         return response
 
