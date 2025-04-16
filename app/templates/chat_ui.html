@@ -34,8 +34,11 @@
         <!-- 입력 영역 -->
         <div class="flex items-center border-t p-2 bg-white">
             <button id="camera-button" class="p-2 text-gray-500 hover:text-gray-700 w-[10%] mr-2">📷</button>
-            <input type="text" id="chat-input" class="p-2 border rounded-lg focus:outline-none w-[90%]"
-                   placeholder="Type a message...">
+            <textarea type="text" id="chat-input" class="p-2 border rounded-lg focus:outline-none w-[90%]"
+                      placeholder="Type a message..."
+                      rows="1"
+                      style="height: auto; line-height: 1.5;"
+            ></textarea>
         </div>
     </div>
 </div>
@@ -127,13 +130,16 @@
                     }
                 }
             })
-            .finally(() => { loading = false; });
+            .finally(() => {
+                loading = false;
+            });
+
     }
 
     // 메시지 전송 후 아래쪽에 추가
     function sendMsg(event) {
         event.preventDefault();
-        const msg = chatInput.value.trim();
+        const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 <br> 제거.trim();
         if (msg !== "") {
             socket.emit("new_msg", { username, msg });
             chatInput.value = "";
@@ -156,20 +162,20 @@
         messageDiv.classList.add(
             "p-2",
             "rounded-lg",
-            "max-w-[70%]",  // 최대 너비 70%
+            "max-w-[75%]",  // 최대 너비 75%
             "w-fit",
             "block",        // 내용에 맞게 크기 조정
             "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
         );
 
         if (isMine) {
-            messageDiv.classList.add("bg-blue-200", "text-right");
+            messageDiv.classList.add("bg-blue-200", "text-left");
         } else {
             messageDiv.classList.add("bg-gray-200", "text-left");
         }
 
         const messageSpan = document.createElement("span");
-        messageSpan.textContent = data.msg;
+        messageSpan.innerHTML = data.msg;
         messageDiv.appendChild(messageSpan);
 
         // 시간 계산
@@ -216,7 +222,12 @@
         } else {
             // 새로운 메세지 렌더링
             chatContainer.appendChild(messageRow);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            // console.log('check', scrollHeight - scrollTop )
+            if (scrollHeight - scrollTop < 1300) {
+                setTimeout(() => {
+                    moveBottonScroll();
+                }, 50)
+            }
         }
 
         // 시간 박스
@@ -234,6 +245,7 @@
             messageRow.appendChild(messageDiv);
             messageRow.appendChild(timeDiv);
         }
+
     }
 
     function createDateDivider(dateStr) {
@@ -256,7 +268,12 @@
 
     function enterEvent(event) {
         if (event.key === 'Enter') {
-            sendMsg(event);
+            if (event.shiftKey) {
+                return; // 줄바꿈만 하고 종료
+            } else {
+                event.preventDefault(); // 기본 Enter 줄바꿈 방지
+                sendMsg(event);
+            }
         }
     }
 
@@ -265,17 +282,33 @@
     }
 
     function checkScroll() {
-        const scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
-        const scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
+        scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
+        scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
 
-        if ((scrollHeight > 1500 && scrollHeight - scrollTop > 1000)) {
+        if (scrollHeight - scrollTop > 1400) {
+            if (!isScroll) {
+                isScroll = true;
+            }
             scrollButton.style.display = "block";
         } else {
-            scrollButton.style.display = "none";
+            if (scrollButton) {
+                scrollButton.style.display = "none";
+            }
         }
+
     }
 
     function moveBottonScroll() {
+        // const scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
+        // const scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
+
+        // scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
+        // scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
+
+        // console.log(scrollHeight, scrollTop)
+
+
+        // console.log('moveBottonScroll', scrollHeight - scrollTop);
         chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
     }
 
@@ -283,6 +316,7 @@
         scrollButton = document.createElement("button");
         scrollButton.id = "scroll-button";
         scrollButton.innerHTML = "↓";
+        scrollButton.style.display = 'none';
         document.body.appendChild(scrollButton);
     }
 
@@ -302,12 +336,19 @@
         document.body.addEventListener('click', requestNotificationPermission);
         loadMoreChats();
         renderBottomScrollButton();
+
         // requestNotificationPermission(); // 상호작용 시 권한 허용
 
         chatContainer.removeEventListener("scroll", checkScroll);
         chatContainer.addEventListener("scroll", checkScroll);
-        scrollButton.removeEventListener("click", moveBottonScroll);
-        scrollButton.addEventListener("click", moveBottonScroll);
+        setTimeout(() => {
+            moveBottonScroll();
+        }, 50)
+
+        scrollButton?.removeEventListener("click", () => {moveBottonScroll()});
+        scrollButton?.addEventListener("click", () => {moveBottonScroll()});
+
+
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
