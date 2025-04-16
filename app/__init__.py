@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.middleware.proxy_fix import ProxyFix
 import uuid
-
+from config.config import settings
 
 
 ALLOWED_PATHS = [
@@ -66,13 +66,15 @@ IP_404_COUNTS = {}
 # 설정값
 BLOCK_THRESHOLD = 5
 BLOCK_DURATION = timedelta(days=365)
-
+SESSION_EXPIRATION_TIME = timedelta(minutes=1) # 세션 만료 시간
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
+    app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME
+    app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
     app.secret_key = app.config['SECRET_KEY']
 
     app.register_blueprint(main, url_prefix='/')
@@ -97,6 +99,25 @@ def create_app():
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
+
+    # 게스트 세션 로그아웃 강제
+    @app.before_request
+    def force_guest_auto_logout():
+        if current_user.is_authenticated and current_user.get_id() == settings['GUEST_USERNAME']:
+            now = datetime.utcnow()
+            last_str = session.get('user_last_activity')
+
+            last = datetime.fromisoformat(last_str) if isinstance(last_str, str) else now
+            inactive_time = (now - last).total_seconds()
+
+            print('비활동 시간:', inactive_time)
+
+            if inactive_time > SESSION_EXPIRATION_TIME.total_seconds():
+                logout_user()
+                session.clear()
+                return redirect(url_for('login'))
+
+            session['user_last_activity'] = now.isoformat() # 세션 갱신
 
     # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
     @app.before_request
