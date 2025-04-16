@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager, current_user, logout_user
 from .auth import auth, User, users
 from config.config import load_config
 from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프린트를 import
@@ -66,7 +66,8 @@ IP_404_COUNTS = {}
 # 설정값
 BLOCK_THRESHOLD = 5
 BLOCK_DURATION = timedelta(days=365)
-SESSION_EXPIRATION_TIME = timedelta(minutes=1) # 세션 만료 시간
+# SESSION_EXPIRATION_TIME = timedelta(minutes=1) # 세션 만료 시간
+SESSION_EXPIRATION_TIME = timedelta(seconds=5) # 세션 만료 시간
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
@@ -103,14 +104,13 @@ def create_app():
     # 게스트 세션 로그아웃 강제
     @app.before_request
     def force_guest_auto_logout():
+        # 게스트가 로그인한 경우
         if current_user.is_authenticated and current_user.get_id() == settings['GUEST_USERNAME']:
             now = datetime.utcnow()
             last_str = session.get('user_last_activity')
 
             last = datetime.fromisoformat(last_str) if isinstance(last_str, str) else now
             inactive_time = (now - last).total_seconds()
-
-            print('비활동 시간:', inactive_time)
 
             if inactive_time > SESSION_EXPIRATION_TIME.total_seconds():
                 logout_user()
@@ -224,6 +224,21 @@ def create_app():
         #         del IP_404_COUNTS[ip]
 
         return response
+
+    # @app.after_request
+    def add_no_cache_headers(response):
+        # Flask에서 모든 응답에 캐시 금지 헤더 추가
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+        # 특정 경로(/func/chat)에만 캐시 금지 예시
+        # if request.path.startswith('/func/chat'):
+        #     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        #     response.headers["Pragma"] = "no-cache"
+        #     response.headers["Expires"] = "0"
+        # return response
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_413(e):
