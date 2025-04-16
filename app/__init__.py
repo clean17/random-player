@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
-from flask_login import LoginManager, current_user, logout_user
+from flask_login import LoginManager, current_user, logout_user, login_required
 from .auth import auth, User, users
 from config.config import load_config
 from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프린트를 import
@@ -67,15 +67,15 @@ IP_404_COUNTS = {}
 BLOCK_THRESHOLD = 5
 BLOCK_DURATION = timedelta(days=365)
 # SESSION_EXPIRATION_TIME = timedelta(minutes=1) # 세션 만료 시간
-SESSION_EXPIRATION_TIME = timedelta(seconds=5) # 세션 만료 시간
+SESSION_EXPIRATION_TIME = timedelta(seconds=10) # 세션 만료 시간
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
-    app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME
-    app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
+    # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정
+    # app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
     app.secret_key = app.config['SECRET_KEY']
 
     app.register_blueprint(main, url_prefix='/')
@@ -104,7 +104,12 @@ def create_app():
     # 게스트 세션 로그아웃 강제
     @app.before_request
     def force_guest_auto_logout():
-        # 게스트가 로그인한 경우
+        if request.path == "/auth/login":
+            now = datetime.utcnow()
+            session['user_last_activity'] = now.isoformat()
+            return
+
+        # 게스트가 요청할 경우 세션 시간 체크
         if current_user.is_authenticated and current_user.get_id() == settings['GUEST_USERNAME']:
             now = datetime.utcnow()
             last_str = session.get('user_last_activity')
@@ -113,9 +118,9 @@ def create_app():
             inactive_time = (now - last).total_seconds()
 
             if inactive_time > SESSION_EXPIRATION_TIME.total_seconds():
-                logout_user()
+                print('게스트 세션 죽여', inactive_time)
                 session.clear()
-                return redirect(url_for('login'))
+                return redirect(url_for('auth.logout'))
 
             session['user_last_activity'] = now.isoformat() # 세션 갱신
 
@@ -202,6 +207,10 @@ def create_app():
     @app.route("/favicon.ico")
     def get_favicon():
         return send_from_directory("static", "favicon.ico", mimetype="application/javascript")
+
+    @app.route("/get-test")
+    def get_test():
+        return "OK"
 
     @app.after_request
     def track_404(response):

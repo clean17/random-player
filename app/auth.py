@@ -58,11 +58,12 @@ def login():
             session['attempts'] = 0
 
             # GUEST_USERNAME 사용자라면
-            if username == settings['GUEST_USERNAME']:
-#                 return redirect(url_for('image.image_list'))
-                session.permanent = True  # PERMANENT_SESSION_LIFETIME 적용되도록
-                if not current_user.is_authenticated:
-                    return redirect(url_for('login'))
+            # if username == settings['GUEST_USERNAME']:
+            #     return redirect(url_for('image.image_list'))
+            #     session.permanent = True  # PERMANENT_SESSION_LIFETIME 적용되도록
+            #     if not current_user.is_authenticated:
+            #         logout_user()
+            #         return redirect(url_for('auth.login'))
 
             return redirect(url_for('main.home'))
         # 로그인 실패
