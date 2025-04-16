@@ -44,7 +44,7 @@ function sendNotification(data) {
             });
         });*/
         new Notification('새 메시지 도착!', { // 일반 알림
-            body: `${data.username}: ${data.msg}`,
+            // body: `${data.username}: ${data.msg}`,
             icon: "/static/favicon.ico",
             badge: "/static/favicon.ico",
             vibrate: [200, 100, 200],  // 진동 패턴 (안드로이드)
