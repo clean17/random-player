@@ -45,44 +45,70 @@
 
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 <script>
-    // const socket = io("https://192.168.141.214:3000", {
-    // const socket = io("https://192.168.60.205:3000", {
-    const socket = io("https://chickchick.shop:3000", {
-        secure: true, // HTTPS 사용
-        transports: ["websocket", "polling"],
-        reconnection: true,              // 자동 재연결 활성화
-        reconnectionAttempts: 5,         // 최대 재시도 횟수
-        reconnectionDelay: 1000,         // 1초 간격
-        timeout: 20000,                  // 서버로부터 응답 기다리는 시간
-    });
     const username = "{{ username }}",  // Flask에서 전달된 username
         chatContainer = document.getElementById("chat-container"),
         chatInput = document.getElementById("chat-input"),
         cameraButton = document.getElementById("camera-button");
     const MAX_FETCH_MESSAGE_SIZE = 20;
     let offset = 0, // 가장 최근 10개는 이미 로드됨
+        socket,
         loading = false,
         lastMessageDate = null,
         dateStr,
+        isScroll = false,
+        scrollHeight, // 전체 스크롤 높이
+        scrollTop,    // 현재 스크롤 위치
         scrollButton = undefined;
 
-    // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
-    socket.emit("user_info", { username });
 
-    socket.on("new_msg", function(data) {
-        addMessage(data);
-        sendNotification(data);
-    });
 
-    socket.on("bye", function(data) {
-        addMessage(data);
-    });
+    function connectSocket() {
+        // socket = io("https://192.168.60.205:3000", {
+        socket = io("https://chickchick.shop:3000", {
+            secure: true, // HTTPS 사용
+            transports: ["websocket", "polling"],
+            reconnection: true,              // 자동 재연결 활성화
+            reconnectionAttempts: 20,        // 최대 재시도 횟수
+            reconnectionDelay: 1000,         // 1초 간격
+            timeout: 20000,                  // 서버로부터 응답 기다리는 시간 (기본값)
+        });
 
-    socket.on("enter_user", function(data) {
-        if (data.username !== username) {
+        // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
+        socket.emit("user_info", { username });
+
+        socket.on("new_msg", function(data) {
             addMessage(data);
+            sendNotification(data);
+        });
+
+        socket.on("bye", function(data) {
+            addMessage(data);
+        });
+
+        socket.on("enter_user", function(data) {
+            if (data.username !== username) {
+                addMessage(data);
+            }
+        });
+    }
+
+
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            if (typeof socket !== "undefined") {
+                if (!socket.connected) {
+                    alert("🔄 소켓 재연결 시도");
+                    connectSocket();
+                }
+            } else {
+                alert("⚠️ socket 객체가 정의되지 않음");
+                connectSocket();
+            }
         }
     });
+
+
 
     // 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
     chatContainer.addEventListener("scroll", function () {
@@ -348,7 +374,8 @@
         scrollButton?.removeEventListener("click", () => {moveBottonScroll()});
         scrollButton?.addEventListener("click", () => {moveBottonScroll()});
 
-
+        connectSocket();
+        chatInput.focus();
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
