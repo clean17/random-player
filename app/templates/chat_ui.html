@@ -47,6 +47,10 @@
     const socket = io("https://chickchick.shop:3000", {
         secure: true, // HTTPS 사용
         transports: ["websocket", "polling"],
+        reconnection: true,              // 자동 재연결 활성화
+        reconnectionAttempts: 5,         // 최대 재시도 횟수
+        reconnectionDelay: 1000,         // 1초 간격
+        timeout: 20000,                  // 서버로부터 응답 기다리는 시간
     });
     const username = "{{ username }}",  // Flask에서 전달된 username
         chatContainer = document.getElementById("chat-container"),
