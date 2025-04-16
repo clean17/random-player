@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash
+from utils.wsgi_midleware import logger
 
 from config.config import settings
 
@@ -49,7 +50,8 @@ def login():
                 session['attempts'] = 0
                 session['lockout_time'] = None
 
-        print('attempt_username', username)
+        # print('attempt_username', username)
+        logger.info(f"############################# attempt_username: {username} #################################")
 
         # 로그인 검증
         if username in users and check_password_hash(users[username]['password'], password):

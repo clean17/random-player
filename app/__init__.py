@@ -66,8 +66,8 @@ IP_404_COUNTS = {}
 # 설정값
 BLOCK_THRESHOLD = 5
 BLOCK_DURATION = timedelta(days=365)
-# SESSION_EXPIRATION_TIME = timedelta(minutes=1) # 세션 만료 시간
-SESSION_EXPIRATION_TIME = timedelta(seconds=10) # 세션 만료 시간
+SESSION_EXPIRATION_TIME = timedelta(minutes=10) # 세션 만료 시간
+# SESSION_EXPIRATION_TIME = timedelta(seconds=10) # 세션 만료 시간
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
