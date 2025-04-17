@@ -112,7 +112,7 @@
 
     // 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
     chatContainer.addEventListener("scroll", function () {
-        if (chatContainer.scrollTop === 0 && !loading) {
+        if (Number(chatContainer.scrollTop) < 500 && !loading) {
             loadMoreChats();
         }
     });
@@ -147,7 +147,7 @@
                         const [timestamp, username, msg] = log.toString().split("|");
                         chatObj = { timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
                         addMessage(chatObj, true, isFisrtMsg)
-                        chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
+                        // chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
                     });
 
                     if (isFisrtMsg) {
@@ -369,7 +369,7 @@
         chatContainer.addEventListener("scroll", checkScroll);
         setTimeout(() => {
             moveBottonScroll();
-        }, 50)
+        }, 100)
 
         scrollButton?.removeEventListener("click", () => {moveBottonScroll()});
         scrollButton?.addEventListener("click", () => {moveBottonScroll()});
