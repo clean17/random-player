@@ -288,6 +288,14 @@ def get_chat_ui():
 # @login_required 추가하면 안된다.. 외부 API 역할을 한다
 def save_chat_message():
     data = request.json
+
+    if not data['timestamp']:
+        now = datetime.now()
+        data['timestamp'] = now.strftime("%y%m%d%H%M%S")
+
+    if not data['username']:
+        data['username'] = 'error'
+
     log_entry = f"{data['timestamp']} | {data['username']} | {data['message']}"
     with open(CHAT_FILENAME, "a", encoding="utf-8") as log_file:
         log_file.write(log_entry + "\n")
