@@ -62,6 +62,8 @@ BLOCKED_IPS = load_blocked_ips()
 # IP 기록: {ip: [404_count, last_404_time]}
 IP_404_COUNTS = {}
 
+# 테스트 키
+SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
 
 # 설정값
 BLOCK_THRESHOLD = 5
@@ -75,7 +77,7 @@ def create_app():
     app.config.update(load_config())
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
     # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정
-    # app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
+    app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
     app.secret_key = app.config['SECRET_KEY']
 
     app.register_blueprint(main, url_prefix='/')
@@ -139,6 +141,13 @@ def create_app():
                 del BLOCKED_IPS[ip]  # 차단 해제
             else:
                 return abort(403, description="접근이 차단된 IP입니다.")
+
+
+
+        ####################### 추가 인증 #########################
+        if request.path.startswith('/func/memo'):
+            if not session.get(SECOND_PASSWORD_SESSION_KEY):
+                return redirect(url_for('auth.verify_password'))
 
         ###################### 세션 잠금 확인 ######################
         if 'lockout_time' in session and session['lockout_time']:

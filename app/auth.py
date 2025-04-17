@@ -7,6 +7,9 @@ from utils.wsgi_midleware import logger
 
 from config.config import settings
 
+SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
+YOUR_SECRET_PASSWORD = settings['YOUR_SECRET_PASSWORD']
+
 auth = Blueprint('auth', __name__)
 
 users = {
@@ -51,7 +54,7 @@ def login():
                 session['lockout_time'] = None
 
         # print('attempt_username', username)
-        logger.info(f"############################# attempt_username: {username} #################################")
+        logger.info(f"###################################################################### attempt_username: {username} #################################")
 
         # 로그인 검증
         if username in users and check_password_hash(users[username]['password'], password):
@@ -85,8 +88,28 @@ def lockout():
 @auth.route('/logout')
 @login_required
 def logout():
+    session[SECOND_PASSWORD_SESSION_KEY] = False
     logout_user()
     return redirect(url_for('auth.login'))
+
+@auth.route("/verify-password", methods=["GET", "POST"])
+@login_required
+def verify_password():
+    if request.method == "POST":
+        password = request.form.get("password")
+
+        if password == YOUR_SECRET_PASSWORD:
+            session[SECOND_PASSWORD_SESSION_KEY] = True
+            session['second_password_verified_at'] = datetime.utcnow().isoformat()
+            next_page = request.args.get("next", "/func/memo")
+            return redirect(next_page)
+        else:
+            logout_user()
+            session.clear()
+            flash("추가 인증 실패. 로그아웃되었습니다.")
+            return redirect(url_for("login"))
+
+    return render_template("verify_password.html")
 
 '''
 Flask의 세션은 기본적으로 비영속적(non-permanent)

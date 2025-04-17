@@ -40,6 +40,8 @@ def load_config():
         'WORK_DIRECTORY': config['paths']['work_directory'],
         'LOTTO_USER_ID': config['lotto']['username'],
         'LOTTO_PASSWORD': config['lotto']['password'],
+        'SECOND_PASSWORD_SESSION_KEY': config['auth']['second_password_session_key'],
+        'YOUR_SECRET_PASSWORD': config['auth']['your_secret_password'],
     }
 
 settings = load_config()
