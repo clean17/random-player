@@ -158,6 +158,7 @@ def download_all_zip():
     return send_from_directory(directory, zip_filename, as_attachment=True)
 
 @func.route('/compress-zip', methods=['GET'])
+@login_required
 def compress_now():
     process = multiprocessing.Process(target=compress_directory_to_zip)
     process.start()
@@ -174,16 +175,19 @@ def get_log_filename(date=None):
     return os.path.join(LOG_DIR, f"app_{date}.log")
 
 @func.route("/logs/view")
+@login_required
 def get_log_viewer():
     """로그 뷰어 HTML 페이지 제공"""
     return render_template("log_viewer.html")
 
 @func.route("/logs")
+@login_required
 def get_latest_logs():
     """최신 로그 파일 가져오기"""
     return get_logs_by_date(datetime.now().strftime("%y%m%d"))
 
 @func.route("/logs/<date>")
+@login_required
 def get_logs_by_date(date):
     """특정 날짜의 로그 파일 가져오기"""
     log_file = get_log_filename(date)  # 클라이언트 요청 날짜의 로그 파일 읽기
@@ -273,14 +277,15 @@ def get_last_n_lines(n):
         return []  # 파일이 없으면 빈 리스트 반환
 
 @func.route("/chat")
+@login_required
 def get_chat_ui():
     if "_user_id" not in session:
         return redirect(url_for('auth.logout'))  # 로그인 안 되어 있으면 로그인 페이지로 이동
 
-    latest_logs = get_last_n_lines(10)
     return render_template("chat_ui.html", username=session["_user_id"])
 
 @func.route("/chat/save-file", methods=["POST"])
+# @login_required 추가하면 안된다.. 외부 API 역할을 한다
 def save_chat_message():
     data = request.json
     log_entry = f"{data['timestamp']} | {data['username']} | {data['message']}"
@@ -290,11 +295,12 @@ def save_chat_message():
 
 # 비동기로 추가 채팅 로그 요청 API
 @func.route("/chat/load-more-chat", methods=["POST"])
+@login_required
 def load_more_logs():
     offset = int(request.json.get("offset", 0))  # 클라이언트가 요청한 로그 시작점
     all_lines = get_last_n_lines(1000)  # 최대 로그 유지
 
-    start = max(0, len(all_lines) - offset - 20)
+    start = max(0, len(all_lines) - offset - 25)
     end = len(all_lines) - offset
 
     if (end > 0):
@@ -305,6 +311,7 @@ def load_more_logs():
 
 ################################# Memo ######################################
 @func.route('/memo', methods=['GET', 'POST'])
+@login_required
 def memo():
     if request.method == 'POST':
         # textarea의 내용 가져오기
@@ -326,10 +333,12 @@ def memo():
 ################################# HLS ######################################
 
 @func.route('/get-hls', methods=['GET'])
+@login_required
 def get_hls():
     return render_template('hls/test_hls.html')
 
 @func.route("/buy/lotto-test")
+@login_required
 def test_lotto():
     asyncio.run(async_buy_lotto())  # 코루틴 실행
     return {"status": "success", "message": "로또 구매 완료!!"}
