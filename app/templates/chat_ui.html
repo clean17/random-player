@@ -52,6 +52,7 @@
     const MAX_FETCH_MESSAGE_SIZE = 20;
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         socket,
+        dateSet = new Set(),
         loading = false,
         lastMessageDate = null,
         dateStr,
@@ -98,8 +99,8 @@
         if (!document.hidden) {
             if (typeof socket !== "undefined") {
                 if (!socket.connected) {
-                    alert("🔄 소켓 재연결 시도");
-                    connectSocket();
+                    // alert("🔄 소켓 재연결 시도");
+                    // connectSocket();
                 }
             } else {
                 alert("⚠️ socket 객체가 정의되지 않음");
@@ -112,7 +113,7 @@
 
     // 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
     chatContainer.addEventListener("scroll", function () {
-        if (Number(chatContainer.scrollTop) < 500 && !loading) {
+        if (Number(chatContainer.scrollTop) < 700 && !loading) {
             loadMoreChats();
         }
     });
@@ -151,8 +152,7 @@
                     });
 
                     if (isFisrtMsg) {
-                        const divider = createDateDivider(dateStr);
-                        chatContainer.prepend(divider);
+                        renderDateDivider(dateStr)
                     }
                 }
             })
@@ -228,19 +228,7 @@
             lastMessageDate = dateStr;
         }
 
-        // 날짜 구분선이 필요한 경우 추가
-        let shouldAddDivider = false;
-        if (dateStr !== lastMessageDate) {
-            shouldAddDivider = true;
-        }
-
-        if (shouldAddDivider) {
-            if (lastMessageDate) {
-                const divider = createDateDivider(lastMessageDate);
-                chatContainer.prepend(divider);
-            }
-            lastMessageDate = dateStr;
-        }
+        renderDateDivider(dateStr)
 
         if (load) {
             // 저장된 메세지 렌더링
@@ -272,6 +260,24 @@
             messageRow.appendChild(timeDiv);
         }
 
+    }
+
+    // 날짜 구분선 추가
+    function renderDateDivider(dateStr) {
+
+        let shouldAddDivider = false;
+        if (dateStr !== lastMessageDate) {
+            shouldAddDivider = true;
+        }
+
+        if (shouldAddDivider) {
+            if (lastMessageDate && !dateSet.has(dateStr)) {
+                const divider = createDateDivider(lastMessageDate);
+                chatContainer.prepend(divider);
+                dateSet.add(lastMessageDate)
+            }
+            lastMessageDate = dateStr;
+        }
     }
 
     function createDateDivider(dateStr) {
