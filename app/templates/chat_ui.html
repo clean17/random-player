@@ -117,11 +117,15 @@
             loadMoreChats("wheel");
         }
     });
-    chatContainer.addEventListener("scroll", function () {
-        if (Number(chatContainer.scrollTop) < 700 && !loading) {
-            loadMoreChats();
-        }
-    });
+    setTimeout(() => {
+        chatContainer.addEventListener("scroll", function () {
+            console.log(chatContainer.scrollTop)
+            if (Number(chatContainer.scrollTop) < 700 && !loading) {
+                loadMoreChats();
+            }
+        });
+    }, 200)
+
 
     function loadMoreChats(event) {
         if (loading) return;  // 중복 호출 방지
