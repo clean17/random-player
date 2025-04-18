@@ -40,6 +40,7 @@
                       rows="1"
                       style="height: auto; line-height: 1.5;"
             ></textarea>
+            <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[10%] ml-2">📤</button>
         </div>
     </div>
 </div>
@@ -49,6 +50,7 @@
     const username = "{{ username }}",  // Flask에서 전달된 username
         chatContainer = document.getElementById("chat-container"),
         chatInput = document.getElementById("chat-input"),
+        sendButton = document.getElementById('send-button'),
         cameraButton = document.getElementById("camera-button");
     const MAX_FETCH_MESSAGE_SIZE = 20;
     let offset = 0, // 가장 최근 10개는 이미 로드됨
@@ -353,7 +355,8 @@
                 return; // 줄바꿈만 하고 종료
             } else {
                 event.preventDefault(); // 기본 Enter 줄바꿈 방지
-                sendMsg();
+                // sendMsg();
+                sendButton.click();
             }
         }
     }
@@ -408,6 +411,8 @@
         chatInput.addEventListener('keydown', enterEvent);
         cameraButton.removeEventListener('click', cameraEvent);
         cameraButton.addEventListener('click', cameraEvent);
+        sendButton.removeEventListener('click', sendMsg);
+        sendButton.addEventListener('click', sendMsg);
         document.body.removeEventListener('touchstart', requestNotificationPermission);
         document.body.addEventListener('touchstart', requestNotificationPermission);
         document.body.removeEventListener('ended', requestNotificationPermission);
