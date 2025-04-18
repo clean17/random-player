@@ -11,6 +11,7 @@
 </head>
 
 <body>
+<audio id="alert-sound" src="/static/sound/beep.mp3" preload="auto"></audio>
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -52,6 +53,8 @@
     const MAX_FETCH_MESSAGE_SIZE = 20;
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         socket,
+        isMine,
+        isUnderline,
         dateSet = new Set(),
         loading = false,
         lastMessageDate = null,
@@ -100,7 +103,11 @@
             if (typeof socket !== "undefined") {
                 if (!socket.connected) {
                     // alert("🔄 소켓 재연결 시도");
-                    // connectSocket();
+                    setTimeout(() => {
+                        if (!socket.connected) {
+                            connectSocket();
+                        }
+                    }, 2000)
                 }
             } else {
                 alert("⚠️ socket 객체가 정의되지 않음");
@@ -175,15 +182,30 @@
     // 메시지 전송 후 아래쪽에 추가
     function sendMsg() {
         // console.log(JSON.stringify(chatInput.value));
-        const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)+$/g, "");  // 마지막 모든 <br> 제거
+        const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
         if (msg !== "") {
             socket.emit("new_msg", { username, msg });
-            chatInput.value = "";
         }
+        chatInput.value = "";
+    }
+
+    function callNotification() {
+        if ("vibrate" in navigator) {
+            navigator.vibrate([300, 200, 300]); // 400ms 진동 → 200ms 정지 → 400ms 진동
+        }
+
+        /*const audio = document.getElementById("alert-sound");
+        if (audio) {
+            audio.currentTime = 0;  // 처음부터 재생
+            audio.play().catch(err => {
+                console.warn("오디오 재생 실패:", err);
+            });
+        }*/
     }
 
     function addMessage(data, load = false) {
-        const isMine = data.username === username;
+        isMine = data.username === username;
+        isUnderline = data.underline;
 
         // 바깥 컨테이너: 메시지 한 줄을 구성
         const messageRow = document.createElement("div");
@@ -207,68 +229,84 @@
         if (isMine) {
             messageDiv.classList.add("bg-blue-200", "text-left");
         } else {
+            if (!data.isUnderline) {
+                callNotification();
+            }
             messageDiv.classList.add("bg-gray-200", "text-left");
         }
 
-        const messageSpan = document.createElement("span");
-        const safeText = data.msg.replace(/ /g, "&nbsp;");
-        messageSpan.innerHTML = safeText;
-        messageDiv.appendChild(messageSpan);
-
-        // 시간 계산
-        let timeStr = "";
-        dateStr = "";
-        const now = new Date();
-
-        if (data.timestamp && data.timestamp.length >= 10) {
-            const hour = data.timestamp.slice(6, 8);
-            const minute = data.timestamp.slice(8, 10);
-            timeStr = `${hour}:${minute}`;
-
-            const yy = data.timestamp.slice(0, 2);
-            const mm = data.timestamp.slice(2, 4);
-            const dd = data.timestamp.slice(4, 6);
-            dateStr = `20${yy}.${mm}.${dd}`;
-        } else {
-            const pad = (n) => String(n).padStart(2, '0');
-            const hour = pad(now.getHours());
-            const minute = pad(now.getMinutes());
-            timeStr = `${hour}:${minute}`;
-
-            dateStr = `20${pad(now.getFullYear() % 100)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
-            lastMessageDate = dateStr;
-        }
-
-        renderDateDivider(dateStr)
-
-        if (load) {
-            // 저장된 메세지 렌더링
-            chatContainer.prepend(messageRow);
-        } else {
-            // 새로운 메세지 렌더링
-            chatContainer.appendChild(messageRow);
-            // console.log('check', scrollHeight - scrollTop )
+        // 출입 알림
+        if (data.underline) {
+            const divider = createDateDivider(data.msg);
+            chatContainer.appendChild(divider);
             if (scrollHeight - scrollTop < 1300) {
                 setTimeout(() => {
                     moveBottonScroll();
                 }, 50)
             }
-        }
-
-        // 시간 박스
-        const timeDiv = document.createElement("div");
-        timeDiv.textContent = timeStr;
-        timeDiv.style.fontSize = "0.75em";
-        timeDiv.style.color = "#666";
-        timeDiv.style.margin = isMine ? "0 8px 0 0" : "0 0 0 8px";  // 메시지와 간격
-
-        // 정렬 순서: 시간 → 메시지 또는 메시지 → 시간
-        if (isMine) {
-            messageRow.appendChild(timeDiv);
-            messageRow.appendChild(messageDiv);
         } else {
-            messageRow.appendChild(messageDiv);
-            messageRow.appendChild(timeDiv);
+            const messageSpan = document.createElement("span");
+            const safeText = data.msg.replace(/ /g, "&nbsp;");
+            // messageSpan.innerHTML = safeText;
+            messageSpan.innerHTML = data.msg;
+            messageDiv.appendChild(messageSpan);
+
+
+            // 시간 계산
+            let timeStr = "";
+            dateStr = "";
+            const now = new Date();
+
+            if (data.timestamp && data.timestamp.length >= 10) {
+                const hour = data.timestamp.slice(6, 8);
+                const minute = data.timestamp.slice(8, 10);
+                timeStr = `${hour}:${minute}`;
+
+                const yy = data.timestamp.slice(0, 2);
+                const mm = data.timestamp.slice(2, 4);
+                const dd = data.timestamp.slice(4, 6);
+                dateStr = `20${yy}.${mm}.${dd}`;
+            } else {
+                const pad = (n) => String(n).padStart(2, '0');
+                const hour = pad(now.getHours());
+                const minute = pad(now.getMinutes());
+                timeStr = `${hour}:${minute}`;
+
+                dateStr = `20${pad(now.getFullYear() % 100)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+                lastMessageDate = dateStr;
+            }
+
+            renderDateDivider(dateStr)
+
+            if (load) {
+                // 저장된 메세지 렌더링
+                chatContainer.prepend(messageRow);
+            } else {
+                // 새로운 메세지 렌더링
+                chatContainer.appendChild(messageRow);
+                // console.log('check', scrollHeight - scrollTop )
+                if (scrollHeight - scrollTop < 1300) {
+                    setTimeout(() => {
+                        moveBottonScroll();
+                    }, 50)
+                }
+            }
+
+            // 시간 박스
+            const timeDiv = document.createElement("div");
+            timeDiv.textContent = timeStr;
+            timeDiv.style.fontSize = "0.75em";
+            timeDiv.style.color = "#666";
+            timeDiv.style.margin = isMine ? "0 8px 0 0" : "0 0 0 8px";  // 메시지와 간격
+
+            // 정렬 순서: 시간 → 메시지 또는 메시지 → 시간
+            if (isMine) {
+                messageRow.appendChild(timeDiv);
+                messageRow.appendChild(messageDiv);
+            } else {
+                messageRow.appendChild(messageDiv);
+                messageRow.appendChild(timeDiv);
+            }
         }
 
     }
