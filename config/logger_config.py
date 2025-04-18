@@ -99,7 +99,8 @@ def setup_logging():
 
     # 기본 로거 설정
     root_logger = logging.getLogger() # root
-    root_logger.setLevel(logging.INFO)
+    # werkzeug 로거는 flask의 첫 요청을 받아야 생성되므로 초기화 시켜줌
+    werkzeug_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
 
     active_loggers = get_active_loggers()
     active_logger = None
@@ -107,9 +108,14 @@ def setup_logging():
         # print(f"Logger name: {name}, Level: {logging.getLevelName(logger.level)}")
         if name == "waitress":
             active_logger = logging.getLogger("waitress") # Waitress 로그
+            break
         if name == "werkzeug":
-            active_logger = logging.getLogger("werkzeug") # Flask 기본 서버 로그
+            active_logger = werkzeug_logger
+            break
 
+    if not active_logger:
+        active_logger = root_logger
+    print(f'🚀 {active_logger} is running... 🚀')
 
     # 로그 포맷 설정
     formatter = logging.Formatter(formatting)
