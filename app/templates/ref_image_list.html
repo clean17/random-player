@@ -360,7 +360,16 @@
     function moveImage(event) {
         const centerImage = getCenterImage();
         const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
-        fetch(`/image/move-image/ref-image/${filename}`, { method: 'POST' })
+        fetch(`/image/move-image`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                imagepath: 'ref_image',
+                filename: filename
+            })
+        })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
