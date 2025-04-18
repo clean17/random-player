@@ -89,6 +89,7 @@ def lockout():
 @login_required
 def logout():
     session[SECOND_PASSWORD_SESSION_KEY] = False
+    session.clear()
     logout_user()
     return redirect(url_for('auth.login'))
 
@@ -104,10 +105,7 @@ def verify_password():
             next_page = request.args.get("next", "/func/memo")
             return redirect(next_page)
         else:
-            logout_user()
-            session.clear()
-            flash("추가 인증 실패. 로그아웃되었습니다.")
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.logout"))
 
     return render_template("verify_password.html")
 

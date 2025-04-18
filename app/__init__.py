@@ -29,6 +29,7 @@ ALLOWED_PATHS = [
     '/video/temp-video*',
     '/func/chat*',
     '/func/memo*',
+    "/auth/verify-password",
 ]
 
 # 파일 읽기
@@ -68,7 +69,7 @@ SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
 # 설정값
 BLOCK_THRESHOLD = 5
 BLOCK_DURATION = timedelta(days=365)
-SESSION_EXPIRATION_TIME = timedelta(minutes=10) # 세션 만료 시간
+SESSION_EXPIRATION_TIME = timedelta(minutes=20) # 세션 만료 시간
 # SESSION_EXPIRATION_TIME = timedelta(seconds=10) # 세션 만료 시간
 
 def create_app():
@@ -104,27 +105,27 @@ def create_app():
     login_manager.login_view = 'auth.login'
 
     # 게스트 세션 로그아웃 강제
-    @app.before_request
-    def force_guest_auto_logout():
-        if request.path == "/auth/login":
-            now = datetime.utcnow()
-            session['user_last_activity'] = now.isoformat()
-            return
-
-        # 게스트가 요청할 경우 세션 시간 체크
-        if current_user.is_authenticated and current_user.get_id() == settings['GUEST_USERNAME']:
-            now = datetime.utcnow()
-            last_str = session.get('user_last_activity')
-
-            last = datetime.fromisoformat(last_str) if isinstance(last_str, str) else now
-            inactive_time = (now - last).total_seconds()
-
-            if inactive_time > SESSION_EXPIRATION_TIME.total_seconds():
-                print('게스트 세션 죽여', inactive_time)
-                session.clear()
-                return redirect(url_for('auth.logout'))
-
-            session['user_last_activity'] = now.isoformat() # 세션 갱신
+    # @app.before_request
+    # def force_guest_auto_logout():
+    #     if request.path == "/auth/login":
+    #         now = datetime.utcnow()
+    #         session['user_last_activity'] = now.isoformat()
+    #         return
+    #
+    #     # 게스트가 요청할 경우 세션 시간 체크
+    #     if current_user.is_authenticated and current_user.get_id() == settings['GUEST_USERNAME']:
+    #         now = datetime.utcnow()
+    #         last_str = session.get('user_last_activity')
+    #
+    #         last = datetime.fromisoformat(last_str) if isinstance(last_str, str) else now
+    #         inactive_time = (now - last).total_seconds()
+    #
+    #         if inactive_time > SESSION_EXPIRATION_TIME.total_seconds():
+    #             print('게스트 세션 죽여', inactive_time)
+    #             session.clear()
+    #             return redirect(url_for('auth.logout'))
+    #
+    #         session['user_last_activity'] = now.isoformat() # 세션 갱신
 
     # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
     @app.before_request
@@ -146,8 +147,26 @@ def create_app():
 
         ####################### 추가 인증 #########################
         if request.path.startswith('/func/memo'):
-            if not session.get(SECOND_PASSWORD_SESSION_KEY):
-                return redirect(url_for('auth.verify_password'))
+            verified = session.get(SECOND_PASSWORD_SESSION_KEY)
+            verified_at_str = session.get('second_password_verified_at')
+
+            if not verified or not verified_at_str:
+                # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
+                return redirect(url_for('auth.verify_password', next=request.path))
+
+            try:
+                verified_at = datetime.fromisoformat(verified_at_str)
+            except Exception:
+                # 시간 파싱 실패 → 인증 무효 처리
+                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
+                session.pop('second_password_verified_at', None)
+                return redirect(url_for('auth.verify_password', next=request.path))
+
+            # 10분 유효시간 초과 시 인증 무효
+            if datetime.utcnow() - verified_at > timedelta(minutes=10):
+                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
+                session.pop('second_password_verified_at', None)
+                return redirect(url_for('auth.verify_password', next=request.path))
 
         ###################### 세션 잠금 확인 ######################
         if 'lockout_time' in session and session['lockout_time']:
