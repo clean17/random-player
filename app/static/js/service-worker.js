@@ -27,12 +27,3 @@ self.addEventListener("push", function (event) {
         badge: "/static/favicon.ico",
     });
 });
-
-const notification = new Notification("📢 클릭 가능한 알림", {
-    body: "클릭하면 어떤 동작을 수행합니다.",
-});
-
-notification.onclick = function () {
-    window.focus(); // 또는 특정 페이지로 이동
-    console.log("알림이 클릭되었습니다!");
-};

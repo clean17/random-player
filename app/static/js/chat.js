@@ -25,30 +25,38 @@ function requestNotificationPermission() {
 
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            console.log("알림 권한이 허용되었습니다.");
+            console.log("알림 권한이 허용되었습니다 ㅅㅅ.");
         } else {
-            console.log("알림 권한이 거부되었습니다.");
+            console.log("알림 권한이 거부되었습니다 ㅠㅠ.");
         }
     });
 }
 
 function sendNotification(data) {
     if (document.hidden && Notification.permission === "granted") {
-    // if (Notification.permission === "granted") {
-        /*navigator.serviceWorker.ready.then(registration => { // 서비스 워커 알림
-            registration.showNotification("새 메시지 도착!", {
-                body: `${data.username}: ${data.msg}`,
-                icon: "/static/favicon.ico",
-                badge: "/static/favicon.ico",
-                vibrate: [200, 100, 200],  // 진동 패턴 (안드로이드)
+        if (!isMine && !isUnderline) {
+            navigator.serviceWorker.ready.then(registration => { // 서비스 워커 알림
+                registration.showNotification("새 메시지 도착!", {
+                    // body: `${data.username}: ${data.msg}`,
+                    icon: "/static/favicon.ico",
+                    badge: "/static/favicon.ico",
+                    vibrate: [200, 100, 200],  // 진동 패턴 (안드로이드)
+                });
             });
-        });*/
-        new Notification('새 메시지 도착!', { // 일반 알림
-            // body: `${data.username}: ${data.msg}`,
+        }
+
+
+
+        // http 환경에서는 아래 코드로 가능
+        /*const notification = new Notification('새 메시지 도착!', { // 일반 알림
+            body: `${data.username}: ${data.msg}`,
             icon: "/static/favicon.ico",
             badge: "/static/favicon.ico",
             vibrate: [200, 100, 200],  // 진동 패턴 (안드로이드)
         });
+        notification.onclick = function () {
+            window.focus(); // 또는 특정 페이지로 이동
+        };*/
     }
 }
 
