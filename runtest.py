@@ -1,10 +1,8 @@
+"""
 import logging
 from flask import Flask, request
-from waitress import serve
-from app import create_app
-from utils.wsgi_midleware import RequestLoggingMiddleware, HopByHopHeaderFilter, ReverseProxied, logger
 
-"""
+
 # ✅ 로그 설정
 logging.basicConfig(
     level=logging.INFO,
@@ -24,14 +22,26 @@ def create_app():
     return app
 """
 
-# ✅ 앱 인스턴스
-app = create_app()
+
+# 0: werkzeug, 1: waitress
+select_server = 0
+
 
 if __name__ == '__main__':
-    logger.info("🚀 Waitress 서버 시작 (http://127.0.0.1:8090)")
+    if select_server == 0: # werkzeug
+        from app import create_app # Flask
 
-    serve(
-        app,
-        host='0.0.0.0',
-        port=8090,
-    )
+        # ✅ 앱 인스턴스
+        app = create_app()
+        app.run(debug=False, host='127.0.0.1', port=8090,)
+
+    if select_server == 1: # waitress 서버
+        from waitress import serve
+        from utils.wsgi_midleware import RequestLoggingMiddleware, logger
+        from app import create_app
+
+        app = create_app()
+        app.wsgi_app = RequestLoggingMiddleware(app.wsgi_app)
+        serve(app, host='127.0.0.1', port=8090, threads=12)
+
+
