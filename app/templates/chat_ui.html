@@ -51,12 +51,15 @@
         chatContainer = document.getElementById("chat-container"),
         chatInput = document.getElementById("chat-input"),
         sendButton = document.getElementById('send-button'),
-        cameraButton = document.getElementById("camera-button");
-    const MAX_FETCH_MESSAGE_SIZE = 20;
+        textAreaMaxRows = 5,
+        cameraButton = document.getElementById("camera-button"),
+        MAX_FETCH_MESSAGE_SIZE = 20;
+
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         socket,
         isMine,
         isUnderline,
+        isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
         dateSet = new Set(),
         loading = false,
         lastMessageDate = null,
@@ -69,6 +72,7 @@
 
 
     function connectSocket() {
+        console.log('새로운 소켓 연결', username)
         // socket = io("https://192.168.60.205:3000", {
         socket = io("https://chickchick.shop:3000", {
             secure: true, // HTTPS 사용
@@ -79,8 +83,16 @@
             timeout: 20000,                  // 서버로부터 응답 기다리는 시간 (기본값)
         });
 
-        // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
-        socket.emit("user_info", { username: username });
+        socket.on("connect", () => {
+            console.log("✅ 소켓 연결됨, 유저 정보 전송");
+            // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
+            socket.emit("user_info", { username: username });
+        });
+
+        socket.on("reconnect", () => {
+            console.log("🔄 소켓 재연결됨");
+            socket.emit("user_info", { username: username });
+        });
 
         socket.on("new_msg", function(data) {
             addMessage(data);
@@ -101,13 +113,15 @@
 
 
     document.addEventListener('visibilitychange', () => {
+        console.log('visible')
         if (!document.hidden) {
             if (typeof socket !== "undefined") {
                 if (!socket.connected) {
                     // alert("🔄 소켓 재연결 시도");
                     setTimeout(() => {
                         if (!socket.connected) {
-                            connectSocket();
+                            console.log('⚠️ 소켓 연결 끊김')
+                            // connectSocket();
                         }
                     }, 2000)
                 }
@@ -116,6 +130,16 @@
                 connectSocket();
             }
         }
+
+        fetch("/func/chat", { method: "GET" })
+            .then(res => {
+                if (res.redirected) {
+                    window.location.href = res.url;
+                }
+            })
+            .catch(err => {
+                console.error("요청 실패:", err);
+            });
     });
 
 
@@ -189,6 +213,7 @@
             socket.emit("new_msg", { username, msg });
         }
         chatInput.value = "";
+        chatInput.focus();
     }
 
     function callNotification() {
@@ -239,12 +264,14 @@
 
         // 출입 알림
         if (data.underline) {
-            const divider = createDateDivider(data.msg);
-            chatContainer.appendChild(divider);
-            if (scrollHeight - scrollTop < 1300) {
-                setTimeout(() => {
-                    moveBottonScroll();
-                }, 50)
+            if (!isMine) {
+                const divider = createDateDivider('['+getCurrentTimeStr()+'] '+ data.msg);
+                chatContainer.appendChild(divider);
+                if (scrollHeight - scrollTop < 1300) {
+                    setTimeout(() => {
+                        moveBottonScroll();
+                    }, 50)
+                }
             }
         } else {
             const messageSpan = document.createElement("span");
@@ -313,6 +340,15 @@
 
     }
 
+    function getCurrentTimeStr() {
+        const now = new Date();
+
+        const hour = now.getHours().toString().padStart(2, "0");
+        const minute = now.getMinutes().toString().padStart(2, "0");
+
+        return `${hour}:${minute}`;
+    }
+
     // 날짜 구분선 추가
     function renderDateDivider(dateStr) {
 
@@ -353,7 +389,8 @@
         if (event.key === 'Enter') {
             if (event.shiftKey) {
                 return; // 줄바꿈만 하고 종료
-            } else {
+            }
+            if (!isMobile) {
                 event.preventDefault(); // 기본 Enter 줄바꿈 방지
                 // sendMsg();
                 sendButton.click();
@@ -435,8 +472,35 @@
         scrollButton?.removeEventListener("click", () => {moveBottonScroll()});
         scrollButton?.addEventListener("click", () => {moveBottonScroll()});
 
-        connectSocket();
+        if (typeof socket !== "undefined") {
+            if (!socket.connected) {
+                connectSocket();
+            }
+        } else {
+            connectSocket();
+        }
         chatInput.focus();
+
+
+        // 입력창 높이 자동 맞춤
+        const lineHeight = parseInt(getComputedStyle(chatInput).lineHeight, 10);
+        const maxHeight = lineHeight * textAreaMaxRows;
+
+        chatInput.style.overflowY = 'hidden'; // 초기 스크롤 감춤
+        chatInput.style.height = 'auto';
+
+        chatInput.addEventListener('input', () => {
+            chatInput.style.height = 'auto'; // 먼저 높이 초기화
+
+            if (chatInput.scrollHeight <= maxHeight) {
+                chatInput.style.overflowY = 'hidden';
+                chatInput.style.height = chatInput.scrollHeight + 'px';
+            } else {
+                chatInput.style.overflowY = 'auto';
+                chatInput.style.height = maxHeight + 'px';
+            }
+        });
+
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
