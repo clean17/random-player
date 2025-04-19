@@ -146,13 +146,21 @@ def create_app():
 
 
         ####################### 추가 인증 #########################
-        if request.path.startswith('/func/memo'):
+        # if request.path.startswith('/func/memo'):
+
+        # paths_to_check = ['/func/memo', '/func/chat', '/func/log']
+        # if request.path.startswith(tuple(paths_to_check)):
+
+        if request.path.startswith(('/func/memo', '/func/chat')): # tuple
             verified = session.get(SECOND_PASSWORD_SESSION_KEY)
             verified_at_str = session.get('second_password_verified_at')
 
             if not verified or not verified_at_str:
                 # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
                 return redirect(url_for('auth.verify_password', next=request.path))
+
+            # 현재 uri 요청을 반복하면 세션 시간 갱신
+            session['second_password_verified_at'] = datetime.utcnow().isoformat()
 
             try:
                 verified_at = datetime.fromisoformat(verified_at_str)
@@ -163,7 +171,9 @@ def create_app():
                 return redirect(url_for('auth.verify_password', next=request.path))
 
             # 10분 유효시간 초과 시 인증 무효
+            # if datetime.utcnow() - verified_at > timedelta(seconds=5):
             if datetime.utcnow() - verified_at > timedelta(minutes=10):
+                print('    Session Expires')
                 session.pop(SECOND_PASSWORD_SESSION_KEY, None)
                 session.pop('second_password_verified_at', None)
                 return redirect(url_for('auth.verify_password', next=request.path))
