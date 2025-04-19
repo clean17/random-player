@@ -21,6 +21,7 @@ import schedule
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from utils.lotto_schedule import async_buy_lotto
+import re
 
 tasks = []
 
@@ -369,10 +370,23 @@ def compress_directory_to_zip():
 def compress_directory(directory):
 #     print(f'compressing to {directory}')
     today_str = datetime.now().strftime("%y%m%d")
-    new_zip_filename = f"compressed_{os.path.basename(directory)}_{today_str}.zip"
+    base_name = os.path.basename(directory)
+    prefix = f"compressed_{base_name}_"
+    new_zip_filename = f"{prefix}{today_str}.zip"
     new_zip_filepath = os.path.join(directory, new_zip_filename)
-    old_zip_filename = f"compressed_{os.path.basename(directory)}.zip"
+    old_zip_filename = f"{prefix}.zip"
     old_zip_filepath = os.path.join(directory, old_zip_filename)
+
+    # 압축 전에 이전 날짜의 압축 파일 삭제
+    pattern = re.compile(rf"^{re.escape(prefix)}\d{{6}}\.zip$")
+
+    for filename in os.listdir(directory):
+        if pattern.match(filename) and filename != new_zip_filename:
+            try:
+                os.remove(os.path.join(directory, filename))
+                print(f"🧹 이전 압축파일 삭제: {filename}")
+            except Exception as e:
+                print(f"⚠️ 파일 삭제 실패: {filename}, {e}")
 
     try:
         # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x, ZIP_DEFLATED : deflate 알고리즘으로 압축)
@@ -432,7 +446,7 @@ async def run_schedule():
         schedule.run_pending()
         await asyncio.sleep(60)  # 1분마다 체크
 
-def start_scheduler():
+def start_lotto_scheduler():
     """멀티프로세싱 환경에서 비동기 스케줄러 실행"""
     # loop = asyncio.get_event_loop()
     # RuntimeError: There is no current event loop in thread 에러 발생
@@ -457,7 +471,7 @@ def start_periodic_task():
     process.start()
     processes.append(process)
 
-    process2 = multiprocessing.Process(target=start_scheduler)
+    process2 = multiprocessing.Process(target=start_lotto_scheduler)
     process2.daemon = True
     process2.start()
     processes.append(process2)
@@ -466,7 +480,7 @@ def start_periodic_task():
 
 def start_background_tasks():
     threading.Thread(target=periodic_compression_task, daemon=True).start()
-    threading.Thread(target=start_scheduler, daemon=True).start()
+    threading.Thread(target=start_lotto_scheduler, daemon=True).start()
 
 def initialize_directories():
     for directory in DIRECTORIES_TO_COMPRESS:

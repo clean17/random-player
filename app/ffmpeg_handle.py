@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from flask_login import login_required
 from flask_cors import CORS, cross_origin
 from config.config import settings
-from app.task_manager import tasks, Task, current_date, terminate_task
+from utils.task_manager import tasks, Task, current_date, terminate_task
 import shutil
 from urllib.parse import quote
 
