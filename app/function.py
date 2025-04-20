@@ -351,3 +351,11 @@ def get_hls():
 def test_lotto():
     asyncio.run(async_buy_lotto())  # 코루틴 실행
     return {"status": "success", "message": "로또 구매 완료!!"}
+
+
+################################# Call ######################################
+
+@func.route('/video-call', methods=['GET'])
+@login_required
+def get_video_call():
+    return render_template('video_call.html')
