@@ -30,6 +30,7 @@ SHERB_NOPROGRESSUI = 0x00000002   # 진행 UI를 표시하지 않음
 SHERB_NOSOUND = 0x00000004        # 소리를 재생하지 않음
 
 CHAT_FILENAME = f"logs/chat.log"
+MAX_FETCH_MESSAGE_SIZE = 30
 
 
 def check_recycle_bin():
@@ -282,7 +283,7 @@ def get_chat_ui():
     if "_user_id" not in session:
         return redirect(url_for('auth.logout'))  # 로그인 안 되어 있으면 로그인 페이지로 이동
 
-    return render_template("chat_ui.html", username=session["_user_id"])
+    return render_template("chat_ui.html", username=session["_user_id"], maxFetchMessageSize = MAX_FETCH_MESSAGE_SIZE)
 
 @func.route("/chat/save-file", methods=["POST"])
 # @login_required 추가하면 안된다.. 외부 API 역할을 한다
@@ -308,7 +309,7 @@ def load_more_logs():
     offset = int(request.json.get("offset", 0))  # 클라이언트가 요청한 로그 시작점
     all_lines = get_last_n_lines(1000)  # 최대 로그 유지
 
-    start = max(0, len(all_lines) - offset - 25)
+    start = max(0, len(all_lines) - offset - MAX_FETCH_MESSAGE_SIZE)
     end = len(all_lines) - offset
 
     if (end > 0):

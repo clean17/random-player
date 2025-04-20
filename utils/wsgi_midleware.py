@@ -1,6 +1,6 @@
 from config.logger_config import setup_logging
 from werkzeug.middleware.proxy_fix import ProxyFix
-
+from urllib.parse import unquote
 
 logger = setup_logging()
 
@@ -15,6 +15,9 @@ class RequestLoggingMiddleware:
         client_ip = environ.get("HTTP_X_REAL_IP", environ.get("REMOTE_ADDR", "-")) # 프록시 전의 ip
         method = environ.get("REQUEST_METHOD")
         path = environ.get("PATH_INFO")
+        query_string = environ.get("QUERY_STRING", "")
+        decoded_query = unquote(query_string)
+        full_path = f"{path}?{decoded_query}" if decoded_query else path
         protocol = environ.get("SERVER_PROTOCOL", "-")
 
         status_code = None
@@ -29,12 +32,13 @@ class RequestLoggingMiddleware:
         # 원래 WSGI 애플리케이션을 custom_start_response를 사용해 호출합니다.
         result = self.app(environ, custom_start_response)
 
-        self.logger.info('%s - - "%s %s %s" %s -', client_ip, method, path, protocol, status_code)
+        # self.logger.info('%s - - "%s %s %s" %s ', client_ip, method, path, protocol, status_code)
+        self.logger.info('%s - - "%s %s %s" %s', client_ip, method, full_path, protocol, status_code)
 
         return result
 
 '''
-Hop-by-Hop: HTTP/1.1 프로토콜에서 사용하는 헤더
+Hop-by-Hop: HTTP/1.1 프로토콜에서 사용하는 헤더, 프록시나 게이트웨이 등을 거칠 때 제거되어야 하는 헤더
 프록시나 게이트웨이를 통과하는 동안 다른 연결로 전달되지 않아야 한다
 
 Connection, Keep-Alive, ...

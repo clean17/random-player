@@ -21,7 +21,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
+# NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
+NO_LOGS_URLS = ["/static/", "/func/chat/save-file", "/func/logs/stream", "/service-worker.js", "/favicon.ico", "Client disconnected while serving", "dir=refine", "dir=1", "dir=2", "dir=3", "dir=4"]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 
 class WerkzeugLogFilter(logging.Filter):
@@ -150,7 +151,7 @@ def setup_logging():
     active_logger.setLevel(logging.INFO)
     active_logger.propagate = False # root로 전파하지 않는다
     active_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
-    active_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
+    # active_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
     return active_logger
 

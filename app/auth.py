@@ -54,7 +54,7 @@ def login():
                 session['lockout_time'] = None
 
         # print('attempt_username', username)
-        logger.info(f"###################################################################### attempt_username: {username} #################################")
+        logger.info(f"###################################################################### attempt_username: {username} ######################################################################")
 
         # 로그인 검증
         if username in users and check_password_hash(users[username]['password'], password):

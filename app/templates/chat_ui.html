@@ -53,7 +53,7 @@
         sendButton = document.getElementById('send-button'),
         textAreaMaxRows = 5,
         cameraButton = document.getElementById("camera-button"),
-        MAX_FETCH_MESSAGE_SIZE = 20;
+        MAX_FETCH_MESSAGE_SIZE = "{{ maxFetchMessageSize }}";
 
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         socket,
@@ -121,7 +121,7 @@
                     setTimeout(() => {
                         if (!socket.connected) {
                             console.log('⚠️ 소켓 연결 끊김')
-                            // connectSocket();
+                            connectSocket();
                         }
                     }, 2000)
                 }
@@ -177,7 +177,7 @@
                 if (data.logs.length > 0) {
                     const tempArr = []
                     let isFisrtMsg = false;
-                    offset += MAX_FETCH_MESSAGE_SIZE;
+                    offset += Number(MAX_FETCH_MESSAGE_SIZE);
 
                     if (data.logs.length !== MAX_FETCH_MESSAGE_SIZE) isFisrtMsg = true;
 
@@ -213,7 +213,8 @@
             socket.emit("new_msg", { username, msg });
         }
         chatInput.value = "";
-        chatInput.focus();
+        chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
+        setTimeout(() => chatInput.focus(), 0); // 다시 포커스를 살짝 늦게 줘서 안전하게 초기화
     }
 
     function callNotification() {
@@ -256,7 +257,7 @@
         if (isMine) {
             messageDiv.classList.add("bg-blue-200", "text-left");
         } else {
-            if (!data.isUnderline) {
+            if (data.isUnderline !== 1) {
                 callNotification();
             }
             messageDiv.classList.add("bg-gray-200", "text-left");
