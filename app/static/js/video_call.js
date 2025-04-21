@@ -230,6 +230,11 @@ function makeConnection() {
                     'stun:stun2.l.google.com:19302',
                     'stun:stun3.l.google.com:19302'
                 ]
+            },
+            {
+                urls: "turn:your.turn.server:3478",
+                username: "user",
+                credential: "pass"
             }
         ]
     });
@@ -246,7 +251,18 @@ function handleIce(data) {
 
 function handleAddStream(data) {
     const peerFace = document.getElementById('peerFace');
-    peerFace.srcObject = data.stream;
+    // peerFace.srcObject = data.stream;
+
+    // track 이벤트로 들어온 경우
+    if (data.streams && data.streams[0]) {
+        peerFace.srcObject = data.streams[0];
+        return;
+    }
+
+    // addstream 이벤트로 들어온 경우 (구형 브라우저 대응)
+    if (data.stream) {
+        peerFace.srcObject = data.stream;
+    }
 }
 
 // 카메라 장치 인식 확인

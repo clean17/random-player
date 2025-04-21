@@ -66,10 +66,10 @@
     {% if current_user.get_id() != config.GUEST_USERNAME %}
         <a href="{{ url_for('func.get_log_viewer') }}"><button type="button" id="btn923" class="btn-w100">View Log</button></a>
     {% endif %}
+        <a href="{{ url_for('func.get_video_call') }}"><button type="button" id="btn9224" class="btn-w100">Video Call</button></a>
         <a href="{{ url_for('func.get_chat_ui') }}"><button type="button" id="btn924" class="btn-w100">Chat</button></a>
         <a href="{{ url_for('func.memo') }}"><button type="button" id="btn925" class="btn-w100">Memo</button></a>
     {% if current_user.get_id() != config.GUEST_USERNAME %}
-        <a href="{{ url_for('func.get_video_call') }}"><button type="button" id="btn9224" class="btn-w100">Video Call</button></a>
         <button type="button" id="buy-lotto" class="btn-w100">Buy Lotto</button>
         <a href="{{ url_for('func.get_hls') }}"><button type="button" id="btn927" class="btn-w100">HLS</button></a>
     {% endif %}

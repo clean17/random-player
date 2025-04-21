@@ -6,10 +6,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="https://unpkg.com/mvp.css" />
     <title>Noom</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!--<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>-->
+    <script src="https://chickchick.shop:3000/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
+<!--    <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">-->
 </head>
+<style>
+    body, html {
+        background-color: #f4f4f4;
+        font-family: Arial, sans-serif;
+    }
+    .control-bar {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px; /* 요소 간 간격 */
+        margin-top: 20px;
+        padding: 10px;
+    }
+    .control-bar button {
+        width: 200px;
+    }
+    video {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+    }
+</style>
 <body>
 <div class="top-bar">
     <div class="logout">
@@ -22,35 +48,23 @@
     </div>
 </div>
 <div class="container">
-    <!--<div id="welcome">
-        <form>
-            <input placeholder="room name" required type="text" />
-            <button>Enter room</button>
-        </form>
-    </div>-->
-    <div id="call">
-        <div id="myStream">
-            <video id="myFace" autoplay playsinline muted width="400" height="400"></video>
-            <video id="peerFace" autoplay playsinline width="400" height="400"></video>
-            <!--
-            <video id="myFace" autoplay playsinline>
-              <source src="video.mp4" type="video/mp4" />
-            </video>
-            -->
-            <div>
-                <button id="mute">소리 켜짐</button>
-                <button id="camera" style="margin-left: 100px;">카메라 켜기</button>
-                <select id="audios"></select>
-            </div>
+    <div id="myStream">
+        <video id="peerFace" autoplay playsinline></video>
+        <video id="myFace" autoplay playsinline muted></video>
+        <!--
+        <video id="myFace" autoplay playsinline>
+          <source src="video.mp4" type="video/mp4" />
+        </video>
+        -->
+        <div class="control-bar">
+            <button id="mute">Audio Off</button>
+            <button id="camera">Camera On</button>
         </div>
+        <select id="audios"></select>
+
     </div>
 </div>
-<!--<script src="/socket.io/socket.io.js"></script> &lt;!&ndash; const io = new Server(server); 가 제공한다 &ndash;&gt;-->
-<!--<script src="/static/js/app_video.js"></script> &lt;!&ndash; 위 코드 덕분에 const socket = io(); 를 가능하게 해준다 &ndash;&gt;-->
-
-<!--<script src="https://chickchick.shop:3000/socket.io/socket.io.js"></script>-->
-<!--<script src="https://chickchick.shop:3000/public/js/video_call.js"></script> &lt;!&ndash; 위 코드 덕분에 const socket = io(); 를 가능하게 해준다 &ndash;&gt;-->
-
+<!--<script src="https://chickchick.shop/static/js/video_call.js"></script>-->
 <script src="https://chickchick.shop/static/js/video_call.js"></script>
 </body>
 </html>

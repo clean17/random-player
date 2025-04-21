@@ -29,7 +29,8 @@ ALLOWED_PATHS = [
     '/video/temp-video*',
     '/func/chat*',
     '/func/memo*',
-    "/auth/verify-password",
+    '/auth/verify-password',
+    '/func/video-call',
 ]
 
 # 파일 읽기
