@@ -57,6 +57,7 @@
 
     let offset = 0, // 가장 최근 10개는 이미 로드됨
         socket,
+        roomName,
         isMine,
         isUnderline,
         isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
@@ -83,15 +84,15 @@
             timeout: 20000,                  // 서버로부터 응답 기다리는 시간 (기본값)
         });
 
-        socket.on("connect", () => {
+        socket.on("connect", () => { // 소켓이 연결되면 자동으로 실행되는 콜백 함수
             console.log("✅ 소켓 연결됨, 유저 정보 전송");
             // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
-            socket.emit("user_info", { username: username });
+            socket.emit("user_info", { username: username, room: 'chat-room' });
         });
 
         socket.on("reconnect", () => {
             console.log("🔄 소켓 재연결됨");
-            socket.emit("user_info", { username: username });
+            socket.emit("user_info", { username: username, room: 'chat-room' });
         });
 
         socket.on("new_msg", function(data) {
@@ -104,6 +105,7 @@
         });
 
         socket.on("enter_user", function(data) {
+            roomName = data.room;
             if (data.username !== username) {
                 addMessage(data);
             }
@@ -210,7 +212,7 @@
         // console.log(JSON.stringify(chatInput.value));
         const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
         if (msg !== "") {
-            socket.emit("new_msg", { username, msg });
+            socket.emit("new_msg", { username, msg, room: roomName });
         }
         chatInput.value = "";
         chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
@@ -234,6 +236,13 @@
     function addMessage(data, load = false) {
         isMine = data.username === username;
         isUnderline = data.underline;
+        if (data && !data.timestamp) {
+            const now = new Date();
+            now.setHours(now.getHours() + 9);  // UTC → KST 변환
+            const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
+            data.timestamp = timestamp;
+        }
+        // console.log(data)
 
         // 바깥 컨테이너: 메시지 한 줄을 구성
         const messageRow = document.createElement("div");
@@ -263,8 +272,8 @@
             messageDiv.classList.add("bg-gray-200", "text-left");
         }
 
-        // 출입 알림
-        if (data.underline) {
+
+        if (data.underline) { // 출입 알림
             if (!isMine) {
                 const divider = createDateDivider('['+getCurrentTimeStr()+'] '+ data.msg);
                 chatContainer.appendChild(divider);
@@ -274,7 +283,7 @@
                     }, 50)
                 }
             }
-        } else {
+        } else { // 메세지 생성
             const messageSpan = document.createElement("span");
             const safeText = data.msg.replace(/ /g, "&nbsp;");
             // messageSpan.innerHTML = safeText;
@@ -305,6 +314,8 @@
                 dateStr = `20${pad(now.getFullYear() % 100)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
                 lastMessageDate = dateStr;
             }
+            // console.log('lastMessageDate', lastMessageDate)
+            // console.log('dateStr', dateStr)
 
             renderDateDivider(dateStr)
 
@@ -361,6 +372,7 @@
         if (shouldAddDivider) {
             if (lastMessageDate && !dateSet.has(dateStr)) {
                 const divider = createDateDivider(lastMessageDate);
+                // console.log('divider',divider)
                 chatContainer.prepend(divider);
                 dateSet.add(lastMessageDate)
             }
@@ -428,8 +440,6 @@
         // scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
 
         // console.log(scrollHeight, scrollTop)
-
-
         // console.log('moveBottonScroll', scrollHeight - scrollTop);
         chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
     }
