@@ -1,4 +1,4 @@
-from flask import Blueprint, Flask, render_template, jsonify, request, send_file, abort, send_from_directory, session, url_for, redirect, Response, stream_with_context
+from flask import Blueprint, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
 import ctypes
 from flask_login import login_required
 import zipfile
@@ -6,12 +6,12 @@ import os
 import io
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
-from .task_manager import compress_directory, compress_directory_to_zip, OUTPUT_ZIP_FILE
+from utils.task_manager import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
 from flask_socketio import SocketIO
 from datetime import datetime
-from utils.lotto_schedule import buy_lotto, async_buy_lotto
+from utils.lotto_schedule import async_buy_lotto
 from config.config import settings
 import asyncio
 
@@ -285,7 +285,7 @@ def get_chat_ui():
 
     return render_template("chat_ui.html", username=session["_user_id"], maxFetchMessageSize = MAX_FETCH_MESSAGE_SIZE)
 
-@func.route("/chat/save-file", methods=["POST"])
+@func.route("/api/chat/save-file", methods=["POST"])
 # @login_required 추가하면 안된다.. 외부 API 역할을 한다
 def save_chat_message():
     data = request.json

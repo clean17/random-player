@@ -408,10 +408,25 @@ def compress_directory(directory):
 
     try:
         # 기존 압축파일이 있다면 삭제
-        if os.path.exists(old_zip_filepath):
-            os.remove(old_zip_filepath)
-        # 새 압축파일의 이름을 기존 압축파일명으로 변경
-        os.rename(new_zip_filepath, old_zip_filepath)
+        # if os.path.exists(old_zip_filepath):
+        #     os.remove(old_zip_filepath)
+        # # 새 압축파일의 이름을 기존 압축파일명으로 변경
+        # os.rename(new_zip_filepath, old_zip_filepath)
+
+        # 압축 끝난 파일을 .zip01 으로 변경
+        zip01_path = old_zip_filepath + "01"
+        os.rename(new_zip_filepath, zip01_path)
+
+        # 디렉토리 내의 모든 .zip 파일 삭제
+        for f in os.listdir(directory):
+            if f.lower().endswith('.zip'):
+                try:
+                    os.remove(os.path.join(directory, f))
+                except Exception as e:
+                    print(f"삭제 실패: {f} → {e}")
+
+        # .zip01 → .zip 으로 다시 이름 변경
+        os.rename(zip01_path, old_zip_filepath)
     except Exception as e:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
         print(f"### {current_time} - Error while renaming zip file: {e}")
