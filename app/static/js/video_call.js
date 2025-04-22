@@ -75,6 +75,7 @@ async function getAudios() {
         })
     } catch (err) {
         console.log(err);
+        alert('오류발생 12 : '+ err)
     }
 }
 
@@ -242,7 +243,7 @@ function makeConnection() { // 연결을 만든다.
                     'stun:stun2.l.google.com:19302',
                     'stun:stun3.l.google.com:19302'
                 ]
-            },
+            }
             /*{
                 urls: "turn:your.turn.server:3478",
                 username: "user",
@@ -253,7 +254,7 @@ function makeConnection() { // 연결을 만든다.
     // icecandidate; 연결 가능한 네트워크 경로(ICE candidate)가 발견
     myPeerConnection.addEventListener('icecandidate', handleIce); // 두 Peer사이의 가능한 모든 경로를 수집하고 다른 Peer에 전송
     myPeerConnection.addEventListener('addstream', handleAddStream);
-    myPeerConnection.addEventListener('track', handleAddStream);
+    myPeerConnection.addEventListener('track', handleTrack);
 
     // 내 카메라/마이크 스트림을 WebRTC 연결에 추가
     myStream.getTracks().forEach(track => {
@@ -267,10 +268,10 @@ function handleIce(data) {
 
 function handleAddStream(data) {
     const peerFace = document.getElementById('peerFace');
-    // peerFace.srcObject = data.stream;
+    peerFace.srcObject = data.stream;
 
-    // track 이벤트로 들어온 경우
-    if (data.streams && data.streams[0]) {
+    // track 이벤트로 들어온 경우, 코드 분리
+    /*if (data.streams && data.streams[0]) {
         peerFace.srcObject = data.streams[0];
         return;
     }
@@ -278,8 +279,15 @@ function handleAddStream(data) {
     // addstream 이벤트로 들어온 경우 (구형 브라우저 대응)
     if (data.stream) {
         peerFace.srcObject = data.stream;
-    }
+    }*/
 }
+
+function handleTrack(event) {
+    const peerFace = document.getElementById('peerFace');
+    const [stream] = event.streams;
+    peerFace.srcObject = stream;
+}
+
 
 /////////////////////////// Choose a room ///////////////////////////////
 async function handleWelcomeSubmit(event) {
