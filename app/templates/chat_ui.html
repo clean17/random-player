@@ -214,9 +214,11 @@
         if (msg !== "") {
             socket.emit("new_msg", { username, msg, room: roomName });
         }
-        chatInput.value = "";
         chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
-        setTimeout(() => chatInput.focus(), 0); // 다시 포커스를 살짝 늦게 줘서 안전하게 초기화
+        chatInput.value = "";
+        // setTimeout(() => chatInput.focus(), 0); // 다시 포커스를 살짝 늦게 줘서 안전하게 초기화
+        chatInput.style.height = 'auto';
+        chatInput.focus();
     }
 
     function callNotification() {
