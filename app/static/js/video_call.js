@@ -28,11 +28,10 @@
 
 const socket = io("https://chickchick.shop:3000", {
     secure: true, // HTTPS 사용
-    transports: ["websocket", "polling"],
-    reconnection: true,              // 자동 재연결 활성화
-    reconnectionAttempts: 20,        // 최대 재시도 횟수
-    reconnectionDelay: 1000,         // 1초 간격
-    timeout: 20000,                  // 서버로부터 응답 기다리는 시간 (기본값)
+    transports: ["polling", "websocket"],
+    // reconnection: true,              // 자동 재연결 활성화
+    // reconnectionAttempts: 20,        // 최대 재시도 횟수
+    // reconnectionDelay: 1000,         // 1초 간격
 });
 
 const myFace = document.getElementById('myFace');
@@ -46,6 +45,7 @@ let muted = false;
 let cameraOff = false;
 let myPeerConnection;
 let myDataChannel;
+let peerLeftTimeout;
 
 // 연결된 카메라 리스트 출력
 async function getCameras() {
@@ -104,7 +104,8 @@ async function getMedia(deviceId) {
     try {
         // 웹캠은 사용중일때 접근 못함..
         myStream = await navigator.mediaDevices.getUserMedia(deviceId ? audioContrains : initialConstrains); // MediaStream
-        // console.log("myStream 보여줘 ---------------------- ",myStream);
+        console.log("myStream 보여줘 ---------------------- ",myStream);
+
         myFace.srcObject = myStream;
         if (!deviceId) {
             await getAudios();
@@ -188,8 +189,16 @@ audioSelect.addEventListener('input', handleAudioChange);
 
 ///////////////////////// Socket Code /////////////////////////////////////
 
+// 내가 들어가면 다른 참가자들이 'welcome' 이벤트를 받는다
 socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer를 생성 및 제안
-    myDataChannel = myPeerConnection.createDataChannel('chat');
+    if (peerLeftTimeout) {
+        clearTimeout(peerLeftTimeout); // 타이머 취소
+        peerLeftTimeout = null;
+    }
+    if (!myPeerConnection) {
+        await makeConnection();
+    }
+    myDataChannel = myPeerConnection.createDataChannel('video/audio');
     myDataChannel.addEventListener('message', console.log); // message 이벤트 - send에 반응
     console.log('dataChannel 생성됨');
     const offer = await myPeerConnection.createOffer();
@@ -229,11 +238,21 @@ socket.on("peer_left", () => {
     // 비디오 정리만 하고 연결은 유지
     peerFace.srcObject = null;
     console.log("상대방이 나갔습니다");
+
+    peerLeftTimeout = setTimeout(() => {
+        console.log("10초 지남, 연결 닫음");
+        myPeerConnection?.close();
+        myPeerConnection = null;
+    }, 10000); // 10초 대기
 });
 
 ////////////////////////// RTC Code /////////////////////////////////////
 
-function makeConnection() { // 연결을 만든다.
+/**
+ * WebRTC 연결을 설정
+ * 내 스트림(영상/음성)을 상대방에게 전송할 준비를 마친다
+ */
+async function makeConnection() { // 연결을 만든다.
     myPeerConnection = new RTCPeerConnection({
         iceServers: [ // STUN; 내 외부 IP를 알려주는 서버 (ICE 후보 생성을 도와줌)
             {
@@ -251,9 +270,9 @@ function makeConnection() { // 연결을 만든다.
             }*/
         ]
     });
-    // icecandidate; 연결 가능한 네트워크 경로(ICE candidate)가 발견
+    // icecandidate; 연결 가능한 네트워크 경로(ICE candidate; IP + 포트)가 발견되면 발생하는 이벤트
     myPeerConnection.addEventListener('icecandidate', handleIce); // 두 Peer사이의 가능한 모든 경로를 수집하고 다른 Peer에 전송
-    myPeerConnection.addEventListener('addstream', handleAddStream);
+    // myPeerConnection.addEventListener('addstream', handleAddStream);
     myPeerConnection.addEventListener('track', handleTrack);
 
     // 내 카메라/마이크 스트림을 WebRTC 연결에 추가
@@ -266,21 +285,10 @@ function handleIce(data) {
     socket.emit('ice', data.candidate, roomName); // data.candidate 안에는 이 브라우저가 사용할 수 있는 연결 정보가 들어 있음
 }
 
-function handleAddStream(data) {
+/*function handleAddStream(data) {
     const peerFace = document.getElementById('peerFace');
     peerFace.srcObject = data.stream;
-
-    // track 이벤트로 들어온 경우, 코드 분리
-    /*if (data.streams && data.streams[0]) {
-        peerFace.srcObject = data.streams[0];
-        return;
-    }
-
-    // addstream 이벤트로 들어온 경우 (구형 브라우저 대응)
-    if (data.stream) {
-        peerFace.srcObject = data.stream;
-    }*/
-}
+}*/
 
 function handleTrack(event) {
     const peerFace = document.getElementById('peerFace');
