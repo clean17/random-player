@@ -52,6 +52,7 @@
         chatInput = document.getElementById("chat-input"),
         sendButton = document.getElementById('send-button'),
         textAreaMaxRows = 5,
+        openDate = new Date();
         cameraButton = document.getElementById("camera-button"),
         MAX_FETCH_MESSAGE_SIZE = "{{ maxFetchMessageSize }}";
 
@@ -70,6 +71,8 @@
         scrollTop,    // 현재 스크롤 위치
         scrollButton = undefined;
 
+    openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
+    const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
 
 
     function connectSocket() {
@@ -214,11 +217,9 @@
         if (msg !== "") {
             socket.emit("new_msg", { username, msg, room: roomName });
         }
-        chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
         chatInput.value = "";
-        // setTimeout(() => chatInput.focus(), 0); // 다시 포커스를 살짝 늦게 줘서 안전하게 초기화
-        chatInput.style.height = 'auto';
-        chatInput.focus();
+        chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
+        setTimeout(() => chatInput.focus(), 0); // 다시 포커스를 살짝 늦게 줘서 안전하게 초기화
     }
 
     function callNotification() {
@@ -235,26 +236,19 @@
         }*/
     }
 
-    function addMessage(data, load = false) {
-        isMine = data.username === username;
-        isUnderline = data.underline;
-        if (data && !data.timestamp) {
-            const now = new Date();
-            now.setHours(now.getHours() + 9);  // UTC → KST 변환
-            const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
-            data.timestamp = timestamp;
-        }
-        // console.log(data)
-
-        // 바깥 컨테이너: 메시지 한 줄을 구성
+    // 바깥 컨테이너: 메시지 한 줄을 구성
+    function renderMessageRow(isMine) {
         const messageRow = document.createElement("div");
         messageRow.style.display = "flex";
         messageRow.style.alignItems = "flex-end";
         messageRow.style.marginBottom = "6px";
         messageRow.style.maxWidth = "100%";
         messageRow.style.justifyContent = isMine ? "flex-end" : "flex-start";
+        return messageRow;
+    }
 
-        // 메시지 박스
+    // 메시지 박스
+    function renderMessageDiv() {
         const messageDiv = document.createElement("div");
         messageDiv.classList.add(
             "p-2",
@@ -264,11 +258,38 @@
             "block",        // 내용에 맞게 크기 조정
             "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
         );
+        return messageDiv;
+    }
+
+    // 시간 박스
+    function renderTimeDiv(timeStr) {
+        const timeDiv = document.createElement("div");
+        timeDiv.textContent = timeStr;
+        timeDiv.style.fontSize = "0.75em";
+        timeDiv.style.color = "#666";
+        timeDiv.style.margin = isMine ? "0 8px 0 0" : "0 0 0 8px";  // 메시지와 간격
+        return timeDiv;
+    }
+
+    // 메세지 추가
+    function addMessage(data, load = false) {
+        isMine = data.username === username;
+        isUnderline = data.underline;
+        const now = new Date();
+
+        if (data && !data.timestamp) {
+            now.setHours(now.getHours() + 9);  // UTC → KST 변환
+            const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
+            data.timestamp = timestamp;
+        }
+
+        const messageRow = renderMessageRow(isMine);
+        const messageDiv = renderMessageDiv();
 
         if (isMine) {
             messageDiv.classList.add("bg-blue-200", "text-left");
         } else {
-            if (data.isUnderline !== 1) {
+            if (data.isUnderline !== 1 && openTimestamp < data.timestamp) {
                 callNotification();
             }
             messageDiv.classList.add("bg-gray-200", "text-left");
@@ -288,16 +309,14 @@
         } else { // 메세지 생성
             const messageSpan = document.createElement("span");
             const safeText = data.msg.replace(/ /g, "&nbsp;");
-            // messageSpan.innerHTML = safeText;
-            messageSpan.innerHTML = data.msg;
+            messageSpan.innerHTML = safeText;
             messageDiv.appendChild(messageSpan);
 
-
             // 시간 계산
-            let timeStr = "";
-            dateStr = "";
-            const now = new Date();
+            let timeStr = ""; // 14:33 형식
+            dateStr = ""; // 25.04.12 형식
 
+            // 채팅 불러와서 렌더링
             if (data.timestamp && data.timestamp.length >= 10) {
                 const hour = data.timestamp.slice(6, 8);
                 const minute = data.timestamp.slice(8, 10);
@@ -307,7 +326,7 @@
                 const mm = data.timestamp.slice(2, 4);
                 const dd = data.timestamp.slice(4, 6);
                 dateStr = `20${yy}.${mm}.${dd}`;
-            } else {
+            } else { // 신규 채팅
                 const pad = (n) => String(n).padStart(2, '0');
                 const hour = pad(now.getHours());
                 const minute = pad(now.getMinutes());
@@ -335,20 +354,13 @@
                 }
             }
 
-            // 시간 박스
-            const timeDiv = document.createElement("div");
-            timeDiv.textContent = timeStr;
-            timeDiv.style.fontSize = "0.75em";
-            timeDiv.style.color = "#666";
-            timeDiv.style.margin = isMine ? "0 8px 0 0" : "0 0 0 8px";  // 메시지와 간격
-
             // 정렬 순서: 시간 → 메시지 또는 메시지 → 시간
             if (isMine) {
-                messageRow.appendChild(timeDiv);
+                messageRow.appendChild(renderTimeDiv(timeStr));
                 messageRow.appendChild(messageDiv);
             } else {
                 messageRow.appendChild(messageDiv);
-                messageRow.appendChild(timeDiv);
+                messageRow.appendChild(renderTimeDiv(timeStr));
             }
         }
 
