@@ -148,7 +148,7 @@ def download_all_zip():
         directory = os.path.join(TEMP_IMAGE_DIR, title_directory)
         print('download_all_zip - directory', directory)
 
-    zip_filename = f"compressed_{os.path.basename(directory)}.zip"
+    zip_filename = f"compressed_{os.path.basename(directory)}_.zip"
     zip_filepath = os.path.join(directory, zip_filename)
 
     # ZIP 파일이 없으면 생성
@@ -358,4 +358,4 @@ def test_lotto():
 @func.route('/video-call', methods=['GET'])
 @login_required
 def get_video_call():
-    return render_template('video_call.html')
+    return render_template('video_call.html', username=session["_user_id"])

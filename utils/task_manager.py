@@ -34,7 +34,6 @@ work_directory = settings['WORK_DIRECTORY']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
-OUTPUT_ZIP_FILE = "compressed_all_files.zip"
 
 '''
     # 1. multiprocessing는 메모리를 공유하지 않는다 -> class의 필드를 공유하지 않음

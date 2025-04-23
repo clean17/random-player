@@ -143,10 +143,10 @@ function handleMuteClick() {
         track.enabled = !track.enabled
     });
     if (!muted) {
-        muteBtn.innerText = "Audio On"
+        muteBtn.innerText = "Mic On"
         muted = true;
     } else {
-        muteBtn.innerText = "Audio Off"
+        muteBtn.innerText = "Mic Off"
         muted = false;
     }
 }
@@ -246,6 +246,23 @@ socket.on("peer_left", () => {
     }, 10000); // 10초 대기
 });
 
+socket.on("force_disconnect", () => {
+    console.log("⚠️ 다른 기기에서 로그인되어 연결 종료됨");
+
+    // 연결 정리
+    if (myPeerConnection) {
+        myPeerConnection.close();
+        myPeerConnection = null;
+    }
+
+    if (myDataChannel) {
+        myDataChannel.close();
+        myDataChannel = null;
+    }
+
+    socket.disconnect(); // 소켓도 끊기
+    window.location.href = '/';
+});
 ////////////////////////// RTC Code /////////////////////////////////////
 
 /**
@@ -301,7 +318,7 @@ function handleTrack(event) {
 async function handleWelcomeSubmit(event) {
     await getMedia(); // myStream 초기화
     makeConnection();
-    socket.emit('join_room', roomName);
+    socket.emit('join_room', roomName, username);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
