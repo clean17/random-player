@@ -5,34 +5,8 @@
     <title>Image List</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}?v=2">
 </head>
-<style>
-    .image-item {
-        position: relative;
-        display: inline-block;
-    }
-
-    .delete-btn {
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        background: rgba(0, 0, 0, 0.5);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 48px;         /* 24px → 48px */
-        height: 48px;        /* 24px → 48px */
-        font-size: 28px;     /* 16px → 더 큼 */
-        cursor: pointer;
-        z-index: 10;
-        transition: background 0.2s;
-    }
-
-    .delete-btn:hover {
-        background: red;
-    }
-</style>
 
 <body>
 <div class="top-bar">

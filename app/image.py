@@ -61,7 +61,10 @@ def get_images(start, count, dir):
     if dir == REF_IMAGE_DIR:
         images = shuffled_images
     else:
-        images = os.listdir(dir) # IMAGE_DIR, TRIP_IMAGE_DIR
+        images = [
+            f for f in os.listdir(dir)
+            if not f.lower().endswith(('.zip', '.ini'))  # ✅ .zip 파일 제외
+        ]
         images.sort()
     return images[start:start + count]
 

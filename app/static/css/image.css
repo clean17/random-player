@@ -41,6 +41,7 @@ body {
     margin-bottom: 5px;
     position: relative;
     width: 100%;
+    /*display: inline-block;*/
 }
 
 .image-item img {
@@ -280,4 +281,25 @@ button.delete-button:hover {
 .dropdown-selector select:focus {
     border-color: #007bff;
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+
+.delete-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 48px;         /* 24px → 48px */
+    height: 48px;        /* 24px → 48px */
+    font-size: 28px;     /* 16px → 더 큼 */
+    cursor: pointer;
+    z-index: 10;
+    transition: background 0.2s;
+}
+
+.delete-btn:hover {
+    background: red;
 }

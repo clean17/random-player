@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image List</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}?v=2">
 </head>
 <body>
 <div class="top-bar">
@@ -29,10 +29,11 @@
         <div class="image-container">
             {% for image in images %}
                 <div class="image-item" id="image-{{ loop.index }}">
-                    {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'] %}
+                    {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'jfif'] %}
                     {% set file_extension = image.split('.')[-1].lower() %}
                     <!-- 처음 5개 이미지만 실제 이미지 로드 -->
                     {% if file_extension in image_extensions %}
+                    <button class="delete-btn" type="button">×</button>
                     <img class="thumbnail"
                          src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
                          data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
@@ -41,6 +42,9 @@
                     <input type="hidden" name="images[]" value="{{ image }}">
                 </div>
             {% endfor %}
+        </div>
+        <div>
+            total_count : {{ images_length }}
         </div>
         <div class="pagination">
             {% if page > 1 %}
@@ -154,10 +158,10 @@
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    if (confirm('Delete the file ?')) {
-                        moveImage(event)
+                    // if (confirm('Delete the file ?')) {
+                        moveImage(event);
                         // document.querySelector('.delete-button')?.click()
-                    }
+                    // }
                 default: break;
             }
         });
@@ -357,9 +361,12 @@
         return 'No image with alt attribute found at the center of the viewport.';
     }
 
-    function moveImage(event) {
+    function moveImage(event, name) {
         const centerImage = getCenterImage();
-        const filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
+        let filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
+        if (name) {
+            filename = name;
+        }
         fetch(`/image/move-image`, {
             method: 'POST',
             headers: {
@@ -367,7 +374,7 @@
             },
             body: JSON.stringify({
                 imagepath: 'ref_image',
-                filename: filename
+                filename: `${decodeURIComponent(filename)}`
             })
         })
             .then(response => response.json())
@@ -388,6 +395,19 @@
                 console.error('Error:', error);
             });
     }
+
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const imageItem = e.target.closest('.image-item');
+            let filename = imageItem.querySelector('.thumbnail')?.alt;
+            if (imageItem) {
+                if (!filename) {
+                    filename = imageItem.querySelector('source').dataset.filename;
+                }
+                moveImage(e, filename);
+            }
+        });
+    });
 
     document.getElementById("prevButton").addEventListener("click", () => {
         if (page > 1) {
