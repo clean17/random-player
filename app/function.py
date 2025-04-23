@@ -6,7 +6,7 @@ import os
 import io
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
-from utils.task_manager import compress_directory, compress_directory_to_zip
+from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
 from flask_socketio import SocketIO
