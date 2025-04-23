@@ -7,7 +7,7 @@ if ("serviceWorker" in navigator) {
         .then(reg => console.log("서비스 워커 등록 완료:", reg))
         .catch(err => console.log("서비스 워커 등록 실패:", err));*/
 
-    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+    navigator.serviceWorker.register('/service-worker.js?v=2').then(registration => {
         return registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: "BM3Xq3X-hbmCtGvoJv3Dl-WmW1nTYenl4tKQtE4pdcMTK0XDxjrECQSmtFgnPd1aqUoBINRCKrLqfqwIdemSXZs" // YOUR_PUBLIC_VAPID_KEY
