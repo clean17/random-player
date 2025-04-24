@@ -14,6 +14,7 @@
 </head>
 
 <body>
+{% if windowFlag != 1 %}
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -24,6 +25,7 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+{% endif %}
 <div class="container">
     <div id="myStream">
         <video id="peerFace" autoplay playsinline muted></video>

@@ -8,8 +8,21 @@
     <!--<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>-->
     <script src="https://chickchick.shop:3000/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/video_call.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
-
+<style>
+    .icon-buttons {
+        position: absolute;
+        top: 15%;
+        right: 5px;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;   /* ✅ 세로 정렬 핵심 */
+        gap: 10px;                /* 버튼 사이 간격 */
+        z-index: 10;
+    }
+</style>
 <body>
 <audio id="alert-sound" src="/static/sound/beep.mp3" preload="auto"></audio>
 <div class="top-bar">
@@ -56,6 +69,7 @@
         textAreaOffsetHeight = 22,
         openDate = new Date();
         cameraButton = document.getElementById("camera-button"),
+        videoCallBtn = document.getElementById("videoCallBtn"),
         MAX_FETCH_MESSAGE_SIZE = "{{ maxFetchMessageSize }}";
 
     let offset = 0, // 가장 최근 10개는 이미 로드됨
@@ -71,6 +85,8 @@
         isScroll = false,
         scrollHeight, // 전체 스크롤 높이
         scrollTop,    // 현재 스크롤 위치
+        videoCallWindow = null,
+        isMinimized = false,
         scrollButton = undefined;
 
     openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -136,6 +152,7 @@
                 alert("⚠️ socket 객체가 정의되지 않음");
                 connectSocket();
             }
+            chatInput.focus();
         }
 
         fetch("/func/chat", { method: "GET" })
@@ -469,7 +486,82 @@
         document.body.appendChild(scrollButton);
     }
 
+    function renderVideoCallWindow() {
+        if (!videoCallWindow) {
+            openVideoCallWindow();
+        } else {
+            if (isMinimized) {
+                videoCallWindow.style.visibility = "";
+                videoCallWindow.style.opacity = "1";
+                isMinimized = false;
+            } else {
+                videoCallWindow.style.visibility = "hidden";
+                videoCallWindow.style.opacity = "0";
+                isMinimized = true;
+            }
+        }
 
+        updateButtonColor();
+    }
+
+    function updateButtonColor() {
+        // videoCallBtn.style.backgroundColor = videoCallWindow && !isMinimized ? "red" : "green";
+    }
+
+    function openVideoCallWindow() {
+        videoCallWindow = document.createElement("div");
+        videoCallWindow.style.position = "fixed";
+        videoCallWindow.style.bottom = "20px";
+        videoCallWindow.style.right = "5px";
+        videoCallWindow.style.width = "400px";
+        videoCallWindow.style.height = "600px";
+        videoCallWindow.style.background = "#000";
+        videoCallWindow.style.border = "2px solid #ccc";
+        videoCallWindow.style.zIndex = "9998";
+        videoCallWindow.style.display = "flex";
+        videoCallWindow.style.flexDirection = "column";
+        videoCallWindow.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+
+        const topBar = document.createElement("div");
+        topBar.style.display = "flex";
+        topBar.style.justifyContent = "space-between";
+        topBar.style.background = "#222";
+        topBar.style.color = "#fff";
+        topBar.style.padding = "4px 8px";
+
+        const hideBtn = document.createElement("span");
+        hideBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';  // 🔽 숨기기
+        hideBtn.style.cursor = "pointer";
+        hideBtn.onclick = () => {
+            videoCallWindow.style.visibility = "hidden";
+            videoCallWindow.style.opacity = "0";
+            isMinimized = true;
+            updateButtonColor();
+        };
+
+        const closeBtn = document.createElement("span");
+        closeBtn.innerHTML = '<i class="fas fa-times"></i>'; // ❌ 닫기
+        closeBtn.style.cursor = "pointer";
+        closeBtn.onclick = () => {
+            document.body.removeChild(videoCallWindow);
+            videoCallWindow = null;
+            updateButtonColor();
+        };
+
+        topBar.appendChild(hideBtn);
+        topBar.appendChild(closeBtn);
+
+        const iframe = document.createElement("iframe");
+        iframe.src = "/func/video-call/window";
+        iframe.style.flex = "1";
+        iframe.style.border = "none";
+
+        videoCallWindow.appendChild(topBar);
+        videoCallWindow.appendChild(iframe);
+        document.body.appendChild(videoCallWindow);
+
+        updateButtonColor();
+    }
     function initPage() {
         // keydown 에서만 event.preventDefault() 가 적용된다 !!
         chatInput.removeEventListener('keydown', enterEvent);
@@ -478,6 +570,8 @@
         cameraButton.addEventListener('click', cameraEvent);
         sendButton.removeEventListener('click', sendMsg);
         sendButton.addEventListener('click', sendMsg);
+        videoCallBtn?.removeEventListener('click', renderVideoCallWindow)
+        videoCallBtn?.addEventListener('click', renderVideoCallWindow)
         document.body.removeEventListener('touchstart', requestNotificationPermission);
         document.body.addEventListener('touchstart', requestNotificationPermission);
         document.body.removeEventListener('ended', requestNotificationPermission);

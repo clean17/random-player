@@ -384,6 +384,11 @@ def get_hls():
 def get_video_call():
     return render_template('video_call.html', username=session["_user_id"])
 
+@func.route('/video-call/window', methods=['GET'])
+@login_required
+def get_video_call_window():
+    return render_template('video_call.html', username=session["_user_id"], windowFlag=1)
+
 ################################# LOTTO ####################################
 
 @func.route("/buy/lotto-test")
