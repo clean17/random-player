@@ -536,6 +536,7 @@
         topBar.style.background = "#222";
         topBar.style.color = "#fff";
         topBar.style.padding = "4px 8px";
+        topBar.style.cursor = "move";
 
         const hideBtn = document.createElement("span");
         hideBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';  // 🔽 숨기기
@@ -554,6 +555,7 @@
             document.body.removeChild(videoCallWindow);
             videoCallWindow = null;
             updateButtonColor();
+            videoCallBtn.style.backgroundColor = "";
         };
 
         topBar.appendChild(hideBtn);
@@ -564,7 +566,7 @@
         iframe.style.flex = "1";
         iframe.style.border = "none";
 
-        const dragOverlay = document.createElement("div");
+        /*const dragOverlay = document.createElement("div");
         dragOverlay.style.position = "absolute";
         dragOverlay.style.bottom = "0";
         dragOverlay.style.left = "0";
@@ -577,7 +579,7 @@
         videoCallWindow.appendChild(dragOverlay);
         // 드래그 이벤트 연결
         dragOverlay.addEventListener("mousedown", startDrag);
-        dragOverlay.addEventListener("touchstart", startDrag, { passive: false });
+        dragOverlay.addEventListener("touchstart", startDrag, { passive: false });*/
 
         videoCallWindow.appendChild(topBar);
         videoCallWindow.appendChild(iframe);
@@ -595,6 +597,15 @@
         document.body.appendChild(videoCallWindow);
 
         updateButtonColor();
+
+        window.addEventListener("message", (event) => {
+            if (event.data?.type === "SOCKET_CONNECTED") {
+                videoCallBtn.style.backgroundColor = "green";
+            }
+            if (event.data?.type === "SOCKET_DISCONNECTED") {
+                videoCallBtn.style.backgroundColor = "";
+            }
+        });
     }
     function initPage() {
         // keydown 에서만 event.preventDefault() 가 적용된다 !!

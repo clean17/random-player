@@ -233,15 +233,24 @@ socket.on('offer', async (offer) => {
     const answer = await myPeerConnection.createAnswer(); // offer를 받고 answer를 생성해 SDP 설정
     myPeerConnection.setLocalDescription(answer); // 각자의 peer는 local, remote를 설정
     socket.emit('answer', answer, roomName);
+
+    // 부모에게 연결 완료 알림
+    window.parent.postMessage({ type: "SOCKET_CONNECTED" }, "*");
 });
 
 socket.on('answer', (answer) => {
     myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
+
+    // 부모에게 연결 완료 알림
+    window.parent.postMessage({ type: "SOCKET_CONNECTED" }, "*");
 });
 
 socket.on('ice', (ice) => {
     console.log("상대방과 연결되었습니다.");
     myPeerConnection.addIceCandidate(ice); // ICE(Interactive Connectivity Establishment); 서로 연결되는 경로를 찾아냄; 상대방의 후보 경로를 추가해서 연결을 시도
+
+    // 부모에게 연결 완료 알림
+    window.parent.postMessage({ type: "SOCKET_CONNECTED" }, "*");
 });
 
 socket.on("peer_left", () => {
@@ -254,6 +263,8 @@ socket.on("peer_left", () => {
         myPeerConnection?.close();
         myPeerConnection = null;
     }, 10000); // 10초 대기
+
+    window.parent.postMessage({ type: "SOCKET_DISCONNECTED" }, "*");
 });
 
 socket.on("force_disconnect", () => {
