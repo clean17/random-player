@@ -17,21 +17,28 @@ import asyncio
 
 func = Blueprint('func', __name__)
 
-socketio = SocketIO()
+socketio = SocketIO() # __init__ 으로 전달
 
 LOG_DIR = "logs"
+DATA_DIR = "data"
 MEMO_FILE = 'memo.txt'
-MEMO_PATH = os.path.join(LOG_DIR, MEMO_FILE)
+CHAT_FILE = 'chat.txt'
+MEMO_FILE_PATH = os.path.join(DATA_DIR, MEMO_FILE)
+CHAT_FILE_PATH = os.path.join(DATA_DIR, CHAT_FILE)
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
+MAX_FETCH_MESSAGE_SIZE = 30
+
+
 
 # Windows API 상수
 SHERB_NOCONFIRMATION = 0x00000001  # 사용자 확인 대화 상자를 표시하지 않음
 SHERB_NOPROGRESSUI = 0x00000002   # 진행 UI를 표시하지 않음
 SHERB_NOSOUND = 0x00000004        # 소리를 재생하지 않음
 
-CHAT_FILENAME = f"logs/chat.log"
-MAX_FETCH_MESSAGE_SIZE = 30
 
+
+
+################################# IMAGE #####################################
 
 def check_recycle_bin():
     """휴지통 상태 확인"""
@@ -166,8 +173,7 @@ def compress_now():
     return jsonify({"status": "Compression started"}), 202
 
 
-######################## log ##############################
-
+################################# LOG ######################################
 
 def get_log_filename(date=None):
     """주어진 날짜(yyMMdd)의 로그 파일 경로 반환. 날짜가 없으면 오늘 날짜 사용"""
@@ -195,15 +201,22 @@ def get_logs_by_date(date):
     if not os.path.exists(log_file):
         return jsonify({"error": f"{date} 로그 파일이 없습니다."}), 404
 
-    try:
-        with open(log_file, "r", encoding="utf-8") as f:
-            logs = f.readlines()
-    except PermissionError:
-        return jsonify({"error": "로그 파일을 현재 사용할 수 없습니다. 잠시 후 다시 시도하세요."}), 503
-    except Exception as e:
-        return jsonify({"error": f"로그 파일을 읽는 중 오류 발생: {e}"}), 500
+    def generate():
+        with open(log_file, encoding='utf-8') as f:
+            for line in f:
+                yield line
 
-    return jsonify({"logs": logs})
+    return Response(generate(), mimetype="text/plain")
+
+    # try:
+    #     with open(log_file, "r", encoding="utf-8") as f:
+    #         logs = f.readlines()
+    # except PermissionError:
+    #     return jsonify({"error": "로그 파일을 현재 사용할 수 없습니다. 잠시 후 다시 시도하세요."}), 503
+    # except Exception as e:
+    #     return jsonify({"error": f"로그 파일을 읽는 중 오류 발생: {e}"}), 500
+
+    # return jsonify({"logs": logs})
 
 @func.route("/logs/stream")
 def stream_logs():
@@ -268,14 +281,31 @@ def handle_connect():
 
 
 ################################# Chat ######################################
+
 # 로그 파일에서 가장 최근 N개의 메시지 가져오기
-def get_last_n_lines(n):
+def get_last_n_lines(filepath, n):
     try:
-        with open(CHAT_FILENAME, "r", encoding="utf-8") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             lines = f.readlines()
         return lines[-n:]  # 가장 마지막 N개 줄 반환
     except FileNotFoundError:
         return []  # 파일이 없으면 빈 리스트 반환
+
+def get_last_n_lines(filepath, start, end):
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        total = len(lines)
+
+        # 역방향 슬라이싱을 위한 시작/끝 계산
+        slice_end = total - start
+        slice_start = max(0, total - end)
+
+        return lines[slice_start:slice_end]
+
+    except FileNotFoundError:
+        return []
 
 @func.route("/chat")
 @login_required
@@ -298,7 +328,7 @@ def save_chat_message():
         data['username'] = 'error'
 
     log_entry = f"{data['timestamp']} | {data['username']} | {data['message']}"
-    with open(CHAT_FILENAME, "a", encoding="utf-8") as log_file:
+    with open(CHAT_FILE_PATH, "a", encoding="utf-8") as log_file:
         log_file.write(log_entry + "\n")
     return {"status": "success"}, 200
 
@@ -307,7 +337,7 @@ def save_chat_message():
 @login_required
 def load_more_logs():
     offset = int(request.json.get("offset", 0))  # 클라이언트가 요청한 로그 시작점
-    all_lines = get_last_n_lines(1000)  # 최대 로그 유지
+    all_lines = get_last_n_lines(CHAT_FILE_PATH, 0, 1000)  # 최대 로그 유지
 
     start = max(0, len(all_lines) - offset - MAX_FETCH_MESSAGE_SIZE)
     end = len(all_lines) - offset
@@ -328,12 +358,12 @@ def memo():
         # 줄바꿈 문자 통일 (\r\n -> \n)
         content = content.replace('\r\n', '\n')
         # 파일에 내용 저장
-        with open(MEMO_PATH, 'w', encoding='utf-8') as f:
+        with open(MEMO_FILE_PATH, 'w', encoding='utf-8') as f:
             f.write(content)
     else:
         # GET 요청 시 기존 메모 내용 읽기
-        if os.path.exists(MEMO_PATH):
-            with open(MEMO_PATH, 'r', encoding='utf-8') as f:
+        if os.path.exists(MEMO_FILE_PATH):
+            with open(MEMO_FILE_PATH, 'r', encoding='utf-8') as f:
                 content = f.read()
         else:
             content = ''
@@ -346,12 +376,6 @@ def memo():
 def get_hls():
     return render_template('hls/test_hls.html')
 
-@func.route("/buy/lotto-test")
-@login_required
-def test_lotto():
-    asyncio.run(async_buy_lotto())  # 코루틴 실행
-    return {"status": "success", "message": "로또 구매 완료!!"}
-
 
 ################################# Call ######################################
 
@@ -359,3 +383,11 @@ def test_lotto():
 @login_required
 def get_video_call():
     return render_template('video_call.html', username=session["_user_id"])
+
+################################# LOTTO ####################################
+
+@func.route("/buy/lotto-test")
+@login_required
+def test_lotto():
+    asyncio.run(async_buy_lotto())  # 코루틴 실행
+    return {"status": "success", "message": "로또 구매 완료!!"}
