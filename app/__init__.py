@@ -30,7 +30,7 @@ ALLOWED_PATHS = [
     '/func/chat*',
     '/func/memo*',
     '/auth/verify-password',
-    '/func/video-call',
+    '/func/video-call*',
 ]
 
 # 파일 읽기
