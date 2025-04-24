@@ -70,17 +70,18 @@ SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
 # 설정값
 BLOCK_THRESHOLD = 5
 BLOCK_DURATION = timedelta(days=365)
-SESSION_EXPIRATION_TIME = timedelta(minutes=20) # 세션 만료 시간
-# SESSION_EXPIRATION_TIME = timedelta(seconds=10) # 세션 만료 시간
+SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
+GUEST_SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
-    # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정
     app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
     app.secret_key = app.config['SECRET_KEY']
+    # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정, Flask 공식 설정값
+    # app.permanent_session_lifetime = SESSION_EXPIRATION_TIME  # 기본 유효기간 설정 (기본값: timedelta(days=31), property 접근 방식; 위와 동일; 내부적으로 app.config['PERMANENT_SESSION_LIFETIME']를 읽고 쓴다
 
     app.register_blueprint(main, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/auth')
@@ -105,28 +106,6 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
 
-    # 게스트 세션 로그아웃 강제
-    # @app.before_request
-    # def force_guest_auto_logout():
-    #     if request.path == "/auth/login":
-    #         now = datetime.utcnow()
-    #         session['user_last_activity'] = now.isoformat()
-    #         return
-    #
-    #     # 게스트가 요청할 경우 세션 시간 체크
-    #     if current_user.is_authenticated and current_user.get_id() == settings['GUEST_USERNAME']:
-    #         now = datetime.utcnow()
-    #         last_str = session.get('user_last_activity')
-    #
-    #         last = datetime.fromisoformat(last_str) if isinstance(last_str, str) else now
-    #         inactive_time = (now - last).total_seconds()
-    #
-    #         if inactive_time > SESSION_EXPIRATION_TIME.total_seconds():
-    #             print('게스트 세션 죽여', inactive_time)
-    #             session.clear()
-    #             return redirect(url_for('auth.logout'))
-    #
-    #         session['user_last_activity'] = now.isoformat() # 세션 갱신
 
     # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
     @app.before_request
@@ -174,7 +153,7 @@ def create_app():
             # 10분 유효시간 초과 시 인증 무효
             # if datetime.utcnow() - verified_at > timedelta(seconds=5):
             if datetime.utcnow() - verified_at > timedelta(minutes=10):
-                print('    Session Expires')
+                print('    before_request - Session Expires')
                 session.pop(SECOND_PASSWORD_SESSION_KEY, None)
                 session.pop('second_password_verified_at', None)
                 return redirect(url_for('auth.verify_password', next=request.path))
@@ -204,7 +183,7 @@ def create_app():
             session.clear()
 
 
-        ###################### 엔드포인트 제한 ######################
+        ###################### 엔드포인트 허용 ######################
         if request.path == '/auth/logout':
             return
 
@@ -217,14 +196,20 @@ def create_app():
         if not current_user.is_authenticated:
             return  # 로그인하지 않은 사용자는 검증하지 않음
 
-        user_id = current_user.get_id()
 
         # GUEST_USERNAME 사용자에 대한 검증
-        if user_id == app.config['GUEST_USERNAME']:
-            # GUEST_USERNAME 사용자가 /image/trip-images 경로가 아닌 경우만 제한
-            # if not request.path.startswith('/image/trip-images'):
-            #     return redirect(url_for('auth.logout'))
-                # return jsonify({"error": "Forbidden"}), 403
+        if current_user.get_id() == app.config['GUEST_USERNAME']:
+            last_active = session.get("last_active")
+            if last_active:
+                now = datetime.utcnow().timestamp()
+                elapsed = now - last_active
+                timeout = GUEST_SESSION_EXPIRATION_TIME.total_seconds()
+
+                if elapsed > timeout:
+                    print(f"    before_request - ⏱ 경과 시간: {elapsed:.2f}초")
+                    return redirect(url_for("auth.logout"))
+
+                session["last_active"] = now
 
             # print('request.path', request.path)
             if not any(fnmatch.fnmatch(request.path, pattern) for pattern in ALLOWED_PATHS):

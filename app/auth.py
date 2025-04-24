@@ -54,7 +54,7 @@ def login():
                 session['lockout_time'] = None
 
         # print('attempt_username', username)
-        logger.info(f"###################################################################### attempt_username: {username} ######################################################################")
+        logger.info(f"###################################################################### login_username: {username} ######################################################################")
 
         # 로그인 검증
         if username in users and check_password_hash(users[username]['password'], password):
@@ -63,12 +63,12 @@ def login():
             session['attempts'] = 0
 
             # GUEST_USERNAME 사용자라면
-            # if username == settings['GUEST_USERNAME']:
-            #     return redirect(url_for('image.image_list'))
-            #     session.permanent = True  # PERMANENT_SESSION_LIFETIME 적용되도록
-            #     if not current_user.is_authenticated:
-            #         logout_user()
-            #         return redirect(url_for('auth.login'))
+            if username == settings['GUEST_USERNAME']:
+                session.permanent = False  # PERMANENT_SESSION_LIFETIME 적용되도록
+                session["last_active"] = datetime.utcnow().timestamp() # session["last_active"]
+
+                if not current_user.is_authenticated:
+                    return redirect(url_for('auth.logout'))
 
             return redirect(url_for('main.home'))
         # 로그인 실패
@@ -86,8 +86,8 @@ def lockout():
     return render_template('lockout.html')
 
 @auth.route('/logout')
-@login_required
 def logout():
+    logger.info(f"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ logout_username: {current_user.get_id()} $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
     session[SECOND_PASSWORD_SESSION_KEY] = False
     session.clear()
     logout_user()
@@ -100,7 +100,7 @@ def verify_password():
         password = request.form.get("password")
 
         if password == YOUR_SECRET_PASSWORD:
-            session[SECOND_PASSWORD_SESSION_KEY] = True
+            session[SECOND_PASSWORD_SESSION_KEY] = True # session.get(SECOND_PASSWORD_SESSION_KEY)
             session['second_password_verified_at'] = datetime.utcnow().isoformat()
             next_page = request.args.get("next", "/func/memo")
             return redirect(next_page)
@@ -113,7 +113,8 @@ def verify_password():
 Flask의 세션은 기본적으로 비영속적(non-permanent)
 >> 브라우저를 닫으면 세션이 사라진다
 
-session.permanent = True 를 통해 세션을 영구적으로 설정
+session.permanent = False (기본값)	브라우저 꺼지면 세션 소멸 (세션 쿠키)
+session.permanent = True 를 통해 세션을 영구적으로 설정, app.permanent_session_lifetime 만큼 유지됨
 
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=10)  # 10분 비활동 시 만료
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
