@@ -1,0 +1,94 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* ✅ 스크롤 제거 */
+    height: 100%;
+    background-color: rgb(40, 40, 40);
+    font-family: Arial, sans-serif;
+}
+.top-bar {
+    position: fixed;
+    opacity: 0.4;
+}
+video.mirror {
+    transform: scaleX(-1);
+}
+
+.container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+#peerFace {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* ✅ 화면에 꽉 차게 */
+    z-index: 1;
+}
+#myFace {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+    max-width: 35vw;
+    max-height: 25vh;
+    aspect-ratio: auto; /* 기기 영상 비율 그대로 */
+    border: 2px solid white;
+    object-fit: cover;
+    z-index: 2; /* ✅ peerFace 위로 오버레이 */
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    border-radius: 6px;
+}
+
+#audios {
+    position: absolute;
+    top: 100px;
+    right: 20px;
+    z-index: 3;
+    background: rgba(0,0,0,0.4);
+    color: whitesmoke;
+    border: none;
+    padding: 5px;
+    border-radius: 6px;
+}
+
+button {
+    margin: 5px;
+    color: whitesmoke;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid white;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.icon-buttons {
+    position: absolute;
+    top: 55%;
+    right: 5px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;   /* ✅ 세로 정렬 핵심 */
+    gap: 10px;                /* 버튼 사이 간격 */
+    z-index: 10;
+}
+.icon-buttons button {
+    background: rgba(0, 0, 0, 0.4); /* ✅ 어두운 반투명 배경 추가 */
+    border: 2px solid white;
+    border-radius: 50%;       /* ✅ 동그랗게 */
+    width: 50px;
+    height: 50px;
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+.icon-buttons button:hover {
+    background: rgba(0, 0, 0, 0.6); /* ✅ hover 시 살짝 더 어둡게 */
+    transform: scale(1.1);
+}
+.icon-buttons i {
+    pointer-events: none;
+}

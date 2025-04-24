@@ -35,7 +35,9 @@ const socket = io("https://chickchick.shop:3000", {
 });
 
 const myFace = document.getElementById('myFace');
+const peerFace = document.getElementById("peerFace");
 const muteBtn = document.getElementById('mute');
+const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
 const audioSelect = document.getElementById('audios');
 const roomName = 'nh';
@@ -46,6 +48,12 @@ let cameraOff = false;
 let myPeerConnection;
 let myDataChannel;
 let peerLeftTimeout;
+let cameraOn = true;
+let audioOn = false;
+let micOn = false;
+let isDragging = false;
+let offsetX = 0;
+let offsetY = 0;
 
 // 연결된 카메라 리스트 출력
 async function getCameras() {
@@ -71,7 +79,7 @@ async function getAudios() {
             if (currentAudio.label == audio.label) {
                 option.selected = true;
             }
-            audioSelect.appendChild(option);
+            audioSelect?.appendChild(option);
         })
     } catch (err) {
         console.log(err);
@@ -120,18 +128,19 @@ async function getMedia(deviceId) {
             track.enabled = false;
         });
 
-        /*const videoTrack = myStream.getVideoTracks()[0];
+        const videoTrack = myStream.getVideoTracks()[0];
         const settings = videoTrack.getSettings();
 
         // 전면 카메라 + 모바일인 경우에만 mirror 적용
         const isFrontCamera = settings.facingMode === "user";
-        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        // const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
         if (isFrontCamera && isMobile) {
             myFace.classList.add("mirror");
         } else {
             myFace.classList.remove("mirror");
-        }*/
+        }
     } catch (err) {
         console.error("🎥 getMedia 에러:", err);
         alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
@@ -142,26 +151,26 @@ function handleMuteClick() {
     myStream.getAudioTracks().forEach(track => {
         track.enabled = !track.enabled
     });
-    if (!muted) {
-        muteBtn.innerText = "Mic On"
-        muted = true;
-    } else {
-        muteBtn.innerText = "Mic Off"
-        muted = false;
-    }
+    micOn = !micOn;
+    const micIcon = document.getElementById("micIcon");
+    micIcon.className = micOn ? "fas fa-microphone" : "fas fa-microphone-slash";
 }
 
 function handleCameraClick() {
     myStream.getVideoTracks().forEach(track => {
         track.enabled = !track.enabled
     });
-    if (cameraOff) {
-        cameraBtn.innerText = "Camera On"
-        cameraOff = false;
-    } else {
-        cameraBtn.innerText = "Camera Off"
-        cameraOff = true;
-    }
+    cameraOn = !cameraOn;
+    const cameraIcon = document.getElementById("cameraIcon");
+    cameraIcon.className = cameraOn ? "fas fa-video" : "fas fa-video-slash";
+}
+
+function handlePeerAudio() {
+    audioOn = !audioOn;
+    peerFace.muted = !audioOn;
+
+    const icon = document.getElementById("audioIcon");
+    icon.className = audioOn ? "fas fa-volume-up" : "fas fa-volume-mute";
 }
 
 /*async function handleCameraChange() {
@@ -174,7 +183,7 @@ function handleCameraClick() {
 }*/
 
 async function handleAudioChange() {
-    await getMedia(audioSelect.value);
+    await getMedia(audioSelect?.value);
     if (myPeerConnection) {
         const videoTrack = myStream?.getVideoTracks()[0]; // 변경된 myStream
         const audioSender = myPeerConnection.getSenders()
@@ -185,7 +194,8 @@ async function handleAudioChange() {
 
 muteBtn.addEventListener('click', handleMuteClick);
 cameraBtn.addEventListener('click', handleCameraClick);
-audioSelect.addEventListener('input', handleAudioChange);
+peerAudioBtn.addEventListener('click', handlePeerAudio);
+audioSelect?.addEventListener('input', handleAudioChange);
 
 ///////////////////////// Socket Code /////////////////////////////////////
 
@@ -328,3 +338,56 @@ document.addEventListener("DOMContentLoaded", () => {
 window.addEventListener("beforeunload", () => {
     socket.emit("leave_room", roomName); // 서버에 방 나간다고 알림
 });
+
+
+/////////////////////////// Drag Event //////////////////////////////////
+
+// 📱 공통 좌표 추출 함수 (마우스 or 터치 구분)
+function getClientPosition(e) {
+    if (e.touches && e.touches.length > 0) {
+        return {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY
+        };
+    } else {
+        return {
+            x: e.clientX,
+            y: e.clientY
+        };
+    }
+}
+
+function startDrag(e) {
+    isDragging = true;
+    const pos = getClientPosition(e);
+    offsetX = pos.x - myFace.offsetLeft;
+    offsetY = pos.y - myFace.offsetTop;
+    e.preventDefault(); // 터치 스크롤 방지
+}
+
+function onDrag(e) {
+    if (!isDragging) return;
+    const pos = getClientPosition(e);
+
+    const x = pos.x - offsetX;
+    const y = pos.y - offsetY;
+
+    myFace.style.left = `${x}px`;
+    myFace.style.top = `${y}px`;
+    myFace.style.right = "auto";
+    myFace.style.bottom = "auto";
+}
+
+function endDrag() {
+    isDragging = false;
+}
+
+// ✅ 마우스 이벤트
+myFace.addEventListener("mousedown", startDrag);
+document.addEventListener("mousemove", onDrag);
+document.addEventListener("mouseup", endDrag);
+
+// ✅ 터치 이벤트
+myFace.addEventListener("touchstart", startDrag, { passive: false });
+document.addEventListener("touchmove", onDrag, { passive: false });
+document.addEventListener("touchend", endDrag);
