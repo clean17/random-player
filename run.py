@@ -26,9 +26,12 @@ if __name__ == '__main__':
 
     if select_server == 0: # werkzeug
         from utils.wsgi_midleware import logger
+        from werkzeug.middleware.proxy_fix import ProxyFix
         logger.info("############################### Starting server.... ####################################")
         from app import create_app # Flask, # create_app 에서 WebSocket 기능을 추가함
         app = create_app()
+        # 실제 클라이언트 IP (X-Forwarded-For) 를 읽도록
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
         app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False, threaded=True)
         # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True)
 
