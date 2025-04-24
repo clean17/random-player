@@ -24,6 +24,11 @@
     }
 </style>
 <body>
+<div class="icon-buttons">
+    <button id="videoCallBtn" title="Video Call">
+        <i class="fas fa-video"></i>
+    </button>
+</div>
 <audio id="alert-sound" src="/static/sound/beep.mp3" preload="auto"></audio>
 <div class="top-bar">
     <div class="logout">
@@ -87,6 +92,9 @@
         scrollTop,    // 현재 스크롤 위치
         videoCallWindow = null,
         isMinimized = false,
+        isDragging = false,
+        offsetX = 0,
+        offsetY = 0,
         scrollButton = undefined;
 
     openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -556,8 +564,34 @@
         iframe.style.flex = "1";
         iframe.style.border = "none";
 
+        const dragOverlay = document.createElement("div");
+        dragOverlay.style.position = "absolute";
+        dragOverlay.style.top = "0";
+        dragOverlay.style.left = "0";
+        dragOverlay.style.width = "100%";
+        dragOverlay.style.height = "100%";
+        dragOverlay.style.zIndex = "9999";
+        dragOverlay.style.background = "transparent"; // 완전 투명
+
+        // iframe 추가 전에 삽입
+        videoCallWindow.appendChild(dragOverlay);
+        // 드래그 이벤트 연결
+        dragOverlay.addEventListener("mousedown", startDrag);
+        dragOverlay.addEventListener("touchstart", startDrag, { passive: false });
+
         videoCallWindow.appendChild(topBar);
         videoCallWindow.appendChild(iframe);
+
+        // ✅ 마우스 이벤트
+        videoCallWindow.addEventListener("mousedown", startDrag);
+        document.addEventListener("mousemove", onDrag);
+        document.addEventListener("mouseup", endDrag);
+
+        // ✅ 터치 이벤트
+        videoCallWindow.addEventListener("touchstart", startDrag, { passive: false });
+        document.addEventListener("touchmove", onDrag, { passive: false });
+        document.addEventListener("touchend", endDrag);
+
         document.body.appendChild(videoCallWindow);
 
         updateButtonColor();
@@ -622,6 +656,46 @@
         // 초기 설정
         resize();
     });
+
+    // 📱 공통 좌표 추출 함수 (마우스 or 터치 구분)
+    function getClientPosition(e) {
+        if (e.touches && e.touches.length > 0) {
+            return {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY
+            };
+        } else {
+            return {
+                x: e.clientX,
+                y: e.clientY
+            };
+        }
+    }
+
+    function startDrag(e) {
+        isDragging = true;
+        const pos = getClientPosition(e);
+        offsetX = pos.x - videoCallWindow.offsetLeft;
+        offsetY = pos.y - videoCallWindow.offsetTop;
+        e.preventDefault(); // 터치 스크롤 방지
+    }
+
+    function onDrag(e) {
+        if (!isDragging) return;
+        const pos = getClientPosition(e);
+
+        const x = pos.x - offsetX;
+        const y = pos.y - offsetY;
+
+        videoCallWindow.style.left = `${x}px`;
+        videoCallWindow.style.top = `${y}px`;
+        videoCallWindow.style.right = "auto";
+        videoCallWindow.style.bottom = "auto";
+    }
+
+    function endDrag() {
+        isDragging = false;
+    }
 
     document.addEventListener("DOMContentLoaded", initPage);
 </script>
