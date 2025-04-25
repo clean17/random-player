@@ -42,7 +42,11 @@ os.makedirs(MOVE_DIR, exist_ok=True)
 
 def initialize_shuffle_images():
     global shuffled_images
-    images = os.listdir(REF_IMAGE_DIR)
+    images = [
+        f for f in os.listdir(REF_IMAGE_DIR)
+        if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))
+           and not f.lower().endswith(('.zip', '.ini'))
+    ]
     random.seed(time.time())
     random.shuffle(images)
     shuffled_images = images
@@ -211,17 +215,30 @@ def get_image():
     selected_dir = request.args.get('selected_dir', '')
 
     if dir == 'image':
-        dir = IMAGE_DIR
+        base_dir = IMAGE_DIR
     elif dir == 'refine':
-        dir = REF_IMAGE_DIR
+        base_dir = REF_IMAGE_DIR
     elif dir == 'trip':
-        dir = TRIP_IMAGE_DIR
+        base_dir = TRIP_IMAGE_DIR
     elif dir == 'temp':
-        dir = TEMP_IMAGE_DIR
+        base_dir = TEMP_IMAGE_DIR
         if selected_dir:
-            dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
+            base_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
+    else:
+        abort(400, 'Invalid dir')
 
-    return send_from_directory(dir, filename)
+    # ✅ thumb 디렉토리 경로 설정
+    thumb_dir = os.path.join(base_dir, 'thumb')
+    name_without_ext, _ = os.path.splitext(filename)
+    webp_name = name_without_ext + '.webp'
+    webp_path = os.path.join(thumb_dir, webp_name)
+
+    # ✅ webp 썸네일이 존재하면 반환
+    if os.path.exists(webp_path):
+        return send_from_directory(thumb_dir, webp_name)
+
+    # ✅ 기존 파일 경로에서 반환
+    return send_from_directory(base_dir, filename)
 
 @image_bp.route('/shuffle/ref-images', methods=['POST'], endpoint='shuffle/ref-images')
 @login_required

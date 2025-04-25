@@ -6,6 +6,7 @@ from config.config import settings
 from werkzeug.utils import secure_filename
 from threading import Thread
 from zipfile import ZipFile
+from utils.make_thumbnail import convert_file
 
 upload = Blueprint('upload', __name__)
 
@@ -62,6 +63,7 @@ def upload_file():
                                 extracted_path = os.path.join(target_dir, extracted_file)
                                 # 파일인 경우에만 추가
                                 if os.path.isfile(extracted_path):
+                                    convert_file(extracted_path)
                                     saved_files.append(extracted_path)
                     except Exception as e:
                         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
@@ -73,6 +75,7 @@ def upload_file():
                 else:
                     file_path = os.path.join(target_dir, f"{filename}")
                     file.save(file_path)
+                    convert_file(file_path)
                     saved_files.append(file_path)
 
         return jsonify({"status": "success", "files": saved_files})

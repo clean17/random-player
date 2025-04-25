@@ -68,7 +68,7 @@
             {% for image in images %}
             <div class="image-item" id="image-{{ loop.index }}">
                 {% set video_extensions = ['mp4', 'mov', 'mkv', 'avi'] %}
-                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'] %}
+                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'jfif'] %}
                 {% set file_extension = image.split('.')[-1].lower() %}
 
                 <input type="hidden" name="images[]" value="{{ image }}">
@@ -78,10 +78,14 @@
 
                 <!-- 비디오 파일인 경우 -->
 <!--                <video class="thumbnail" controls preload="metadata" poster="thumbnail.jpg" playsinline muted>-->
-                <video class="thumbnail" controls preload="metadata">
-                    <!-- preload="none" 브라우저가 비디오 데이터를 아예 사전 로드하지 않음 -->
+                    <!--<video class="thumbnail" controls preload="metadata">
+                    &lt;!&ndash; preload="none" 브라우저가 비디오 데이터를 아예 사전 로드하지 않음 &ndash;&gt;
                     <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
                             type="video/mp4" data-filename="{{ image|urlencode }}">
+                </video>-->
+
+                <video class="thumbnail" controls preload="metadata" muted playsinline data-index="{{ loop.index }}">
+                    <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}" type="video/mp4">
                 </video>
                 {% elif file_extension in image_extensions %}
                 <button class="delete-btn" type="button">×</button>
@@ -116,7 +120,7 @@
             <a href="{{ url_for('image.image_list', page=total_pages, title=title, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>
-        {% if current_user.get_id() != config.GUEST_USERNAME %}
+        {% if current_user.get_id() != config.GUEST_USERNAME and dir == 'image' %}
         <button type="submit" class="delete-button">Delete</button>
         {% endif %}
     </form>
@@ -319,6 +323,8 @@
     };
 
     function initPage() {
+        // renderTopScrollButton();
+        // renderBottomScrollButton();
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
         const imageItems = document.querySelectorAll('.image-item');
         imageItems.forEach(item => {
@@ -585,6 +591,8 @@
                 dropdownMenu.style.display = 'none';
             }
         });
+
+        lazyLoadVideos();
     }
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -606,6 +614,46 @@
         });
     });
 
+    function lazyLoadVideos() {
+        const videos = document.querySelectorAll("video.thumbnail");
+
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const video = entry.target;
+                    const source = video.querySelector("source");
+
+                    if (source && source.dataset.src && !source.src) {
+                        source.src = source.dataset.src;
+                        video.load();  // 실제 로드 시작
+                    }
+
+                    observer.unobserve(video); // 한 번 로딩되면 더 이상 감시 안 함
+                }
+            });
+        }, {
+            rootMargin: "0px 0px 300px 0px",  // 약간 미리 로드
+            threshold: 0.1
+        });
+
+        videos.forEach(video => observer.observe(video));
+    }
+
+    /*function renderBottomScrollButton() {
+        scrollButton = document.createElement("button");
+        scrollButton.id = "scroll-button";
+        scrollButton.innerHTML = "↓";
+        document.body.appendChild(scrollButton);
+        console.log(scrollButton)
+    }
+
+    function renderTopScrollButton() {
+        scrollButton = document.createElement("button");
+        scrollButton.id = "scroll-button";
+        scrollButton.innerHTML = "↑";
+        document.body.appendChild(scrollButton);
+        console.log(scrollButton)
+    }*/
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
