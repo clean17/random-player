@@ -106,6 +106,19 @@
             saveMemo();  // 5초 후 자동 저장
         }, 1000);
     });
+
+    document.addEventListener('visibilitychange', () => {
+        fetch("/func/memo", { method: "GET" })
+            .then(res => {
+                if (res.redirected) {
+                    window.location.href = res.url;
+                }
+            })
+            .catch(err => {
+                console.error("요청 실패:", err);
+            });
+    });
+
 </script>
 
 </body>
