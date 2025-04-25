@@ -8,7 +8,8 @@ body, html {
     justify-content: center;
     align-items: center;
     background-color: #f4f4f4;
-    overflow-y: hidden
+    overflow: hidden;
+    touch-action: manipulation;
 }
 
 

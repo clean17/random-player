@@ -8,19 +8,39 @@
     <!--<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>-->
     <script src="https://chickchick.shop:3000/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/video_call.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <style>
     .icon-buttons {
         position: absolute;
-        top: 15%;
-        right: 5px;
+        top: 12%;
+        right: 10px;
         transform: translateY(-50%);
         display: flex;
         flex-direction: column;   /* ✅ 세로 정렬 핵심 */
         gap: 10px;                /* 버튼 사이 간격 */
         z-index: 10;
+    }
+    .icon-buttons button {
+        background: rgba(0, 0, 0, 0.4); /* ✅ 어두운 반투명 배경 추가 */
+        border: 2px solid white;
+        border-radius: 50%;       /* ✅ 동그랗게 */
+        width: 50px;
+        height: 50px;
+        color: white;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.2s;
+    }
+    .icon-buttons button:hover {
+        background: rgba(0, 0, 0, 0.6); /* ✅ hover 시 살짝 더 어둡게 */
+        transform: scale(1.1);
+    }
+    .icon-buttons i {
+        pointer-events: none;
     }
 </style>
 <body>
@@ -99,7 +119,6 @@
 
     openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
     const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
-
 
     function connectSocket() {
         console.log('새로운 소켓 연결', username)
@@ -519,10 +538,10 @@
     function openVideoCallWindow() {
         videoCallWindow = document.createElement("div");
         videoCallWindow.style.position = "fixed";
-        videoCallWindow.style.bottom = "20px";
-        videoCallWindow.style.right = "5px";
-        videoCallWindow.style.width = "400px";
-        videoCallWindow.style.height = "600px";
+        videoCallWindow.style.bottom = "140px";
+        videoCallWindow.style.right = "30px";
+        videoCallWindow.style.width = "350px";
+        videoCallWindow.style.height = "500px";
         videoCallWindow.style.background = "#000";
         videoCallWindow.style.border = "2px solid #ccc";
         videoCallWindow.style.zIndex = "9998";
@@ -536,7 +555,6 @@
         topBar.style.background = "#222";
         topBar.style.color = "#fff";
         topBar.style.padding = "4px 8px";
-        topBar.style.cursor = "move";
 
         const hideBtn = document.createElement("span");
         hideBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';  // 🔽 숨기기
@@ -566,11 +584,11 @@
         iframe.style.flex = "1";
         iframe.style.border = "none";
 
-        /*const dragOverlay = document.createElement("div");
+        const dragOverlay = document.createElement("div");
         dragOverlay.style.position = "absolute";
         dragOverlay.style.bottom = "0";
         dragOverlay.style.left = "0";
-        dragOverlay.style.width = "100%";
+        dragOverlay.style.width = "85%";
         dragOverlay.style.height = "90%";
         dragOverlay.style.zIndex = "9999";
         dragOverlay.style.background = "transparent"; // 완전 투명
@@ -579,7 +597,7 @@
         videoCallWindow.appendChild(dragOverlay);
         // 드래그 이벤트 연결
         dragOverlay.addEventListener("mousedown", startDrag);
-        dragOverlay.addEventListener("touchstart", startDrag, { passive: false });*/
+        dragOverlay.addEventListener("touchstart", startDrag, { passive: false });
 
         videoCallWindow.appendChild(topBar);
         videoCallWindow.appendChild(iframe);
@@ -598,19 +616,21 @@
 
         updateButtonColor();
 
-        window.addEventListener("message", (event) => {
-            if (event.data?.type === "SOCKET_CONNECTED") {
-                videoCallBtn.style.backgroundColor = "green";
-            }
-            if (event.data?.type === "SOCKET_DISCONNECTED") {
-                videoCallBtn.style.backgroundColor = "";
-            }
-        });
+        // videoCallBtn.style.backgroundColor = "green";
+        // videoCallBtn.style.backgroundColor = "";
+        // closeBtn.click();
+        // 소켓으로 컨트롤 해야할지도
+
     }
     function initPage() {
         // keydown 에서만 event.preventDefault() 가 적용된다 !!
         chatInput.removeEventListener('keydown', enterEvent);
-        chatInput.addEventListener('keydown', enterEvent);
+        chatInput.addEventListener('keydown', enterEvent)
+        chatInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                window.scrollTo(0, 0);  // 키보드 내려간 후에도 복구
+            }, 100);
+        });
         cameraButton.removeEventListener('click', cameraEvent);
         cameraButton.addEventListener('click', cameraEvent);
         sendButton.removeEventListener('click', sendMsg);
@@ -688,7 +708,7 @@
         const pos = getClientPosition(e);
         offsetX = pos.x - videoCallWindow.offsetLeft;
         offsetY = pos.y - videoCallWindow.offsetTop;
-        e.preventDefault(); // 터치 스크롤 방지
+        // e.preventDefault(); // 터치 스크롤 방지
     }
 
     function onDrag(e) {
@@ -698,8 +718,18 @@
         const x = pos.x - offsetX;
         const y = pos.y - offsetY;
 
-        videoCallWindow.style.left = `${x}px`;
-        videoCallWindow.style.top = `${y}px`;
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+
+        const elemWidth = videoCallWindow.offsetWidth;
+        const elemHeight = videoCallWindow.offsetHeight;
+
+        // ✅ 화면(뷰포트)을 벗어나지 않도록 제한
+        const clampedX = Math.max(0, Math.min(x, windowWidth - elemWidth));
+        const clampedY = Math.max(0, Math.min(y, windowHeight - elemHeight));
+
+        videoCallWindow.style.left = `${clampedX}px`;
+        videoCallWindow.style.top = `${clampedY}px`;
         videoCallWindow.style.right = "auto";
         videoCallWindow.style.bottom = "auto";
     }
