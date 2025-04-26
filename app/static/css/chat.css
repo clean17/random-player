@@ -9,6 +9,11 @@ body, html {
     align-items: center;
     background-color: #f4f4f4;
     overflow: hidden;
+    position: fixed;  /* ✅ 추가: 뷰포트에 고정 */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     touch-action: manipulation;
 }
 
@@ -89,4 +94,22 @@ body, html {
     text-align: center; /* 텍스트 중앙 정렬 */
     line-height: 50px; /* 버튼 높이와 동일하게 설정하여 아이콘 정중앙 */
     opacity: 0.4;
+}
+
+.container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-width: 600px;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    background: white; /* ✅ body 색상이 아닌 container 자체 배경 */
+}
+
+#chat-container {
+    overflow-y: auto;
+    flex: 1;
 }
