@@ -108,15 +108,17 @@
     });
 
     document.addEventListener('visibilitychange', () => {
-        fetch("/func/memo", { method: "GET" })
-            .then(res => {
-                if (res.redirected) {
-                    window.location.href = res.url;
-                }
-            })
-            .catch(err => {
-                console.error("요청 실패:", err);
-            });
+        if (!document.hidden) {
+            fetch("/func/memo", { method: "GET" })
+                .then(res => {
+                    if (res.redirected) {
+                        window.location.href = res.url;
+                    }
+                })
+                .catch(err => {
+                    console.error("요청 실패:", err);
+                });
+        }
     });
 
 </script>
