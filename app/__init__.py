@@ -132,12 +132,16 @@ def create_app():
         # if request.path.startswith(tuple(paths_to_check)):
 
         if request.path.startswith(('/func/memo', '/func/chat')): # tuple
+            url = request.path
+            parts = url.split("/")
+            base_path = "/" + "/".join(parts[1:3])
+
             verified = session.get(SECOND_PASSWORD_SESSION_KEY)
             verified_at_str = session.get('second_password_verified_at')
 
             if not verified or not verified_at_str:
                 # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
-                return redirect(url_for('auth.verify_password', next=request.path))
+                return redirect(url_for('auth.verify_password', next=base_path))
 
             # 현재 uri 요청을 반복하면 세션 시간 갱신
             session['second_password_verified_at'] = datetime.utcnow().isoformat()
@@ -148,7 +152,7 @@ def create_app():
                 # 시간 파싱 실패 → 인증 무효 처리
                 session.pop(SECOND_PASSWORD_SESSION_KEY, None)
                 session.pop('second_password_verified_at', None)
-                return redirect(url_for('auth.verify_password', next=request.path))
+                return redirect(url_for('auth.verify_password', next=base_path))
 
             # 10분 유효시간 초과 시 인증 무효
             # if datetime.utcnow() - verified_at > timedelta(seconds=5):
@@ -156,7 +160,7 @@ def create_app():
                 print('    before_request - Session Expires ', current_user.get_id())
                 session.pop(SECOND_PASSWORD_SESSION_KEY, None)
                 session.pop('second_password_verified_at', None)
-                return redirect(url_for('auth.verify_password', next=request.path))
+                return redirect(url_for('auth.verify_password', next=base_path))
 
         ###################### 세션 잠금 확인 ######################
         if 'lockout_time' in session and session['lockout_time']:
