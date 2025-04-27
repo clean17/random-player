@@ -170,18 +170,29 @@ def move_image():
     subpath = request.get_json().get('subpath', '')
     filename = request.get_json().get('filename')
     dest_path = os.path.join(MOVE_DIR, filename)
+    name_without_ext = os.path.splitext(filename)[0]
 
     if imagepath == "image":
         src_path = os.path.join(IMAGE_DIR, filename)
+        thumb_dir = os.path.join(IMAGE_DIR, "thumb")
     elif imagepath == "ref_image":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
+        thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
     elif imagepath == "trip_image":
         src_path = os.path.join(TRIP_IMAGE_DIR, filename)
+        thumb_dir = os.path.join(TRIP_IMAGE_DIR, "thumb")
     elif imagepath == "temp_image":
         dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
         src_path = os.path.join(TEMP_IMAGE_DIR, subpath, filename)
+        thumb_dir = os.path.join(TEMP_IMAGE_DIR, subpath, "thumb")
     else:
         return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
+
+    webp_file = os.path.join(thumb_dir, name_without_ext + ".webp")
+
+    # 존재하면 휴지통으로 이동
+    if os.path.exists(webp_file):
+        send2trash(webp_file)
 
     # print('src_path', src_path)
     if os.path.exists(src_path):
