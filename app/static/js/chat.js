@@ -588,8 +588,12 @@ document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textare
 
     const resize = () => {
         textarea.style.height = '22px';  // ✅ 초기화
-        const lineCount = textarea.value.split('\n').length;
-        const newHeight = Math.min(lineCount * textAreaOffsetHeight, maxHeight);
+        // const lineCount = textarea.value.split('\n').length;
+        // const newHeight = Math.min(lineCount * textAreaOffsetHeight, maxHeight);
+
+        const scrollHeight = textarea.scrollHeight - 10; // ✅ 실제 내용 높이
+        const newHeight = Math.min(scrollHeight, maxHeight);
+
         textarea.style.height = `${newHeight}px`;
     };
 
