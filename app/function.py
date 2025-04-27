@@ -26,7 +26,7 @@ CHAT_FILE = 'chat.txt'
 MEMO_FILE_PATH = os.path.join(DATA_DIR, MEMO_FILE)
 CHAT_FILE_PATH = os.path.join(DATA_DIR, CHAT_FILE)
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
-MAX_FETCH_MESSAGE_SIZE = 30
+MAX_FETCH_MESSAGE_SIZE = 50
 
 
 
@@ -327,7 +327,15 @@ def save_chat_message():
     if not data['username']:
         data['username'] = 'error'
 
-    log_entry = f"{data['timestamp']} | {data['username']} | {data['message']}"
+    try:
+        with open(CHAT_FILE_PATH, "r", encoding="utf-8") as f:
+            line_count = sum(1 for _ in f)
+    except FileNotFoundError:
+        line_count = 0  # 파일이 없으면 0부터 시작
+
+    next_line_number = line_count + 1
+
+    log_entry = f"{next_line_number} | {data['timestamp']} | {data['username']} | {data['message']}"
     with open(CHAT_FILE_PATH, "a", encoding="utf-8") as log_file:
         log_file.write(log_entry + "\n")
     return {"status": "success"}, 200
@@ -339,6 +347,8 @@ def load_more_logs():
     offset = int(request.json.get("offset", 0))  # 클라이언트가 요청한 로그 시작점
     all_lines = get_last_n_lines(CHAT_FILE_PATH, 0, 1000)  # 최대 로그 유지
 
+    # offset 0 =>  950 ~ 1000 라인
+    # offset 1 =>  900 ~ 950 라인...
     start = max(0, len(all_lines) - offset - MAX_FETCH_MESSAGE_SIZE)
     end = len(all_lines) - offset
 

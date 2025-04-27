@@ -26,6 +26,8 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     isDragging = false,
     offsetX = 0,
     offsetY = 0,
+    lastChatId = 0,
+    socketFlag = false;
     scrollButton = undefined;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -72,9 +74,8 @@ function connectSocket() {
 }
 
 
-
 document.addEventListener('visibilitychange', () => {
-    console.log('visible')
+    // console.log('visible')
     if (!document.hidden) {
         if (typeof socket !== "undefined") {
             if (!socket.connected) {
@@ -84,24 +85,67 @@ document.addEventListener('visibilitychange', () => {
                         console.log('⚠️ 소켓 연결 끊김')
                         connectSocket();
                     }
-                }, 2000)
+                }, 400)
             }
         } else {
             alert("⚠️ socket 객체가 정의되지 않음");
             connectSocket();
         }
         chatInput.focus();
-    }
 
-    fetch("/func/chat", { method: "GET" })
-        .then(res => {
-            if (res.redirected) {
-                window.location.href = res.url;
-            }
+        /*fetch("/func/chat", { method: "GET" })
+            .then(res => {
+                if (res.redirected) {
+                    window.location.href = res.url;
+                }
+            })
+            .catch(err => {
+                console.error("요청 실패:", err);
+            });*/
+
+        fetch("/func/chat/load-more-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ offset: 0 })
         })
-        .catch(err => {
-            console.error("요청 실패:", err);
-        });
+            .then(res => {
+                if (res.redirected) {
+                    window.location.href = res.url;
+                } else {
+                    return res.json();
+                }
+            })
+            .then(data => {
+                if (data.logs.length > 0) {
+                    const tempArr = []
+                    let isFisrtMsg = false;
+
+                    if (data.logs.length !== MAX_FETCH_MESSAGE_SIZE) isFisrtMsg = true;
+
+                    data.logs.map(log => {
+                        tempArr.push(log)
+                    });
+
+                    tempArr.forEach(log => {
+                        const [chatId, timestamp, username, msg] = log.toString().split("|");
+                        chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
+                        if (Number(lastChatId) < Number(chatObj.chatId)) {
+                            // addMessage(chatObj);
+                        }
+                    });
+
+                    if (isFisrtMsg) {
+                        renderDateDivider(dateStr)
+                    }
+                }
+            })
+            .finally(() => {
+                loading = false;
+            });
+    } else {
+        // socketFlag = false;
+        // if (typeof socket !== "undefined") socket.disconnect();
+    }
 });
 
 
@@ -148,9 +192,9 @@ function loadMoreChats(event) {
                 });
 
                 tempArr.reverse().forEach(log => {
-                    const [timestamp, username, msg] = log.toString().split("|");
-                    chatObj = { timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
-                    addMessage(chatObj, true, isFisrtMsg)
+                    const [chatId, timestamp, username, msg] = log.toString().split("|");
+                    chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
+                    addMessage(chatObj, true)
                     if (event === "wheel") {
                         chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
                     }
@@ -194,13 +238,15 @@ function callNotification() {
 }
 
 // 바깥 컨테이너: 메시지 한 줄을 구성
-function renderMessageRow(isMine) {
+function renderMessageRow(isMine, chatId) {
     const messageRow = document.createElement("div");
     messageRow.style.display = "flex";
     messageRow.style.alignItems = "flex-end";
     messageRow.style.marginBottom = "6px";
     messageRow.style.maxWidth = "100%";
     messageRow.style.justifyContent = isMine ? "flex-end" : "flex-start";
+    messageRow.classList.add('messageRow')
+    messageRow.dataset.chatId = chatId;
     return messageRow;
 }
 
@@ -239,8 +285,11 @@ function addMessage(data, load = false) {
         const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
         data.timestamp = timestamp;
     }
+    if (Number(lastChatId) < Number(data.chatId)) {
+        lastChatId = data.chatId;
+    }
 
-    const messageRow = renderMessageRow(isMine);
+    const messageRow = renderMessageRow(isMine, data.chatId);
     const messageDiv = renderMessageDiv();
 
     if (isMine) {
