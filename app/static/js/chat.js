@@ -32,7 +32,7 @@ openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
 const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
 
 function connectSocket() {
-    console.log('새로운 소켓 연결', username)
+    // console.log('새로운 소켓 연결', username)
     // socket = io("https://192.168.60.205:3000", {
     socket = io("https://chickchick.shop:3000", {
         secure: true, // HTTPS 사용
@@ -565,7 +565,7 @@ function initPage() {
     chatContainer.addEventListener("scroll", checkScroll);
     setTimeout(() => {
         moveBottonScroll();
-    }, 100)
+    }, 200)
 
     scrollButton?.removeEventListener("click", () => {moveBottonScroll()});
     scrollButton?.addEventListener("click", () => {moveBottonScroll()});
@@ -648,5 +648,15 @@ function onDrag(e) {
 function endDrag() {
     isDragging = false;
 }
+
+// touchmove 강제 차단
+document.addEventListener('touchmove', function (e) {
+    const isChatContainer = e.target.closest('#chat-container');
+    if (!isChatContainer) {
+        e.preventDefault();  // ❌ chat-container 아닌 경우만 터치 이동 막기
+    }
+}, { passive: false }); // 브라우저에게 "이 리스너는 preventDefault()를 호출할 수 있다"고 알려주는 옵션
+// passive: true     preventDefault() 안한다      (브라우저 최적화 OK)
+// passive: false    preventDefault() 쓸 수도 있음 (브라우저가 스크롤 최적화 안 함)
 
 document.addEventListener("DOMContentLoaded", initPage);
