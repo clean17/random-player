@@ -23,7 +23,6 @@ def get_file_upload_html():
 @upload.route('/', methods=['POST'], strict_slashes=False)
 @login_required
 def upload_file():
-    print('post /upload')
     try:
         if 'files[]' not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
@@ -45,7 +44,6 @@ def upload_file():
             if file and file.filename:  # 파일명이 있는 경우 저장
                 # filename = secure_filename(file.filename)
                 filename = file.filename
-                print('filename', filename)
                 file_ext = os.path.splitext(filename)[1].lower()
 
                 # 압축 파일인 경우
@@ -64,7 +62,8 @@ def upload_file():
                                 # 파일인 경우에만 추가
                                 if os.path.isfile(extracted_path):
                                     convert_file(extracted_path)
-                                    saved_files.append(extracted_path)
+                                    # saved_files.append(extracted_path)
+                                    saved_files.append(filename)
                     except Exception as e:
                         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
                         print(f"### {current_time} - Error while extracting {archive_path}: {e}")
@@ -76,7 +75,8 @@ def upload_file():
                     file_path = os.path.join(target_dir, f"{filename}")
                     file.save(file_path)
                     convert_file(file_path)
-                    saved_files.append(file_path)
+                    # saved_files.append(file_path)
+                    saved_files.append(filename)
 
         return jsonify({"status": "success", "files": saved_files})
     except Exception as e:

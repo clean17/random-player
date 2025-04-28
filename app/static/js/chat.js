@@ -5,7 +5,9 @@ const chatContainer = document.getElementById("chat-container"),
     sendButton = document.getElementById('send-button'),
     textAreaOffsetHeight = 22,
     openDate = new Date(),
-    cameraButton = document.getElementById("camera-button"),
+    // cameraButton = document.getElementById("camera-button"),
+    fileInput = document.getElementById('file-input'),
+    progressContainer = document.getElementById('progressContainer'),
     videoCallBtn = document.getElementById("videoCallBtn");
 
 let offset = 0, // 가장 최근 10개는 이미 로드됨
@@ -27,7 +29,8 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     offsetX = 0,
     offsetY = 0,
     lastChatId = 0,
-    socketFlag = false;
+    socketFlag = false,
+    submitted = false,
     scrollButton = undefined;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -260,6 +263,7 @@ function renderMessageDiv() {
         "w-fit",
         "block",        // 내용에 맞게 크기 조정
         "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
+        "messageDiv",
     );
     return messageDiv;
 }
@@ -313,10 +317,48 @@ function addMessage(data, load = false) {
             }
         }
     } else { // 메세지 생성
-        const messageSpan = document.createElement("span");
-        const safeText = data.msg.replace(/ /g, "&nbsp;");
-        messageSpan.innerHTML = safeText;
-        messageDiv.appendChild(messageSpan);
+        if (data.msg.trim().startsWith('https://chickchick.shop/image/images/')) {
+            const fileUrl = '';
+
+            const img = document.createElement('img');
+            img.src = data.msg;
+            // img.className = 'w-40 h-40 object-cover rounded'; // Tailwind 예시
+            img.alt = 'Uploaded Image';
+            img.style.width = '100%';
+            img.style.height = 'auto'; // 비율 유지 (이미지가 찌그러지지 않게)
+            messageDiv.appendChild(img);
+            messageDiv.classList.remove('p-2');
+            messageDiv.classList.add('border');
+
+            /*if (fileUrl.match(/\.(jpeg|jpg|png|gif|webp)$/i)) {
+                // 이미지 파일
+                const img = document.createElement('img');
+                img.src = fileUrl;
+                img.className = 'w-40 h-40 object-cover rounded'; // Tailwind 예시
+                img.alt = 'Uploaded Image';
+                messageDiv.appendChild(img);
+            } else if (fileUrl.match(/\.(mp4|webm|ogg)$/i)) {
+                // 비디오 파일
+                const video = document.createElement('video');
+                video.src = fileUrl;
+                video.controls = true;
+                video.className = 'w-60 h-40 rounded';
+                messageDiv.appendChild(video);
+            } else {
+                // 기타 파일
+                const link = document.createElement('a');
+                link.href = fileUrl;
+                link.innerText = '파일 보기';
+                link.target = '_blank';
+                messageDiv.appendChild(link);
+            }*/
+        } else {
+            const messageSpan = document.createElement("span");
+            const safeText = data.msg.replace(/ /g, "&nbsp;");
+            messageSpan.innerHTML = safeText;
+            messageDiv.appendChild(messageSpan);
+        }
+
 
         // 시간 계산
         let timeStr = ""; // 14:33 형식
@@ -435,6 +477,80 @@ function enterEvent(event) {
 function cameraEvent(event) {
 
 }
+
+fileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        event.preventDefault(); // 기본 제출 막기
+
+        const form = event.target.closest('form');  // 🔧 이걸 먼저 정의해줘야 아래에서 사용 가능
+
+        if (submitted) {
+            return;  // 이미 제출한 경우
+        }
+        submitted = true;
+
+        // 버튼 비활성화해서 UI도 중복 방지
+        const button = document.querySelector('label[for="file-input"]');
+        if (button) {
+            button.disabled = true;
+        }
+
+        const formData = new FormData(form);
+        const xhr = new XMLHttpRequest();
+
+        xhr.open('POST', '/upload/', true);
+
+        // 진행률 표시
+        xhr.upload.onprogress = function (e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                document.getElementById('progressContainer').style.display = 'block';
+                document.getElementById('progressBar').value = percent;
+            }
+        };
+
+        // 완료 후 리다이렉트
+        xhr.onload = function () {
+            // submitted = false; // 다시 전송 가능하게
+            if (xhr.status === 200) {
+
+                // submitted = false; // 다시 전송 가능하게
+                // document.getElementById('progressContainer').style.display = 'none';
+                submitted = false;
+                document.getElementById('progressContainer').style.display = 'none';
+
+                const response = JSON.parse(xhr.responseText); // 서버 응답
+                const files = response.files;
+
+                files.forEach(file => {
+                    const url = "https://chickchick.shop/image/images/?filename="+file+"&dir=temp&selected_dir=chat";
+                    const msg = url.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
+                    if (msg !== "") {
+                        socket.emit("new_msg", { username, msg, room: roomName });
+                    }
+                })
+            } else {
+                submitted = false; // 다시 전송 가능하게
+                alert('업로드 실패: ' + xhr.statusText);
+                if (button) {
+                    button.disabled = false;
+                }
+            }
+        };
+
+        xhr.onerror = function () {
+            submitted = false;
+            alert('서버에 연결할 수 없습니다.');
+            if (button) {
+                button.disabled = false;
+                button.innerText = 'Start Upload';
+            }
+        };
+
+        xhr.send(formData);
+    }
+});
 
 function checkScroll() {
     scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
@@ -555,7 +671,7 @@ function openVideoCallWindow() {
     // dragOverlay.style.background = "rgba(128, 128, 128, 0.5)"; // ✅ 반투명 회색
 
     // iframe 추가 전에 삽입
-    videoCallWindow.appendChild(dragOverlay);
+    // videoCallWindow.appendChild(dragOverlay);
     // 드래그 이벤트 연결
     dragOverlay.addEventListener("mousedown", startDrag);
     dragOverlay.addEventListener("touchstart", startDrag, { passive: false });
@@ -592,8 +708,8 @@ function initPage() {
             window.scrollTo(0, 0);  // 키보드 내려간 후에도 복구
         }, 100);
     });
-    cameraButton.removeEventListener('click', cameraEvent);
-    cameraButton.addEventListener('click', cameraEvent);
+    // cameraButton.removeEventListener('click', cameraEvent);
+    // cameraButton.addEventListener('click', cameraEvent);
     sendButton.removeEventListener('click', sendMsg);
     sendButton.addEventListener('click', sendMsg);
     videoCallBtn?.removeEventListener('click', renderVideoCallWindow)

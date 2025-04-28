@@ -72,7 +72,14 @@
         </div>
         <!-- 입력 영역 -->
         <div class="flex items-center border-t p-2 bg-white">
-            <button id="camera-button" class="p-2 text-gray-500 hover:text-gray-700 w-[10%] mr-2">📷</button>
+<!--            <button id="camera-button" class="p-2 text-gray-500 hover:text-gray-700 w-[10%] mr-2">📷</button>-->
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="hidden" id="title" name="title" value="chat">
+                <label for="file-input" class="p-2 text-gray-600 cursor-pointer hover:bg-gray-200 w-[auto] mr-2">
+                    📁
+                </label>
+                <input type="file" name="files[]" id="file-input" multiple  class="hidden">
+            </form>
             <!-- box-content: padding이 height에 포함되지 않도록 함 -->
             <textarea type="text" id="chat-input" class="p-2 px-3 py-[6px] border rounded-lg focus:outline-none w-[90%] box-content resize-none"
                       placeholder="Type a message..."
@@ -83,6 +90,10 @@
             <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[10%] ml-2">📤</button>
         </div>
     </div>
+    <!-- 진행률 표시 영역 -->
+    <div id="progressContainer" style="display: none;">
+        <progress id="progressBar" value="0" max="100" style="width: 100%; height: 30%"></progress>
+    </div>
 </div>
 
 <script>
@@ -90,6 +101,6 @@
     const MAX_FETCH_MESSAGE_SIZE = "{{ maxFetchMessageSize }}";
 </script>
 <script src="{{ url_for('static', filename='js/chat_notification.js') }}"></script>
-<script src="https://chickchick.shop/static/js/chat.js?v=12"></script>
+<script src="https://chickchick.shop/static/js/chat.js?v=24"></script>
 </body>
 </html>
