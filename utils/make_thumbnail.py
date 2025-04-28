@@ -16,6 +16,7 @@ max_width = 720
 def convert_file(file_path):
     dir_path = Path(file_path).parent
     thumb_dir = os.path.join(dir_path, 'thumb')
+    os.makedirs(thumb_dir, exist_ok=True) # ✅ thumb 디렉토리 먼저 생성 (없으면 생성)
     filename = os.path.basename(file_path)
     file_lower = filename.lower()
 
