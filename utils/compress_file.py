@@ -16,6 +16,11 @@ def compress_directory_to_zip():
             print(f"Directory does not exist: {dir_to_compress}")
             continue
 
+        # ✅ 디렉토리 이름이 '영상'으로 끝나면 압축하지 않고 건너뛰기
+        if os.path.basename(dir_to_compress).endswith('영상'):
+            print(f"Skip compressing directory (ends with '영상'): {dir_to_compress}")
+            continue
+
         # 하위 디렉토리 목록 수집
         subdirs = []
         for item in os.listdir(dir_to_compress):
