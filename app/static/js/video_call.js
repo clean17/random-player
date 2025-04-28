@@ -57,6 +57,7 @@ let isDragging = false;
 let offsetX = 0;
 let offsetY = 0;
 let currentFacingMode = "user"; // 기본은 전면 카메라 (user)
+let currentMicrophoneDeviceId = null;
 
 // 연결된 카메라 리스트 출력
 async function getCameras() {
@@ -106,7 +107,7 @@ async function getMicrophones() {
     });
 }
 
-async function getMedia(deviceId = null) {
+async function getMedia(deviceId = null, switchCamera = false) {
     // 기존 스트림 종료
     if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
@@ -133,18 +134,37 @@ async function getMedia(deviceId = null) {
         myStream = await navigator.mediaDevices.getUserMedia(constraints);
         // console.log("myStream 연결 완료: ", myStream);
         console.log("myStream 연결 완료");
+        // 🔥 myStream에서 audio track의 deviceId 다시 저장
+        const audioTrack = myStream.getAudioTracks()[0];
+        if (audioTrack && audioTrack.getSettings) {
+            const settings = audioTrack.getSettings();
+            currentMicrophoneDeviceId = settings.deviceId || null;
+            console.log("🎤 현재 마이크 deviceId 저장:", currentMicrophoneDeviceId);
+        }
+
+        if (myPeerConnection) {
+            const audioSender = myPeerConnection.getSenders()
+                .find(sender => sender.track && sender.track.kind === "audio");
+
+            if (audioSender && audioTrack) {
+                await audioSender.replaceTrack(audioTrack);
+                console.log("🎤 (카메라 전환) 오디오 트랙 교체 완료!");
+            }
+        }
 
         myFace.srcObject = myStream;
 
         if (!deviceId) {
-            await getAudios(); // 오디오 목록 갱신
+            // await getAudios(); // 오디오 목록 갱신
             await getMicrophones();
         }
 
         // 처음 연결 시 마이크 off
-        myStream.getAudioTracks().forEach(track => {
-            track.enabled = false;
-        });
+        if (!switchCamera) {
+            myStream.getAudioTracks().forEach(track => {
+                track.enabled = false;
+            });
+        }
 
         const videoTrack = myStream.getVideoTracks()[0];
         const settings = videoTrack.getSettings();
@@ -192,11 +212,8 @@ function handlePeerAudio() {
 
 async function handleCameraChange() {
     currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const microphones = devices.filter(device => device.kind === "audioinput");
 
-    console.log(microphones);
-    // await getMedia(); // facingMode 바꿔서 새 스트림 가져옴
+    await getMedia(currentMicrophoneDeviceId, true); // facingMode 바꿔서 새 스트림 가져옴
     if (myPeerConnection) {
         const videoTrack = myStream?.getVideoTracks()[0]; // ✅ 새 비디오 트랙 가져오기
         const videoSender = myPeerConnection.getSenders()
