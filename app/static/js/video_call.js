@@ -74,6 +74,7 @@ async function getAudios() {
     try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audios = devices.filter(device => device.kind === 'audiooutput');
+        // console.log(audios)
         const currentAudio = myStream.getAudioTracks()[0];
         audios.forEach(audio => {
             const option = document.createElement('option')
@@ -94,7 +95,7 @@ async function getAudios() {
 async function getMicrophones() {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const microphones = devices.filter(device => device.kind === "audioinput");
-
+    // console.log(microphones)
     microphoneSelect.innerHTML = ""; // 초기화
 
     microphones.forEach(device => {
@@ -130,7 +131,8 @@ async function getMedia(deviceId = null) {
 
     try {
         myStream = await navigator.mediaDevices.getUserMedia(constraints);
-        console.log("myStream 연결 완료: ", myStream);
+        // console.log("myStream 연결 완료: ", myStream);
+        console.log("myStream 연결 완료");
 
         myFace.srcObject = myStream;
 
@@ -156,66 +158,6 @@ async function getMedia(deviceId = null) {
             myFace.classList.remove("mirror");
         }
 
-    } catch (err) {
-        console.error("🎥 getMedia 에러:", err);
-        alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
-    }
-}
-
-async function getMedia2(deviceId) {
-    // 기존 스트림 종료
-    if (myStream) {
-        myStream.getTracks().forEach(track => track.stop());
-        myStream = null;
-    }
-
-    const initialConstrains = { // false 로 설정하면 권한을 요청하지 않음 > 사용하지 않음
-        audio: true,
-        video: {
-            facingMode: "user", // 전면 카메라
-        },
-    }
-    const audioContrains = {
-        audio: {
-            deviceId: {
-                exact: deviceId,
-            },
-        },
-        video: true
-    }
-
-    try {
-        // 웹캠은 사용중일때 접근 못함..
-        myStream = await navigator.mediaDevices.getUserMedia(deviceId ? audioContrains : initialConstrains); // MediaStream
-        console.log("myStream 보여줘 ---------------------- ",myStream);
-
-        myFace.srcObject = myStream;
-        if (!deviceId) {
-            await getAudios();
-        }
-        // await getCameras() // 사용가능한 카메라 콘솔 출력
-
-        /*myStream.getVideoTracks().forEach(track => {
-            track.enabled = !track.enabled
-        });*/
-        // 처음 연결 시 마이크 off
-        myStream.getAudioTracks().forEach(track => {
-            track.enabled = false;
-        });
-
-        const videoTrack = myStream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-
-        // 전면 카메라 + 모바일인 경우에만 mirror 적용
-        const isFrontCamera = settings.facingMode === "user";
-        // const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-        const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-        if (isFrontCamera && isMobile) {
-            myFace.classList.add("mirror");
-        } else {
-            myFace.classList.remove("mirror");
-        }
     } catch (err) {
         console.error("🎥 getMedia 에러:", err);
         alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
@@ -250,7 +192,11 @@ function handlePeerAudio() {
 
 async function handleCameraChange() {
     currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
-    await getMedia(); // facingMode 바꿔서 새 스트림 가져옴
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const microphones = devices.filter(device => device.kind === "audioinput");
+
+    console.log(microphones);
+    // await getMedia(); // facingMode 바꿔서 새 스트림 가져옴
     if (myPeerConnection) {
         const videoTrack = myStream?.getVideoTracks()[0]; // ✅ 새 비디오 트랙 가져오기
         const videoSender = myPeerConnection.getSenders()
@@ -259,12 +205,12 @@ async function handleCameraChange() {
             await videoSender.replaceTrack(videoTrack); // ✅ 새 비디오 트랙 교체
         }
 
-        const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
+        /*const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
         const audioSender = myPeerConnection.getSenders()
             .find((sender) => sender.track.kind === "audio");
         if (audioSender && audioTrack) {
             await audioSender.replaceTrack(audioTrack); // ✅ 올바르게 오디오 트랙 교체
-        }
+        }*/
     }
 }
 
@@ -277,13 +223,6 @@ async function handleAudioChange() {
         if (audioSender && audioTrack) {
             await audioSender.replaceTrack(audioTrack); // ✅ 올바르게 오디오 트랙 교체
         }
-
-        const videoTrack = myStream?.getVideoTracks()[0]; // ✅ 새 비디오 트랙 가져오기
-        const videoSender = myPeerConnection.getSenders()
-            .find(sender => sender.track && sender.track.kind === "video");
-        if (videoSender && videoTrack) {
-            await videoSender.replaceTrack(videoTrack); // ✅ 새 비디오 트랙 교체
-        }
     }
 }
 
@@ -294,7 +233,7 @@ async function handleMicrophoneChange() {
     try {
         // 새로 선택한 마이크로 스트림 얻기
         const newStream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: { exact: selectedDeviceId } },
+            audio: { deviceId: { exact: selectedDeviceId } }, // 모바일은 오디오 입출력 장치를 하나로 묶어서 관리한다 > 이어폰에서 폰으로 마이크를 변경하면 스피커도 묶여서 변경된다
             video: false // 변경하지 않는다
         });
 

@@ -15,16 +15,16 @@ self.addEventListener("notificationclick", function(event) {
     event.waitUntil(
         Promise.all([
             self.registration.getNotifications({ includeTriggered: true }).then(notifications => {
-                console.log("모든 알림 종료");
+                // console.log("모든 알림 종료");
                 notifications.forEach(n => n.close());
             }),
 
             clients.matchAll({ type: "window", includeUncontrolled: true }).then(clientList => {
-                console.log("열린 창 목록:", clientList);
+                // console.log("열린 창 목록:", clientList);
 
                 for (let client of clientList) {
                     if (client.url.includes("/func/chat") && "focus" in client) {
-                        console.log("채팅 창 포커스 시도:", client);
+                        // console.log("채팅 창 포커스 시도:", client);
                         return client.focus();
                     }
                 }
