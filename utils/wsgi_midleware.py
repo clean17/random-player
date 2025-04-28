@@ -12,7 +12,11 @@ class RequestLoggingMiddleware:
 
     def __call__(self, environ, start_response):
         # client_ip = environ.get("REMOTE_ADDR", "-")
-        client_ip = environ.get("HTTP_X_REAL_IP", environ.get("REMOTE_ADDR", "-")) # 프록시 전의 ip
+        client_ip = (
+                environ.get("HTTP_X_CLIENT_IP") or
+                environ.get("HTTP_X_REAL_IP") or
+                environ.get("REMOTE_ADDR", "-")
+        ) # 프록시 전의 ip
         method = environ.get("REQUEST_METHOD")
         path = environ.get("PATH_INFO")
         query_string = environ.get("QUERY_STRING", "")

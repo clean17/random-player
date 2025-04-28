@@ -307,6 +307,11 @@ def get_last_n_lines(filepath, start, end):
     except FileNotFoundError:
         return []
 
+def normalize_ip(ip_address):
+    if ip_address.startswith("::ffff:"):
+        return ip_address[7:]  # 앞에 "::ffff:" 빼버림
+    return ip_address
+
 @func.route("/chat")
 @login_required
 def get_chat_ui():
@@ -319,6 +324,9 @@ def get_chat_ui():
 # @login_required 추가하면 안된다.. 외부 API 역할을 한다
 def save_chat_message():
     data = request.json
+    # client_ip = request.headers.get('X-Client-IP') or request.remote_addr
+    # client_ip = normalize_ip(client_ip)
+    # print(f"✅ 클린 IP 주소: {client_ip}")
 
     if not data['timestamp']:
         now = datetime.now()
