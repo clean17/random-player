@@ -546,12 +546,13 @@ function openVideoCallWindow() {
 
     const dragOverlay = document.createElement("div");
     dragOverlay.style.position = "absolute";
-    dragOverlay.style.bottom = "0";
+    dragOverlay.style.bottom = "60px";
     dragOverlay.style.left = "0";
     dragOverlay.style.width = "85%";
-    dragOverlay.style.height = "90%";
+    dragOverlay.style.height = "80%";
     dragOverlay.style.zIndex = "9999";
     dragOverlay.style.background = "transparent"; // 완전 투명
+    // dragOverlay.style.background = "rgba(128, 128, 128, 0.5)"; // ✅ 반투명 회색
 
     // iframe 추가 전에 삽입
     videoCallWindow.appendChild(dragOverlay);
