@@ -40,6 +40,8 @@ const muteBtn = document.getElementById('mute');
 const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
 const audioSelect = document.getElementById('audios');
+const microphoneSelect = document.getElementById('microphones');
+const swichCameraBtn = document.getElementById('switchCamera');
 const roomName = 'nh';
 
 let myStream;
@@ -54,6 +56,7 @@ let micOn = false;
 let isDragging = false;
 let offsetX = 0;
 let offsetY = 0;
+let currentFacingMode = "user"; // 기본은 전면 카메라 (user)
 
 // 연결된 카메라 리스트 출력
 async function getCameras() {
@@ -70,7 +73,7 @@ async function getCameras() {
 async function getAudios() {
     try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const audios = devices.filter(device => device.kind === 'audioinput');
+        const audios = devices.filter(device => device.kind === 'audiooutput');
         const currentAudio = myStream.getAudioTracks()[0];
         audios.forEach(audio => {
             const option = document.createElement('option')
@@ -87,7 +90,79 @@ async function getAudios() {
     }
 }
 
-async function getMedia(deviceId) {
+// 연결된 마이크 목록 렌더링
+async function getMicrophones() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const microphones = devices.filter(device => device.kind === "audioinput");
+
+    microphoneSelect.innerHTML = ""; // 초기화
+
+    microphones.forEach(device => {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.text = device.label || `Microphone ${microphoneSelect.length + 1}`;
+        microphoneSelect.appendChild(option);
+    });
+}
+
+async function getMedia(deviceId = null) {
+    // 기존 스트림 종료
+    if (myStream) {
+        myStream.getTracks().forEach(track => track.stop());
+        myStream = null;
+    }
+
+    // Constraints 설정
+    let constraints;
+    if (deviceId) {
+        constraints = {
+            audio: {
+                deviceId: { exact: deviceId }
+            },
+            video: { facingMode: currentFacingMode }
+        };
+    } else {
+        constraints = {
+            audio: true,
+            video: { facingMode: currentFacingMode }
+        };
+    }
+
+    try {
+        myStream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log("myStream 연결 완료: ", myStream);
+
+        myFace.srcObject = myStream;
+
+        if (!deviceId) {
+            await getAudios(); // 오디오 목록 갱신
+            await getMicrophones();
+        }
+
+        // 처음 연결 시 마이크 off
+        myStream.getAudioTracks().forEach(track => {
+            track.enabled = false;
+        });
+
+        const videoTrack = myStream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+
+        const isFrontCamera = settings.facingMode === "user";
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        if (isFrontCamera && isMobile) {
+            myFace.classList.add("mirror");
+        } else {
+            myFace.classList.remove("mirror");
+        }
+
+    } catch (err) {
+        console.error("🎥 getMedia 에러:", err);
+        alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
+    }
+}
+
+async function getMedia2(deviceId) {
     // 기존 스트림 종료
     if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
@@ -173,29 +248,88 @@ function handlePeerAudio() {
     icon.className = audioOn ? "fas fa-volume-up" : "fas fa-volume-mute";
 }
 
-/*async function handleCameraChange() {
-    await getMedia(videoSelect.value);
+async function handleCameraChange() {
+    currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+    await getMedia(); // facingMode 바꿔서 새 스트림 가져옴
     if (myPeerConnection) {
+        const videoTrack = myStream?.getVideoTracks()[0]; // ✅ 새 비디오 트랙 가져오기
         const videoSender = myPeerConnection.getSenders()
-            .find((sender) => sender.track.kind === "video");
-        console.log(videoSender);
+            .find(sender => sender.track && sender.track.kind === "video");
+        if (videoSender && videoTrack) {
+            await videoSender.replaceTrack(videoTrack); // ✅ 새 비디오 트랙 교체
+        }
+
+        const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
+        const audioSender = myPeerConnection.getSenders()
+            .find((sender) => sender.track.kind === "audio");
+        if (audioSender && audioTrack) {
+            await audioSender.replaceTrack(audioTrack); // ✅ 올바르게 오디오 트랙 교체
+        }
     }
-}*/
+}
 
 async function handleAudioChange() {
     await getMedia(audioSelect?.value);
     if (myPeerConnection) {
-        const videoTrack = myStream?.getVideoTracks()[0]; // 변경된 myStream
+        const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
         const audioSender = myPeerConnection.getSenders()
             .find((sender) => sender.track.kind === "audio");
-        audioSender.replaceTrack(videoTrack);
+        if (audioSender && audioTrack) {
+            await audioSender.replaceTrack(audioTrack); // ✅ 올바르게 오디오 트랙 교체
+        }
+
+        const videoTrack = myStream?.getVideoTracks()[0]; // ✅ 새 비디오 트랙 가져오기
+        const videoSender = myPeerConnection.getSenders()
+            .find(sender => sender.track && sender.track.kind === "video");
+        if (videoSender && videoTrack) {
+            await videoSender.replaceTrack(videoTrack); // ✅ 새 비디오 트랙 교체
+        }
     }
 }
 
+async function handleMicrophoneChange() {
+    const selectedDeviceId = microphoneSelect?.value;
+    if (!selectedDeviceId) return;
+
+    try {
+        // 새로 선택한 마이크로 스트림 얻기
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { exact: selectedDeviceId } },
+            video: false // 변경하지 않는다
+        });
+
+        const newAudioTrack = newStream.getAudioTracks()[0];
+        if (!newAudioTrack) {
+            console.warn("🎤 새 마이크 트랙이 없습니다.");
+            return;
+        }
+
+        if (myPeerConnection) {
+            const audioSender = myPeerConnection.getSenders()
+                .find(sender => sender.track && sender.track.kind === "audio");
+
+            if (audioSender) {
+                await audioSender.replaceTrack(newAudioTrack);
+                console.log("🎤 마이크 트랙 교체 완료!");
+            }
+        }
+
+        // 기존 myStream에 새 오디오 트랙만 교체
+        const oldAudioTracks = myStream.getAudioTracks();
+        oldAudioTracks.forEach(track => myStream.removeTrack(track)); // 기존 오디오 제거
+        myStream.addTrack(newAudioTrack); // 새 오디오 추가
+
+    } catch (err) {
+        console.error("🎤 마이크 변경 중 에러:", err);
+        alert("마이크 변경 중 문제가 발생했습니다.");
+    }
+}
 muteBtn.addEventListener('click', handleMuteClick);
 cameraBtn.addEventListener('click', handleCameraClick);
 peerAudioBtn.addEventListener('click', handlePeerAudio);
-audioSelect?.addEventListener('input', handleAudioChange);
+audioSelect?.addEventListener('change', handleAudioChange);
+microphoneSelect?.addEventListener('change', handleMicrophoneChange);
+swichCameraBtn.addEventListener("click", handleCameraChange);
 
 ///////////////////////// Socket Code /////////////////////////////////////
 

@@ -9,7 +9,7 @@
     <!--<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>-->
     <script src="https://chickchick.shop:3000/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/video_call.css') }}">
+    <link rel="stylesheet" href="https://chickchick.shop/static/css/video_call.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 
@@ -31,6 +31,9 @@
         <video id="peerFace" autoplay playsinline muted></video>
         <video id="myFace" autoplay playsinline muted></video>
         <div class="icon-buttons">
+            <button id="switchCamera" title="Switch Camera">
+                <i id="switchCameraIcon" class="fas fa-sync-alt"></i>
+            </button>
             <button id="camera" title="Camera Toggle">
                 <i id="cameraIcon" class="fas fa-video"></i>
             </button>
@@ -41,12 +44,15 @@
                 <i id="micIcon" class="fas fa-microphone-slash"></i>
             </button>
         </div>
-        <!--<select id="audios"></select>-->
+        <div class="audio-select">
+<!--            <select id="audios"></select>-->
+            <select id="microphones"></select>
+        </div>
     </div>
 </div>
 <script>
     const username = "{{ username }}";
 </script>
-<script src="https://chickchick.shop/static/js/video_call.js?v=3"></script>
+<script src="https://chickchick.shop/static/js/video_call.js?v=11"></script>
 </body>
 </html>
