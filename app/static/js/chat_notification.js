@@ -19,9 +19,9 @@ function requestNotificationPermission() {
 
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            console.log("알림 권한이 허용되었습니다 ㅅㅅ.");
+            // console.log("알림 권한이 허용되었습니다 ㅅㅅ.");
         } else {
-            console.log("알림 권한이 거부되었습니다 ㅠㅠ.");
+            // console.log("알림 권한이 거부되었습니다 ㅠㅠ.");
         }
     });
 }

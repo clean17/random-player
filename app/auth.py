@@ -14,7 +14,8 @@ auth = Blueprint('auth', __name__)
 
 users = {
     settings['USERNAME']: {'password': settings['PASSWORD']},
-    settings['GUEST_USERNAME']: {'password': settings['GUEST_PASSWORD']}
+    settings['GUEST_USERNAME']: {'password': settings['GUEST_PASSWORD']},
+    settings['SUPER_USERNAME']: {'password': settings['SUPER_PASSWORD']},
 }
 
 class User(UserMixin):
@@ -54,7 +55,7 @@ def login():
                 session['lockout_time'] = None
 
         # print('attempt_username', username)
-        logger.info(f"###################################################################### login_username: {username} ######################################################################")
+        logger.info(f"############################### login_username: {username} ###############################")
 
         # 로그인 검증
         if username in users and check_password_hash(users[username]['password'], password):
@@ -87,7 +88,7 @@ def lockout():
 
 @auth.route('/logout')
 def logout():
-    logger.info(f"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ logout_username: {current_user.get_id()} $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+    logger.info(f"############################### logout_username: {current_user.get_id()} ###############################")
     session[SECOND_PASSWORD_SESSION_KEY] = False
     session.clear()
     logout_user()

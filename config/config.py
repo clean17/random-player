@@ -36,6 +36,8 @@ def load_config():
         'PASSWORD': generate_password_hash(config['settings']['password']),
         'GUEST_USERNAME': config['settings']['guest_username'],
         'GUEST_PASSWORD': generate_password_hash(config['settings']['guest_password']),
+        'SUPER_USERNAME': config['settings']['super_username'],
+        'SUPER_PASSWORD': generate_password_hash(config['settings']['super_password']),
         'FFMPEG_SCRIPT_PATH': config['paths']['ffmpeg_script_path'],
         'WORK_DIRECTORY': config['paths']['work_directory'],
         'LOTTO_USER_ID': config['lotto']['username'],
