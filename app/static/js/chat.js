@@ -16,10 +16,8 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     isMine,
     isUnderline,
     isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
-    dateSet = new Set(),
     loading = false,
-    lastMessageDate = null,
-    dateStr,
+    chatState = { previousDate: null, latestDate: null },
     isScroll = false,
     scrollHeight, // 전체 스크롤 높이
     scrollTop,    // 현재 스크롤 위치
@@ -138,7 +136,7 @@ document.addEventListener('visibilitychange', () => {
                     });
 
                     if (isFisrtMsg) {
-                        renderDateDivider(dateStr)
+                        // renderDateDivider(dateStr)
                     }
                 }
             })
@@ -146,7 +144,6 @@ document.addEventListener('visibilitychange', () => {
                 loading = false;
             });
     } else {
-        // socketFlag = false;
         // if (typeof socket !== "undefined") socket.disconnect();
     }
 });
@@ -204,7 +201,7 @@ function loadMoreChats(event) {
                 });
 
                 if (isFisrtMsg) {
-                    renderDateDivider(dateStr)
+                    // renderDateDivider(dateStr)
                 }
             }
         })
@@ -284,12 +281,13 @@ function addMessage(data, load = false) {
     isUnderline = data.underline;
     const now = new Date();
 
-    if (data && !data.timestamp) {
+    if (data && !data.timestamp) { // 보낸 메세지는 timestemp가 없어서 만들어 준다. 채팅 로그를 node서버에 일임해야 할까 ?
         now.setHours(now.getHours() + 9);  // UTC → KST 변환
         const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
         data.timestamp = timestamp;
     }
-    if (Number(lastChatId) < Number(data.chatId)) {
+
+    if (Number(lastChatId) < Number(data.chatId)) { // 로드한 메세지가 아닌 추가된 메세지는 chatId가 없는데 ?
         lastChatId = data.chatId;
     }
 
@@ -361,32 +359,16 @@ function addMessage(data, load = false) {
 
 
         // 시간 계산
-        let timeStr = ""; // 14:33 형식
-        dateStr = ""; // 25.04.12 형식
+        const hour = data.timestamp.slice(6, 8);
+        const minute = data.timestamp.slice(8, 10);
+        const timeStr = `${hour}:${minute}`; // 14:33 형식
 
-        // 채팅 불러와서 렌더링
-        if (data.timestamp && data.timestamp.length >= 10) {
-            const hour = data.timestamp.slice(6, 8);
-            const minute = data.timestamp.slice(8, 10);
-            timeStr = `${hour}:${minute}`;
+        const yy = data.timestamp.slice(0, 2);
+        const mm = data.timestamp.slice(2, 4);
+        const dd = data.timestamp.slice(4, 6);
+        const dateStr = `20${yy}.${mm}.${dd}`; // 25.04.12 형식
 
-            const yy = data.timestamp.slice(0, 2);
-            const mm = data.timestamp.slice(2, 4);
-            const dd = data.timestamp.slice(4, 6);
-            dateStr = `20${yy}.${mm}.${dd}`;
-        } else { // 신규 채팅
-            const pad = (n) => String(n).padStart(2, '0');
-            const hour = pad(now.getHours());
-            const minute = pad(now.getMinutes());
-            timeStr = `${hour}:${minute}`;
-
-            dateStr = `20${pad(now.getFullYear() % 100)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
-            lastMessageDate = dateStr;
-        }
-        // console.log('lastMessageDate', lastMessageDate)
-        // console.log('dateStr', dateStr)
-
-        renderDateDivider(dateStr)
+        renderDateDivider(chatState, dateStr)
 
         if (load) {
             // 저장된 메세지 렌더링
@@ -424,21 +406,33 @@ function getCurrentTimeStr() {
 }
 
 // 날짜 구분선 추가
-function renderDateDivider(dateStr) {
+function renderDateDivider(chatState, dateStr) {
+    // 메세지를 불러오다가 lastMessageDate > dateStr => prepend; lastMessageDate 직 후 lastMessageDate = dateStr;
+    // 메세지를 불러오다가 lastMessageDate < dateStr => append; dateStr          직 후 lastMessageDate = dateStr;
 
-    let shouldAddDivider = false;
-    if (dateStr !== lastMessageDate) {
-        shouldAddDivider = true;
+    let lastest = null;
+    let previos = null;
+    let otherDate = null;
+
+    if (chatState.latestDate) lastest = Number(chatState.latestDate.replace(/\./g, ''));
+    if (chatState.previousDate) previos = Number(chatState.previousDate.replace(/\./g, ''));
+    if (dateStr) otherDate = Number(dateStr.replace(/\./g, ''));
+
+    // 스크롤 올려서 이전 날짜가 나오면 메세지 렌더링 전에 prepend
+    if (lastest && otherDate && otherDate < previos) {
+        const divider = createDateDivider(chatState.previousDate);
+        chatContainer.prepend(divider);
+        chatState.previousDate = dateStr;
     }
-
-    if (shouldAddDivider) {
-        if (lastMessageDate && !dateSet.has(dateStr)) {
-            const divider = createDateDivider(lastMessageDate);
-            // console.log('divider',divider)
-            chatContainer.prepend(divider);
-            dateSet.add(lastMessageDate)
-        }
-        lastMessageDate = dateStr;
+    // 채팅을 쳤는데 오늘 첫 메세지라면 메세지 렌더링 전에 append
+    if (lastest && otherDate && otherDate > lastest) {
+        const divider = createDateDivider(dateStr);
+        chatContainer.append(divider);
+        chatState.latestDate = dateStr;
+    }
+    if (!chatState.latestDate) {
+        chatState.previousDate = dateStr;
+        chatState.latestDate = dateStr;
     }
 }
 
