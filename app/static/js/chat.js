@@ -27,8 +27,8 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     offsetX = 0,
     offsetY = 0,
     lastChatId = 0,
-    socketFlag = false,
     submitted = false,
+    videoCallRoomName = null,
     scrollButton = undefined;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -70,6 +70,29 @@ function connectSocket() {
         roomName = data.room;
         if (data.username !== username) {
             addMessage(data);
+        }
+    });
+
+    socket.on('room_user_list', (userList) => {
+        console.log('현재 접속 중인 유저 목록:', userList);
+        userList.forEach(user => {
+            if (user !== username) {
+                socket.emit("check_video_call_by_user", { username: user });
+            }
+        })
+    });
+
+    socket.on('video_call_ready', (data) => {
+        videoCallRoomName = data.videoCallRoomName;
+        if (username !== data.username) {
+            videoCallBtn.style.backgroundColor = "green";
+        }
+    });
+
+    socket.on('video_call_ended', (data) => {
+        videoCallRoomName = null;
+        if (username !== data.username) {
+            videoCallBtn.style.backgroundColor = "";
         }
     });
 }
@@ -297,7 +320,7 @@ function addMessage(data, load = false) {
     if (isMine) {
         messageDiv.classList.add("bg-blue-200", "text-left");
     } else {
-        if (data.isUnderline !== 1 && openTimestamp < data.timestamp) {
+        if (data.underline !== 1 && openTimestamp < data.timestamp) {
             callNotification();
         }
         messageDiv.classList.add("bg-gray-200", "text-left");
@@ -640,10 +663,10 @@ function openVideoCallWindow() {
     closeBtn.innerHTML = '<i class="fas fa-times"></i>'; // ❌ 닫기
     closeBtn.style.cursor = "pointer";
     closeBtn.onclick = () => {
+        socket.emit("leave_room", videoCallRoomName, username); // 서버에 방 나간다고 알림
         document.body.removeChild(videoCallWindow);
         videoCallWindow = null;
         updateButtonColor();
-        videoCallBtn.style.backgroundColor = "";
     };
 
     topBar.appendChild(hideBtn);
