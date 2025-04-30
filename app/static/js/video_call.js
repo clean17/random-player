@@ -426,7 +426,7 @@ document.addEventListener("DOMContentLoaded", () => {
 })
 
 window.addEventListener("beforeunload", () => {
-    socket.emit("leave_room", roomName); // 서버에 방 나간다고 알림
+    socket.emit("leave_room", roomName, username); // 서버에 방 나간다고 알림
 });
 
 
