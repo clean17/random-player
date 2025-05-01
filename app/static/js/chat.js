@@ -677,7 +677,7 @@ function openVideoCallWindow() {
     iframe.style.flex = "1";
     iframe.style.border = "none";
 
-    const dragOverlay = document.createElement("div");
+   /* const dragOverlay = document.createElement("div");
     dragOverlay.style.position = "absolute";
     dragOverlay.style.bottom = "60px";
     dragOverlay.style.left = "0";
@@ -691,20 +691,21 @@ function openVideoCallWindow() {
     // videoCallWindow.appendChild(dragOverlay);
     // 드래그 이벤트 연결
     dragOverlay.addEventListener("mousedown", startDrag);
-    dragOverlay.addEventListener("touchstart", startDrag, { passive: false });
+    dragOverlay.addEventListener("touchstart", startDrag, { passive: false });*/
 
-    videoCallWindow.appendChild(topBar);
-    videoCallWindow.appendChild(iframe);
 
     // ✅ 마우스 이벤트
-    videoCallWindow.addEventListener("mousedown", startDrag);
+    topBar.addEventListener("mousedown", startDrag);
     document.addEventListener("mousemove", onDrag);
     document.addEventListener("mouseup", endDrag);
 
     // ✅ 터치 이벤트
-    videoCallWindow.addEventListener("touchstart", startDrag, { passive: false });
+    topBar.addEventListener("touchstart", startDrag, { passive: false });
     document.addEventListener("touchmove", onDrag, { passive: false });
     document.addEventListener("touchend", endDrag);
+
+    videoCallWindow.appendChild(topBar);
+    videoCallWindow.appendChild(iframe);
 
     document.body.appendChild(videoCallWindow);
 
