@@ -318,7 +318,7 @@ def get_chat_ui():
     if "_user_id" not in session:
         return redirect(url_for('auth.logout'))  # 로그인 안 되어 있으면 로그인 페이지로 이동
 
-    return render_template("chat_ui.html", username=session["_user_id"], maxFetchMessageSize = MAX_FETCH_MESSAGE_SIZE)
+    return render_template("chat_ui.html", username=session["_user_id"], maxFetchMessageSize = MAX_FETCH_MESSAGE_SIZE, version=int(time.time()))
 
 @func.route("/api/chat/save-file", methods=["POST"])
 # @login_required 추가하면 안된다.. 외부 API 역할을 한다
@@ -400,12 +400,12 @@ def get_hls():
 @func.route('/video-call', methods=['GET'])
 @login_required
 def get_video_call():
-    return render_template('video_call.html', username=session["_user_id"])
+    return render_template('video_call.html', username=session["_user_id"], version=int(time.time()))
 
 @func.route('/video-call/window', methods=['GET'])
 @login_required
 def get_video_call_window():
-    return render_template('video_call.html', username=session["_user_id"], windowFlag=1)
+    return render_template('video_call.html', username=session["_user_id"], windowFlag=1, version=int(time.time()))
 
 ################################# LOTTO ####################################
 

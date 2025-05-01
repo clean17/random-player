@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!--<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>-->
     <script src="https://chickchick.shop:3000/socket.io/socket.io.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+    <link rel="stylesheet" href="/static/css/chat.css?v={{ version }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <style>
@@ -102,6 +102,6 @@
     const MAX_FETCH_MESSAGE_SIZE = "{{ maxFetchMessageSize }}";
 </script>
 <script src="{{ url_for('static', filename='js/chat_notification.js') }}"></script>
-<script src="https://chickchick.shop/static/js/chat.js?v=26"></script>
+<script src="/static/js/chat.js?v={{ version }}"></script>
 </body>
 </html>
