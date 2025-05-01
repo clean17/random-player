@@ -244,6 +244,7 @@ function sendMsg() {
     chatInput.value = "";
     chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
     setTimeout(() => chatInput.focus(), 0); // 다시 포커스를 살짝 늦게 줘서 안전하게 초기화
+    chatInput.style.height = textAreaOffsetHeight + "px";
 }
 
 function callNotification() {
@@ -347,6 +348,10 @@ function addMessage(data, load = false) {
             img.alt = 'Uploaded Image';
             img.style.width = '100%';
             img.style.height = 'auto'; // 비율 유지 (이미지가 찌그러지지 않게)
+            img.onerror = () => {
+                img.onerror = null; img.src = '/static/no-image.png';
+                img.style.width = '200px';
+            };
             messageDiv.appendChild(img);
             messageDiv.classList.remove('p-2');
             messageDiv.classList.add('border');
@@ -486,7 +491,6 @@ function enterEvent(event) {
             event.preventDefault(); // 기본 Enter 줄바꿈 방지
             // sendMsg();
             sendButton.click();
-            chatInput.style.height = textAreaOffsetHeight + "px";
         }
     }
 }
