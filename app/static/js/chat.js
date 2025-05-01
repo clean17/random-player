@@ -635,12 +635,18 @@ function openVideoCallWindow() {
     videoCallWindow.style.right = "30px";
     videoCallWindow.style.width = "350px";
     videoCallWindow.style.height = "500px";
+    videoCallWindow.style.maxWidth = "100vw";
+    videoCallWindow.style.maxHeight = "100vh";
+    videoCallWindow.style.minWidth = "200px";
+    videoCallWindow.style.minHeight = "300px";
     videoCallWindow.style.background = "#000";
     videoCallWindow.style.border = "2px solid #ccc";
-    videoCallWindow.style.zIndex = "9998";
-    videoCallWindow.style.display = "flex";
+    videoCallWindow.style.zIndex = "10";
     videoCallWindow.style.flexDirection = "column";
     videoCallWindow.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+    videoCallWindow.style.resize = "both";
+    videoCallWindow.style.overflow = "auto";
+    videoCallWindow.style.display = "flex";
 
     const topBar = document.createElement("div");
     topBar.style.display = "flex";
@@ -674,7 +680,9 @@ function openVideoCallWindow() {
 
     const iframe = document.createElement("iframe");
     iframe.src = "/func/video-call/window";
-    iframe.style.flex = "1";
+    // iframe.style.flex = "1";
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
     iframe.style.border = "none";
 
    /* const dragOverlay = document.createElement("div");
