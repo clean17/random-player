@@ -52,7 +52,7 @@ button {
 }
 .icon-buttons {
     position: absolute;
-    top: 55%;
+    top: 45%;
     right: 5px;
     transform: translateY(-50%);
     display: flex;
@@ -64,10 +64,10 @@ button {
     background: rgba(0, 0, 0, 0.4); /* ✅ 어두운 반투명 배경 추가 */
     border: 2px solid whitesmoke;
     border-radius: 50%;       /* ✅ 동그랗게 */
-    width: 50px;
-    height: 50px;
-    color: white;
-    font-size: 20px;
+    width: 45px;
+    height: 45px;
+    color: whitesmoke;
+    font-size: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
