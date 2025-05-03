@@ -346,7 +346,7 @@ def periodic_compression_task():
     try:
         while True:
             now = datetime.now()
-            next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            next_hour = (now + timedelta(hours=6)).replace(minute=0, second=0, microsecond=0)
             sleep_duration = (next_hour - now).total_seconds()
             # sleep_duration = 60 # 1분 테스트
             time.sleep(sleep_duration)

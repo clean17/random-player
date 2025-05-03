@@ -87,6 +87,9 @@ def compress_directory(directory):
 
         # 압축 끝난 파일을 .zip01 으로 변경
         zip01_path = old_zip_filepath + "01"
+        if os.path.exists(zip01_path):
+            os.remove(zip01_path)  # 이미 있으면 삭제
+
         os.rename(new_zip_filepath, zip01_path)
 
         # 디렉토리 내의 모든 .zip 파일 삭제
