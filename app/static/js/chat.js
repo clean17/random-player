@@ -29,6 +29,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     lastChatId = 0,
     submitted = false,
     videoCallRoomName = null,
+    typingTimeout,
     scrollButton = undefined;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -68,9 +69,7 @@ function connectSocket() {
 
     socket.on("enter_user", function(data) {
         roomName = data.room;
-        if (data.username !== username) {
-            addMessage(data);
-        }
+        addMessage(data);
     });
 
     socket.on('room_user_list', (userList) => {
@@ -103,6 +102,24 @@ function connectSocket() {
             videoCallBtn.style.backgroundColor = "";
         }
     });
+
+    socket.on("typing", () => {
+        document.getElementById('typingIndicator').style.display = 'block';
+        const messageRow = renderMessageRow(false);
+        const messageDiv = renderMessageDiv();
+        messageRow.appendChild(messageDiv);
+        // chatContainer.appendChild(messageRow);
+        if (scrollHeight - scrollTop < 1300) {
+            setTimeout(() => {
+                moveBottonScroll();
+            }, 50)
+        }
+    });
+
+    socket.on("stop_typing", () => {
+        document.getElementById('typingIndicator').style.display = 'none';
+    });
+
 }
 
 
@@ -248,6 +265,7 @@ function sendMsg() {
     const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
     if (msg !== "") {
         socket.emit("new_msg", { username, msg, room: roomName });
+        socket.emit("stop_typing", {room: 'chat-room'});
     }
     chatInput.value = "";
     chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
@@ -334,7 +352,6 @@ function addMessage(data, load = false) {
         }
         messageDiv.classList.add("bg-gray-200", "text-left");
     }
-
 
     if (data.underline) { // 출입 알림
         if (!isMine) {
@@ -500,6 +517,13 @@ function enterEvent(event) {
             // sendMsg();
             sendButton.click();
         }
+    } else {
+        socket.emit("typing", {room: 'chat-room'}); // 입력 중임을 알림
+
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit("stop_typing", {room: 'chat-room'}); // 일정 시간 입력 없으면 중단 알림
+        }, 2000); // 2초간 입력 없으면 stop_typing
     }
 }
 
@@ -739,6 +763,7 @@ function openVideoCallWindow() {
     // 소켓으로 컨트롤 해야할지도
 
 }
+
 function initPage() {
     // keydown 에서만 event.preventDefault() 가 적용된다 !!
     chatInput.removeEventListener('keydown', enterEvent);
