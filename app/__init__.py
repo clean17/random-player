@@ -1,6 +1,8 @@
 import os
+import time
 from datetime import datetime, timezone
-from flask import Flask, session, send_file, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
+from collections import defaultdict, deque
+from flask import Flask, session, send_file, render_template, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
 from flask_login import LoginManager, current_user, logout_user, login_required
 from .auth import auth, User, users
 from config.config import load_config
@@ -58,18 +60,17 @@ def clean_expired_blocked_ips():
     for ip in expired:
         del BLOCKED_IPS[ip]
 
-# 차단된 IP: {ip: block_until_time}
-BLOCKED_IPS = load_blocked_ips()
 
-# IP 기록: {ip: [404_count, last_404_time]}
-IP_404_COUNTS = {}
+
+BLOCKED_IPS = load_blocked_ips()                      # 차단된 IP: {ip: block_until_time}
+ip_404_log = defaultdict(lambda: deque(maxlen=10))    # IP별 최근 404 기록 시간 저장 (deque로 sliding window)
+IP_404_COUNTS = {}                                    # IP 기록: {ip: [404_count, last_404_time]}
+BLOCK_THRESHOLD = 5                                   # 차단 설정 임계횟수
+BLOCK_DURATION = timedelta(days=99999)                # 차단 기간
+
 
 # 테스트 키
 SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
-
-# 설정값
-BLOCK_THRESHOLD = 5
-BLOCK_DURATION = timedelta(days=365)
 SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
 GUEST_SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
 
@@ -210,7 +211,7 @@ def create_app():
                 timeout = GUEST_SESSION_EXPIRATION_TIME.total_seconds()
 
                 if elapsed > timeout:
-                    print(f"    before_request - ⏱ 경과 시간: {elapsed:.2f}초")
+                    print(f"    before_request - ⏱ 경과 시간: {elapsed:.2f}초 redirect logout")
                     return redirect(url_for("auth.logout"))
 
                 session["last_active"] = now
@@ -244,21 +245,32 @@ def create_app():
     def track_404(response):
         # ip = request.remote_addr
         ip = request.environ.get("HTTP_X_REAL_IP", request.environ.get("REMOTE_ADDR", "-")).strip()
-        # 223.38 로 시작하고 나머지 변함
 
-        # 404 응답이었으면 카운트 증가
-        # if not current_user.is_authenticated and response.status_code == 404:
-        #     count, _ = IP_404_COUNTS.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
-        #     count += 1
-        #     IP_404_COUNTS[ip] = (count, datetime.now())
-        #
-        #     # 5번 넘으면 차단
-        #     if count >= BLOCK_THRESHOLD:
-        #         until = datetime.now() + BLOCK_DURATION # value
-        #         BLOCKED_IPS[ip] = until
-        #         save_blocked_ip(ip, until)  # ✅ 파일에 추가 저장
-        #         print(f"🚫 IP {ip} is blocked until {until}")
-        #         del IP_404_COUNTS[ip]
+        # 세션이 없음 + 404 응답이었으면 카운트 증가
+        if not current_user.is_authenticated and response.status_code == 404:
+            now = time.time()
+            dq = ip_404_log[ip]
+            dq.append(now)
+
+            # 5초 이내 404가 5회 이상?
+            recent = [t for t in dq if now - t <= BLOCK_THRESHOLD]
+            if len(recent) >= BLOCK_THRESHOLD:
+                until = datetime.now() + BLOCK_DURATION # value
+                BLOCKED_IPS[ip] = until
+                save_blocked_ip(ip, until)  # ✅ 파일에 추가 저장
+                # print(f"🚫 {ip} 차단됨 - 404 {BLOCK_THRESHOLD}회 초과")
+
+            # count, _ = IP_404_COUNTS.get(ip, (0, datetime.now())) # 파라미터 2개로 각각의 값을 가져온다
+            # count += 1
+            # IP_404_COUNTS[ip] = (count, datetime.now())
+            #
+            # # 5번 넘으면 차단
+            # if count >= BLOCK_THRESHOLD:
+            #     until = datetime.now() + BLOCK_DURATION # value
+            #     BLOCKED_IPS[ip] = until
+            #     save_blocked_ip(ip, until)  # ✅ 파일에 추가 저장
+            #     print(f"🚫 IP {ip} is blocked until {until}")
+            #     del IP_404_COUNTS[ip]
 
         return response
 
