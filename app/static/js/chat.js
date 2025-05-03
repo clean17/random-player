@@ -886,10 +886,18 @@ function endDrag() {
 
 // touchmove 강제 차단
 document.addEventListener('touchmove', function (e) {
-    const isChatContainer = e.target.closest('#chat-container');
+    /*const isChatContainer = e.target.closest('#chat-container');
     if (!isChatContainer) {
         e.preventDefault();  // ❌ chat-container 아닌 경우만 터치 이동 막기
+    }*/
+    const isTextArea = e.target.closest('textarea');
+    const isScrollableContainer = e.target.closest('#chat-container');
+
+    if (isTextArea || isScrollableContainer) {
+        return; // ✅ 내부 스크롤 가능한 요소는 막지 않음
     }
+
+    e.preventDefault(); // ❌ 외부 영역에서만 터치 이동 막기
 }, { passive: false }); // 브라우저에게 "이 리스너는 preventDefault()를 호출할 수 있다"고 알려주는 옵션
 // passive: true     preventDefault() 안한다      (브라우저 최적화 OK)
 // passive: false    preventDefault() 쓸 수도 있음 (브라우저가 스크롤 최적화 안 함)

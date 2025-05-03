@@ -113,3 +113,10 @@ body, html {
     overflow-y: auto;
     flex: 1;
 }
+
+#chat-input {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* iOS 자연스러운 스크롤 */
+    touch-action: auto;
+    line-height: 1.5;
+}
