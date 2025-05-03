@@ -75,11 +75,19 @@ function connectSocket() {
 
     socket.on('room_user_list', (userList) => {
         console.log('현재 접속 중인 유저 목록:', userList);
+        const tempUserList = [];
         userList.forEach(user => {
             if (user !== username) {
-                socket.emit("check_video_call_by_user", { username: user });
+                tempUserList.push(user);
             }
         })
+        socket.emit("check_video_call_by_user", { userList: tempUserList });
+    });
+
+    socket.on('find_video_call', (data) => {
+        if (data.socketId && !data.userList.includes(username)) {
+            videoCallBtn.style.backgroundColor = "green";
+        }
     });
 
     socket.on('video_call_ready', (data) => {
@@ -633,24 +641,26 @@ function updateButtonColor() {
 }
 
 function openVideoCallWindow() {
-    videoCallWindow = document.createElement("div");
-    videoCallWindow.style.position = "fixed";
-    videoCallWindow.style.bottom = "140px";
-    videoCallWindow.style.right = "30px";
-    videoCallWindow.style.width = "350px";
-    videoCallWindow.style.height = "500px";
-    videoCallWindow.style.maxWidth = "100vw";
-    videoCallWindow.style.maxHeight = "100vh";
-    videoCallWindow.style.minWidth = "200px";
-    videoCallWindow.style.minHeight = "300px";
-    videoCallWindow.style.background = "#000";
-    videoCallWindow.style.border = "2px solid #ccc";
-    videoCallWindow.style.zIndex = "10";
-    videoCallWindow.style.flexDirection = "column";
-    videoCallWindow.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
-    videoCallWindow.style.resize = "both";
-    videoCallWindow.style.overflow = "auto";
-    videoCallWindow.style.display = "flex";
+    if (!videoCallWindow) {
+        videoCallWindow = document.createElement("div");
+        videoCallWindow.style.position = "fixed";
+        videoCallWindow.style.bottom = "140px";
+        videoCallWindow.style.right = "30px";
+        videoCallWindow.style.width = "350px";
+        videoCallWindow.style.height = "500px";
+        videoCallWindow.style.maxWidth = "100vw";
+        videoCallWindow.style.maxHeight = "100vh";
+        videoCallWindow.style.minWidth = "200px";
+        videoCallWindow.style.minHeight = "300px";
+        videoCallWindow.style.background = "#000";
+        videoCallWindow.style.border = "2px solid #ccc";
+        videoCallWindow.style.zIndex = "10";
+        videoCallWindow.style.flexDirection = "column";
+        videoCallWindow.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+        videoCallWindow.style.resize = "both";
+        videoCallWindow.style.overflow = "auto";
+        videoCallWindow.style.display = "flex";
+    }
 
     const topBar = document.createElement("div");
     topBar.style.display = "flex";
