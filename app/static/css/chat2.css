@@ -1,0 +1,45 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f4f4f4;
+    touch-action: manipulation;
+    height: auto !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+.container {
+    max-width: 600px;
+    margin: auto;
+    background: white; /* ✅ body 색상이 아닌 container 자체 배경 */
+}
+
+#chat-container {
+    max-height: 99vh;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.scroll-wrapper {
+    max-height: 120px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain; /* 상위로 스크롤 전파 안 함 */
+    padding: 4px;
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+#chat-input {
+    resize: none;
+    line-height: 1.5;
+    border: none;
+    width: 100%;
+    background: transparent;
+    font-size: 16px;
+}

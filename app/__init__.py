@@ -237,9 +237,9 @@ def create_app():
     def get_favicon():
         return send_from_directory("static", "favicon.ico", mimetype="application/javascript")
 
-    @app.route("/get-test")
+    @app.route("/htmltest")
     def get_test():
-        return "OK"
+        return render_template('test.html', version=int(time.time()))
 
     @app.after_request
     def track_404(response):
