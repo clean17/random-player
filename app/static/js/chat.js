@@ -5,14 +5,13 @@ const chatContainer = document.getElementById("chat-container"),
     sendButton = document.getElementById('send-button'),
     textAreaOffsetHeight = 22,
     openDate = new Date(),
-    // cameraButton = document.getElementById("camera-button"),
     fileInput = document.getElementById('file-input'),
     progressContainer = document.getElementById('progressContainer'),
     videoCallBtn = document.getElementById("videoCallBtn");
 
 let offset = 0, // 가장 최근 10개는 이미 로드됨
     socket,
-    roomName,
+    roomName = 'chat-room',
     isMine,
     isUnderline,
     isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
@@ -36,7 +35,6 @@ openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
 const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
 
 function connectSocket() {
-    // console.log('새로운 소켓 연결', username)
     // socket = io("https://192.168.60.205:3000", {
     socket = io("https://chickchick.shop:3000", {
         secure: true, // HTTPS 사용
@@ -50,12 +48,12 @@ function connectSocket() {
     socket.on("connect", () => { // 소켓이 연결되면 자동으로 실행되는 콜백 함수
         console.log("✅ 소켓 연결됨, 유저 정보 전송");
         // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
-        socket.emit("user_info", { username: username, room: 'chat-room' });
+        socket.emit("user_info", { username: username, room: roomName });
     });
 
     socket.on("reconnect", () => {
         console.log("🔄 소켓 재연결됨");
-        socket.emit("user_info", { username: username, room: 'chat-room' });
+        // socket.emit("user_info", { username: username, room: roomName });
     });
 
     socket.on("new_msg", function(data) {
@@ -124,8 +122,12 @@ function connectSocket() {
 
 
 document.addEventListener('visibilitychange', () => {
+    const username_kor = username === 'nh824' ? '나현' : '인우';
     // console.log('visible')
     if (!document.hidden) {
+        // const enterance_mng = username_kor+ '님이 들어왔습니다.';
+        // renderEnterOrExit(enterance_mng);
+        socket.emit("enter_room", { username: username, room: roomName });
         if (typeof socket !== "undefined") {
             if (!socket.connected) {
                 // alert("🔄 소켓 재연결 시도");
@@ -192,7 +194,10 @@ document.addEventListener('visibilitychange', () => {
                 loading = false;
             });
     } else {
+        socket.emit("exit_room", { username: username, room: roomName });
         // if (typeof socket !== "undefined") socket.disconnect();
+        // const exit_msg = username_kor + '님이 나갔습니다.';
+        // renderEnterOrExit(exit_msg);
     }
 });
 
@@ -264,7 +269,7 @@ function sendMsg() {
     const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
     if (msg !== "") {
         socket.emit("new_msg", { username, msg, room: roomName });
-        socket.emit("stop_typing", {room: 'chat-room'});
+        socket.emit("stop_typing", {room: roomName});
     }
     // chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
     chatInput.value = "";
@@ -328,6 +333,16 @@ function renderTimeDiv(timeStr) {
     return timeDiv;
 }
 
+function renderEnterOrExit(msg) {
+    const divider = createDateDivider('[' + getCurrentTimeStr() + '] ' + msg);
+    chatContainer.appendChild(divider);
+    if (scrollHeight - scrollTop < 1300) {
+        setTimeout(() => {
+            moveBottonScroll();
+        }, 50)
+    }
+}
+
 // 메세지 추가
 function addMessage(data, load = false) {
     isMine = data.username === username;
@@ -358,13 +373,7 @@ function addMessage(data, load = false) {
 
     if (data.underline) { // 출입 알림
         if (!isMine) {
-            const divider = createDateDivider('['+getCurrentTimeStr()+'] '+ data.msg);
-            chatContainer.appendChild(divider);
-            if (scrollHeight - scrollTop < 1300) {
-                setTimeout(() => {
-                    moveBottonScroll();
-                }, 50)
-            }
+            renderEnterOrExit(data.msg);
         }
     } else { // 메세지 생성
         if (data.msg.trim().startsWith('https://chickchick.shop/image/images/')) {
@@ -521,17 +530,23 @@ function enterEvent(event) {
             sendButton.click();
         }
     } else {
-        socket.emit("typing", {room: 'chat-room'}); // 입력 중임을 알림
+        setTimeout(() => {
+            if (chatInput.value.trim().length > 0) {
+                socket.emit("typing", {room: roomName}); // 입력 중임을 알림
+            }
+            if (chatInput.value.trim().length === 0) {
+                socket.emit("stop_typing", {room: roomName});
+            }
+        }, 10)
 
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {
-            socket.emit("stop_typing", {room: 'chat-room'}); // 일정 시간 입력 없으면 중단 알림
+            socket.emit("stop_typing", {room: roomName}); // 일정 시간 입력 없으면 중단 알림
         }, 2000); // 2초간 입력 없으면 stop_typing
+
+        fetch("/auth/update-session-time").then(data => {
+        })
     }
-}
-
-function cameraEvent(event) {
-
 }
 
 fileInput.addEventListener('change', (event) => {
@@ -776,8 +791,6 @@ function initPage() {
             window.scrollTo(0, 0);  // 키보드 내려간 후에도 복구
         }, 100);
     });
-    // cameraButton.removeEventListener('click', cameraEvent);
-    // cameraButton.addEventListener('click', cameraEvent);
     sendButton.removeEventListener('click', sendMsg);
     sendButton.addEventListener('click', sendMsg);
     videoCallBtn?.removeEventListener('click', renderVideoCallWindow)
