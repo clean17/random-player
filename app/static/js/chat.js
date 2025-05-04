@@ -261,16 +261,19 @@ function loadMoreChats(event) {
 
 // 메시지 전송 후 아래쪽에 추가
 function sendMsg() {
-    // console.log(JSON.stringify(chatInput.value));
     const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
     if (msg !== "") {
         socket.emit("new_msg", { username, msg, room: roomName });
         socket.emit("stop_typing", {room: 'chat-room'});
     }
+    // chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
     chatInput.value = "";
-    chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
-    setTimeout(() => chatInput.focus(), 0); // 다시 포커스를 살짝 늦게 줘서 안전하게 초기화
     chatInput.style.height = textAreaOffsetHeight + "px";
+    // requestAnimationFrame(() => {
+    //     chatInput.focus();  // ⏱️ 다음 프레임에서 포커스, IME 안정
+    // });
+    chatInput.focus();
+    chatInput.setSelectionRange(0, 0);  // 커서 위치 다시 지정
 }
 
 function callNotification() {
