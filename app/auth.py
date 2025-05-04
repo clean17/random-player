@@ -110,6 +110,12 @@ def verify_password():
 
     return render_template("verify_password.html")
 
+@auth.route("/update-session-time")
+@login_required
+def update_session_time():
+    session['second_password_verified_at'] = datetime.utcnow().isoformat()
+    return "update-session-time"
+
 '''
 Flask의 세션은 기본적으로 비영속적(non-permanent)
 >> 브라우저를 닫으면 세션이 사라진다
