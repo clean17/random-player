@@ -22,7 +22,9 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 # NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
-NO_LOGS_URLS = ["/static/", "/func/chat/save-file", "/func/logs/stream", "/service-worker.js", "/favicon.ico", "Client disconnected while serving", "dir=refine", "dir=1", "dir=2", "dir=3", "dir=4"]
+NO_LOGS_URLS = ["/static/", "/func/chat/save-file", "/func/logs/stream", "/service-worker.js", "/favicon.ico",
+                "Client disconnected while serving", "?dir=refine", "?dir=1", "?dir=2", "?dir=3", "?dir=4",
+                "update-session-time"]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 
 class WerkzeugLogFilter(logging.Filter):
@@ -80,6 +82,16 @@ class HideDetailURLFilter(logging.Filter):
         record.args = ()  # 기존 args 제거 (포맷팅 오류 방지)
         return True
 
+class SuppressStatusFilter(logging.Filter):
+    def __init__(self, *statuses):
+        super().__init__()
+        self.statuses = [str(s) for s in statuses]
+
+    def filter(self, record):
+        msg = record.getMessage()
+        return not any(status in msg for status in self.statuses)
+# werkzeug_logger.addFilter(SuppressStatusFilter(403, 404))  # 예: 403, 404 숨기기
+
 log_dir = "logs"
 current_date_str = None
 file_handler = None
@@ -118,14 +130,25 @@ def setup_logging():
         active_logger = root_logger
     print(f'🚀 {active_logger} is running... 🚀')
 
+    '''
+    전체적인 흐름
+    1. active_logger에 대한 로그 요청
+    2. QueueHandler를 통해 log_queue로 전달
+    3. QueueListener가 받아서 file_handler를 통해 파일에 기록
+    4. 동시에 콘솔에도 console_handler로 출력
+    5. 각 핸들러는 특정 Filter를 통해 필터링
+    '''
+
     # 로그 포맷 설정
     formatter = logging.Formatter(formatting)
+    suppress_filter = SuppressStatusFilter("403", "404")
 
     # 콘솔 핸들러 정의 (터미널 출력)
     console_handler = logging.StreamHandler(sys.stdout) # 설정하지 않으면 sys.stderr(표준 에러 스트림)에 로그를 출력, error.log
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     console_handler.addFilter(WerkzeugLogFilter())
+    console_handler.addFilter(suppress_filter)
 
     # 파일 핸들러 (날짜별 자동 로그 파일 관리)
     log_filename = get_log_filename()
@@ -136,6 +159,7 @@ def setup_logging():
     file_handler.setLevel(logging.INFO)  # 파일에는 INFO부터 저장
     file_handler.setFormatter(ColorFormatter(formatting))
     file_handler.addFilter(WerkzeugLogFilter())
+    # file_handler.addFilter(suppress_filter) # 파일에는 저장하도록 한다
 
     """ 비동기 로깅 구현 > 멀티스레드/멀티프로세스 환경에서 로그 기록을 효율적으로 수행 """
     # 로그 메시지를 저장할 큐 생성
