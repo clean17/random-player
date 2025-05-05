@@ -103,15 +103,15 @@ function connectSocket() {
 
     socket.on("typing", () => {
         document.getElementById('typingIndicator').style.display = 'block';
-        const messageRow = renderMessageRow(false);
-        const messageDiv = renderMessageDiv();
-        messageRow.appendChild(messageDiv);
+        // const messageRow = renderMessageRow(false);
+        // const messageDiv = renderMessageDiv();
+        // messageRow.appendChild(messageDiv);
         // chatContainer.appendChild(messageRow);
-        if (scrollHeight - scrollTop < 1300) {
-            setTimeout(() => {
-                moveBottonScroll();
-            }, 50)
-        }
+        // if (scrollHeight - scrollTop < 1300) {
+        //     setTimeout(() => {
+        //         moveBottonScroll();
+        //     }, 50)
+        // }
     });
 
     socket.on("stop_typing", () => {
@@ -825,6 +825,9 @@ function initPage() {
         connectSocket();
     }
     chatInput.focus();
+
+    socket.emit("enter_room", { username: username, room: roomName });
+    // socket.emit("user_info", { username: username, room: roomName });
 }
 
 let controller = new AbortController();
