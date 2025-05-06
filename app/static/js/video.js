@@ -302,7 +302,7 @@ function delVideo() {
     if (currentVideo) {
         if (confirm(`Delete \r\n ${currentVideo} ?`)) {
             initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다
-            axios.delete(`/video/delete/${encodeURIComponent(currentVideo)}?dir=${dir}`)
+            axios.post(`/video/delete/${encodeURIComponent(currentVideo)}?dir=${dir}`)
                 .then(response => {
                     if (response.status === 204) {
                         // alert(`${currentVideo}`+` is deleted`)

@@ -69,7 +69,7 @@ def get_temp_video(filename):
 
     return send_file(os.path.join(dir, filename))
 
-@video.route('/delete/<path:filename>', methods=['DELETE'])
+@video.route('/delete/<path:filename>', methods=['POST'])
 @login_required
 def delete_video(filename):
     directory = request.args.get('dir')
