@@ -40,8 +40,10 @@ const muteBtn = document.getElementById('mute');
 const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
 const audioSelect = document.getElementById('audios');
+const autdioSelectDiv = document.querySelector('.audio-select');
 const microphoneSelect = document.getElementById('microphones');
 const swichCameraBtn = document.getElementById('switchCamera');
+const captureBtn = document.getElementById('capture');
 const roomName = 'nh';
 
 let myStream;
@@ -286,6 +288,7 @@ peerAudioBtn.addEventListener('click', handlePeerAudio);
 audioSelect?.addEventListener('change', handleAudioChange);
 microphoneSelect?.addEventListener('change', handleMicrophoneChange);
 swichCameraBtn.addEventListener("click", handleCameraChange);
+captureBtn.addEventListener('click', captureAndUpload);
 
 ///////////////////////// Socket Code /////////////////////////////////////
 
@@ -491,3 +494,63 @@ document.addEventListener("mouseup", endDrag);
 myFace.addEventListener("touchstart", startDrag, { passive: false });
 document.addEventListener("touchmove", onDrag, { passive: false });
 document.addEventListener("touchend", endDrag);
+
+/////////////////////////////// SAVE SCREENSHOT /////////////////////////////////
+
+function getNowTimestamp() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    return `screenshot_${yyyy}-${mm}-${dd}_${hh}${mi}${ss}.png`;
+}
+
+function showFlashEffect() {
+    const flash = document.getElementById("flash");
+    flash.classList.add("active");
+    setTimeout(() => flash.classList.remove("active"), 100);
+}
+
+function captureAndUpload() {
+    const canvas = document.createElement('canvas');
+    canvas.width = peerFace.videoWidth;
+    canvas.height = peerFace.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(peerFace, 0, 0, canvas.width, canvas.height);
+
+    showFlashEffect();
+    captureBtn.classList.add("clicked");
+    setTimeout(() => captureBtn.classList.remove("clicked"), 300);
+
+    canvas.toBlob(blob => {
+        const formData = new FormData();
+        formData.append('files[]', blob, getNowTimestamp());
+        formData.append('title', 'video-call');
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        }).then(res => {
+            if (res.ok) {
+                console.log('캡처 업로드 성공');
+            } else {
+                console.error('업로드 실패');
+            }
+        });
+    }, 'image/png');
+}
+
+
+/////////////////////// Control Buttons ///////////////////////
+document.getElementById('opacitySlider').addEventListener('input', (e) => {
+    const opacity = e.target.value;
+    document.querySelectorAll('.icon-buttons button').forEach(btn => {
+        btn.style.opacity = opacity;
+    });
+    autdioSelectDiv.style.opacity = opacity;
+});
