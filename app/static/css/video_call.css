@@ -33,7 +33,7 @@ video.mirror {
     max-width: 35vw;
     max-height: 25vh;
     aspect-ratio: auto; /* 기기 영상 비율 그대로 */
-    border: 2px solid white;
+    border: 1px solid white;
     object-fit: cover;
     z-index: 2; /* ✅ peerFace 위로 오버레이 */
     box-shadow: 0 0 10px rgba(0,0,0,0.5);

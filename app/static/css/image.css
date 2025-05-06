@@ -122,19 +122,38 @@ button.delete-button:hover {
 }
 
 /* NextImage */
-.floating-button {
+.floating-button-right {
     position: fixed;
     z-index: 5;
     bottom: 150px;
     right: 5px;
-    padding: 20px;
+    padding: 15px 0px;
     cursor: pointer;
     background-color: #007bff;
     opacity: 0.3;
     color: white;
     border: none;
     font-size: 16px;
-    max-width: 150px;
+    max-width: 120px;
+    /*height: 50px;*/
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.floating-button-left {
+    position: fixed;
+    z-index: 5;
+    bottom: 150px;
+    left: 5px;
+    padding: 15px 0px;
+    cursor: pointer;
+    background-color: #007bff;
+    opacity: 0.3;
+    color: white;
+    border: none;
+    font-size: 16px;
+    max-width: 120px;
     /*height: 50px;*/
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     cursor: pointer;
@@ -161,7 +180,7 @@ button.delete-button:hover {
     transition: background-color 0.3s ease;
 }
 
-.floating-button:hover {
+.floating-button-right:hover {
     background-color: #0056b3;
 }
 

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image List</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}?v=3">
 </head>
 <body>
 <div class="top-bar">
@@ -65,7 +65,7 @@
 
 {#<button type="button" class="scroll-bottom-button" onclick="scrollToBottom()">Scroll to Bottom</button>#}
 
-<button id="next-image-button" class="floating-button">Next Image</button>
+<button id="next-image-button" class="floating-button-right">Next</button>
 
 <script>
     let nextImageElement = null,
