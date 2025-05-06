@@ -26,6 +26,9 @@
     </div>
 </div>
 {% endif %}
+<div class="opacity-bar">
+    <input type="range" id="opacitySlider" min="0.1" max="1" step="0.1" value="1">
+</div>
 <div class="container">
     <div id="myStream">
         <video id="peerFace" autoplay playsinline muted></video>
@@ -43,6 +46,9 @@
             <button id="mute" title="Mic Toggle">
                 <i id="micIcon" class="fas fa-microphone-slash"></i>
             </button>
+            <button id="capture" title="Capture Screenshot">
+                <i class="fas fa-camera"></i>
+            </button>
         </div>
         <div class="audio-select">
 <!--            <select id="audios"></select>--> <!-- 모바일에서는 스피커가 변경되지 않는다 -->
@@ -50,6 +56,8 @@
         </div>
     </div>
 </div>
+<div id="flash"></div>
+
 <script>
     const username = "{{ username }}";
 </script>
