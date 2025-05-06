@@ -107,11 +107,11 @@ function connectSocket() {
         // const messageDiv = renderMessageDiv();
         // messageRow.appendChild(messageDiv);
         // chatContainer.appendChild(messageRow);
-        // if (scrollHeight - scrollTop < 1300) {
-        //     setTimeout(() => {
-        //         moveBottonScroll();
-        //     }, 50)
-        // }
+        if (scrollHeight - scrollTop < 1300) {
+            setTimeout(() => {
+                moveBottonScroll();
+            }, 200)
+        }
     });
 
     socket.on("stop_typing", () => {
