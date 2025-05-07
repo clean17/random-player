@@ -44,6 +44,9 @@ def load_config():
         'LOTTO_PASSWORD': config['lotto']['password'],
         'SECOND_PASSWORD_SESSION_KEY': config['auth']['second_password_session_key'],
         'YOUR_SECRET_PASSWORD': config['auth']['your_secret_password'],
+        'FACEBOOK_APP_ID': config['meta']['facebook_app_id'],
+        'THREADS_APP_ID': config['meta']['threads_app_id'],
+        'THREADS_APP_SECRET': config['meta']['threads_app_secret'],
     }
 
 settings = load_config()
