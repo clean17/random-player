@@ -121,11 +121,7 @@ button {
 #capture.clicked i {
     animation: pop 0.3s ease;
 }
-@keyframes pop {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.5); }
-    100% { transform: scale(1); }
-}
+
 
 
 
@@ -144,4 +140,32 @@ button {
 
 .opacity-bar input[type="range"] {
     width: 100px;
+}
+
+
+#record.clicked {
+    animation: pop 0.3s ease;
+}
+
+
+#toast.show {
+    display: block;
+    animation: fadeout 1.5s ease forwards;
+}
+
+
+@keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.5); }
+    100% { transform: scale(1); }
+}
+@keyframes pulse {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.4); color: #00eaff; }
+    100% { transform: scale(1); }
+}
+@keyframes fadeout {
+    0% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; display: none; }
 }
