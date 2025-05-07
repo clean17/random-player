@@ -223,26 +223,24 @@ def stream_logs():
     """SSE를 사용하여 실시간 로그 스트리밍"""
     def generate():
         log_file = get_log_filename()
-        last_position = 0  # 마지막으로 읽은 파일 위치
+        last_position = os.path.getsize(log_file)  # 시작 시점: 파일 맨 끝
 
         while True:
             try:
                 with open(log_file, "r", encoding="utf-8") as f:
                     f.seek(last_position)
 
-                    while True:
-                        line = f.readline()
-                        if not line:
-                            break  # 새로운 내용이 없으면 반복문 탈출
-
-                        yield f"data: {line.strip()}\n\n"  # SSE 포맷으로 전송
+                    line = f.readline()
+                    if line:
+                        yield f"data: {line.strip()}\n\n"
                         last_position = f.tell()
-
-                time.sleep(1)  # 새로운 로그가 없으면 대기
+                    else:
+                        # 빠른 polling (0.1초) → 너무 빠르면 CPU 100% 될 수 있으니 적절 조절
+                        time.sleep(0.1)
 
             except Exception as e:
-                yield f"data: 로그 읽기 오류: {e}\n\n"
-                time.sleep(1)  # 오류 발생 시 재시도
+                yield f"data: 오류: {e}\n\n"
+                time.sleep(1)
 
     return Response(stream_with_context(generate()), content_type="text/event-stream")
 

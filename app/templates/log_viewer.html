@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Viewer</title>
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<!--    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>-->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
     <style>
         body { font-family: Arial, sans-serif; background: #f4f4f4;}
         #log-container {height: 71vh; overflow-y: scroll; background: #fff; padding: 10px; border: 1px solid #ccc; text-align: left }
-        .log-line { white-space: pre; font-family: monospace; }
         #date-picker { margin: 0px 10px 10px 10px}
     </style>
 </head>
@@ -38,14 +37,14 @@
 <script>
     // const socket = io()  // WebSocket 연결
     const logContainer = document.getElementById("log-container"),
-        datePicker = document.getElementById("date-picker");
-        // eventSource = new EventSource("/func/logs/stream");
+          datePicker = document.getElementById("date-picker"),
+          eventSource = new EventSource("/func/logs/stream");
 
     // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
     /*socket.on("log_update", (data) => {
         const selectedDate = datePicker.value;
         if (selectedDate === getTodayDate()) {
-            renderLogs(data.log)
+            appendLog(data.log);
         }
     });*/
 
@@ -64,22 +63,12 @@
     }
 
     // 오늘 로그만 뷰어에 추가
-    // eventSource.onmessage = (event) => {
-    //     const selectedDate = datePicker.value;
-    //     if (selectedDate === getTodayDate()) {
-    //         // renderLogs(event.data);
-    //         appendLog(event.data)
-    //     }
-    // };
-
-    // 느려서 사용안함
-    function renderLogs(log) {
-        const logLine = document.createElement("div");
-        logLine.classList.add("log-line");
-        logLine.textContent = log;
-        logContainer.appendChild(logLine);
-        logContainer.scrollTop = logContainer.scrollHeight;
-    }
+    eventSource.onmessage = (event) => {
+        const selectedDate = datePicker.value;
+        if (selectedDate === getTodayDate()) {
+            appendLog(event.data)
+        }
+    };
 
     function appendLog(line) {
         // logContainer.textContent += line + "\n";
@@ -114,12 +103,6 @@
         fetch(`/func/logs/${formattedDate}`, { cache: "no-cache" })  // 🔥 캐싱 방지 추가
             .then(response => response.text()) // json -> text
             .then(data => {
-                /*if (data.error) {
-                    logContainer.innerHTML = `<p style="color:red;">${data.error}</p>`;
-                } else {
-                    logContainer.innerHTML = "";
-                    data.logs.forEach(log => renderLogs(log));
-                }*/
                 document.getElementById("log-container").textContent = data;
                 logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
             })
@@ -137,7 +120,7 @@
 
     // 페이지가 언로드될 때 SSE 연결 종료
     window.addEventListener("beforeunload", () => {
-        // eventSource.close();
+        eventSource.close();
     });
 </script>
 
