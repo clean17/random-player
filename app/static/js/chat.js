@@ -49,6 +49,7 @@ function connectSocket() {
         console.log("✅ 소켓 연결됨, 유저 정보 전송");
         // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
         socket.emit("user_info", { username: username, room: roomName });
+        socket.emit("message_read", { chatId: lastChatId, room: roomName });
     });
 
     socket.on("reconnect", () => {
@@ -59,7 +60,12 @@ function connectSocket() {
     socket.on("new_msg", function(data) {
         addMessage(data);
         sendNotification(data);
+        checkReadLastChat();
     });
+
+    socket.on("message_read_ack", function (data) {
+        // setCheckIconsGreenUpTo(data.chatId)
+    })
 
     socket.on("bye", function(data) {
         addMessage(data);
@@ -110,7 +116,7 @@ function connectSocket() {
         if (scrollHeight - scrollTop < 1300) {
             setTimeout(() => {
                 moveBottonScroll();
-            }, 200)
+            }, 500)
         }
     });
 
@@ -154,50 +160,50 @@ document.addEventListener('visibilitychange', () => {
                 console.error("요청 실패:", err);
             });*/
 
-        fetch("/func/chat/load-more-chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ offset: 0 })
-        })
-            .then(res => {
-                if (res.redirected) {
-                    window.location.href = res.url;
-                } else {
-                    return res.json();
-                }
-            })
-            .then(data => {
-                if (data.logs.length > 0) {
-                    const tempArr = []
-                    let isFisrtMsg = false;
+        // fetch("/func/chat/load-more-chat", {
+        //     method: "POST",
+        //     headers: { "Content-Type": "application/json" },
+        //     body: JSON.stringify({ offset: 0 })
+        // })
+        //     .then(res => {
+        //         if (res.redirected) {
+        //             window.location.href = res.url;
+        //         } else {
+        //             return res.json();
+        //         }
+        //     })
+        //     .then(data => {
+        //         if (data.logs.length > 0) {
+        //             const tempArr = []
+        //             let isFisrtMsg = false;
+        //
+        //             if (data.logs.length !== MAX_FETCH_MESSAGE_SIZE) isFisrtMsg = true;
+        //
+        //             data.logs.map(log => {
+        //                 tempArr.push(log)
+        //             });
+        //
+        //             tempArr.forEach(log => {
+        //                 const [chatId, timestamp, username, msg] = log.toString().split("|");
+        //                 chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
+        //                 if (Number(lastChatId) < Number(chatObj.chatId)) {
+        //                     // addMessage(chatObj);
+        //                 }
+        //             });
+        //
+        //             if (isFisrtMsg) {
+        //                 // renderDateDivider(dateStr)
+        //             }
+        //         }
+        //     })
+        //     .finally(() => {
+        //         loading = false;
+        //     });
 
-                    if (data.logs.length !== MAX_FETCH_MESSAGE_SIZE) isFisrtMsg = true;
-
-                    data.logs.map(log => {
-                        tempArr.push(log)
-                    });
-
-                    tempArr.forEach(log => {
-                        const [chatId, timestamp, username, msg] = log.toString().split("|");
-                        chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
-                        if (Number(lastChatId) < Number(chatObj.chatId)) {
-                            // addMessage(chatObj);
-                        }
-                    });
-
-                    if (isFisrtMsg) {
-                        // renderDateDivider(dateStr)
-                    }
-                }
-            })
-            .finally(() => {
-                loading = false;
-            });
+        checkReadLastChat();
     } else {
         socket.emit("exit_room", { username: username, room: roomName });
         // if (typeof socket !== "undefined") socket.disconnect();
-        // const exit_msg = username_kor + '님이 나갔습니다.';
-        // renderEnterOrExit(exit_msg);
     }
 });
 
@@ -268,7 +274,7 @@ function loadMoreChats(event) {
 function sendMsg() {
     const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
     if (msg !== "") {
-        socket.emit("new_msg", { username, msg, room: roomName });
+        socket.emit("new_msg", { chatId: Number(lastChatId)+1, username, msg, room: roomName });
         socket.emit("stop_typing", {room: roomName});
     }
     // chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
@@ -281,18 +287,39 @@ function sendMsg() {
     chatInput.setSelectionRange(0, 0);  // 커서 위치 다시 지정
 }
 
-function callNotification() {
-    if ("vibrate" in navigator) {
-        navigator.vibrate([300, 200, 300]); // 400ms 진동 → 200ms 정지 → 400ms 진동
-    }
+function renderCheckIcon() {
+    const checkIcon = document.createElement("div");
+    checkIcon.className = "checkIcon";
+    checkIcon.innerHTML = "✔"; // 나중에 SVG 아이콘으로 바꿔도 좋음
+    checkIcon.style.color = "gray";  // 회색 체크
+    checkIcon.style.fontSize = "0.8em";
+    checkIcon.style.marginRight = "6px";
+    checkIcon.style.flexShrink = "0";
+    return checkIcon;
+}
 
-    /*const audio = document.getElementById("alert-sound");
-    if (audio) {
-        audio.currentTime = 0;  // 처음부터 재생
-        audio.play().catch(err => {
-            console.warn("오디오 재생 실패:", err);
-        });
-    }*/
+function setCheckIconGreen(chatId) {
+    const row = document.querySelector(`.messageRow[data-chat-id="${chatId}"]`);
+    if (!row) return;
+
+    const checkIcon = row.querySelector('.checkIcon');
+    if (checkIcon) {
+        checkIcon.style.color = "green";
+    }
+}
+
+// 파라미터 보다 낮은 채팅 ID들 모두 읽음 표시 전환
+function setCheckIconsGreenUpTo(chatId) {
+    const rows = document.querySelectorAll('.messageRow[data-chat-id]');
+    rows.forEach(row => {
+        const rowChatId = parseInt(row.dataset.chatId, 10);
+        if (!isNaN(rowChatId) && rowChatId <= chatId) {
+            const checkIcon = row.querySelector('.checkIcon');
+            if (checkIcon) {
+                checkIcon.style.color = "green";
+            }
+        }
+    });
 }
 
 // 바깥 컨테이너: 메시지 한 줄을 구성
@@ -452,6 +479,9 @@ function addMessage(data, load = false) {
         // 정렬 순서: 시간 → 메시지 또는 메시지 → 시간
         if (isMine) {
             messageRow.appendChild(renderTimeDiv(timeStr));
+            const checkIcon = renderCheckIcon();
+            // if (load) checkIcon.style.color = "green";
+            messageRow.appendChild(checkIcon);
             messageRow.appendChild(messageDiv);
         } else {
             messageRow.appendChild(messageDiv);
@@ -598,7 +628,7 @@ fileInput.addEventListener('change', (event) => {
                     const url = "https://chickchick.shop/image/images/?filename="+file+"&dir=temp&selected_dir=chat";
                     const msg = url.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
                     if (msg !== "") {
-                        socket.emit("new_msg", { username, msg, room: roomName });
+                        socket.emit("new_msg", { chatId: Number(lastChatId)+1, username, msg, room: roomName });
                     }
                 })
             } else {
@@ -638,6 +668,19 @@ function checkScroll() {
         }
     }
 
+    checkReadLastChat();
+}
+
+// 스크롤이 최하단일 경우 읽음 표시를 보내는 경우
+
+function checkReadLastChat() {
+    const lastMessageRow = document.querySelector(`.messageRow[data-chat-id="${lastChatId}"]`);
+    const rect = lastMessageRow.getBoundingClientRect();
+    const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+
+    if (inView) {
+        socket.emit("message_read", { chatId: lastChatId, room: roomName });
+    }
 }
 
 function moveBottonScroll() {
