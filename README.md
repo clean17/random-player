@@ -218,3 +218,35 @@ del nginx.pid
 ![img_8.png](app/static/readme/img_8.png)
 ![img_9.png](app/static/readme/img_9.png)
 ![img_10.png](app/static/readme/img_10.png)
+
+## Redis 설치
+Redis를 Windows 서비스로 설치
+```cmd
+redis-server --service-install redis.windows.conf --loglevel verbose
+```
+이미 설치가 되어 있는 경우 삭제 후 서비스 설치
+```cmd
+taskkill /f /im redis-server.exe
+```
+서비스 실행
+```cmd
+redis-server --service-start
+```
+서비스 동작 확인
+```cmd
+C:\Redis>sc query redis
+
+SERVICE_NAME: redis
+        종류               : 10  WIN32_OWN_PROCESS
+        상태               : 4  RUNNING
+                                (STOPPABLE, NOT_PAUSABLE, ACCEPTS_PRESHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        검사점             : 0x0
+        WAIT_HINT          : 0x0
+```
+`redis-cli.exe` 실행 후 테스트
+```cmd
+127.0.0.1:6379> ping
+PONG
+```

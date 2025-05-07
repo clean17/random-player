@@ -13,6 +13,7 @@ from .image import image_bp, environment
 from .function import func, socketio
 from .upload import upload
 from .oauth import oauth
+from .rds import rds
 import fnmatch
 from datetime import datetime, timedelta
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -94,6 +95,7 @@ def create_app():
     app.register_blueprint(func, url_prefix='/func')
     app.register_blueprint(upload, url_prefix='/upload')
     app.register_blueprint(oauth, url_prefix='/oauth')
+    app.register_blueprint(rds, url_prefix='/rds')
     app.jinja_env.globals.update(max=max, min=min)
 
     # ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
