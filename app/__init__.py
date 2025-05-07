@@ -24,16 +24,17 @@ from config.config import settings
 ALLOWED_PATHS = [
     '/favicon.ico',       # nginx 서버리스
     '/service-worker.js', # nginx 서버리스
-    '/image/images*',
+    '/image/images',
     '/image/pages',
-    '/image/move-image*',
-    '/upload*',
-    '/func/download-zip*',
-    '/video/temp-video*',
-    '/func/chat*',
-    '/func/memo*',
+    '/image/move-image',
+    '/upload',
+    '/func/download-zip',
+    '/video/temp-video',
+    '/func/chat',
+    '/func/memo',
     '/auth/verify-password',
-    '/func/video-call*',
+    '/func/video-call',
+    '/auth/update-session-time',
 ]
 
 # 파일 읽기
@@ -219,7 +220,7 @@ def create_app():
                 session["last_active"] = now
 
             # print('request.path', request.path)
-            if not any(fnmatch.fnmatch(request.path, pattern) for pattern in ALLOWED_PATHS):
+            if not any(request.path.startswith(path) for path in ALLOWED_PATHS):
                 return redirect(url_for('auth.logout'))
 
         # 다른 사용자는 제한하지 않음
