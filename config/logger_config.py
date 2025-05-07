@@ -23,7 +23,8 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 # NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
 NO_LOGS_URLS = ["/static/", "/func/chat/save-file", "/func/logs/stream", "/service-worker.js", "/favicon.ico",
-                "Client disconnected while serving", "?dir=refine", "?dir=1", "?dir=2", "?dir=3", "?dir=4",
+                "Client disconnected while serving", "dir=refine", "dir=image", "video-player",
+                "?dir=1", "?dir=2", "?dir=3", "?dir=4",
                 "update-session-time", "apple-touch-icon"]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 

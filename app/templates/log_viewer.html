@@ -82,7 +82,20 @@
     }
 
     function appendLog(line) {
-        logContainer.textContent += line + "\n";
+        // logContainer.textContent += line + "\n";
+
+        const newLine = line.trim();
+        const lines = logContainer.textContent.trim().split("\n");
+        const lastLine = lines[lines.length - 1];
+        // 정규식 시간대 2025-05-07 00:10:50,192
+        const timePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}/;
+        const lastTimestampMatch = lastLine.match(timePattern);
+        const newLineTimestampMatch = newLine.match(timePattern);
+
+        // 동일한 로그가 2번 기록되는 이슈 수정 > 시간이 같지 않으면 추가
+        if (!lastTimestampMatch || !newLineTimestampMatch || lastTimestampMatch[0] !== newLineTimestampMatch[0]) {
+            logContainer.textContent += line + "\n";
+        }
         logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
     }
 
