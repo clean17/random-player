@@ -6,7 +6,7 @@ from config.config import settings
 
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
-DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
+DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR]
 
 # CPU 바운드 작업: 디렉토리를 압축하는 함수
 def compress_directory_to_zip():

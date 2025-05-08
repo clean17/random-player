@@ -12,7 +12,7 @@ from urllib.parse import unquote
 import shutil
 
 image_bp = Blueprint('image', __name__)
-LIMIT_PAGE_NUM = 100
+LIMIT_PAGE_NUM = 50
 shuffled_images = None
 
 # 설정
