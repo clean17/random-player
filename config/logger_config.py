@@ -25,7 +25,9 @@ if hasattr(sys.stderr, 'reconfigure'):
 NO_LOGS_URLS = ["/static/", "/func/chat/save-file", "/func/logs/stream", "/service-worker.js", "/favicon.ico",
                 "Client disconnected while serving", "dir=refine", "dir=image", "video-player",
                 "?dir=1", "?dir=2", "?dir=3", "?dir=4",
-                "update-session-time", "apple-touch-icon"]
+                "update-session-time", "apple-touch-icon",
+                "/delete-images"
+                ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 
 class WerkzeugLogFilter(logging.Filter):

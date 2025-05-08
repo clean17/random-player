@@ -4,6 +4,7 @@ from flask_login import login_required
 import zipfile
 import os
 import io
+import json
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
 from utils.compress_file import compress_directory, compress_directory_to_zip
@@ -412,3 +413,65 @@ def get_video_call_window():
 def test_lotto():
     asyncio.run(async_buy_lotto())  # 코루틴 실행
     return {"status": "success", "message": "로또 구매 완료!!"}
+
+################################# STATE ####################################
+
+
+STATE_FILE = 'data.json'
+
+# JSON 상태 불러오기
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {
+        "chats": {"last_chat_id": 0},
+        "users": {},
+        "ai_scheduler_uri": None
+    }
+
+# JSON 상태 저장하기
+def save_state(state):
+    with open(STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=4, ensure_ascii=False)
+
+# ✅ 사용자별 last_read_chat_id 관리
+@func.route('/last-read-chat-id', methods=['GET', 'POST'], endpoint='last-read-chat-id')
+@login_required
+def last_read_chat_id():
+    state = load_state()
+    username = request.args.get('username') if request.method == 'GET' else request.get_json().get('username')
+
+    if not username:
+        return jsonify({'error': 'username is required'}), 400
+
+    if request.method == 'POST':
+        chat_id = request.get_json().get('lastReadChatId')
+        if chat_id is None:
+            return jsonify({'error': 'lastReadChatId is required'}), 400
+        state.setdefault("users", {}).setdefault(username, {})["last_read_chat_id"] = chat_id
+        save_state(state)
+        return jsonify({'result': 'success'})
+
+    else:  # GET
+        chat_id = state.get("users", {}).get(username, {}).get("last_read_chat_id", 0)
+        return jsonify({'username': username, 'last_read_chat_id': chat_id})
+
+# ✅ 전체 마지막 채팅 ID 관리
+@func.route('/last-chat-id', methods=['GET', 'POST'], endpoint='last-chat-id')
+@login_required
+def handle_last_chat_id():
+    state = load_state()
+
+    if request.method == 'POST':
+        chat_id = request.get_json().get('lastChatId')
+        if chat_id is None:
+            return jsonify({'error': 'lastChatId is required'}), 400
+        state.setdefault("chats", {})["last_chat_id"] = chat_id
+        save_state(state)
+        return jsonify({'result': 'success'})
+
+    elif request.method == 'GET':
+        chat_id = state.get("chats", {}).get("last_chat_id", 0)
+        return jsonify({'last_chat_id': chat_id})
+
