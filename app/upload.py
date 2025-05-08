@@ -4,9 +4,9 @@ from datetime import datetime
 from flask_login import login_required
 from config.config import settings
 from werkzeug.utils import secure_filename
-from threading import Thread
 from zipfile import ZipFile
 from utils.make_thumbnail import convert_file
+import uuid
 
 upload = Blueprint('upload', __name__)
 
@@ -44,6 +44,9 @@ def upload_file():
             if file and file.filename:  # 파일명이 있는 경우 저장
                 # filename = secure_filename(file.filename)
                 filename = file.filename
+                name, ext = os.path.splitext(filename)
+                # UUID 생성
+                uuid_filename = f"{name}_{uuid.uuid4().hex}{ext.lower()}"
                 file_ext = os.path.splitext(filename)[1].lower()
 
                 # 압축 파일인 경우
@@ -72,11 +75,11 @@ def upload_file():
                         if os.path.exists(archive_path):
                             os.remove(archive_path)
                 else:
-                    file_path = os.path.join(target_dir, f"{filename}")
+                    file_path = os.path.join(target_dir, f"{uuid_filename}")
                     file.save(file_path)
                     convert_file(file_path)
                     # saved_files.append(file_path)
-                    saved_files.append(filename)
+                    saved_files.append(uuid_filename)
 
         return jsonify({"status": "success", "files": saved_files})
     except Exception as e:
