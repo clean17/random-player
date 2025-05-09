@@ -139,6 +139,9 @@ def create_app():
         # if request.path.startswith(tuple(paths_to_check)):
 
         if request.path.startswith(('/func/memo', '/func/chat')): # tuple
+            if not current_user.is_authenticated:
+                return redirect(url_for("auth.logout"))
+
             url = request.path
             parts = url.split("/")
             base_path = "/" + "/".join(parts[1:3])
