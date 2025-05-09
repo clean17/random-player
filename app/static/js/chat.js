@@ -24,7 +24,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     submitted = false,
     videoCallRoomName = null,
     typingTimeout,
-    peerLastReadChatId,
+    peerLastReadChatId = 0,
     scrollButton = undefined;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -275,7 +275,10 @@ function getPeerLastReadChatId() {
         .then(response => response.json())
         .then(data => {
             peerLastReadChatId = data['last_read_chat_id']
-            console.log('peerLastReadChatId', peerLastReadChatId)
+            console.log('peerLastReadChatId', peerLastReadChatId);
+        })
+        .then(() => {
+            loadMoreChats(); // 초기 채팅 데이터 조회
         });
 }
 
@@ -496,7 +499,7 @@ function addMessage(data, load = false) {
         if (isMine) {
             messageRow.appendChild(renderTimeDiv(timeStr));
             const checkIcon = renderCheckIcon();
-            if (peerLastReadChatId >= data.chatId) {
+            if (peerLastReadChatId && Number(peerLastReadChatId) >= Number(data.chatId)) {
                 if (load) {
                     // checkIcon.style.color = "green";
                     checkIcon.style.setProperty("color", "green", "important");
@@ -870,6 +873,9 @@ function checkHideOrShowScrollButton() {
 
 
 function initPage() {
+    renderBottomScrollButton(); // 스크롤 버튼 렌더링
+    getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
+
     // 웹 소켓 최초 연결
     if (typeof socket !== "undefined") {
         if (!socket.connected) {
@@ -878,9 +884,6 @@ function initPage() {
     } else {
         connectSocket();
     }
-
-    // 웹 소켓 연결 > 유저 입장
-    socket.emit("enter_room", { username: username, room: roomName });
 
     // 상호작용 시 알림 권한 허용
     document.body.removeEventListener('touchstart', requestNotificationPermission);
@@ -891,10 +894,6 @@ function initPage() {
     document.body.addEventListener('touchmove', requestNotificationPermission);
     document.body.removeEventListener('click', requestNotificationPermission);
     document.body.addEventListener('click', requestNotificationPermission);
-
-    renderBottomScrollButton(); // 스크롤 버튼 렌더링
-    getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
-    loadMoreChats(); // 초기 채팅 데이터 조회
 
     // keydown 에서만 event.preventDefault() 가 적용된다 !!
     chatInput.removeEventListener('keydown', enterEvent);
@@ -932,7 +931,10 @@ function initPage() {
     // 브라우저에게 "이 리스너는 preventDefault()를 호출할 수 있다"고 알려주는 옵션
     // passive: true     preventDefault() 안한다      (브라우저 최적화 OK)
     // passive: false    preventDefault() 쓸 수도 있음 (브라우저가 스크롤 최적화 안 함)
-    document.addEventListener('touchmove', blockTouchMoveEvent, { passive: false });
+    document.addEventListener('touchmove', blockTouchMoveEvent, {passive: false});
+
+    // 웹 소켓 연결 > 유저 입장
+    socket.emit("enter_room", {username: username, room: roomName});
 
     setTimeout(() => {
         // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
@@ -945,7 +947,7 @@ function initPage() {
             }
         });
 
-        socket.emit("message_read", { chatId: lastChatId, room: roomName });
+        socket.emit("message_read", {chatId: lastChatId, room: roomName});
     }, 200)
 }
 
