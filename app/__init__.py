@@ -167,7 +167,7 @@ def create_app():
             # 10분 유효시간 초과 시 인증 무효
             # if datetime.utcnow() - verified_at > timedelta(seconds=5):
             if datetime.utcnow() - verified_at > timedelta(minutes=10):
-                print('    before_request - Session Expires ', current_user.get_id())
+                print('    before_request - Function Session Expires ', current_user.get_id())
                 session.pop(SECOND_PASSWORD_SESSION_KEY, None)
                 session.pop('second_password_verified_at', None)
                 return redirect(url_for('auth.verify_password', next=base_path))

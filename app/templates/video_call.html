@@ -31,6 +31,7 @@
 </div>
 <div class="container">
     <div id="myStream">
+        <canvas id="recordCanvas" style="display:none;"></canvas>
         <video id="peerFace" autoplay playsinline muted></video>
         <video id="myFace" autoplay playsinline muted></video>
         <div class="icon-buttons">
@@ -56,14 +57,12 @@
 
         <div class="audio-select">
 <!--            <select id="audios"></select>--> <!-- 모바일에서는 스피커가 변경되지 않는다 -->
+<!--            <select id="videos"></select>-->
             <select id="microphones"></select>
         </div>
     </div>
 </div>
 <div id="flash"></div>
-<div id="toast" class="hidden fixed bottom-20 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-2 rounded text-sm z-50">
-    녹화 저장됨
-</div>
 
 <script>
     const username = "{{ username }}";

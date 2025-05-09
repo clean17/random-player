@@ -143,8 +143,8 @@ button {
 }
 
 
-#record.clicked {
-    animation: pop 0.3s ease;
+#record.clicked i {
+    animation: pulse 0.6s ease;
 }
 
 
@@ -161,7 +161,7 @@ button {
 }
 @keyframes pulse {
     0%   { transform: scale(1); }
-    50%  { transform: scale(1.4); color: #00eaff; }
+    50%  { transform: scale(1.5); color: red; }
     100% { transform: scale(1); }
 }
 @keyframes fadeout {
