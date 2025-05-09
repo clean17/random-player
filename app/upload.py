@@ -6,6 +6,7 @@ from config.config import settings
 from werkzeug.utils import secure_filename
 from zipfile import ZipFile
 from utils.make_thumbnail import convert_file
+from utils.webm_to_mp4 import convert_webm_to_mp4
 import uuid
 
 upload = Blueprint('upload', __name__)
@@ -74,6 +75,16 @@ def upload_file():
                         # 압축 해제 후 임시 압축파일은 삭제 (필요시)
                         if os.path.exists(archive_path):
                             os.remove(archive_path)
+
+                elif file_ext in ['.webm']:
+                    try:
+                        file_path = os.path.join(target_dir, f"{uuid_filename}")
+                        file.save(file_path)
+                        mp4_path = convert_webm_to_mp4(file_path, target_dir)
+                        return jsonify({"result": "success", "mp4_file": mp4_path})
+                        saved_files.append(uuid_filename)
+                    except Exception as e:
+                        return jsonify({"error": str(e)}), 500
                 else:
                     file_path = os.path.join(target_dir, f"{uuid_filename}")
                     file.save(file_path)

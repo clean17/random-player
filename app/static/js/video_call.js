@@ -36,6 +36,8 @@ const socket = io("https://chickchick.shop:3000", {
 
 const myFace = document.getElementById('myFace');
 const peerFace = document.getElementById("peerFace");
+const recordCanvas = document.getElementById('recordCanvas');
+const recordCtx = recordCanvas.getContext('2d');
 const muteBtn = document.getElementById('mute');
 const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
@@ -44,6 +46,8 @@ const autdioSelectDiv = document.querySelector('.audio-select');
 const microphoneSelect = document.getElementById('microphones');
 const swichCameraBtn = document.getElementById('switchCamera');
 const captureBtn = document.getElementById('capture');
+const recordBtn = document.getElementById('record');
+const recordIcon = recordBtn.querySelector('i');
 const roomName = 'nh';
 
 let myStream;
@@ -60,6 +64,16 @@ let offsetX = 0;
 let offsetY = 0;
 let currentFacingMode = "user"; // 기본은 전면 카메라 (user)
 let currentMicrophoneDeviceId = null;
+let globalRecoder = null;
+
+// 캔버스에 그려서 녹화
+function startDrawingLoop(video, width, height) {
+    function loop() {
+        recordCtx.drawImage(video, 0, 0, width, height);
+        requestAnimationFrame(loop);
+    }
+    loop();
+}
 
 // 연결된 카메라 리스트 출력
 async function getCameras() {
@@ -186,6 +200,8 @@ async function getMedia(deviceId = null, switchCamera = false) {
     }
 }
 
+/////////////////////////// Button Event ////////////////////////////
+
 function handleMuteClick() {
     myStream.getAudioTracks().forEach(track => {
         track.enabled = !track.enabled
@@ -282,6 +298,20 @@ async function handleMicrophoneChange() {
         alert("마이크 변경 중 문제가 발생했습니다.");
     }
 }
+
+function recordPeerStream() {
+    recordBtn.classList.add('clicked');
+    recordIcon.className = 'fas fa-circle text-red-500';
+    setTimeout(() => {
+        recordBtn.classList.remove('clicked')
+        recordIcon.className = 'fas fa-circle-dot';
+    }, 500);
+
+    globalRecoder.uploadBufferedBlob('/upload', 'video-call').then(() => {
+
+    });
+}
+
 muteBtn.addEventListener('click', handleMuteClick);
 cameraBtn.addEventListener('click', handleCameraClick);
 peerAudioBtn.addEventListener('click', handlePeerAudio);
@@ -289,6 +319,7 @@ audioSelect?.addEventListener('change', handleAudioChange);
 microphoneSelect?.addEventListener('change', handleMicrophoneChange);
 swichCameraBtn.addEventListener("click", handleCameraChange);
 captureBtn.addEventListener('click', captureAndUpload);
+recordBtn.addEventListener('click', recordPeerStream);
 
 ///////////////////////// Socket Code /////////////////////////////////////
 
@@ -414,6 +445,29 @@ function handleTrack(event) {
     const peerFace = document.getElementById('peerFace');
     const [stream] = event.streams;
     peerFace.srcObject = stream;
+
+    peerFace.onloadedmetadata = () => {
+        recordCanvas.width = peerFace.videoWidth || 1280;
+        recordCanvas.height = peerFace.videoHeight || 720;
+        startDrawingLoop(peerFace, peerFace.videoWidth, peerFace.videoHeight);
+
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        const originalFps = settings.frameRate || 30;
+        const canvasStream = recordCanvas.captureStream(originalFps);
+
+        // 오디오 트랙이 있다면 canvasStream에 추가
+        stream.getAudioTracks().forEach(track => {
+            console.log('audioTrack', track)
+            canvasStream.addTrack(track);
+        });
+
+        globalRecoder = new BufferedRecorder(canvasStream, {
+            chunkDuration: 5,
+            bufferDuration: 30
+        });
+        globalRecoder.start();
+    };
 }
 
 
@@ -430,6 +484,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 window.addEventListener("beforeunload", () => {
     socket.emit("leave_room", roomName, username); // 서버에 방 나간다고 알림
+    globalRecoder.stop();
 });
 
 
@@ -545,8 +600,7 @@ function captureAndUpload() {
     }, 'image/png');
 }
 
-
-/////////////////////// Control Buttons ///////////////////////
+/////////////////////// Control Buttons Opacity ///////////////////////
 document.getElementById('opacitySlider').addEventListener('input', (e) => {
     const opacity = e.target.value;
     document.querySelectorAll('.icon-buttons button').forEach(btn => {
