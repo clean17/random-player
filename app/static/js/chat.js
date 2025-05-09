@@ -104,7 +104,6 @@ function connectSocket() {
         console.log("✅ 소켓 연결됨, 유저 정보 전송");
         // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
         // socket.emit("user_info", { username: username, room: roomName });
-        socket.emit("message_read", { chatId: lastChatId, room: roomName });
     });
 
     socket.on("reconnect", () => {
@@ -184,7 +183,7 @@ function connectSocket() {
 
 ////////////////////////// Focus on Browser  ///////////////////////////
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
+    if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 실행된다
         socket.emit("enter_room", { username: username, room: roomName });
         if (typeof socket !== "undefined") {
             if (!socket.connected) {
@@ -252,9 +251,8 @@ document.addEventListener('visibilitychange', () => {
         //         loading = false;
         //     });
 
-        sendDataReadLastChat();
-        updateUserReadChatId();
-
+        sendDataReadLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
+        updateUserReadChatId(); // 마지막으로 읽은 chatId 수정 요청
     } else {
         socket.emit("exit_room", { username: username, room: roomName });
         // if (typeof socket !== "undefined") socket.disconnect();
@@ -498,7 +496,6 @@ function addMessage(data, load = false) {
         if (isMine) {
             messageRow.appendChild(renderTimeDiv(timeStr));
             const checkIcon = renderCheckIcon();
-            console.log(load, peerLastReadChatId, data.chatId)
             if (peerLastReadChatId >= data.chatId) {
                 if (load) {
                     // checkIcon.style.color = "green";
@@ -947,6 +944,8 @@ function initPage() {
                 loadMoreChats();
             }
         });
+
+        socket.emit("message_read", { chatId: lastChatId, room: roomName });
     }, 200)
 }
 
