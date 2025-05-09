@@ -34,6 +34,31 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
 const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
+const debouncedUpdate = debounce(updateChatSession, 1000 * 10);
+const trottledUpdate = throttle(updateChatSession, 1000 * 10);
+
+
+// debounce 적용 (일정 시간동안의 마지막 요청만)
+function debounce(func, delay) {
+    let debounceTimer;
+    return function (...args) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
+// throttle 적용 (일정 시간마다 요청)
+function throttle(func, delay) {
+    let throttleTimer = null;
+    return function (...args) {
+        if (throttleTimer) return;
+        throttleTimer = setTimeout(() => {
+            func.apply(this, args);
+            throttleTimer = null;
+        }, delay);
+    };
+}
+
 
 function connectSocket() {
     // socket = io("https://192.168.60.205:3000", {
@@ -614,7 +639,14 @@ function createDateDivider(dateStr) {
     return divider;
 }
 
+function updateChatSession() {
+    fetch("/auth/update-session-time").then(data => {
+    })
+}
+
 function enterEvent(event) {
+    debouncedUpdate();
+
     if (event.key === 'Enter') {
         if (event.shiftKey) {
             return; // 줄바꿈만 하고 종료
@@ -638,17 +670,19 @@ function enterEvent(event) {
         typingTimeout = setTimeout(() => {
             socket.emit("stop_typing", {room: roomName}); // 일정 시간 입력 없으면 중단 알림
         }, 2000); // 2초간 입력 없으면 stop_typing
-
-        fetch("/auth/update-session-time").then(data => {
-        })
     }
 }
 
 fileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (file) {
-        event.preventDefault(); // 기본 제출 막기
+    const files = event.target.files;
 
+    if (!files || files.length === 0) {
+        console.log("❌ 파일이 선택되지 않았습니다.");
+        return;
+    }
+
+    const file = files[0];
+    if (file) {
         const form = event.target.closest('form');  // 🔧 이걸 먼저 정의해줘야 아래에서 사용 가능
 
         if (submitted) {
@@ -771,6 +805,7 @@ function renderBottomScrollButton() {
 function renderVideoCallWindow() {
     if (!videoCallWindow) {
         openVideoCallWindow();
+        trottledUpdate();
     } else {
         if (isMinimized) {
             videoCallWindow.style.visibility = "";
