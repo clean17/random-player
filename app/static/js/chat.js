@@ -103,7 +103,7 @@ function connectSocket() {
     socket.on("connect", () => { // 소켓이 연결되면 자동으로 실행되는 콜백 함수
         console.log("✅ 소켓 연결됨, 유저 정보 전송");
         // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
-        socket.emit("user_info", { username: username, room: roomName });
+        // socket.emit("user_info", { username: username, room: roomName });
         socket.emit("message_read", { chatId: lastChatId, room: roomName });
     });
 
@@ -799,9 +799,11 @@ function enterEvent(event) {
 
 // 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
 function loadPreviosChats () {
-    if (Number(chatContainer.scrollTop) < 700 && !loading) {
-        loadMoreChats("wheel");
-    }
+    debounce(() => {
+        if (Number(chatContainer.scrollTop) < 700 && !loading) {
+            loadMoreChats("wheel");
+        }
+    }, 100);
 }
 
 // 영상통화 창 열기
@@ -882,7 +884,6 @@ function initPage() {
 
     // 웹 소켓 연결 > 유저 입장
     socket.emit("enter_room", { username: username, room: roomName });
-    // socket.emit("user_info", { username: username, room: roomName });
 
     // 상호작용 시 알림 권한 허용
     document.body.removeEventListener('touchstart', requestNotificationPermission);
