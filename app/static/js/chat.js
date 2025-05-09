@@ -104,6 +104,7 @@ function connectSocket() {
 
     socket.on('room_user_list', (userList) => {
         console.log('현재 접속 중인 유저 목록:', userList);
+        updateUserCount(userList.length);
         const tempUserList = [];
         userList.forEach(user => {
             if (user !== username) {
@@ -671,6 +672,11 @@ function enterEvent(event) {
             socket.emit("stop_typing", {room: roomName}); // 일정 시간 입력 없으면 중단 알림
         }, 2000); // 2초간 입력 없으면 stop_typing
     }
+}
+
+function updateUserCount(number) {
+    const countEl = document.getElementById('userCount');
+    countEl.textContent = number;
 }
 
 fileInput.addEventListener('change', (event) => {
