@@ -1,3 +1,5 @@
+let userInteracted = false;
+
 // 도메인 구입 전까지 서비스 워커 기능 비활성화 > PWA 기능 or FCM 추가해야함
 if ("serviceWorker" in navigator) {
     // http + localhost, https(공인 ssl) 환경에서만 기동
@@ -26,6 +28,20 @@ function requestNotificationPermission() {
     });
 }
 
+function callNotification() {
+    if (userInteracted && "vibrate" in navigator) {
+        navigator.vibrate([400, 200, 400]); // 400ms 진동 → 200ms 정지 → 400ms 진동
+    }
+
+    /*const audio = document.getElementById("alert-sound");
+    if (audio) {
+        audio.currentTime = 0;  // 처음부터 재생
+        audio.play().catch(err => {
+            console.warn("오디오 재생 실패:", err);
+        });
+    }*/
+}
+
 function sendNotification(data) {
     if (document.hidden && Notification.permission === "granted") {
         if (!isMine && !isUnderline) {
@@ -39,8 +55,6 @@ function sendNotification(data) {
             });
         }
 
-
-
         // http 환경에서는 아래 코드로 가능
         /*const notification = new Notification('새 메시지 도착!', { // 일반 알림
             body: `${data.username}: ${data.msg}`,
@@ -53,6 +67,23 @@ function sendNotification(data) {
         };*/
     }
 }
+
+function handleUserInteraction() {
+    if (!userInteracted) {
+        userInteracted = true;
+
+        // 이벤트 리스너 제거 (불필요한 호출 방지)
+        window.removeEventListener("click", handleUserInteraction);
+        window.removeEventListener("touchstart", handleUserInteraction);
+        window.removeEventListener("scroll", handleUserInteraction);
+        window.removeEventListener("keydown", handleUserInteraction);
+    }
+}
+
+window.addEventListener("click", handleUserInteraction);
+window.addEventListener("touchstart", handleUserInteraction);
+window.addEventListener("scroll", handleUserInteraction);
+window.addEventListener("keydown", handleUserInteraction);
 
 // 클라이언트에서 서버에 푸시 구독 정보 전송
 /*if ("serviceWorker" in navigator && "PushManager" in window) {
