@@ -17,14 +17,9 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
     loading = false,
     chatState = { previousDate: null, latestDate: null },
-    isScroll = false,
     scrollHeight, // 전체 스크롤 높이
     scrollTop,    // 현재 스크롤 위치
-    videoCallWindow = null,
     isMinimized = false,
-    isDragging = false,
-    offsetX = 0,
-    offsetY = 0,
     lastChatId = 0,
     submitted = false,
     videoCallRoomName = null,
@@ -36,7 +31,9 @@ openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
 const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
 const debouncedUpdate = debounce(updateChatSession, 1000 * 10);
 const trottledUpdate = throttle(updateChatSession, 1000 * 10);
+let controller = new AbortController();
 
+////////////////////////////// Util Function ////////////////////////////
 
 // debounce 적용 (일정 시간동안의 마지막 요청만)
 function debounce(func, delay) {
@@ -59,6 +56,38 @@ function throttle(func, delay) {
     };
 }
 
+// 채팅 입력창 자동으로 높이 조절
+document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textarea => {
+    const maxLines = Number(textarea.dataset.textareaAutoResize) || 5;
+    const maxHeight = maxLines * textAreaOffsetHeight;
+
+    const resize = () => {
+        textarea.style.height = '22px';  // ✅ 초기화
+        // const lineCount = textarea.value.split('\n').length;
+        // const newHeight = Math.min(lineCount * textAreaOffsetHeight, maxHeight);
+
+        const scrollHeight = textarea.scrollHeight - 10; // ✅ 실제 내용 높이
+        const newHeight = Math.min(scrollHeight, maxHeight);
+
+        textarea.style.height = `${newHeight}px`;
+    };
+
+    textarea.addEventListener('input', resize, { signal: controller.signal });
+
+    // 초기 설정
+    resize();
+});
+
+function getCurrentTimeStr() {
+    const now = new Date();
+
+    const hour = now.getHours().toString().padStart(2, "0");
+    const minute = now.getMinutes().toString().padStart(2, "0");
+
+    return `${hour}:${minute}`;
+}
+
+/////////////////////////////// Web Socket /////////////////////////////
 
 function connectSocket() {
     // socket = io("https://192.168.60.205:3000", {
@@ -79,14 +108,14 @@ function connectSocket() {
     });
 
     socket.on("reconnect", () => {
-        console.log("🔄 소켓 재연결됨");
+        alert("🔄 소켓 재연결됨");
         // socket.emit("user_info", { username: username, room: roomName });
     });
 
     socket.on("new_msg", function(data) {
         addMessage(data);
         sendNotification(data);
-        checkReadLastChat();
+        sendDataReadLastChat();
     });
 
     socket.on("message_read_ack", function (data) {
@@ -150,54 +179,12 @@ function connectSocket() {
     socket.on("stop_typing", () => {
         document.getElementById('typingIndicator').style.display = 'none';
     });
-
 }
 
-function getPeerLastReadChatId() {
-    peername = username === 'nh824' ? 'fkaus14' : 'nh824'
-    fetch('/func/last-read-chat-id?username=' + peername, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        credentials: 'include' // 세션 인증 유지용 (Flask-Login 등)
-    })
-        .then(response => response.json())
-        .then(data => {
-            peerLastReadChatId = data['last_read_chat_id']
-            console.log('peerLastReadChatId', peerLastReadChatId)
-        });
-}
 
-function updateUserReadChatId() {
-    console.log('updateUserReadChatId', username,  lastChatId)
-    // chatContainer 스크롤이 최하단일 경우에만 실행
-    if (chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 1) {
-        fetch('/func/last-read-chat-id', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                username: username,
-                lastReadChatId: lastChatId
-            })
-        })
-            .then(response => response.json())
-            .then(data => {
-                // console.log('POST /last-read-chat-id:', data);
-            });
-    }
-
-}
-
+////////////////////////// Focus on Browser  ///////////////////////////
 document.addEventListener('visibilitychange', () => {
-    const username_kor = username === 'nh824' ? '나현' : '인우';
-    // console.log('visible')
     if (!document.hidden) {
-        // const enterance_mng = username_kor+ '님이 들어왔습니다.';
-        // renderEnterOrExit(enterance_mng);
         socket.emit("enter_room", { username: username, room: roomName });
         if (typeof socket !== "undefined") {
             if (!socket.connected) {
@@ -265,7 +252,7 @@ document.addEventListener('visibilitychange', () => {
         //         loading = false;
         //     });
 
-        checkReadLastChat();
+        sendDataReadLastChat();
         updateUserReadChatId();
 
     } else {
@@ -275,21 +262,67 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
+////////////////////////// Chat State ////////////////////////////
 
-// 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
-chatContainer.addEventListener("wheel", function () {
-    if (Number(chatContainer.scrollTop) < 700 && !loading) {
-        loadMoreChats("wheel");
+// 상대가 마지막으로 읽은 chatId 조회
+function getPeerLastReadChatId() {
+    peername = username === 'nh824' ? 'fkaus14' : 'nh824'
+    fetch('/func/last-read-chat-id?username=' + peername, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'include' // 세션 인증 유지용 (Flask-Login 등)
+    })
+        .then(response => response.json())
+        .then(data => {
+            peerLastReadChatId = data['last_read_chat_id']
+            console.log('peerLastReadChatId', peerLastReadChatId)
+        });
+}
+
+// 본인이 읽은 마지막 chatId 변경 요청
+function updateUserReadChatId() {
+    console.log('updateUserReadChatId', username,  lastChatId)
+    // chatContainer 스크롤이 최하단일 경우에만 실행
+    if (chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 1) {
+        fetch('/func/last-read-chat-id', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                username: username,
+                lastReadChatId: lastChatId
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                // console.log('POST /last-read-chat-id:', data);
+            });
     }
-});
-setTimeout(() => {
-    chatContainer.addEventListener("scroll", function () {
-        if (Number(chatContainer.scrollTop) < 700 && !loading) {
-            loadMoreChats();
-        }
-    });
-}, 200)
+}
 
+// 스크롤이 최하단일 경우 읽음 표시를 보내는 함수
+function sendDataReadLastChat() {
+    const lastMessageRow = document.querySelector(`.messageRow[data-chat-id="${lastChatId}"]`);
+    const rect = lastMessageRow.getBoundingClientRect();
+    const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+
+    if (inView) {
+        socket.emit("message_read", { chatId: lastChatId, room: roomName });
+    }
+}
+
+// 채팅 세션 갱신 (10분 한정)
+function updateChatSession() {
+    fetch("/auth/update-session-time").then(data => {
+    })
+}
+
+
+//////////////////////////////// Render Chat ////////////////////////////////
 
 function loadMoreChats(event) {
     if (loading) return;  // 중복 호출 방지
@@ -336,11 +369,10 @@ function loadMoreChats(event) {
         .finally(() => {
             loading = false;
         });
-
 }
 
-// 메시지 전송 후 아래쪽에 추가
-function sendMsg() {
+// 메시지를 웹소켓에 전송 후 채팅 입력창 정리
+function sendMessage() {
     const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
     if (msg !== "") {
         socket.emit("new_msg", { chatId: Number(lastChatId)+1, username, msg, room: roomName });
@@ -354,105 +386,6 @@ function sendMsg() {
     // });
     chatInput.focus();
     chatInput.setSelectionRange(0, 0);  // 커서 위치 다시 지정
-}
-
-function renderCheckIcon() {
-    const checkIcon = document.createElement("div");
-    checkIcon.className = "checkIcon";
-    // checkIcon.innerHTML = "✔"; // 나중에 SVG 아이콘으로 바꿔도 좋음
-    checkIcon.innerHTML = '<i class="fas fa-check"></i>';
-    // checkIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    //     <path d="M20.285 6.709l-11.025 11.025-5.046-5.046 1.414-1.414 3.632 3.632 9.611-9.611z"/>
-    // </svg>`;
-
-    // 스타일 설정
-    checkIcon.style.width = "20px";
-    checkIcon.style.height = "20px";
-    checkIcon.style.display = "flex";
-    checkIcon.style.alignItems = "center";
-    checkIcon.style.justifyContent = "center";
-    checkIcon.style.marginRight = "6px";
-    checkIcon.style.flexShrink = "0";
-    checkIcon.style.fontSize = "0.9em";
-    checkIcon.style.color = "whitesmoke";
-    checkIcon.style.background = "#ddd"; // 밝은 회색 배경
-    checkIcon.style.borderRadius = "4px";
-    checkIcon.style.fontWeight = "bold";
-
-    return checkIcon;
-}
-
-function setCheckIconGreen(chatId) {
-    const row = document.querySelector(`.messageRow[data-chat-id="${chatId}"]`);
-    if (!row) return;
-
-    const checkIcon = row.querySelector('.checkIcon');
-    if (checkIcon) {
-        checkIcon.style.color = "green";
-    }
-}
-
-// 파라미터 보다 낮은 채팅 ID들 모두 읽음 표시 전환
-function setCheckIconsGreenUpTo(chatId) {
-    const rows = document.querySelectorAll('.messageRow[data-chat-id]');
-    rows.forEach(row => {
-        const rowChatId = parseInt(row.dataset.chatId, 10);
-        if (!isNaN(rowChatId) && rowChatId <= chatId) {
-            const checkIcon = row.querySelector('.checkIcon');
-            if (checkIcon) {
-                // checkIcon.style.color = "green";
-                checkIcon.style.setProperty("color", "green", "important");
-            }
-        }
-    });
-}
-
-// 바깥 컨테이너: 메시지 한 줄을 구성
-function renderMessageRow(isMine, chatId) {
-    const messageRow = document.createElement("div");
-    messageRow.style.display = "flex";
-    messageRow.style.alignItems = "flex-end";
-    messageRow.style.marginBottom = "6px";
-    messageRow.style.maxWidth = "100%";
-    messageRow.style.justifyContent = isMine ? "flex-end" : "flex-start";
-    messageRow.classList.add('messageRow')
-    messageRow.dataset.chatId = chatId;
-    return messageRow;
-}
-
-// 메시지 박스
-function renderMessageDiv() {
-    const messageDiv = document.createElement("div");
-    messageDiv.classList.add(
-        "p-2",
-        "rounded-lg",
-        "max-w-[75%]",  // 최대 너비 75%
-        "w-fit",
-        "block",        // 내용에 맞게 크기 조정
-        "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
-        "messageDiv",
-    );
-    return messageDiv;
-}
-
-// 시간 박스
-function renderTimeDiv(timeStr) {
-    const timeDiv = document.createElement("div");
-    timeDiv.textContent = timeStr;
-    timeDiv.style.fontSize = "0.75em";
-    timeDiv.style.color = "#666";
-    timeDiv.style.margin = isMine ? "0 8px 0 0" : "0 0 0 8px";  // 메시지와 간격
-    return timeDiv;
-}
-
-function renderEnterOrExit(msg) {
-    const divider = createDateDivider('[' + getCurrentTimeStr() + '] ' + msg);
-    chatContainer.appendChild(divider);
-    if (scrollHeight - scrollTop < 1300) {
-        setTimeout(() => {
-            moveBottonScroll();
-        }, 50)
-    }
 }
 
 // 메세지 추가
@@ -582,13 +515,53 @@ function addMessage(data, load = false) {
 
 }
 
-function getCurrentTimeStr() {
-    const now = new Date();
+// 바깥 컨테이너: 메시지 한 줄을 구성
+function renderMessageRow(isMine, chatId) {
+    const messageRow = document.createElement("div");
+    messageRow.style.display = "flex";
+    messageRow.style.alignItems = "flex-end";
+    messageRow.style.marginBottom = "6px";
+    messageRow.style.maxWidth = "100%";
+    messageRow.style.justifyContent = isMine ? "flex-end" : "flex-start";
+    messageRow.classList.add('messageRow')
+    messageRow.dataset.chatId = chatId;
+    return messageRow;
+}
 
-    const hour = now.getHours().toString().padStart(2, "0");
-    const minute = now.getMinutes().toString().padStart(2, "0");
+// 메시지 박스
+function renderMessageDiv() {
+    const messageDiv = document.createElement("div");
+    messageDiv.classList.add(
+        "p-2",
+        "rounded-lg",
+        "max-w-[75%]",  // 최대 너비 75%
+        "w-fit",
+        "block",        // 내용에 맞게 크기 조정
+        "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
+        "messageDiv",
+    );
+    return messageDiv;
+}
 
-    return `${hour}:${minute}`;
+// 시간 박스
+function renderTimeDiv(timeStr) {
+    const timeDiv = document.createElement("div");
+    timeDiv.textContent = timeStr;
+    timeDiv.style.fontSize = "0.75em";
+    timeDiv.style.color = "#666";
+    timeDiv.style.margin = isMine ? "0 8px 0 0" : "0 0 0 8px";  // 메시지와 간격
+    return timeDiv;
+}
+
+// 들어옴, 나감 표기 함수
+function renderEnterOrExit(msg) {
+    const divider = createDateDivider('[' + getCurrentTimeStr() + '] ' + msg);
+    chatContainer.appendChild(divider);
+    if (scrollHeight - scrollTop < 1300) {
+        setTimeout(() => {
+            moveBottonScroll();
+        }, 50)
+    }
 }
 
 // 날짜 구분선 추가
@@ -640,46 +613,25 @@ function createDateDivider(dateStr) {
     return divider;
 }
 
-function updateChatSession() {
-    fetch("/auth/update-session-time").then(data => {
-    })
-}
-
-function enterEvent(event) {
-    debouncedUpdate();
-
-    if (event.key === 'Enter') {
-        if (event.shiftKey) {
-            return; // 줄바꿈만 하고 종료
-        }
-        if (!isMobile) {
-            event.preventDefault(); // 기본 Enter 줄바꿈 방지
-            // sendMsg();
-            sendButton.click();
-        }
-    } else {
-        setTimeout(() => {
-            if (chatInput.value.trim().length > 0) {
-                socket.emit("typing", {room: roomName}); // 입력 중임을 알림
-            }
-            if (chatInput.value.trim().length === 0) {
-                socket.emit("stop_typing", {room: roomName});
-            }
-        }, 10)
-
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-            socket.emit("stop_typing", {room: roomName}); // 일정 시간 입력 없으면 중단 알림
-        }, 2000); // 2초간 입력 없으면 stop_typing
-    }
-}
-
+// 참여중 인원 수 표기 변경
 function updateUserCount(number) {
     const countEl = document.getElementById('userCount');
     countEl.textContent = number;
 }
 
-fileInput.addEventListener('change', (event) => {
+// 최하단으로 가는 버튼 생성
+function renderBottomScrollButton() {
+    scrollButton = document.createElement("button");
+    scrollButton.id = "scroll-button";
+    scrollButton.innerHTML = "↓";
+    scrollButton.style.display = 'none';
+    document.body.appendChild(scrollButton);
+}
+
+
+////////////////////////// File Upload /////////////////////////////
+
+function uploadFile(event) {
     const files = event.target.files;
 
     if (!files || files.length === 0) {
@@ -711,7 +663,7 @@ fileInput.addEventListener('change', (event) => {
         xhr.upload.onprogress = function (e) {
             if (e.lengthComputable) {
                 const percent = Math.round((e.loaded / e.total) * 100);
-                document.getElementById('progressContainer').style.display = 'block';
+                progressContainer.style.display = 'block';
                 document.getElementById('progressBar').value = percent;
             }
         };
@@ -722,9 +674,9 @@ fileInput.addEventListener('change', (event) => {
             if (xhr.status === 200) {
 
                 // submitted = false; // 다시 전송 가능하게
-                // document.getElementById('progressContainer').style.display = 'none';
+                // progressContainer.style.display = 'none';
                 submitted = false;
-                document.getElementById('progressContainer').style.display = 'none';
+                progressContainer.style.display = 'none';
 
                 const response = JSON.parse(xhr.responseText); // 서버 응답
                 const files = response.files;
@@ -756,58 +708,103 @@ fileInput.addEventListener('change', (event) => {
 
         xhr.send(formData);
     }
-});
+}
 
-function checkScroll() {
-    scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
-    scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
 
-    if (scrollHeight - scrollTop > 1400) {
-        if (!isScroll) {
-            isScroll = true;
+//////////////////////////////// Chat Check Icon  ////////////////////////////////
+
+function renderCheckIcon() {
+    const checkIcon = document.createElement("div");
+    checkIcon.className = "checkIcon";
+    // checkIcon.innerHTML = "✔"; // 나중에 SVG 아이콘으로 바꿔도 좋음
+    checkIcon.innerHTML = '<i class="fas fa-check"></i>';
+    // checkIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    //     <path d="M20.285 6.709l-11.025 11.025-5.046-5.046 1.414-1.414 3.632 3.632 9.611-9.611z"/>
+    // </svg>`;
+
+    // 스타일 설정
+    checkIcon.style.width = "20px";
+    checkIcon.style.height = "20px";
+    checkIcon.style.display = "flex";
+    checkIcon.style.alignItems = "center";
+    checkIcon.style.justifyContent = "center";
+    checkIcon.style.marginRight = "6px";
+    checkIcon.style.flexShrink = "0";
+    checkIcon.style.fontSize = "0.9em";
+    checkIcon.style.color = "whitesmoke";
+    checkIcon.style.background = "#ddd"; // 밝은 회색 배경
+    checkIcon.style.borderRadius = "4px";
+    checkIcon.style.fontWeight = "bold";
+
+    return checkIcon;
+}
+
+function setCheckIconGreen(chatId) {
+    const row = document.querySelector(`.messageRow[data-chat-id="${chatId}"]`);
+    if (!row) return;
+
+    const checkIcon = row.querySelector('.checkIcon');
+    if (checkIcon) {
+        checkIcon.style.color = "green";
+    }
+}
+
+// 파라미터 보다 낮은 채팅 ID들 모두 읽음 표시 전환
+function setCheckIconsGreenUpTo(chatId) {
+    const rows = document.querySelectorAll('.messageRow[data-chat-id]');
+    rows.forEach(row => {
+        const rowChatId = parseInt(row.dataset.chatId, 10);
+        if (!isNaN(rowChatId) && rowChatId <= chatId) {
+            const checkIcon = row.querySelector('.checkIcon');
+            if (checkIcon) {
+                // checkIcon.style.color = "green";
+                checkIcon.style.setProperty("color", "green", "important");
+            }
         }
-        scrollButton.style.display = "block";
+    });
+}
+
+
+///////////////////////////// Event Listener //////////////////////////////
+
+// 채팅 입력 이벤트 함수
+function enterEvent(event) {
+    debouncedUpdate();
+
+    if (event.key === 'Enter') {
+        if (event.shiftKey) {
+            return; // 줄바꿈만 하고 종료
+        }
+        if (!isMobile) {
+            event.preventDefault(); // 기본 Enter 줄바꿈 방지
+            // sendMessage();
+            sendButton.click();
+        }
     } else {
-        if (scrollButton) {
-            scrollButton.style.display = "none";
-        }
-    }
+        setTimeout(() => {
+            if (chatInput.value.trim().length > 0) {
+                socket.emit("typing", {room: roomName}); // 입력 중임을 알림
+            }
+            if (chatInput.value.trim().length === 0) {
+                socket.emit("stop_typing", {room: roomName});
+            }
+        }, 10)
 
-    checkReadLastChat();
-}
-
-// 스크롤이 최하단일 경우 읽음 표시를 보내는 경우
-
-function checkReadLastChat() {
-    const lastMessageRow = document.querySelector(`.messageRow[data-chat-id="${lastChatId}"]`);
-    const rect = lastMessageRow.getBoundingClientRect();
-    const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
-
-    if (inView) {
-        socket.emit("message_read", { chatId: lastChatId, room: roomName });
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit("stop_typing", {room: roomName}); // 일정 시간 입력 없으면 중단 알림
+        }, 2000); // 2초간 입력 없으면 stop_typing
     }
 }
 
-function moveBottonScroll() {
-    // const scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
-    // const scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
-
-    // scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
-    // scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
-
-    // console.log(scrollHeight, scrollTop)
-    // console.log('moveBottonScroll', scrollHeight - scrollTop);
-    chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
+// 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
+function loadPreviosChats () {
+    if (Number(chatContainer.scrollTop) < 700 && !loading) {
+        loadMoreChats("wheel");
+    }
 }
 
-function renderBottomScrollButton() {
-    scrollButton = document.createElement("button");
-    scrollButton.id = "scroll-button";
-    scrollButton.innerHTML = "↓";
-    scrollButton.style.display = 'none';
-    document.body.appendChild(scrollButton);
-}
-
+// 영상통화 창 열기
 function renderVideoCallWindow() {
     if (!videoCallWindow) {
         openVideoCallWindow();
@@ -823,238 +820,10 @@ function renderVideoCallWindow() {
             isMinimized = true;
         }
     }
-
-    updateButtonColor();
-}
-
-function updateButtonColor() {
-    // videoCallBtn.style.backgroundColor = videoCallWindow && !isMinimized ? "red" : "green";
-}
-
-function openVideoCallWindow() {
-    if (!videoCallWindow) {
-        videoCallWindow = document.createElement("div");
-        videoCallWindow.style.position = "fixed";
-        videoCallWindow.style.bottom = "140px";
-        videoCallWindow.style.right = "30px";
-        videoCallWindow.style.width = "350px";
-        videoCallWindow.style.height = "500px";
-        videoCallWindow.style.maxWidth = "100vw";
-        videoCallWindow.style.maxHeight = "100vh";
-        videoCallWindow.style.minWidth = "200px";
-        videoCallWindow.style.minHeight = "300px";
-        videoCallWindow.style.background = "#000";
-        videoCallWindow.style.border = "2px solid #ccc";
-        videoCallWindow.style.zIndex = "10";
-        videoCallWindow.style.flexDirection = "column";
-        videoCallWindow.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
-        videoCallWindow.style.resize = "both";
-        videoCallWindow.style.overflow = "auto";
-        videoCallWindow.style.display = "flex";
-    }
-
-    const topBar = document.createElement("div");
-    topBar.style.display = "flex";
-    topBar.style.justifyContent = "space-between";
-    topBar.style.background = "#222";
-    topBar.style.color = "#fff";
-    topBar.style.padding = "4px 8px";
-
-    const hideBtn = document.createElement("span");
-    hideBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';  // 🔽 숨기기
-    hideBtn.style.cursor = "pointer";
-    hideBtn.onclick = () => {
-        videoCallWindow.style.visibility = "hidden";
-        videoCallWindow.style.opacity = "0";
-        isMinimized = true;
-        updateButtonColor();
-    };
-
-    const closeBtn = document.createElement("span");
-    closeBtn.innerHTML = '<i class="fas fa-times"></i>'; // ❌ 닫기
-    closeBtn.style.cursor = "pointer";
-    closeBtn.onclick = () => {
-        socket.emit("leave_room", videoCallRoomName, username); // 서버에 방 나간다고 알림
-        document.body.removeChild(videoCallWindow);
-        videoCallWindow = null;
-        updateButtonColor();
-    };
-
-    topBar.appendChild(hideBtn);
-    topBar.appendChild(closeBtn);
-
-    const iframe = document.createElement("iframe");
-    iframe.src = "/func/video-call/window";
-    // iframe.style.flex = "1";
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-    iframe.style.border = "none";
-
-   /* const dragOverlay = document.createElement("div");
-    dragOverlay.style.position = "absolute";
-    dragOverlay.style.bottom = "60px";
-    dragOverlay.style.left = "0";
-    dragOverlay.style.width = "85%";
-    dragOverlay.style.height = "80%";
-    dragOverlay.style.zIndex = "9999";
-    dragOverlay.style.background = "transparent"; // 완전 투명
-    // dragOverlay.style.background = "rgba(128, 128, 128, 0.5)"; // ✅ 반투명 회색
-
-    // iframe 추가 전에 삽입
-    // videoCallWindow.appendChild(dragOverlay);
-    // 드래그 이벤트 연결
-    dragOverlay.addEventListener("mousedown", startDrag);
-    dragOverlay.addEventListener("touchstart", startDrag, { passive: false });*/
-
-
-    // ✅ 마우스 이벤트
-    topBar.addEventListener("mousedown", startDrag);
-    document.addEventListener("mousemove", onDrag);
-    document.addEventListener("mouseup", endDrag);
-
-    // ✅ 터치 이벤트
-    topBar.addEventListener("touchstart", startDrag, { passive: false });
-    document.addEventListener("touchmove", onDrag, { passive: false });
-    document.addEventListener("touchend", endDrag);
-
-    videoCallWindow.appendChild(topBar);
-    videoCallWindow.appendChild(iframe);
-
-    document.body.appendChild(videoCallWindow);
-
-    updateButtonColor();
-
-    // videoCallBtn.style.backgroundColor = "green";
-    // videoCallBtn.style.backgroundColor = "";
-    // closeBtn.click();
-    // 소켓으로 컨트롤 해야할지도
-
-}
-
-function initPage() {
-    getPeerLastReadChatId();
-    // keydown 에서만 event.preventDefault() 가 적용된다 !!
-    chatInput.removeEventListener('keydown', enterEvent);
-    chatInput.addEventListener('keydown', enterEvent)
-    chatInput.addEventListener('blur', () => {
-        setTimeout(() => {
-            window.scrollTo(0, 0);  // 키보드 내려간 후에도 복구
-        }, 100);
-    });
-    sendButton.removeEventListener('click', sendMsg);
-    sendButton.addEventListener('click', sendMsg);
-    videoCallBtn?.removeEventListener('click', renderVideoCallWindow)
-    videoCallBtn?.addEventListener('click', renderVideoCallWindow)
-    document.body.removeEventListener('touchstart', requestNotificationPermission);
-    document.body.addEventListener('touchstart', requestNotificationPermission);
-    document.body.removeEventListener('ended', requestNotificationPermission);
-    document.body.addEventListener('ended', requestNotificationPermission);
-    document.body.removeEventListener('touchmove', requestNotificationPermission);
-    document.body.addEventListener('touchmove', requestNotificationPermission);
-    document.body.addEventListener('click', requestNotificationPermission);
-    document.body.addEventListener('click', requestNotificationPermission);
-    loadMoreChats();
-    renderBottomScrollButton();
-
-    // requestNotificationPermission(); // 상호작용 시 권한 허용
-
-    chatContainer.removeEventListener("scroll", checkScroll);
-    chatContainer.addEventListener("scroll", checkScroll);
-    setTimeout(() => {
-        moveBottonScroll();
-    }, 200)
-
-    scrollButton?.removeEventListener("click", () => {moveBottonScroll()});
-    scrollButton?.addEventListener("click", () => {moveBottonScroll()});
-
-    if (typeof socket !== "undefined") {
-        if (!socket.connected) {
-            connectSocket();
-        }
-    } else {
-        connectSocket();
-    }
-    chatInput.focus();
-
-    socket.emit("enter_room", { username: username, room: roomName });
-    // socket.emit("user_info", { username: username, room: roomName });
-}
-
-let controller = new AbortController();
-
-document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textarea => {
-    const maxLines = Number(textarea.dataset.textareaAutoResize) || 5;
-    const maxHeight = maxLines * textAreaOffsetHeight;
-
-    const resize = () => {
-        textarea.style.height = '22px';  // ✅ 초기화
-        // const lineCount = textarea.value.split('\n').length;
-        // const newHeight = Math.min(lineCount * textAreaOffsetHeight, maxHeight);
-
-        const scrollHeight = textarea.scrollHeight - 10; // ✅ 실제 내용 높이
-        const newHeight = Math.min(scrollHeight, maxHeight);
-
-        textarea.style.height = `${newHeight}px`;
-    };
-
-    textarea.addEventListener('input', resize, { signal: controller.signal });
-
-    // 초기 설정
-    resize();
-});
-
-// 📱 공통 좌표 추출 함수 (마우스 or 터치 구분)
-function getClientPosition(e) {
-    if (e.touches && e.touches.length > 0) {
-        return {
-            x: e.touches[0].clientX,
-            y: e.touches[0].clientY
-        };
-    } else {
-        return {
-            x: e.clientX,
-            y: e.clientY
-        };
-    }
-}
-
-function startDrag(e) {
-    isDragging = true;
-    const pos = getClientPosition(e);
-    offsetX = pos.x - videoCallWindow.offsetLeft;
-    offsetY = pos.y - videoCallWindow.offsetTop;
-    // e.preventDefault(); // 터치 스크롤 방지
-}
-
-function onDrag(e) {
-    if (!isDragging) return;
-    const pos = getClientPosition(e);
-
-    const x = pos.x - offsetX;
-    const y = pos.y - offsetY;
-
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-
-    const elemWidth = videoCallWindow.offsetWidth;
-    const elemHeight = videoCallWindow.offsetHeight;
-
-    // ✅ 화면(뷰포트)을 벗어나지 않도록 제한
-    const clampedX = Math.max(0, Math.min(x, windowWidth - elemWidth));
-    const clampedY = Math.max(0, Math.min(y, windowHeight - elemHeight));
-
-    videoCallWindow.style.left = `${clampedX}px`;
-    videoCallWindow.style.top = `${clampedY}px`;
-    videoCallWindow.style.right = "auto";
-    videoCallWindow.style.bottom = "auto";
-}
-
-function endDrag() {
-    isDragging = false;
 }
 
 // touchmove 강제 차단
-document.addEventListener('touchmove', function (e) {
+function blockTouchMoveEvent (e) {
     /*const isChatContainer = e.target.closest('#chat-container');
     if (!isChatContainer) {
         e.preventDefault();  // ❌ chat-container 아닌 경우만 터치 이동 막기
@@ -1067,8 +836,117 @@ document.addEventListener('touchmove', function (e) {
     }
 
     e.preventDefault(); // ❌ 외부 영역에서만 터치 이동 막기
-}, { passive: false }); // 브라우저에게 "이 리스너는 preventDefault()를 호출할 수 있다"고 알려주는 옵션
-// passive: true     preventDefault() 안한다      (브라우저 최적화 OK)
-// passive: false    preventDefault() 쓸 수도 있음 (브라우저가 스크롤 최적화 안 함)
+}
+
+// 스크롤 이동 버튼 클릭 > 최하단
+function moveBottonScroll() {
+    // const scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
+    // const scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
+
+    // scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
+    // scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
+
+    // console.log(scrollHeight, scrollTop)
+    // console.log('moveBottonScroll', scrollHeight - scrollTop);
+    chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
+}
+
+// 현재 스크롤 높이에 따른 스크롤 버튼 보여주기 유무
+function checkHideOrShowScrollButton() {
+    scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
+    scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
+
+    if (scrollHeight - scrollTop > 1400) {
+        scrollButton.style.display = "block";
+    } else {
+        if (scrollButton) {
+            scrollButton.style.display = "none";
+        }
+    }
+
+    sendDataReadLastChat();
+}
+
+
+
+
+function initPage() {
+    // 웹 소켓 최초 연결
+    if (typeof socket !== "undefined") {
+        if (!socket.connected) {
+            connectSocket();
+        }
+    } else {
+        connectSocket();
+    }
+
+    // 웹 소켓 연결 > 유저 입장
+    socket.emit("enter_room", { username: username, room: roomName });
+    // socket.emit("user_info", { username: username, room: roomName });
+
+    // 상호작용 시 알림 권한 허용
+    document.body.removeEventListener('touchstart', requestNotificationPermission);
+    document.body.addEventListener('touchstart', requestNotificationPermission);
+    document.body.removeEventListener('ended', requestNotificationPermission);
+    document.body.addEventListener('ended', requestNotificationPermission);
+    document.body.removeEventListener('touchmove', requestNotificationPermission);
+    document.body.addEventListener('touchmove', requestNotificationPermission);
+    document.body.removeEventListener('click', requestNotificationPermission);
+    document.body.addEventListener('click', requestNotificationPermission);
+
+    renderBottomScrollButton(); // 스크롤 버튼 렌더링
+    getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
+    loadMoreChats(); // 초기 채팅 데이터 조회
+
+    // keydown 에서만 event.preventDefault() 가 적용된다 !!
+    chatInput.removeEventListener('keydown', enterEvent);
+    chatInput.addEventListener('keydown', enterEvent)
+    // 모바일에서 키보드가 사라질 때의 이벤트
+    chatInput.addEventListener('blur', () => {
+        setTimeout(() => {
+            window.scrollTo(0, 0);  // 키보드 내려간 후에도 복구
+        }, 100);
+    });
+    chatInput.focus();
+
+    // 채팅 전송
+    sendButton.removeEventListener('click', sendMessage);
+    sendButton.addEventListener('click', sendMessage);
+
+    // 영상통화 버튼
+    videoCallBtn?.removeEventListener('click', renderVideoCallWindow)
+    videoCallBtn?.addEventListener('click', renderVideoCallWindow)
+
+    // 파일 업로드 기능
+    fileInput.removeEventListener('change', uploadFile);
+    fileInput.addEventListener('change', uploadFile);
+
+    // 채팅창 스크롤 이벤트
+    chatContainer.removeEventListener("wheel", loadPreviosChats);
+    chatContainer.addEventListener("wheel", loadPreviosChats);
+    chatContainer.removeEventListener("scroll", checkHideOrShowScrollButton);
+    chatContainer.addEventListener("scroll", checkHideOrShowScrollButton);
+
+    // 최하단 스크롤 버튼
+    scrollButton?.removeEventListener("click", moveBottonScroll);
+    scrollButton?.addEventListener("click", moveBottonScroll);
+
+    // 브라우저에게 "이 리스너는 preventDefault()를 호출할 수 있다"고 알려주는 옵션
+    // passive: true     preventDefault() 안한다      (브라우저 최적화 OK)
+    // passive: false    preventDefault() 쓸 수도 있음 (브라우저가 스크롤 최적화 안 함)
+    document.addEventListener('touchmove', blockTouchMoveEvent, { passive: false });
+
+    setTimeout(() => {
+        // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
+        moveBottonScroll();
+
+        // 채팅 데이터가 렌더링 된 이후 리스너 추가
+        chatContainer.addEventListener("scroll", function () {
+            if (Number(chatContainer.scrollTop) < 700 && !loading) {
+                loadMoreChats();
+            }
+        });
+    }, 200)
+}
 
 document.addEventListener("DOMContentLoaded", initPage);
