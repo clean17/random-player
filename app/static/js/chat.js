@@ -29,6 +29,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     submitted = false,
     videoCallRoomName = null,
     typingTimeout,
+    peerLastReadChatId,
     scrollButton = undefined;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -64,7 +65,7 @@ function connectSocket() {
     });
 
     socket.on("message_read_ack", function (data) {
-        // setCheckIconsGreenUpTo(data.chatId)
+        setCheckIconsGreenUpTo(data.chatId)
     })
 
     socket.on("bye", function(data) {
@@ -113,11 +114,11 @@ function connectSocket() {
         // const messageDiv = renderMessageDiv();
         // messageRow.appendChild(messageDiv);
         // chatContainer.appendChild(messageRow);
-        if (scrollHeight - scrollTop < 1300) {
+        /*if (scrollHeight - scrollTop < 1300) {
             setTimeout(() => {
                 moveBottonScroll();
             }, 500)
-        }
+        }*/
     });
 
     socket.on("stop_typing", () => {
@@ -126,6 +127,44 @@ function connectSocket() {
 
 }
 
+function getPeerLastReadChatId() {
+    peername = username === 'nh824' ? 'fkaus14' : 'nh824'
+    fetch('/func/last-read-chat-id?username=' + peername, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'include' // 세션 인증 유지용 (Flask-Login 등)
+    })
+        .then(response => response.json())
+        .then(data => {
+            peerLastReadChatId = data['last_read_chat_id']
+            console.log('peerLastReadChatId', peerLastReadChatId)
+        });
+}
+
+function updateUserReadChatId() {
+    console.log('updateUserReadChatId', username,  lastChatId)
+    // chatContainer 스크롤이 최하단일 경우에만 실행
+    if (chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 1) {
+        fetch('/func/last-read-chat-id', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                username: username,
+                lastReadChatId: lastChatId
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                // console.log('POST /last-read-chat-id:', data);
+            });
+    }
+
+}
 
 document.addEventListener('visibilitychange', () => {
     const username_kor = username === 'nh824' ? '나현' : '인우';
@@ -201,6 +240,8 @@ document.addEventListener('visibilitychange', () => {
         //     });
 
         checkReadLastChat();
+        updateUserReadChatId();
+
     } else {
         socket.emit("exit_room", { username: username, room: roomName });
         // if (typeof socket !== "undefined") socket.disconnect();
@@ -263,6 +304,8 @@ function loadMoreChats(event) {
                     // renderDateDivider(dateStr)
                 }
             }
+        }).then(() => {
+            updateUserReadChatId();
         })
         .finally(() => {
             loading = false;
@@ -290,11 +333,26 @@ function sendMsg() {
 function renderCheckIcon() {
     const checkIcon = document.createElement("div");
     checkIcon.className = "checkIcon";
-    checkIcon.innerHTML = "✔"; // 나중에 SVG 아이콘으로 바꿔도 좋음
-    checkIcon.style.color = "gray";  // 회색 체크
-    checkIcon.style.fontSize = "0.8em";
+    // checkIcon.innerHTML = "✔"; // 나중에 SVG 아이콘으로 바꿔도 좋음
+    checkIcon.innerHTML = '<i class="fas fa-check"></i>';
+    // checkIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    //     <path d="M20.285 6.709l-11.025 11.025-5.046-5.046 1.414-1.414 3.632 3.632 9.611-9.611z"/>
+    // </svg>`;
+
+    // 스타일 설정
+    checkIcon.style.width = "20px";
+    checkIcon.style.height = "20px";
+    checkIcon.style.display = "flex";
+    checkIcon.style.alignItems = "center";
+    checkIcon.style.justifyContent = "center";
     checkIcon.style.marginRight = "6px";
     checkIcon.style.flexShrink = "0";
+    checkIcon.style.fontSize = "0.9em";
+    checkIcon.style.color = "whitesmoke";
+    checkIcon.style.background = "#ddd"; // 밝은 회색 배경
+    checkIcon.style.borderRadius = "4px";
+    checkIcon.style.fontWeight = "bold";
+
     return checkIcon;
 }
 
@@ -316,7 +374,8 @@ function setCheckIconsGreenUpTo(chatId) {
         if (!isNaN(rowChatId) && rowChatId <= chatId) {
             const checkIcon = row.querySelector('.checkIcon');
             if (checkIcon) {
-                checkIcon.style.color = "green";
+                // checkIcon.style.color = "green";
+                checkIcon.style.setProperty("color", "green", "important");
             }
         }
     });
@@ -480,7 +539,13 @@ function addMessage(data, load = false) {
         if (isMine) {
             messageRow.appendChild(renderTimeDiv(timeStr));
             const checkIcon = renderCheckIcon();
-            // if (load) checkIcon.style.color = "green";
+            console.log(load, peerLastReadChatId, data.chatId)
+            if (peerLastReadChatId >= data.chatId) {
+                if (load) {
+                    // checkIcon.style.color = "green";
+                    checkIcon.style.setProperty("color", "green", "important");
+                }
+            }
             messageRow.appendChild(checkIcon);
             messageRow.appendChild(messageDiv);
         } else {
@@ -826,6 +891,7 @@ function openVideoCallWindow() {
 }
 
 function initPage() {
+    getPeerLastReadChatId();
     // keydown 에서만 event.preventDefault() 가 적용된다 !!
     chatInput.removeEventListener('keydown', enterEvent);
     chatInput.addEventListener('keydown', enterEvent)

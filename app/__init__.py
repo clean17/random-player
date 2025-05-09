@@ -36,6 +36,7 @@ ALLOWED_PATHS = [
     '/auth/verify-password',
     '/func/video-call',
     '/auth/update-session-time',
+    '/func/last-read-chat-id',
 ]
 
 # 파일 읽기

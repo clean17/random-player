@@ -24,8 +24,10 @@ LOG_DIR = "logs"
 DATA_DIR = "data"
 MEMO_FILE = 'memo.txt'
 CHAT_FILE = 'chat.txt'
+STATE_FILE = 'data.json'
 MEMO_FILE_PATH = os.path.join(DATA_DIR, MEMO_FILE)
 CHAT_FILE_PATH = os.path.join(DATA_DIR, CHAT_FILE)
+CHAT_STATE_FILE_PATH = os.path.join(DATA_DIR, STATE_FILE)
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 MAX_FETCH_MESSAGE_SIZE = 50
 
@@ -345,6 +347,9 @@ def save_chat_message():
     log_entry = f"{next_line_number} | {data['timestamp']} | {data['username']} | {data['message']}"
     with open(CHAT_FILE_PATH, "a", encoding="utf-8") as log_file:
         log_file.write(log_entry + "\n")
+
+    update_last_chat_id_in_state(data['chatId'])
+
     return {"status": "success"}, 200
 
 # 비동기로 추가 채팅 로그 요청 API
@@ -417,12 +422,12 @@ def test_lotto():
 ################################# STATE ####################################
 
 
-STATE_FILE = 'data.json'
+
 
 # JSON 상태 불러오기
 def load_state():
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r', encoding='utf-8') as f:
+    if os.path.exists(CHAT_STATE_FILE_PATH):
+        with open(CHAT_STATE_FILE_PATH, 'r', encoding='utf-8') as f:
             return json.load(f)
     return {
         "chats": {"last_chat_id": 0},
@@ -432,8 +437,16 @@ def load_state():
 
 # JSON 상태 저장하기
 def save_state(state):
-    with open(STATE_FILE, 'w', encoding='utf-8') as f:
+    with open(CHAT_STATE_FILE_PATH, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=4, ensure_ascii=False)
+
+def update_last_chat_id_in_state(chat_id):
+    if chat_id is None:
+        return jsonify({'error': 'lastChatId is required'}), 400
+    state = load_state()
+    state.setdefault("chats", {})["last_chat_id"] = chat_id
+    save_state(state)
+    return {'result': 'success'}
 
 # ✅ 사용자별 last_read_chat_id 관리
 @func.route('/last-read-chat-id', methods=['GET', 'POST'], endpoint='last-read-chat-id')
@@ -458,20 +471,18 @@ def last_read_chat_id():
         return jsonify({'username': username, 'last_read_chat_id': chat_id})
 
 # ✅ 전체 마지막 채팅 ID 관리
-@func.route('/last-chat-id', methods=['GET', 'POST'], endpoint='last-chat-id')
+@func.route('/last-chat-id', methods=['GET'], endpoint='last-chat-id')
 @login_required
 def handle_last_chat_id():
     state = load_state()
 
-    if request.method == 'POST':
-        chat_id = request.get_json().get('lastChatId')
-        if chat_id is None:
-            return jsonify({'error': 'lastChatId is required'}), 400
-        state.setdefault("chats", {})["last_chat_id"] = chat_id
-        save_state(state)
-        return jsonify({'result': 'success'})
+    # if request.method == 'POST':
+    #     chat_id = request.get_json().get('lastChatId')
+    #     return jsonify(update_last_chat_id_in_state(chat_id))
+    #
+    # elif request.method == 'GET':
+    #     chat_id = state.get("chats", {}).get("last_chat_id", 0)
+    #     return jsonify({'last_chat_id': chat_id})
 
-    elif request.method == 'GET':
-        chat_id = state.get("chats", {}).get("last_chat_id", 0)
-        return jsonify({'last_chat_id': chat_id})
-
+    chat_id = state.get("chats", {}).get("last_chat_id", 0)
+    return jsonify({'last_chat_id': chat_id})
