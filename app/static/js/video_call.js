@@ -609,3 +609,11 @@ document.getElementById('opacitySlider').addEventListener('input', (e) => {
     const opacity = e.target.value;
     setVideoCallButtonsOpacity(opacity)
 });
+
+
+
+
+document.addEventListener("DOMContentLoaded", () => {
+    handleWelcomeSubmit();
+    setVideoCallButtonsOpacity(0.5);
+})
