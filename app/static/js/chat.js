@@ -25,6 +25,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     videoCallRoomName = null,
     typingTimeout,
     peerLastReadChatId = 0,
+    isTyping = false,
     scrollButton = undefined;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -102,8 +103,8 @@ function connectSocket() {
 
     socket.on("connect", () => { // 소켓이 연결되면 자동으로 실행되는 콜백 함수
         console.log("✅ 소켓 연결됨, 유저 정보 전송");
-        // 채팅방 입장 시 서버에 로그인된 유저 정보 전달
-        // socket.emit("user_info", { username: username, room: roomName });
+        // 채팅방 입장 시 서버에 로그인된 유저 정보 전달, 이 코드가 없으면 username이 게스트 상태로 소켓에 남아 있는 경우가 있다
+        socket.emit("user_info", { username: username, room: roomName });
     });
 
     socket.on("reconnect", () => {
@@ -164,19 +165,16 @@ function connectSocket() {
 
     socket.on("typing", () => {
         document.getElementById('typingIndicator').style.display = 'block';
-        // const messageRow = renderMessageRow(false);
-        // const messageDiv = renderMessageDiv();
-        // messageRow.appendChild(messageDiv);
-        // chatContainer.appendChild(messageRow);
-        /*if (scrollHeight - scrollTop < 1300) {
-            setTimeout(() => {
-                moveBottonScroll();
-            }, 500)
-        }*/
+
+        if (isScrollAtTheBottom() && !isTyping) {
+            moveBottonScroll();
+            isTyping = true;
+        }
     });
 
     socket.on("stop_typing", () => {
         document.getElementById('typingIndicator').style.display = 'none';
+        isTyping = false;
     });
 }
 
@@ -281,11 +279,17 @@ function getPeerLastReadChatId() {
         });
 }
 
+function isScrolledToBottom(element, threshold = 1) {
+    return (
+        element.scrollTop + element.clientHeight >= element.scrollHeight - threshold
+    );
+}
+
 // 본인이 읽은 마지막 chatId 변경 요청
 function updateUserReadChatId() {
-    console.log('updateUserReadChatId', username,  lastChatId)
+    // console.log('updateUserReadChatId', username,  lastChatId)
     // chatContainer 스크롤이 최하단일 경우에만 실행
-    if (chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 1) {
+    if (isScrolledToBottom(chatContainer, 1)) {
         fetch('/func/last-read-chat-id', {
             method: 'POST',
             headers: {
@@ -304,21 +308,29 @@ function updateUserReadChatId() {
     }
 }
 
+// 오차 발생
+// function isScrollAtTheBottom() {
+//     const lastMessageRow = document.querySelector(`.messageRow[data-chat-id="${lastChatId}"]`);
+//     const rect = lastMessageRow.getBoundingClientRect();
+//     return inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+// }
+
+function isScrollAtTheBottom() {
+    const threshold = 60; // 허용 오차 (픽셀)
+    return chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight <= threshold;
+}
+
 // 스크롤이 최하단일 경우 읽음 표시를 보내는 함수
 function sendDataReadLastChat() {
-    const lastMessageRow = document.querySelector(`.messageRow[data-chat-id="${lastChatId}"]`);
-    const rect = lastMessageRow.getBoundingClientRect();
-    const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
-
-    if (inView) {
+    if (isScrollAtTheBottom()) {
         socket.emit("message_read", { chatId: lastChatId, room: roomName });
+        updateUserReadChatId();
     }
 }
 
 // 채팅 세션 갱신 (10분 한정)
 function updateChatSession() {
-    fetch("/auth/update-session-time").then(data => {
-    })
+    fetch("/auth/update-session-time").then(data => {})
 }
 
 
@@ -365,7 +377,8 @@ function loadMoreChats(event) {
                     // renderDateDivider(dateStr)
                 }
             }
-        }).then(() => {
+        })
+        .then(() => {
             updateUserReadChatId();
         })
         .finally(() => {
@@ -899,7 +912,7 @@ function initPage() {
     // 브라우저에게 "이 리스너는 preventDefault()를 호출할 수 있다"고 알려주는 옵션
     // passive: true     preventDefault() 안한다      (브라우저 최적화 OK)
     // passive: false    preventDefault() 쓸 수도 있음 (브라우저가 스크롤 최적화 안 함)
-    document.addEventListener('touchmove', blockTouchMoveEvent, {passive: false});
+    // document.addEventListener('touchmove', blockTouchMoveEvent, {passive: false});
 
     // 웹 소켓 연결 > 유저 입장
     socket.emit("enter_room", {username: username, room: roomName});
