@@ -275,7 +275,6 @@ function getPeerLastReadChatId() {
         .then(response => response.json())
         .then(data => {
             peerLastReadChatId = data['last_read_chat_id']
-            console.log('peerLastReadChatId', peerLastReadChatId);
         })
         .then(() => {
             loadMoreChats(); // 초기 채팅 데이터 조회
@@ -355,9 +354,6 @@ function loadMoreChats(event) {
                     const [chatId, timestamp, username, msg] = log.toString().split("|");
                     chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
                     addMessage(chatObj, true)
-                    if (event === "wheel") {
-                        chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
-                    }
                 });
 
                 if (isFisrtMsg) {
@@ -382,9 +378,6 @@ function sendMessage() {
     // chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
     chatInput.value = "";
     chatInput.style.height = textAreaOffsetHeight + "px";
-    // requestAnimationFrame(() => {
-    //     chatInput.focus();  // ⏱️ 다음 프레임에서 포커스, IME 안정
-    // });
     chatInput.focus();
     chatInput.setSelectionRange(0, 0);  // 커서 위치 다시 지정
 }
@@ -512,7 +505,6 @@ function addMessage(data, load = false) {
             messageRow.appendChild(renderTimeDiv(timeStr));
         }
     }
-
 }
 
 // 바깥 컨테이너: 메시지 한 줄을 구성
@@ -797,15 +789,6 @@ function enterEvent(event) {
     }
 }
 
-// 위로 스크롤할 때 추가 데이터 불러오기 (무한 스크롤)
-function loadPreviosChats () {
-    debounce(() => {
-        if (Number(chatContainer.scrollTop) < 700 && !loading) {
-            loadMoreChats("wheel");
-        }
-    }, 100);
-}
-
 // 영상통화 창 열기
 function renderVideoCallWindow() {
     if (!videoCallWindow) {
@@ -842,14 +825,6 @@ function blockTouchMoveEvent (e) {
 
 // 스크롤 이동 버튼 클릭 > 최하단
 function moveBottonScroll() {
-    // const scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
-    // const scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
-
-    // scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
-    // scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
-
-    // console.log(scrollHeight, scrollTop)
-    // console.log('moveBottonScroll', scrollHeight - scrollTop);
     chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
 }
 
@@ -884,16 +859,6 @@ function initPage() {
     } else {
         connectSocket();
     }
-
-    // 상호작용 시 알림 권한 허용
-    document.body.removeEventListener('touchstart', requestNotificationPermission);
-    document.body.addEventListener('touchstart', requestNotificationPermission);
-    document.body.removeEventListener('ended', requestNotificationPermission);
-    document.body.addEventListener('ended', requestNotificationPermission);
-    document.body.removeEventListener('touchmove', requestNotificationPermission);
-    document.body.addEventListener('touchmove', requestNotificationPermission);
-    document.body.removeEventListener('click', requestNotificationPermission);
-    document.body.addEventListener('click', requestNotificationPermission);
 
     // keydown 에서만 event.preventDefault() 가 적용된다 !!
     chatInput.removeEventListener('keydown', enterEvent);
