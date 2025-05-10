@@ -30,8 +30,7 @@
         <label for="date-picker">날짜 선택:</label>
         <input type="date" id="date-picker">
     </div>
-<!--    <div id="log-container"></div>-->
-    <pre id="log-container"></pre>
+    <pre id="log-container" style="font-family: monospace; white-space: pre;"></pre>
 </div>
 
 <script>
@@ -70,20 +69,45 @@
         }
     };
 
+    // span 으로 감싸도록 수정
     function appendLog(line) {
         // logContainer.textContent += line + "\n";
 
-        const newLine = line.trim();
-        const lines = logContainer.textContent.trim().split("\n");
-        const lastLine = lines[lines.length - 1];
+        // const newLine = line.trim();
+        // const lines = logContainer.textContent.trim().split("\n");
+        // const lastLine = lines[lines.length - 1];
+        const newLines = line.trim().split("\n");
+        const lines = Array.from(logContainer.querySelectorAll("span"));
+        const lastLine = lines.length ? lines[lines.length - 1].textContent : "";
+
         // 정규식 시간대 2025-05-07 00:10:50,192
         const timePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}/;
         const lastTimestampMatch = lastLine.match(timePattern);
-        const newLineTimestampMatch = newLine.match(timePattern);
+        // const newLineTimestampMatch = newLine.match(timePattern);
+        const newFirstTimestampMatch = newLines[0].match(timePattern);
 
         // 동일한 로그가 2번 기록되는 이슈 수정 > 시간이 같지 않으면 추가
-        if (!lastTimestampMatch || !newLineTimestampMatch || lastTimestampMatch[0] !== newLineTimestampMatch[0]) {
-            logContainer.textContent += line + "\n";
+        // if (!lastTimestampMatch || !newLineTimestampMatch || lastTimestampMatch[0] !== newLineTimestampMatch[0]) {
+        if (!lastTimestampMatch || !newFirstTimestampMatch || lastTimestampMatch[0] !== newFirstTimestampMatch[0]) {
+            // logContainer.textContent += line + "\n";
+
+            // span 태그를 만들어서 각 라인별 스타일 관리하려고 함
+            for (const subline of newLines) {
+                const span = document.createElement("span");
+                span.textContent = subline;
+                span.style.display = "block";
+
+                if (subline.includes("ERROR")) {
+                    span.style.backgroundColor = "tomato";
+                    span.style.color = "white";
+                }
+                const ipKeywords = ["122.42", "223.39", "223.38", "116.46"];
+                if (ipKeywords.some(keyword => subline.includes(keyword))) {
+                    span.style.backgroundColor = "Lightgoldenrodyellow";
+                }
+
+                logContainer.appendChild(span);
+            }
         }
         logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
     }
@@ -103,8 +127,9 @@
         fetch(`/func/logs/${formattedDate}`, { cache: "no-cache" })  // 🔥 캐싱 방지 추가
             .then(response => response.text()) // json -> text
             .then(data => {
-                document.getElementById("log-container").textContent = data;
-                logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
+                // document.getElementById("log-container").textContent = data;
+                // logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
+                appendLog(data)
             })
             .catch(error => console.error("로그 가져오기 실패:", error))
     }
