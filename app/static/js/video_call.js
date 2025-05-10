@@ -478,10 +478,6 @@ async function handleWelcomeSubmit(event) {
     socket.emit('join_room', roomName, username);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    handleWelcomeSubmit();
-})
-
 window.addEventListener("beforeunload", () => {
     socket.emit("leave_room", roomName, username); // 서버에 방 나간다고 알림
     globalRecoder.stop();
@@ -601,10 +597,15 @@ function captureAndUpload() {
 }
 
 /////////////////////// Control Buttons Opacity ///////////////////////
-document.getElementById('opacitySlider').addEventListener('input', (e) => {
-    const opacity = e.target.value;
+
+function setVideoCallButtonsOpacity(opacity) {
     document.querySelectorAll('.icon-buttons button').forEach(btn => {
         btn.style.opacity = opacity;
     });
     autdioSelectDiv.style.opacity = opacity;
+}
+
+document.getElementById('opacitySlider').addEventListener('input', (e) => {
+    const opacity = e.target.value;
+    setVideoCallButtonsOpacity(opacity)
 });

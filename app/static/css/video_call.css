@@ -128,14 +128,14 @@ button {
 .opacity-bar {
     position: fixed;
     top: 10px;
-    left: 80%;
+    left: 20%;
     transform: translateX(-50%);
     z-index: 1100;
     background: rgba(0, 0, 0, 0.2);
     padding: 0px 6px;
     border-radius: 10px;
     backdrop-filter: blur(4px);
-    opacity: 0.2;
+    opacity: 0.3;
 }
 
 .opacity-bar input[type="range"] {
