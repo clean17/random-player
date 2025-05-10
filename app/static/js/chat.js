@@ -325,12 +325,9 @@ function updateChatSession() {
 //////////////////////////////// Render Chat ////////////////////////////////
 
 function loadMoreChats(event) {
-    if (loading) return;  // 중복 호출 방지
-    loading = true;
-
-    // 현재 스크롤 위치 저장
-    const prevScrollHeight = chatContainer.scrollHeight;
-    const prevScrollTop = chatContainer.scrollTop;
+    // 추가 전 맨 위 요소의 위치 저장
+    const firstMsg = chatContainer.firstElementChild;
+    const prevTop = firstMsg?.getBoundingClientRect().top || 0;
 
     fetch("/func/chat/load-more-chat", {
         method: "POST",
@@ -354,6 +351,14 @@ function loadMoreChats(event) {
                     const [chatId, timestamp, username, msg] = log.toString().split("|");
                     chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
                     addMessage(chatObj, true)
+                });
+
+                requestAnimationFrame(() => {
+                    const newTop = firstMsg?.getBoundingClientRect().top || 0;
+                    const delta = newTop - prevTop;
+
+                    // ✅ 기존 위치 유지하도록 scrollTop 보정
+                    chatContainer.scrollTop += delta;
                 });
 
                 if (isFisrtMsg) {
@@ -884,8 +889,6 @@ function initPage() {
     fileInput.addEventListener('change', uploadFile);
 
     // 채팅창 스크롤 이벤트
-    chatContainer.removeEventListener("wheel", loadPreviosChats);
-    chatContainer.addEventListener("wheel", loadPreviosChats);
     chatContainer.removeEventListener("scroll", checkHideOrShowScrollButton);
     chatContainer.addEventListener("scroll", checkHideOrShowScrollButton);
 
@@ -907,13 +910,14 @@ function initPage() {
 
         // 채팅 데이터가 렌더링 된 이후 리스너 추가
         chatContainer.addEventListener("scroll", function () {
-            if (Number(chatContainer.scrollTop) < 700 && !loading) {
+            if (Number(chatContainer.scrollTop) < 700 && !loading && chatContainer.scrollHeight > chatContainer.clientHeight) {
+                loading = true;
                 loadMoreChats();
             }
         });
 
         socket.emit("message_read", {chatId: lastChatId, room: roomName});
-    }, 200)
+    }, 300)
 }
 
 document.addEventListener("DOMContentLoaded", initPage);
