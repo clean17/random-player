@@ -80,10 +80,21 @@ function handleUserInteraction() {
     }
 }
 
+// 상호작용 시 상태플래그만 저장
 window.addEventListener("click", handleUserInteraction);
 window.addEventListener("touchstart", handleUserInteraction);
 window.addEventListener("scroll", handleUserInteraction);
 window.addEventListener("keydown", handleUserInteraction);
+
+// 상호작용 시 알림 권한 허용
+document.body.removeEventListener('touchstart', requestNotificationPermission);
+document.body.addEventListener('touchstart', requestNotificationPermission);
+document.body.removeEventListener('ended', requestNotificationPermission);
+document.body.addEventListener('ended', requestNotificationPermission);
+document.body.removeEventListener('touchmove', requestNotificationPermission);
+document.body.addEventListener('touchmove', requestNotificationPermission);
+document.body.removeEventListener('click', requestNotificationPermission);
+document.body.addEventListener('click', requestNotificationPermission);
 
 // 클라이언트에서 서버에 푸시 구독 정보 전송
 /*if ("serviceWorker" in navigator && "PushManager" in window) {
