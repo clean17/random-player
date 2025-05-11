@@ -13,7 +13,6 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     socket,
     roomName = 'chat-room',
     isMine,
-    isUnderline,
     isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
     loading = false,
     chatState = { previousDate: null, latestDate: null },
@@ -115,7 +114,9 @@ function connectSocket() {
     socket.on("new_msg", function(data) {
         addMessage(data);
         sendNotification(data);
-        sendDataReadLastChat();
+        sendReadDataLastChat();
+        console.log('여긴 아니야')
+        updateUserReadChatId();
     });
 
     socket.on("message_read_ack", function (data) {
@@ -181,8 +182,8 @@ function connectSocket() {
 
 ////////////////////////// Focus on Browser  ///////////////////////////
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 실행된다
-        socket.emit("enter_room", { username: username, room: roomName });
+    if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
+        /*socket.emit("enter_room", { username: username, room: roomName });
         if (typeof socket !== "undefined") {
             if (!socket.connected) {
                 // alert("🔄 소켓 재연결 시도");
@@ -196,7 +197,7 @@ document.addEventListener('visibilitychange', () => {
         } else {
             alert("⚠️ socket 객체가 정의되지 않음");
             connectSocket();
-        }
+        }*/
         chatInput.focus();
 
         /*fetch("/func/chat", { method: "GET" })
@@ -209,51 +210,58 @@ document.addEventListener('visibilitychange', () => {
                 console.error("요청 실패:", err);
             });*/
 
-        // fetch("/func/chat/load-more-chat", {
-        //     method: "POST",
-        //     headers: { "Content-Type": "application/json" },
-        //     body: JSON.stringify({ offset: 0 })
-        // })
-        //     .then(res => {
-        //         if (res.redirected) {
-        //             window.location.href = res.url;
-        //         } else {
-        //             return res.json();
-        //         }
-        //     })
-        //     .then(data => {
-        //         if (data.logs.length > 0) {
-        //             const tempArr = []
-        //             let isFisrtMsg = false;
-        //
-        //             if (data.logs.length !== MAX_FETCH_MESSAGE_SIZE) isFisrtMsg = true;
-        //
-        //             data.logs.map(log => {
-        //                 tempArr.push(log)
-        //             });
-        //
-        //             tempArr.forEach(log => {
-        //                 const [chatId, timestamp, username, msg] = log.toString().split("|");
-        //                 chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
-        //                 if (Number(lastChatId) < Number(chatObj.chatId)) {
-        //                     // addMessage(chatObj);
-        //                 }
-        //             });
-        //
-        //             if (isFisrtMsg) {
-        //                 // renderDateDivider(dateStr)
-        //             }
-        //         }
-        //     })
-        //     .finally(() => {
-        //         loading = false;
-        //     });
+        fetch("/func/chat/load-more-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ offset: 0 })
+        })
+            .then(res => {
+                if (res.redirected) {
+                    window.location.href = res.url;
+                } else {
+                    return res.json();
+                }
+            })
+            .then(data => {
+                if (data.logs.length > 0) {
+                    const tempArr = []
 
-        sendDataReadLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
-        updateUserReadChatId(); // 마지막으로 읽은 chatId 수정 요청
+                    data.logs.map(log => {
+                        tempArr.push(log)
+                    });
+
+                    tempArr.forEach(log => {
+                        const [chatId, timestamp, username, msg] = log.toString().split("|");
+                        chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
+                        if (Number(lastChatId) < Number(chatObj.chatId)) {
+                            addMessage(chatObj);
+                        }
+                    });
+                }
+            })
+            .then(() => {
+                if (typeof socket !== "undefined") {
+                    if (!socket.connected) {
+                        // alert("🔄 소켓 재연결 시도");
+                        if (!socket.connected) {
+                            // console.log('⚠️ 소켓 연결 끊김');
+                            console.log('🔄 소켓 재연결 시도');
+                            connectSocket();
+                        }
+                    }
+                } else {
+                    alert("⚠️ socket 객체가 정의되지 않음");
+                    connectSocket();
+                }
+                socket.emit("enter_room", { username: username, room: roomName });
+            })
+            .finally(() => {
+                sendReadDataLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
+            });
+
     } else {
         socket.emit("exit_room", { username: username, room: roomName });
-        // if (typeof socket !== "undefined") socket.disconnect();
+        if (typeof socket !== "undefined") socket.disconnect();
     }
 });
 
@@ -275,21 +283,13 @@ function getPeerLastReadChatId() {
             peerLastReadChatId = data['last_read_chat_id']
         })
         .then(() => {
-            loadMoreChats(); // 초기 채팅 데이터 조회
+            loadMoreChats('init'); // 초기 채팅 데이터 조회
         });
-}
-
-function isScrolledToBottom(element, threshold = 1) {
-    return (
-        element.scrollTop + element.clientHeight >= element.scrollHeight - threshold
-    );
 }
 
 // 본인이 읽은 마지막 chatId 변경 요청
 function updateUserReadChatId() {
-    // console.log('updateUserReadChatId', username,  lastChatId)
-    // chatContainer 스크롤이 최하단일 경우에만 실행
-    if (isScrolledToBottom(chatContainer, 1)) {
+    if (isScrollAtTheBottom()) {
         fetch('/func/last-read-chat-id', {
             method: 'POST',
             headers: {
@@ -320,11 +320,15 @@ function isScrollAtTheBottom() {
     return chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight <= threshold;
 }
 
+const readDebounce = debounce(() => {
+    socket.emit("message_read", { chatId: lastChatId, room: roomName });
+    // updateUserReadChatId(); // 스크롤이 아래일 때 상대가 채팅을 치기만 해도 계속 요청을 보낸다
+}, 100)
+
 // 스크롤이 최하단일 경우 읽음 표시를 보내는 함수
-function sendDataReadLastChat() {
+function sendReadDataLastChat() {
     if (isScrollAtTheBottom()) {
-        socket.emit("message_read", { chatId: lastChatId, room: roomName });
-        updateUserReadChatId();
+        readDebounce();
     }
 }
 
@@ -379,7 +383,13 @@ function loadMoreChats(event) {
             }
         })
         .then(() => {
+            console.log('여긴가')
             updateUserReadChatId();
+            if (event === 'init') {
+                // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
+                moveBottonScroll();
+                socket.emit("message_read", {chatId: lastChatId, room: roomName});
+            }
         })
         .finally(() => {
             loading = false;
@@ -403,7 +413,6 @@ function sendMessage() {
 // 메세지 추가
 function addMessage(data, load = false) {
     isMine = data.username === username;
-    isUnderline = data.underline;
     const now = new Date();
 
     if (data && !data.timestamp) { // 보낸 메세지는 timestemp가 없어서 만들어 준다. 채팅 로그를 node서버에 일임해야 할까 ?
@@ -499,11 +508,14 @@ function addMessage(data, load = false) {
             // 새로운 메세지 렌더링
             chatContainer.appendChild(messageRow);
             // console.log('check', scrollHeight - scrollTop )
-            if (scrollHeight - scrollTop < 1300) {
+            if (isScrollAtTheBottom()) {
+                moveBottonScroll();
+            }
+            /*if (scrollHeight - scrollTop < 1300) {
                 setTimeout(() => {
                     moveBottonScroll();
-                }, 50)
-            }
+                }, 50);
+            }*/
         }
 
         // 정렬 순서: 시간 → 메시지 또는 메시지 → 시간
@@ -567,10 +579,8 @@ function renderTimeDiv(timeStr) {
 function renderEnterOrExit(msg) {
     const divider = createDateDivider('[' + getCurrentTimeStr() + '] ' + msg);
     chatContainer.appendChild(divider);
-    if (scrollHeight - scrollTop < 1300) {
-        setTimeout(() => {
-            moveBottonScroll();
-        }, 50)
+    if (isScrollAtTheBottom()) {
+        moveBottonScroll();
     }
 }
 
@@ -627,6 +637,9 @@ function createDateDivider(dateStr) {
 function updateUserCount(number) {
     const countEl = document.getElementById('userCount');
     countEl.textContent = number;
+    if (number === 1) {
+        videoCallBtn.style.backgroundColor = "";
+    }
 }
 
 // 최하단으로 가는 버튼 생성
@@ -843,11 +856,13 @@ function blockTouchMoveEvent (e) {
 
 // 스크롤 이동 버튼 클릭 > 최하단
 function moveBottonScroll() {
-    chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
+    requestAnimationFrame(() => {
+        chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
+    });
 }
 
 // 현재 스크롤 높이에 따른 스크롤 버튼 보여주기 유무
-function checkHideOrShowScrollButton() {
+function handleChatScroll() {
     scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
     scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
 
@@ -859,7 +874,7 @@ function checkHideOrShowScrollButton() {
         }
     }
 
-    sendDataReadLastChat();
+    sendReadDataLastChat();
 }
 
 
@@ -902,8 +917,8 @@ function initPage() {
     fileInput.addEventListener('change', uploadFile);
 
     // 채팅창 스크롤 이벤트
-    chatContainer.removeEventListener("scroll", checkHideOrShowScrollButton);
-    chatContainer.addEventListener("scroll", checkHideOrShowScrollButton);
+    chatContainer.removeEventListener("scroll", handleChatScroll);
+    chatContainer.addEventListener("scroll", handleChatScroll);
 
     // 최하단 스크롤 버튼
     scrollButton?.removeEventListener("click", moveBottonScroll);
@@ -918,9 +933,6 @@ function initPage() {
     socket.emit("enter_room", {username: username, room: roomName});
 
     setTimeout(() => {
-        // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
-        moveBottonScroll();
-
         // 채팅 데이터가 렌더링 된 이후 리스너 추가
         chatContainer.addEventListener("scroll", function () {
             if (Number(chatContainer.scrollTop) < 700 && !loading && chatContainer.scrollHeight > chatContainer.clientHeight) {
@@ -928,8 +940,6 @@ function initPage() {
                 loadMoreChats();
             }
         });
-
-        socket.emit("message_read", {chatId: lastChatId, room: roomName});
     }, 300)
 }
 
