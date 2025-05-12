@@ -13,6 +13,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     socket,
     roomName = 'chat-room',
     isMine,
+    isUnderline, // 알림에서 사용한다
     isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
     loading = false,
     chatState = { previousDate: null, latestDate: null },
@@ -107,20 +108,23 @@ function connectSocket() {
     });
 
     socket.on("reconnect", () => {
-        alert("🔄 소켓 재연결됨");
+        alert("🔄 소켓 재연결됨"); // 이거 호출 안된다..
         // socket.emit("user_info", { username: username, room: roomName });
     });
 
     socket.on("new_msg", function(data) {
-        addMessage(data);
+        if (lastChatId < data.chatId) {
+            addMessage(data);
+        }
         sendNotification(data);
         sendReadDataLastChat();
-        console.log('여긴 아니야')
         updateUserReadChatId();
     });
 
     socket.on("message_read_ack", function (data) {
-        setCheckIconsGreenUpTo(data.chatId)
+        if (data.username !== username) {
+            setCheckIconsGreenUpTo(data.chatId);
+        }
     })
 
     socket.on("bye", function(data) {
@@ -132,7 +136,7 @@ function connectSocket() {
         addMessage(data);
     });
 
-    socket.on('room_user_list', (userList) => {
+    socket.on("room_user_list", (userList) => {
         console.log('현재 접속 중인 유저 목록:', userList);
         updateUserCount(userList.length);
         const tempUserList = [];
@@ -144,38 +148,42 @@ function connectSocket() {
         socket.emit("check_video_call_by_user", { userList: tempUserList });
     });
 
-    socket.on('find_video_call', (data) => {
+    socket.on("find_video_call", (data) => {
         if (data.socketId && !data.userList.includes(username)) {
             videoCallBtn.style.backgroundColor = "green";
         }
     });
 
-    socket.on('video_call_ready', (data) => {
+    socket.on("video_call_ready", (data) => {
         videoCallRoomName = data.videoCallRoomName;
         if (username !== data.username) {
             videoCallBtn.style.backgroundColor = "green";
         }
     });
 
-    socket.on('video_call_ended', (data) => {
+    socket.on("video_call_ended", (data) => {
         videoCallRoomName = null;
         if (username !== data.username) {
             videoCallBtn.style.backgroundColor = "";
         }
     });
 
-    socket.on("typing", () => {
-        document.getElementById('typingIndicator').style.display = 'block';
+    socket.on("typing", (data) => {
+        if ( data.username !== username ) {
+            document.getElementById('typingIndicator').style.display = 'block';
 
-        if (isScrollAtTheBottom() && !isTyping) {
-            moveBottonScroll();
-            isTyping = true;
+            if (isScrollAtTheBottom() && !isTyping) {
+                moveBottonScroll();
+                isTyping = true;
+            }
         }
     });
 
-    socket.on("stop_typing", () => {
-        document.getElementById('typingIndicator').style.display = 'none';
-        isTyping = false;
+    socket.on("stop_typing", (data) => {
+        if (data.username !== username) {
+            document.getElementById('typingIndicator').style.display = 'none';
+            isTyping = false;
+        }
     });
 }
 
@@ -198,8 +206,8 @@ document.addEventListener('visibilitychange', () => {
             alert("⚠️ socket 객체가 정의되지 않음");
             connectSocket();
         }*/
-        chatInput.focus();
 
+        // 최후의 보루 아래 코드가 안되면 새로고침 할 수 밖에
         /*fetch("/func/chat", { method: "GET" })
             .then(res => {
                 if (res.redirected) {
@@ -209,6 +217,8 @@ document.addEventListener('visibilitychange', () => {
             .catch(err => {
                 console.error("요청 실패:", err);
             });*/
+
+        chatInput.focus();
 
         fetch("/func/chat/load-more-chat", {
             method: "POST",
@@ -261,7 +271,11 @@ document.addEventListener('visibilitychange', () => {
 
     } else {
         socket.emit("exit_room", { username: username, room: roomName });
-        if (typeof socket !== "undefined") socket.disconnect();
+        // 소켓을 끊어버리면 알림이 안온다..
+        // if (typeof socket !== "undefined") socket.disconnect();
+
+        document.getElementById('typingIndicator').style.display = 'none';
+        isTyping = false;
     }
 });
 
@@ -321,7 +335,7 @@ function isScrollAtTheBottom() {
 }
 
 const readDebounce = debounce(() => {
-    socket.emit("message_read", { chatId: lastChatId, room: roomName });
+    socket.emit("message_read", { chatId: lastChatId, room: roomName, username: username });
     // updateUserReadChatId(); // 스크롤이 아래일 때 상대가 채팅을 치기만 해도 계속 요청을 보낸다
 }, 100)
 
@@ -383,12 +397,11 @@ function loadMoreChats(event) {
             }
         })
         .then(() => {
-            console.log('여긴가')
             updateUserReadChatId();
             if (event === 'init') {
                 // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
                 moveBottonScroll();
-                socket.emit("message_read", {chatId: lastChatId, room: roomName});
+                socket.emit("message_read", {chatId: lastChatId, room: roomName, username: username });
             }
         })
         .finally(() => {
@@ -401,7 +414,7 @@ function sendMessage() {
     const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
     if (msg !== "") {
         socket.emit("new_msg", { chatId: Number(lastChatId)+1, username, msg, room: roomName });
-        socket.emit("stop_typing", {room: roomName});
+        socket.emit("stop_typing", {room: roomName, username: username });
     }
     // chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
     chatInput.value = "";
@@ -413,6 +426,7 @@ function sendMessage() {
 // 메세지 추가
 function addMessage(data, load = false) {
     isMine = data.username === username;
+    isUnderline = data.underline; // 알림에서 사용한다
     const now = new Date();
 
     if (data && !data.timestamp) { // 보낸 메세지는 timestemp가 없어서 만들어 준다. 채팅 로그를 node서버에 일임해야 할까 ?
@@ -806,16 +820,16 @@ function enterEvent(event) {
     } else {
         setTimeout(() => {
             if (chatInput.value.trim().length > 0) {
-                socket.emit("typing", {room: roomName}); // 입력 중임을 알림
+                socket.emit("typing", { room: roomName, username: username }); // 입력 중임을 알림
             }
             if (chatInput.value.trim().length === 0) {
-                socket.emit("stop_typing", {room: roomName});
+                socket.emit("stop_typing", { room: roomName, username: username });
             }
         }, 10)
 
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {
-            socket.emit("stop_typing", {room: roomName}); // 일정 시간 입력 없으면 중단 알림
+            socket.emit("stop_typing", { room: roomName, username: username }); // 일정 시간 입력 없으면 중단 알림
         }, 2000); // 2초간 입력 없으면 stop_typing
     }
 }
@@ -930,7 +944,7 @@ function initPage() {
     // document.addEventListener('touchmove', blockTouchMoveEvent, {passive: false});
 
     // 웹 소켓 연결 > 유저 입장
-    socket.emit("enter_room", {username: username, room: roomName});
+    socket.emit("enter_room", { username: username, room: roomName });
 
     setTimeout(() => {
         // 채팅 데이터가 렌더링 된 이후 리스너 추가
