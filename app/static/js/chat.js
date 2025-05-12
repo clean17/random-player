@@ -7,7 +7,8 @@ const chatContainer = document.getElementById("chat-container"),
     openDate = new Date(),
     fileInput = document.getElementById('file-input'),
     progressContainer = document.getElementById('progressContainer'),
-    videoCallBtn = document.getElementById("videoCallBtn");
+    videoCallBtn = document.getElementById("videoCallBtn"),
+    roomUserCount = document.getElementById('userCount');
 
 let offset = 0, // 가장 최근 10개는 이미 로드됨
     socket,
@@ -129,6 +130,7 @@ function connectSocket() {
 
     socket.on("bye", function(data) {
         addMessage(data);
+        updateUserCount(Number(roomUserCount.textContent)-1);
     });
 
     socket.on("enter_user", function(data) {
@@ -137,7 +139,7 @@ function connectSocket() {
     });
 
     socket.on("room_user_list", (userList) => {
-        console.log('현재 접속 중인 유저 목록:', userList);
+        // console.log('현재 접속 중인 유저 목록:', userList);
         updateUserCount(userList.length);
         const tempUserList = [];
         userList.forEach(user => {
@@ -649,8 +651,7 @@ function createDateDivider(dateStr) {
 
 // 참여중 인원 수 표기 변경
 function updateUserCount(number) {
-    const countEl = document.getElementById('userCount');
-    countEl.textContent = number;
+    roomUserCount.textContent = number;
     if (number === 1) {
         videoCallBtn.style.backgroundColor = "";
     }
