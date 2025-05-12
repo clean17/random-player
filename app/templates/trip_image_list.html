@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <title>Image List</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}?v=3">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
 </head>
 
 <body>
@@ -30,6 +30,10 @@
 <div class="pagination-buttons">
     <button class="pagination-button prev-button" id="prevButton">&lt;</button>
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
+</div>
+<div class="scroll-buttons">
+    <button onclick="window.scrollTo({ top: 0, behavior: 'auto' })">⬆</button>
+    <button onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })">⬇</button>
 </div>
 <div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
     <!-- 드롭다운 리스트 추가 -->
