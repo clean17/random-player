@@ -315,6 +315,11 @@ def normalize_ip(ip_address):
         return ip_address[7:]  # 앞에 "::ffff:" 빼버림
     return ip_address
 
+# 인코딩 가능한지 확인하고 처리 > 처리 못하면 '?' 대체
+def sanitize_text(text):
+    return text.encode('utf-8', errors='replace').decode('utf-8')
+
+
 @func.route("/chat")
 @login_required
 def get_chat_ui():
@@ -346,8 +351,9 @@ def save_chat_message():
 
     next_line_number = line_count + 1
 
-    log_entry = f"{next_line_number} | {data['timestamp']} | {data['username']} | {data['message']}"
-    with open(CHAT_FILE_PATH, "a", encoding="utf-8") as log_file:
+    sanitized_message = sanitize_text(data['message'])
+    log_entry = f"{next_line_number} | {data['timestamp']} | {data['username']} | {sanitized_message}"
+    with open(CHAT_FILE_PATH, "a", encoding="utf-8", errors='replace') as log_file: # errors='replace'; 인코딩할 수 없는 문자를 자동으로 '?'로 대체
         log_file.write(log_entry + "\n")
 
     update_last_chat_id_in_state(data['chatId'])
