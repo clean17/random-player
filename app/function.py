@@ -15,6 +15,8 @@ from datetime import datetime
 from utils.lotto_schedule import async_buy_lotto
 from config.config import settings
 import asyncio
+from utils.wsgi_midleware import logger
+from filelock import FileLock, Timeout
 
 func = Blueprint('func', __name__)
 
@@ -422,23 +424,65 @@ def test_lotto():
 ################################# STATE ####################################
 
 
-
+DEFAULT_STATE = {
+    "chats": {"last_chat_id": 0},
+    "users": {},
+    "ai_scheduler_uri": None
+}
+LOCK_PATH = CHAT_STATE_FILE_PATH + ".lock"
 
 # JSON 상태 불러오기
 def load_state():
-    if os.path.exists(CHAT_STATE_FILE_PATH):
-        with open(CHAT_STATE_FILE_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {
-        "chats": {"last_chat_id": 0},
-        "users": {},
-        "ai_scheduler_uri": None
-    }
+    lock = FileLock(LOCK_PATH, timeout=2)
+    try:
+        with lock:
+            if not os.path.exists(CHAT_STATE_FILE_PATH):
+                logger.warning("⚠️ 상태 파일 없음. 기본값 반환.")
+                return DEFAULT_STATE
+
+            if os.path.getsize(CHAT_STATE_FILE_PATH) == 0:
+                logger.warning("⚠️ 상태 파일 비어 있음. 기본값 반환.")
+                return DEFAULT_STATE
+
+            with open(CHAT_STATE_FILE_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Timeout:
+        logger.error("❌ 상태 파일 읽기 락 획득 실패 (2초 타임아웃)")
+        return DEFAULT_STATE
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON 파싱 실패: {e}")
+        return DEFAULT_STATE
+    except Exception as e:
+        logger.error(f"❌ 상태 로드 중 기타 예외: {e}")
+        return DEFAULT_STATE
 
 # JSON 상태 저장하기
-def save_state(state):
-    with open(CHAT_STATE_FILE_PATH, 'w', encoding='utf-8') as f:
-        json.dump(state, f, indent=4, ensure_ascii=False)
+def save_state(state: dict):
+    lock = FileLock(LOCK_PATH, timeout=2)
+    tmp_path = CHAT_STATE_FILE_PATH + ".tmp"
+
+    try:
+        with lock:
+            try:
+                with open(tmp_path, 'w', encoding='utf-8') as f:
+                    json.dump(state, f, ensure_ascii=False, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+            except Exception as write_err:
+                logger.error(f"❌ 임시 파일 쓰기 실패: {write_err}")
+                return
+
+            if os.path.exists(tmp_path):
+                try:
+                    os.replace(tmp_path, CHAT_STATE_FILE_PATH)
+                    # logger.info("✅ 상태 파일 저장 완료")
+                except Exception as replace_err:
+                    logger.error(f"❌ 상태 파일 교체 실패: {replace_err}")
+            else:
+                logger.error(f"❌ 임시 파일 누락: {tmp_path} – 저장 스킵됨")
+
+    except Timeout:
+        logger.warning("🔒 상태 저장 락 획득 실패 (2초 대기 후 포기)")
 
 def update_last_chat_id_in_state(chat_id):
     if chat_id is None:
