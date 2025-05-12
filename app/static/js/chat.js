@@ -422,7 +422,7 @@ function sendMessage() {
     chatInput.value = "";
     chatInput.style.height = textAreaOffsetHeight + "px";
     chatInput.focus();
-    chatInput.setSelectionRange(0, 0);  // 커서 위치 다시 지정
+    // chatInput.setSelectionRange(0, 0);  // 커서 위치 맨 앞으로 다시 지정,  iOS Safari에서 포커스 후 스크롤 위치 이상 현상을 유발할 수도
 }
 
 // 메세지 추가
@@ -913,9 +913,17 @@ function initPage() {
     chatInput.addEventListener('keydown', enterEvent)
     // 모바일에서 키보드가 사라질 때의 이벤트
     chatInput.addEventListener('blur', () => {
-        setTimeout(() => {
-            window.scrollTo(0, 0);  // 키보드 내려간 후에도 복구
-        }, 100);
+        let attempt = 0;
+        const maxAttempts = 20;
+
+        const intervalId = setInterval(() => {
+            moveBottonScroll();
+
+            attempt++;
+            if (attempt >= maxAttempts) {
+                clearInterval(intervalId);
+            }
+        }, 50);
     });
     chatInput.focus();
 
