@@ -159,7 +159,7 @@ def image_list():
 
     return render_template(template_html, images=images, page=page, title=selected_dir,
                            total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, title_list=title_list)
+                           selected_dir=selected_dir, title_list=title_list, version=int(time.time()))
 
 
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
