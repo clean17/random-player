@@ -1,16 +1,21 @@
 from datetime import datetime, timedelta, timezone
-
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash
 from utils.wsgi_midleware import logger
+from utils.jwt import create_access_token
+from .rds import redis_client
 
 from config.config import settings
 
-SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
-YOUR_SECRET_PASSWORD = settings['YOUR_SECRET_PASSWORD']
 
 auth = Blueprint('auth', __name__)
+
+SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
+SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
+GUEST_SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
+YOUR_SECRET_PASSWORD = settings['YOUR_SECRET_PASSWORD']
+
 
 users = {
     settings['USERNAME']: {'password': settings['PASSWORD']},
@@ -21,6 +26,42 @@ users = {
 class User(UserMixin):
     def __init__(self, username):
         self.id = username
+
+
+def check_active_session():
+    if current_user.is_authenticated and current_user.get_id() == settings['USERNAME']:
+        key = f"user_session:{current_user.get_id()}"
+        ttl = redis_client.ttl(key)
+
+        if ttl <= 0:  # -2: 키없음, -1: TTL 없음
+            return redirect(url_for('auth.logout'))
+        else:
+            redis_client.expire(key, SESSION_EXPIRATION_TIME)  # TTL 연장
+
+# setex(name, time, value); name: 키, time: TTL, value: 값
+def save_verified_time(username):
+    redis_client.setex(
+        f"second_password_verified:{username}",
+        timedelta(minutes=10),
+        datetime.utcnow().isoformat()
+    )
+
+def get_verified_time(username):
+    return redis_client.get(f"second_password_verified:{username}")
+
+
+
+@auth.route('/api/token', methods=['POST'])
+def issue_token():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    if username in users and check_password_hash(users[username]['password'], password):
+        token = create_access_token({"sub": username})
+        return jsonify(access_token=token)
+
+    return jsonify(error="Invalid credentials"), 401
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
@@ -43,6 +84,9 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        # data = request.get_json()
+        # username = data.get('username')
+        # password = data.get('password')
 
         if session['attempts'] >= 5:
             lockout_time = datetime.fromisoformat(session['lockout_time'])
@@ -65,11 +109,15 @@ def login():
 
             # GUEST_USERNAME 사용자라면
             if username == settings['GUEST_USERNAME']:
-                session.permanent = False  # PERMANENT_SESSION_LIFETIME 적용되도록
+                session.permanent = False  # False; 브라우저 세션, 브라우저를 닫으면 세션 쿠키는 사라진다
                 session["last_active"] = datetime.utcnow().timestamp() # session["last_active"]
 
                 if not current_user.is_authenticated:
                     return redirect(url_for('auth.logout'))
+            else:
+                session.permanent = True # True; PERMANENT_SESSION_LIFETIME 적용되도록 >> Flask의 기본 세션 만료 정책 (브라우저별 쿠키 기반, session_id), 브라우저를 꺼도 쿠키는 살아 있다
+                key = f"user_session:{username}"
+                redis_client.setex(key, SESSION_EXPIRATION_TIME, "active")
 
             return redirect(url_for('main.home'))
         # 로그인 실패
@@ -103,7 +151,9 @@ def verify_password():
 
         if password == YOUR_SECRET_PASSWORD:
             session[SECOND_PASSWORD_SESSION_KEY] = True # session.get(SECOND_PASSWORD_SESSION_KEY)
-            session['second_password_verified_at'] = datetime.utcnow().isoformat()
+            # session['second_password_verified_at'] = datetime.utcnow().isoformat()
+            save_verified_time(current_user.get_id()) # redis 동기화
+
             next_page = request.args.get("next", "/func/memo")
             return redirect(next_page)
         else:
@@ -114,7 +164,8 @@ def verify_password():
 @auth.route("/update-session-time")
 @login_required
 def update_session_time():
-    session['second_password_verified_at'] = datetime.utcnow().isoformat()
+    # session['second_password_verified_at'] = datetime.utcnow().isoformat()
+    save_verified_time(current_user.get_id()) # redis 동기화
     return "update-session-time"
 
 '''
