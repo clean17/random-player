@@ -29,6 +29,7 @@
     <div style="display: flex; justify-content: center;">
         <label for="date-picker">날짜 선택:</label>
         <input type="date" id="date-picker">
+        <span id="sse-status">연결 상태 🔄</span>
     </div>
     <pre id="log-container" style="font-family: monospace; white-space: pre;"></pre>
 </div>
@@ -37,7 +38,8 @@
     // const socket = io()  // WebSocket 연결
     const logContainer = document.getElementById("log-container"),
           datePicker = document.getElementById("date-picker"),
-          eventSource = new EventSource("/func/logs/stream");
+          eventSource = new EventSource("/func/logs/stream"),
+          statusEl = document.getElementById("sse-status");
 
     // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
     /*socket.on("log_update", (data) => {
@@ -46,6 +48,25 @@
             appendLog(data.log);
         }
     });*/
+
+    function updateStatus() {
+        switch (eventSource.readyState) {
+            case 0:
+                statusEl.textContent = "연결 상태 🟡";
+                break;
+            case 1:
+                statusEl.textContent = "연결 상태 🟢";
+                break;
+            case 2:
+                statusEl.textContent = "연결 상태 🔴";
+                break;
+        }
+    }
+
+    setInterval(updateStatus, 300);
+
+    eventSource.onerror = updateStatus;
+    eventSource.onopen = updateStatus;
 
     // 오늘 날짜 가져오기 (YYYY-MM-DD 형식)
     function getTodayDate() {

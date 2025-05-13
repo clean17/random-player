@@ -230,6 +230,9 @@ def stream_logs():
         log_file = get_log_filename()
         last_position = os.path.getsize(log_file)  # 시작 시점: 파일 맨 끝
 
+        # 연결 직후 한 번은 무조건 데이터 전송 (브라우저가 onopen 판단 가능하도록)
+        yield "data: 연결됨\n\n"
+
         while True:
             try:
                 with open(log_file, "r", encoding="utf-8") as f:
@@ -240,8 +243,11 @@ def stream_logs():
                         yield f"data: {line.strip()}\n\n"
                         last_position = f.tell()
                     else:
-                        # 빠른 polling (0.1초) → 너무 빠르면 CPU 100% 될 수 있으니 적절 조절
-                        time.sleep(0.1)
+                        # 주석 형태(:로 시작)의 SSE 이벤트는 클라이언트에 표시되진 않지만 연결을 유지
+                        # SSE 연결이 죽었는지 판단하려면 최소한의 유효 응답이라도 주기적으로 받아야 한다
+                        yield ": keep-alive\n\n"
+                        # 너무 빠르면 CPU 100% 될 수 있으니 적절 조절
+                        time.sleep(0.3)
 
             except Exception as e:
                 yield f"data: 오류: {e}\n\n"
