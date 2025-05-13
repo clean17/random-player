@@ -4,15 +4,15 @@ from flask_login import login_required
 
 rds = Blueprint('rds', __name__)
 
-r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
-r.set('user:123:status', 'active')
-r.set('task:running', 'true')
+redis_client.set('user:123:status', 'active')
+redis_client.set('task:running', 'true')
 
 @rds.route('/test', methods=['get'])
 @login_required
 def get_redis_test():
-    status = r.get('task:running')
+    status =redis_client.get('task:running')
     return jsonify({'task_running': status})
 
 @rds.route('/last-read-chat-id', methods=['GET', 'POST'], endpoint='last-read-chat-id')
@@ -23,10 +23,10 @@ def last_read_chat_id():
 
     if request.method == 'POST':
         chatId = request.get_json().get('lastReadChatId')
-        r.set(key, chatId)
+        redis_client.set(key, chatId)
         return jsonify({'result': 'success'})
     else:
-        chatId = r.get(key)
+        chatId =redis_client.get(key)
         return jsonify({'username': username, 'last_read_chat_id': chatId})
 
 @rds.route('/last-chat-id', methods=['GET', 'POST'], endpoint='last-chat-id')
@@ -37,9 +37,9 @@ def handle_last_chat_id():
     if request.method == 'POST':
         data = request.get_json()
         chatId = data.get('lastChatId')
-        r.set(key, chatId)
+        redis_client.set(key, chatId)
         return jsonify({'result': 'success'})
 
     elif request.method == 'GET':
-        chatId = r.get(key)
+        chatId =redis_client.get(key)
         return jsonify({'last_chat_id': chatId})
