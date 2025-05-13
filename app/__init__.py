@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from collections import defaultdict, deque
 from flask import Flask, session, send_file, render_template, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
 from flask_login import LoginManager, current_user, logout_user, login_required
-from .auth import auth, User, users
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
+from .auth import auth, User, users, SESSION_EXPIRATION_TIME, GUEST_SESSION_EXPIRATION_TIME, SECOND_PASSWORD_SESSION_KEY, check_active_session, save_verified_time, get_verified_time
 from config.config import load_config
 from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프린트를 import
 from .main import main
@@ -20,6 +21,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.middleware.proxy_fix import ProxyFix
 import uuid
 from config.config import settings
+from redis import Redis
 
 
 ALLOWED_PATHS = [
@@ -38,6 +40,7 @@ ALLOWED_PATHS = [
     '/auth/update-session-time',
     '/func/last-read-chat-id',
 ]
+
 
 # 파일 읽기
 def load_blocked_ips(filepath='data/blocked_ips.txt'):
@@ -73,20 +76,24 @@ BLOCK_THRESHOLD = 5                                   # 차단 설정 임계횟�
 BLOCK_DURATION = timedelta(days=99999)                # 차단 기간
 
 
-# 테스트 키
-SECOND_PASSWORD_SESSION_KEY = settings['SECOND_PASSWORD_SESSION_KEY']
-SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
-GUEST_SESSION_EXPIRATION_TIME = timedelta(minutes=30) # 세션 만료 시간
+
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
+
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
     app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
-    app.secret_key = app.config['SECRET_KEY']
-    # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정, Flask 공식 설정값
+    app.secret_key = app.config['SECRET_KEY'] # app.config.update(load_config()) 에서 키를 통해 가져온다
+    # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정, Flask 공식 설정값 >>> 25.05.13 Redis로 TTL을 체크하기 위해 주석
     # app.permanent_session_lifetime = SESSION_EXPIRATION_TIME  # 기본 유효기간 설정 (기본값: timedelta(days=31), property 접근 방식; 위와 동일; 내부적으로 app.config['PERMANENT_SESSION_LIFETIME']를 읽고 쓴다
+
+    # 세션을 Redis에 저장하도록 >>> Flask가 자동으로 Redis에 해당 세션을 JSON 직렬화하여 저장
+    app.config['SESSION_TYPE'] = 'redis'
+    app.config['SESSION_REDIS'] = Redis(host='localhost', port=6379)
+
+    app.config["JWT_SECRET_KEY"] = app.config['SECRET_KEY'] # jwt 테스트 한다고 추가했음, 사용안함
 
     app.register_blueprint(main, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/auth')
@@ -109,6 +116,9 @@ def create_app():
     # Flask 앱에 WebSocket 기능을 추가
     socketio.init_app(app)
 
+    # jwt test
+    jwt = JWTManager(app)
+
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
@@ -130,47 +140,24 @@ def create_app():
             else:
                 return abort(403, description="접근이 차단된 IP입니다.")
 
+        ###################### 엔드포인트 허용 ######################
+        if request.path == '/auth/logout':
+            return
 
+        if request.path.startswith('/static'):
+            return
 
-        ####################### 추가 인증 #########################
-        # if request.path.startswith('/func/memo'):
+        if request.path.startswith('/service-worker.js'):
+            return
 
-        # paths_to_check = ['/func/memo', '/func/chat', '/func/log']
-        # if request.path.startswith(tuple(paths_to_check)):
+        if not current_user.is_authenticated: # PERMANENT_SESSION_LIFETIME 를 설정하면 redis 확인 전에 세션이 만료된다
+            return  #  비회원은 인증 체크/검증을 하지 않는다
 
-        if request.path.startswith(('/func/memo', '/func/chat')): # tuple
-            if not current_user.is_authenticated:
-                return redirect(url_for("auth.logout"))
+        check_active_session() # redis ttl, 세션 동기화
 
-            url = request.path
-            parts = url.split("/")
-            base_path = "/" + "/".join(parts[1:3])
+        if request.path == '/':
+            return
 
-            verified = session.get(SECOND_PASSWORD_SESSION_KEY)
-            verified_at_str = session.get('second_password_verified_at')
-
-            if not verified or not verified_at_str:
-                # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
-                return redirect(url_for('auth.verify_password', next=base_path))
-
-            # 현재 uri 요청을 반복하면 세션 시간 갱신
-            session['second_password_verified_at'] = datetime.utcnow().isoformat()
-
-            try:
-                verified_at = datetime.fromisoformat(verified_at_str)
-            except Exception:
-                # 시간 파싱 실패 → 인증 무효 처리
-                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
-                session.pop('second_password_verified_at', None)
-                return redirect(url_for('auth.verify_password', next=base_path))
-
-            # 10분 유효시간 초과 시 인증 무효
-            # if datetime.utcnow() - verified_at > timedelta(seconds=5):
-            if datetime.utcnow() - verified_at > timedelta(minutes=10):
-                print('    before_request - Function Session Expires ', current_user.get_id())
-                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
-                session.pop('second_password_verified_at', None)
-                return redirect(url_for('auth.verify_password', next=base_path))
 
         ###################### 세션 잠금 확인 ######################
         if 'lockout_time' in session and session['lockout_time']:
@@ -197,18 +184,50 @@ def create_app():
             session.clear()
 
 
-        ###################### 엔드포인트 허용 ######################
-        if request.path == '/auth/logout':
-            return
+        ####################### 추가 인증 #########################
+        # if request.path.startswith('/func/memo'):
 
-        if request.path == '/':
-            return
+        # paths_to_check = ['/func/memo', '/func/chat', '/func/log']
+        # if request.path.startswith(tuple(paths_to_check)):
 
-        if request.path.startswith('/static'):
-            return
+        if request.path.startswith(('/func/memo', '/func/chat')): # tuple
+            if not current_user.is_authenticated:
+                return redirect(url_for("auth.logout"))
 
-        if not current_user.is_authenticated:
-            return  # 로그인하지 않은 사용자는 검증하지 않음
+            url = request.path
+            parts = url.split("/")
+            base_path = "/" + "/".join(parts[1:3])
+
+            verified = session.get(SECOND_PASSWORD_SESSION_KEY)
+            # verified_at_str = session.get('second_password_verified_at') # 마지막 인증 시간
+            verified_at_str = get_verified_time(current_user.get_id())
+
+            if not verified and current_user.get_id() == app.config['GUEST_USERNAME']:
+                return redirect(url_for('auth.verify_password', next=base_path))
+            if not verified_at_str:
+                # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
+                return redirect(url_for('auth.verify_password', next=base_path))
+
+            try:
+                verified_at = datetime.fromisoformat(verified_at_str)
+            except Exception:
+                # 시간 파싱 실패 → 인증 무효 처리
+                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
+                session.pop('second_password_verified_at', None)
+                return redirect(url_for('auth.verify_password', next=base_path))
+
+            # 10분 유효시간 초과 시 인증 무효
+            # if datetime.utcnow() - verified_at > timedelta(seconds=5):
+            if datetime.utcnow() - verified_at > timedelta(minutes=10):
+                print('    before_request - Function Session Expires ', current_user.get_id())
+                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
+                session.pop('second_password_verified_at', None)
+                return redirect(url_for('auth.verify_password', next=base_path))
+
+            # 현재 uri 요청을 반복하면 세션 시간 갱신
+            # session['second_password_verified_at'] = datetime.utcnow().isoformat()
+            save_verified_time(current_user.get_id())
+
 
 
         # GUEST_USERNAME 사용자에 대한 검증
@@ -228,6 +247,8 @@ def create_app():
             # print('request.path', request.path)
             if not any(request.path.startswith(path) for path in ALLOWED_PATHS):
                 return redirect(url_for('auth.logout'))
+        else:
+            pass
 
         # 다른 사용자는 제한하지 않음
         return
@@ -249,6 +270,12 @@ def create_app():
     @app.route("/htmltest")
     def get_test():
         return render_template('test.html', version=int(time.time()))
+
+    @app.route("/protected")
+    @jwt_required()
+    def protected():
+        user_id = get_jwt_identity()
+        return f"Hello {user_id}"
 
     @app.after_request
     def track_404(response):
