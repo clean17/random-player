@@ -964,6 +964,19 @@ function initPage() {
             }
         });
     }, 300)
+
+    // 하단으로 스크롤링
+    let attempt = 0;
+    const maxAttempts = 5;
+
+    const intervalId = setInterval(() => {
+        moveBottonScroll();
+
+        attempt++;
+        if (attempt >= maxAttempts) {
+            clearInterval(intervalId);
+        }
+    }, 20);
 }
 
 document.addEventListener("DOMContentLoaded", initPage);
