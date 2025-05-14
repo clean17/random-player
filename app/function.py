@@ -17,6 +17,8 @@ from config.config import settings
 import asyncio
 from utils.wsgi_midleware import logger
 from filelock import FileLock, Timeout
+import requests
+from bs4 import BeautifulSoup
 
 func = Blueprint('func', __name__)
 
@@ -384,6 +386,25 @@ def load_more_logs():
         return jsonify({"logs": []})
 
 
+def fetch_url_preview(url):
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        def get_meta(property_name):
+            tag = soup.find('meta', attrs={'property': property_name}) or \
+                  soup.find('meta', attrs={'name': property_name})
+            return tag['content'] if tag and 'content' in tag.attrs else None
+
+        return {
+            'title': soup.title.string if soup.title else '',
+            'description': get_meta('og:description') or get_meta('description'),
+            'image': get_meta('og:image'),
+            'url': url
+        }
+    except Exception as e:
+        return None
+
 ################################# Memo ######################################
 @func.route('/memo', methods=['GET', 'POST'])
 @login_required
@@ -542,3 +563,12 @@ def handle_last_chat_id():
 
     chat_id = state.get("chats", {}).get("last_chat_id", 0)
     return jsonify({'last_chat_id': chat_id})
+
+
+################################# PREVIEW ####################################
+
+@func.route('/api/url-preview', methods=['POST'])
+def render_preview():
+    data = request.get_json()
+    url = data.get('url')
+    return fetch_url_preview(url)

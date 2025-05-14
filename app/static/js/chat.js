@@ -89,6 +89,15 @@ function getCurrentTimeStr() {
     return `${hour}:${minute}`;
 }
 
+function extractDomain(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.hostname.replace(/^www\./, ''); // www. 제거
+    } catch (e) {
+        return null;
+    }
+}
+
 /////////////////////////////// Web Socket /////////////////////////////
 
 function connectSocket() {
@@ -425,6 +434,20 @@ function sendMessage() {
     // chatInput.setSelectionRange(0, 0);  // 커서 위치 맨 앞으로 다시 지정,  iOS Safari에서 포커스 후 스크롤 위치 이상 현상을 유발할 수도
 }
 
+// url 미리보기 카드 렌더링
+function renderPreviewCard(data) {
+    const copyLinkPreview = document.querySelector('.link-preview').cloneNode(true);
+    copyLinkPreview.style.display = '';
+    copyLinkPreview.querySelector('a').href = data.url;
+    copyLinkPreview.querySelector('a').classList.add('bg-white');
+    copyLinkPreview.querySelector('img').src = data.image;
+    copyLinkPreview.querySelector('.message').textContent = data.url;
+    copyLinkPreview.querySelector('.preview-title').textContent = data.title;
+    copyLinkPreview.querySelector('.preview-description').textContent = data.description;
+    copyLinkPreview.querySelector('.preview-url').textContent = extractDomain(data.url);
+    return copyLinkPreview;
+}
+
 // 메세지 추가
 function addMessage(data, load = false) {
     isMine = data.username === username;
@@ -458,6 +481,9 @@ function addMessage(data, load = false) {
             renderEnterOrExit(data.msg);
         }
     } else { // 메세지 생성
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const matches = data.msg.match(urlRegex);
+
         if (data.msg.trim().startsWith('https://chickchick.shop/image/images/')) {
             const fileUrl = '';
 
@@ -497,11 +523,48 @@ function addMessage(data, load = false) {
                 link.target = '_blank';
                 messageDiv.appendChild(link);
             }*/
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const matches = data.msg.match(urlRegex);
+
+            if (matches) {
+                // fetch('/api/url-preview', {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify({ url: matches[0] })
+                // })
+                //     .then(res => res.json())
+                //     .then(preview => {
+                //         if (preview) {
+                //             console.log(preview);
+                //             // renderPreviewCard(preview);
+                //         }
+                //     });
+            }
+
         } else {
             const messageSpan = document.createElement("span");
             const safeText = data.msg.replace(/ /g, "&nbsp;");
             messageSpan.innerHTML = safeText;
             messageDiv.appendChild(messageSpan);
+
+            if (matches) {
+                fetch('/func/api/url-preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: matches[0] })
+                })
+                    .then(res => res.json())
+                    .then(preview => {
+                        if (preview) {
+                            const previewEl = renderPreviewCard(preview, isMine);
+                            messageDiv.innerHTML = '';
+                            messageDiv.appendChild(previewEl);
+                            messageDiv.classList.remove('p-2');
+                            // messageDiv.classList.remove('bg-gray-200')
+                            // messageDiv.classList.remove('bg-blue-200')
+                        }
+                    });
+            }
         }
 
 
