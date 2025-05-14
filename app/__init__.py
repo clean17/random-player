@@ -22,6 +22,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import uuid
 from config.config import settings
 from redis import Redis
+from flask_wtf.csrf import CSRFProtect
 
 
 ALLOWED_PATHS = [
@@ -76,7 +77,7 @@ BLOCK_THRESHOLD = 5                                   # 차단 설정 임계횟�
 BLOCK_DURATION = timedelta(days=99999)                # 차단 기간
 
 
-
+# csrf = CSRFProtect()
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
@@ -118,6 +119,8 @@ def create_app():
 
     # jwt test
     jwt = JWTManager(app)
+
+    # csrf.init_app(app)  # 앱에 CSRF 보호 적용
 
     login_manager = LoginManager()
     login_manager.init_app(app)
