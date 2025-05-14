@@ -8,10 +8,21 @@
     <!--<script src="https://cdn.tailwindcss.com"></script>-->
     <script src="/static/js/tailwindcss.js"></script>
     <script src="https://chickchick.shop:3000/socket.io/socket.io.js"></script>
-    <link rel="stylesheet" href="/static/css/chat2.css?v={{ version }}">
+<!--    <link rel="stylesheet" href="/static/css/chat2.css?v={{ version }}">-->
+    <link rel="stylesheet" href="/static/css/chat.css?v={{ version }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
+<div class="top-bar">
+    <div class="logout">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        {% endif %}
+    </div>
+    <div class="back">
+        <a href="{{ url_for('main.home') }}">Back</a>
+    </div>
+</div>
 <div class="container">
     <div class="bg-white p-2 shadow-md rounded-lg w-full h-full text-center overflow-hidden flex flex-col">
         <!-- 채팅 메시지 목록 -->
@@ -23,29 +34,42 @@
             {% endfor %}
         </div>
         <!-- 입력 영역 -->
-        <div class="border-t p-2 bg-white">
+        <!--<div class="border-t p-2 bg-white">
             <div class="scroll-wrapper max-h-[120px] overflow-y-auto">
                 <textarea id="chat-input" class="w-full h-auto min-h-[60px] resize-none outline-none"></textarea>
             </div>
+        </div>-->
+        <div class="flex items-center border-t p-2 bg-white">
+            <!--            <button id="camera-button" class="p-2 text-gray-500 hover:text-gray-700 w-[10%] mr-2">📷</button>-->
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="hidden" id="title" name="title" value="chat">
+                <label for="file-input" class="p-2 text-gray-600 cursor-pointer hover:bg-gray-200 w-[auto] mr-2">
+                    📁
+                </label>
+                <input type="file" name="files[]" id="file-input" multiple  class="hidden">
+            </form>
+            <!-- box-content: padding이 height에 포함되지 않도록 함 -->
+            <textarea type="text" id="chat-input"
+                      class="p-2 px-3 py-[6px] border rounded-lg focus:outline-none w-[90%] box-content resize-none"
+                      placeholder="Type a message..."
+                      data-textarea-auto-resize="5"
+            ></textarea>
+            <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[10%] ml-2">📤</button>
         </div>
-<!--        <div class="flex items-center border-t p-2 bg-white">-->
-<!--            &lt;!&ndash;            <button id="camera-button" class="p-2 text-gray-500 hover:text-gray-700 w-[10%] mr-2">📷</button>&ndash;&gt;-->
-<!--            <form id="uploadForm" enctype="multipart/form-data">-->
-<!--                <input type="hidden" id="title" name="title" value="chat">-->
-<!--                <label for="file-input" class="p-2 text-gray-600 cursor-pointer hover:bg-gray-200 w-[auto] mr-2">-->
-<!--                    📁-->
-<!--                </label>-->
-<!--                <input type="file" name="files[]" id="file-input" multiple  class="hidden">-->
-<!--            </form>-->
-<!--            &lt;!&ndash; box-content: padding이 height에 포함되지 않도록 함 &ndash;&gt;-->
-<!--            <textarea type="text" id="chat-input"-->
-<!--                      class="p-2 px-3 py-[6px] border rounded-lg focus:outline-none w-[90%] box-content resize-none"-->
-<!--                      placeholder="Type a message..."-->
-<!--                      data-textarea-auto-resize="5"-->
-<!--            >1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n</textarea>-->
-<!--            <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[10%] ml-2">📤</button>-->
-<!--        </div>-->
     </div>
+</div>
+<div class="link-preview" style="display: none">
+    <div class="message" style="margin: 7px"></div>
+    <a href="https://chickchick.shop" target="_blank" class="preview-card">
+        <div class="preview-thumbnail">
+            <img src="http://chickchick.shop/static/no-image.png" alt="썸네일">
+        </div>
+        <div class="preview-meta">
+            <p class="preview-title">Example Title</p>
+            <p class="preview-description">This is a short description from the target site...</p>
+            <span class="preview-url">example.com</span>
+        </div>
+    </a>
 </div>
 
 <script>

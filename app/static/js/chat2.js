@@ -1,31 +1,92 @@
 
 
 const chatContainer = document.getElementById("chat-container"),
-    chatInput = document.getElementById("chat-input"),
     textAreaOffsetHeight = 22,
     openDate = new Date(),
     fileInput = document.getElementById('file-input');
 
 let offset = 0, // 가장 최근 10개는 이미 로드됨
     socket,
+    roomName = 'chat-room',
     isMine,
-    isUnderline,
+    isUnderline, // 알림에서 사용한다
     isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
     loading = false,
+    chatState = { previousDate: null, latestDate: null },
     scrollHeight, // 전체 스크롤 높이
     scrollTop,    // 현재 스크롤 위치
-    offsetX = 0,
-    offsetY = 0,
+    isMinimized = false,
     lastChatId = 0,
-    submitted = false;
+    submitted = false,
+    videoCallRoomName = null,
+    peerLastReadChatId = 0;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
 const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
+let controller = new AbortController();
+
+////////////////////////////// Util Function ////////////////////////////
+
+// debounce 적용 (일정 시간동안의 마지막 요청만)
+function debounce(func, delay) {
+    let debounceTimer;
+    return function (...args) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
+// throttle 적용 (일정 시간마다 요청)
+function throttle(func, delay) {
+    let throttleTimer = null;
+    return function (...args) {
+        if (throttleTimer) return;
+        throttleTimer = setTimeout(() => {
+            func.apply(this, args);
+            throttleTimer = null;
+        }, delay);
+    };
+}
+
+// 채팅 입력창 자동으로 높이 조절
+document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textarea => {
+    const maxLines = Number(textarea.dataset.textareaAutoResize) || 5;
+    const maxHeight = maxLines * textAreaOffsetHeight;
+
+    const resize = () => {
+        textarea.style.height = '22px';  // ✅ 초기화
+        // const lineCount = textarea.value.split('\n').length;
+        // const newHeight = Math.min(lineCount * textAreaOffsetHeight, maxHeight);
+
+        const scrollHeight = textarea.scrollHeight - 10; // ✅ 실제 내용 높이
+        const newHeight = Math.min(scrollHeight, maxHeight);
+
+        textarea.style.height = `${newHeight}px`;
+    };
+
+    textarea.addEventListener('input', resize, { signal: controller.signal });
+
+    // 초기 설정
+    resize();
+});
+
+function getCurrentTimeStr() {
+    const now = new Date();
+
+    const hour = now.getHours().toString().padStart(2, "0");
+    const minute = now.getMinutes().toString().padStart(2, "0");
+
+    return `${hour}:${minute}`;
+}
+
+
+
+//////////////////////////////// Render Chat ////////////////////////////////
 
 function loadMoreChats(event) {
     // 현재 스크롤 위치 저장
-    const prevScrollHeight = chatContainer.scrollHeight;
-    const prevScrollTop = chatContainer.scrollTop;
+    const firstMsg = chatContainer.firstElementChild;
+    const prevTop = firstMsg?.getBoundingClientRect().top || 0;
 
     const data = {
         "logs": [
@@ -77,8 +138,7 @@ function loadMoreChats(event) {
             "12831 | 250504172337 | nh824 | \ub108\ubb34 \ub2f5\ub2f5\ud558\uace0 \ubd88\ud3b8\ud574\uc11c \uce74\ud398 \uac00\uc790\uace0 \ud588\uc5b4..\n",
             "12832 | 250504173830 | fkaus14 | \uac19\uc774 \uac14\uc5b4..\n",
             "12833 | 250504182216 | fkaus14 | \uce74\ud398\ub97c \ub108\uac00 \uac00\uc790\uace0 \ud55c\uac70\uc57c? \uac19\uc774 \uc544\ub2c8\uba74 \ubabb\uac00\ub294\uac70\uc57c?\n",
-            "12834 | 250504182354 | fkaus14 | \uac19\uc774\uac00\uba74.. \uc606\uc5d0 \uc549\uc544\uc788\ub294\uac70\uc57c? \uacc4\uc18d \ub9d0\uac70\ub294\uac70\uc57c?\n",
-            "12835 | 250504184536 | fkaus14 | \uce74\ud398\uac14\ub2e4\uac00 \uc800\ub141\ub3c4 \uba39\uace0 \uc624\ub294\uac70\uc57c... ?\n"
+            "12835 | 250504184536 | fkaus14 | \u0068\u0074\u0074\u0070\u0073\u003a\u002f\u002f\u0079\u006f\u0075\u0074\u0075\u0062\u0065\u002e\u0063\u006f\u006d\u002f\u0073\u0068\u006f\u0072\u0074\u0073\u002f\u0068\u0063\u0058\u0074\u0049\u0038\u0045\u0057\u0057\u0038\u006f\u003f\u0073\u0069\u003d\u004c\u0064\u0069\u0045\u0039\u0050\u0030\u0038\u0050\u0071\u0036\u005a\u0045\u0053\u0070\u0049"
         ]
     }
 
@@ -89,19 +149,172 @@ function loadMoreChats(event) {
         tempArr.push(log);
     });
 
-    // console.log(tempArr);
-
     tempArr.reverse().slice(0,20).forEach(log => {
         const [chatId, timestamp, username, msg] = log.toString().split("|");
         chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
         addMessage(chatObj, true)
-        if (event === "wheel") {
-            chatContainer.scrollTop = chatContainer.scrollHeight - prevScrollHeight + prevScrollTop;
-        }
     });
 
+    requestAnimationFrame(() => {
+        const newTop = firstMsg?.getBoundingClientRect().top || 0;
+        const delta = newTop - prevTop;
+
+        // ✅ 기존 위치 유지하도록 scrollTop 보정
+        chatContainer.scrollTop += delta;
+    });
 }
 
+function extractDomain(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.hostname.replace(/^www\./, ''); // www. 제거
+    } catch (e) {
+        return null;
+    }
+}
+
+// url 미리보기 카드 렌더링
+function renderPreviewCard(data) {
+    console.log('preview', data)
+    const copyLinkPreview = document.querySelector('.link-preview').cloneNode(true);
+    copyLinkPreview.style.display = '';
+    copyLinkPreview.querySelector('a').href = data.url;
+    copyLinkPreview.querySelector('a').classList.add('bg-white');
+    copyLinkPreview.querySelector('img').src = data.image;
+    const message = copyLinkPreview.querySelector('.message');
+    message.textContent = data.url;
+    copyLinkPreview.querySelector('.preview-title').textContent = data.title;
+    copyLinkPreview.querySelector('.preview-description').textContent = data.description;
+    copyLinkPreview.querySelector('.preview-url').textContent = extractDomain(data.url);
+    return copyLinkPreview;
+}
+
+// 메세지 추가
+function addMessage(data, load = false) {
+    isMine = data.username === username;
+    isUnderline = data.underline; // 알림에서 사용한다
+    const now = new Date();
+
+    if (data && !data.timestamp) { // 보낸 메세지는 timestemp가 없어서 만들어 준다. 채팅 로그를 node서버에 일임해야 할까 ?
+        now.setHours(now.getHours() + 9);  // UTC → KST 변환
+        const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
+        data.timestamp = timestamp;
+    }
+
+    if (Number(lastChatId) < Number(data.chatId)) { // 로드한 메세지가 아닌 추가된 메세지는 chatId가 없는데 ?
+        lastChatId = data.chatId;
+    }
+
+    const messageRow = renderMessageRow(isMine, data.chatId);
+    const messageDiv = renderMessageDiv();
+
+    if (isMine) {
+        messageDiv.classList.add("bg-blue-200", "text-left");
+    } else {
+        if (data.underline !== 1 && openTimestamp < data.timestamp) {
+            callNotification();
+        }
+        messageDiv.classList.add("bg-gray-200", "text-left");
+    }
+
+    if (data.underline) { // 출입 알림
+        if (!isMine) {
+            renderEnterOrExit(data.msg);
+        }
+    } else { // 메세지 생성
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const matches = data.msg.match(urlRegex);
+
+        if (data.msg.trim().startsWith('https://chickchick.shop/image/images/')) {
+            const fileUrl = '';
+
+            const img = document.createElement('img');
+            img.src = data.msg;
+            // img.className = 'w-40 h-40 object-cover rounded'; // Tailwind 예시
+            img.alt = 'Uploaded Image';
+            img.style.width = '100%';
+            img.style.height = 'auto'; // 비율 유지 (이미지가 찌그러지지 않게)
+            img.onerror = () => {
+                img.onerror = null; img.src = '/static/no-image.png';
+                img.style.width = '200px';
+            };
+            messageDiv.appendChild(img);
+            messageDiv.classList.remove('p-2');
+            messageDiv.classList.add('border');
+        } else {
+            const messageSpan = document.createElement("span");
+            const safeText = data.msg.replace(/ /g, "&nbsp;");
+            messageSpan.innerHTML = safeText;
+            messageDiv.appendChild(messageSpan);
+            if (matches) {
+                fetch('/func/api/url-preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: matches[0] })
+                })
+                    .then(res => res.json())
+                    .then(preview => {
+                        if (preview) {
+                            const previewEl = renderPreviewCard(preview, isMine);
+                            messageDiv.innerHTML = '';
+                            messageDiv.appendChild(previewEl);
+                            messageDiv.classList.remove('p-2');
+                            // messageDiv.classList.remove('bg-gray-200')
+                            // messageDiv.classList.remove('bg-blue-200')
+                        }
+                    });
+            }
+        }
+
+        // 시간 계산
+        const hour = data.timestamp.slice(6, 8);
+        const minute = data.timestamp.slice(8, 10);
+        const timeStr = `${hour}:${minute}`; // 14:33 형식
+
+        const yy = data.timestamp.slice(0, 2);
+        const mm = data.timestamp.slice(2, 4);
+        const dd = data.timestamp.slice(4, 6);
+        const dateStr = `20${yy}.${mm}.${dd}`; // 25.04.12 형식
+
+        renderDateDivider(chatState, dateStr)
+
+        if (load) {
+            // 저장된 메세지 렌더링
+            chatContainer.prepend(messageRow);
+        } else {
+            // 새로운 메세지 렌더링
+            chatContainer.appendChild(messageRow);
+            // console.log('check', scrollHeight - scrollTop )
+            if (isScrollAtTheBottom()) {
+                moveBottonScroll();
+            }
+        }
+
+        // 정렬 순서: 시간 → 메시지 또는 메시지 → 시간
+        if (isMine) {
+            messageRow.appendChild(renderTimeDiv(timeStr));
+            const checkIcon = renderCheckIcon();
+            if (peerLastReadChatId && Number(peerLastReadChatId) >= Number(data.chatId)) {
+                if (load) {
+                    // checkIcon.style.color = "green";
+                    checkIcon.style.setProperty("color", "green", "important");
+                }
+            }
+            messageRow.appendChild(checkIcon);
+            messageRow.appendChild(messageDiv);
+        } else {
+            messageRow.appendChild(messageDiv);
+            messageRow.appendChild(renderTimeDiv(timeStr));
+        }
+    }
+}
+
+// 스크롤 이동 버튼 클릭 > 최하단
+function moveBottonScroll() {
+    requestAnimationFrame(() => {
+        chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
+    });
+}
 
 
 // 바깥 컨테이너: 메시지 한 줄을 구성
@@ -132,42 +345,72 @@ function renderMessageDiv() {
     return messageDiv;
 }
 
+// 시간 박스
+function renderTimeDiv(timeStr) {
+    const timeDiv = document.createElement("div");
+    timeDiv.textContent = timeStr;
+    timeDiv.style.fontSize = "0.75em";
+    timeDiv.style.color = "#666";
+    timeDiv.style.margin = isMine ? "0 8px 0 0" : "0 0 0 8px";  // 메시지와 간격
+    return timeDiv;
+}
 
-
-// 메세지 추가
-function addMessage(data, load = false) {
-    isMine = data.username === username;
-    isUnderline = data.underline;
-    const now = new Date();
-
-    if (data && !data.timestamp) { // 보낸 메세지는 timestemp가 없어서 만들어 준다. 채팅 로그를 node서버에 일임해야 할까 ?
-        now.setHours(now.getHours() + 9);  // UTC → KST 변환
-        const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
-        data.timestamp = timestamp;
+// 들어옴, 나감 표기 함수
+function renderEnterOrExit(msg) {
+    const divider = createDateDivider('[' + getCurrentTimeStr() + '] ' + msg);
+    chatContainer.appendChild(divider);
+    if (isScrollAtTheBottom()) {
+        moveBottonScroll();
     }
+}
 
-    if (Number(lastChatId) < Number(data.chatId)) { // 로드한 메세지가 아닌 추가된 메세지는 chatId가 없는데 ?
-        lastChatId = data.chatId;
+// 날짜 구분선 추가
+function renderDateDivider(chatState, dateStr) {
+    // 메세지를 불러오다가 lastMessageDate > dateStr => prepend; lastMessageDate 직 후 lastMessageDate = dateStr;
+    // 메세지를 불러오다가 lastMessageDate < dateStr => append; dateStr          직 후 lastMessageDate = dateStr;
+
+    let lastest = null;
+    let previos = null;
+    let otherDate = null;
+
+    if (chatState.latestDate) lastest = Number(chatState.latestDate.replace(/\./g, ''));
+    if (chatState.previousDate) previos = Number(chatState.previousDate.replace(/\./g, ''));
+    if (dateStr) otherDate = Number(dateStr.replace(/\./g, ''));
+
+    // 스크롤 올려서 이전 날짜가 나오면 메세지 렌더링 전에 prepend
+    if (lastest && otherDate && otherDate < previos) {
+        const divider = createDateDivider(chatState.previousDate);
+        chatContainer.prepend(divider);
+        chatState.previousDate = dateStr;
     }
-
-    const messageRow = renderMessageRow(isMine, data.chatId);
-    const messageDiv = renderMessageDiv();
-
-    if (isMine) {
-        messageDiv.classList.add("bg-blue-200", "text-left");
-    } else {
-        messageDiv.classList.add("bg-gray-200", "text-left");
+    // 채팅을 쳤는데 오늘 첫 메세지라면 메세지 렌더링 전에 append
+    if (lastest && otherDate && otherDate > lastest) {
+        const divider = createDateDivider(dateStr);
+        chatContainer.append(divider);
+        chatState.latestDate = dateStr;
     }
+    if (!chatState.latestDate) {
+        chatState.previousDate = dateStr;
+        chatState.latestDate = dateStr;
+    }
+}
 
-    const messageSpan = document.createElement("span");
-    const safeText = data.msg.replace(/ /g, "&nbsp;");
-    messageSpan.innerHTML = safeText;
-    messageDiv.appendChild(messageSpan);
+function createDateDivider(dateStr) {
+    const divider = document.createElement("div");
+    divider.style.display = "flex";
+    divider.style.alignItems = "center";
+    divider.style.textAlign = "center";
+    divider.style.margin = "16px 0";
+    divider.style.color = "#999";
+    divider.style.fontSize = "0.9em";
 
+    divider.innerHTML = `
+        <hr style="flex:1; border:none; border-top:1px solid #ccc;" />
+        <span style="margin: 0 10px;">${dateStr}</span>
+        <hr style="flex:1; border:none; border-top:1px solid #ccc;" />
+    `;
 
-    chatContainer.prepend(messageRow);
-    messageRow.appendChild(messageDiv);
-
+    return divider;
 }
 
 
@@ -175,46 +418,18 @@ function addMessage(data, load = false) {
 function initPage() {
     loadMoreChats();
 
-    chatInput.focus();
+    // 하단으로 스크롤링
+    let attempt = 0;
+    const maxAttempts = 5;
+
+    const intervalId = setInterval(() => {
+        moveBottonScroll();
+
+        attempt++;
+        if (attempt >= maxAttempts) {
+            clearInterval(intervalId);
+        }
+    }, 20);
 }
 
-
 document.addEventListener("DOMContentLoaded", initPage);
-
-
-// let controller = new AbortController();
-//
-// document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textarea => {
-//     const maxLines = Number(textarea.dataset.textareaAutoResize) || 5;
-//     const maxHeight = maxLines * textAreaOffsetHeight;
-//
-//     const resize = () => {
-//         textarea.style.height = '22px';  // ✅ 초기화
-//         // const lineCount = textarea.value.split('\n').length;
-//         // const newHeight = Math.min(lineCount * textAreaOffsetHeight, maxHeight);
-//
-//         const scrollHeight = textarea.scrollHeight - 10; // ✅ 실제 내용 높이
-//         const newHeight = Math.min(scrollHeight, maxHeight);
-//
-//         textarea.style.height = `${newHeight}px`;
-//     };
-//
-//     textarea.addEventListener('input', resize, { signal: controller.signal });
-//
-//     // 초기 설정
-//     resize();
-// });
-//
-
-const textarea = document.getElementById('chat-input');
-
-textarea.addEventListener('touchmove', function (e) {
-    const scrollTop = textarea.scrollTop;
-    const scrollHeight = textarea.scrollHeight;
-    const offsetHeight = textarea.offsetHeight;
-
-    if (scrollHeight > offsetHeight) {
-        // 내부에 스크롤이 생길 수 있는 상황
-        e.stopPropagation(); // 부모 스크롤로 넘기지 않음
-    }
-}, { passive: true });
