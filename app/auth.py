@@ -141,7 +141,8 @@ def logout():
     session[SECOND_PASSWORD_SESSION_KEY] = False
     session.clear()
     logout_user()
-    return redirect(url_for('auth.login'))
+    # return redirect(url_for('auth.login'))
+    return login()
 
 @auth.route("/verify-password", methods=["GET", "POST"])
 @login_required

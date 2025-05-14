@@ -1,41 +1,76 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends "base.html" %}
+
+{% block head %}
+    {{ super() }}
     <title>Login</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
-</head>
-<body>
-    <form method="POST" action="/auth/login">
-        <div>
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required>
-        </div>
-        <div>
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
-        </div>
-        {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <ul id="error-messages">
-            {% for message in messages %}
-                <li>{{ message }}</li>
-            {% endfor %}
-            </ul>
-        {% endif %}
-        {% endwith %}
-        <button type="submit" class="btn-w100">Login</button>
-    </form>
-    <script>
-        document.querySelectorAll('input').forEach(input => {
-            input.addEventListener('input', () => {
-                if (document.getElementById('error-messages')) {
-                    document.getElementById('error-messages').innerHTML = '';
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="/auth/login">
+    {# <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> #}
+    <!--    <form onsubmit="event.preventDefault(); login();">-->
+    <div>
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+    </div>
+    <div>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+    </div>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <ul id="error-messages">
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+    <button type="submit" class="btn-w100">Login</button>
+</form>
+<script>
+    document.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', () => {
+            if (document.getElementById('error-messages')) {
+                document.getElementById('error-messages').innerHTML = '';
+            }
+        });
+    });
+
+    async function login() {
+        try {
+            const response = await axios.post("/auth/api/token", {
+                username: document.getElementById("username").value,
+                password: document.getElementById("password").value
+            }, {
+                headers: {
+                    "Content-Type": "application/json",
                 }
             });
-        });
-    </script>
-</body>
-</html>
+
+            const token = response.data.access_token;
+
+            localStorage.setItem("access_token", token);
+
+            axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+            await axios.post("/auth/login", {
+                username: document.getElementById("username").value,
+                password: document.getElementById("password").value
+            }, {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                }
+            }).then(res => {
+                if (res.request.responseURL) {
+                    window.location.href = res.request.responseURL;
+                }
+            })
+        } catch (error) {
+            console.error("❌ 로그인 실패:", error.response?.data || error.message);
+        }
+    }
+</script>
+{% endblock %}
