@@ -105,8 +105,12 @@ socket.on('offer', async (offer) => {
     socket.emit('answer', answer, roomName);
 });
 
-socket.on('answer', (answer) => {
-    myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
+socket.on('answer', async (answer) => {
+    if (myPeerConnection.signalingState === "stable") {
+        await myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
+    } else {
+        console.warn("❗ 시그널링 상태가 stable이 아니므로 대기 또는 무시:", myPeerConnection.signalingState);
+    }
 });
 
 socket.on('ice', (ice) => {
@@ -220,6 +224,11 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
         myStream = null;
     }
 
+    /*const devices = await navigator.mediaDevices.enumerateDevices();
+    devices.filter(d => d.kind === "videoinput").forEach(d => {
+        console.log("🎥 카메라:", d.label, d.deviceId);
+    });*/
+
     let constraints = {
         audio: audioDeviceId ? { deviceId: { exact: audioDeviceId }} : true,
         video: { facingMode: currentFacingMode }
@@ -234,7 +243,7 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
         if (audioTrack && audioTrack.getSettings) {
             const settings = audioTrack.getSettings();
             currentMicrophoneDeviceId = settings.deviceId || null;
-            console.log("🎤 현재 마이크 deviceId 저장:", currentMicrophoneDeviceId);
+            // console.log("🎤 현재 마이크 deviceId 저장:", currentMicrophoneDeviceId);
         }
 
         if (myPeerConnection) {
@@ -248,11 +257,6 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
         }
 
         myFace.srcObject = myStream;
-
-        if (!audioDeviceId) {
-            // await getAudios(); // 오디오 목록 갱신
-            await getMicrophones();
-        }
 
         // 처음 연결 시 마이크 off
         if (!switchCamera) {
@@ -280,6 +284,27 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
         alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
     }
 }
+
+async function updatePeerConnection() {
+    if (myPeerConnection) {
+        // 오디오 트랙 교체
+        const audioTrack = myStream?.getAudioTracks()[0];
+        const audioSender = myPeerConnection.getSenders()
+            .find(sender => sender.track?.kind === "audio");
+        if (audioSender && audioTrack) {
+            await audioSender.replaceTrack(audioTrack);
+        }
+
+        // 비디오 트랙 교체
+        const videoTrack = myStream?.getVideoTracks()[0];
+        const videoSender = myPeerConnection.getSenders()
+            .find(sender => sender.track?.kind === "video");
+        if (videoSender && videoTrack) {
+            await videoSender.replaceTrack(videoTrack);
+        }
+    }
+}
+
 
 /**
  * WebRTC 연결을 설정
@@ -350,7 +375,7 @@ function handleTrack(event) {
 
         // 오디오 트랙이 있다면 canvasStream에 추가
         stream.getAudioTracks().forEach(track => {
-            console.log('enabled:', track.enabled, 'muted:', track.muted);
+            // console.log('enabled:', track.enabled, 'muted:', track.muted);
             console.log('audioTrack', track)
             canvasStream.addTrack(track);
         });
@@ -497,7 +522,7 @@ peerAudioBtn.addEventListener('click', handlePeerAudio); // 상대 오디오 on/
 captureBtn.addEventListener('click', captureAndUpload); // 캡쳐
 recordBtn.addEventListener('click', recordPeerStream); // 녹화
 
-audioSelect?.addEventListener('change', handleAudioChange); // 내 오디오 전환 (사용안함 - 모바일에서는 마이크랑 같이 묶여 있음)
+// audioSelect?.addEventListener('change', handleAudioChange); // 내 오디오 전환 (사용안함 - 모바일에서는 마이크랑 같이 묶여 있음)
 microphoneSelect?.addEventListener('change', handleMicrophoneChange); // 내 마이크 전환
 swichCameraBtn.addEventListener("click", handleCameraChange); // 내 카메라 전환
 
@@ -634,6 +659,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     await getMedia(); // myStream 초기화
     makeConnection();
     socket.emit('join_room', roomName, username);
+
+    // console.log('sender', myPeerConnection.getSenders())
+    // await getAudios(); // 오디오 목록 갱신
+    getMicrophones();
 })
 
 window.addEventListener("beforeunload", () => {
