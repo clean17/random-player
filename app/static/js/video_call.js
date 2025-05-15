@@ -26,14 +26,6 @@
  * 이걸 상대방에게 보내서 서로 연결되는지 테스트하는 절차
  */
 
-const socket = io("https://chickchick.shop:3000", {
-    secure: true, // HTTPS 사용
-    transports: ["polling", "websocket"],
-    // reconnection: true,              // 자동 재연결 활성화
-    // reconnectionAttempts: 20,        // 최대 재시도 횟수
-    // reconnectionDelay: 1000,         // 1초 간격
-});
-
 const myFace = document.getElementById('myFace');
 const peerFace = document.getElementById("peerFace");
 const recordCanvas = document.getElementById('recordCanvas');
@@ -49,10 +41,10 @@ const captureBtn = document.getElementById('capture');
 const recordBtn = document.getElementById('record');
 const recordIcon = recordBtn.querySelector('i');
 const roomName = 'nh';
+const opacitySlider = document.getElementById('opacitySlider');
 
 let myStream;
 let muted = false;
-let cameraOff = false;
 let myPeerConnection;
 let myDataChannel;
 let peerLeftTimeout;
@@ -66,14 +58,112 @@ let currentFacingMode = "user"; // 기본은 전면 카메라 (user)
 let currentMicrophoneDeviceId = null;
 let globalRecoder = null;
 
-// 캔버스에 그려서 녹화
-function startDrawingLoop(video, width, height) {
-    function loop() {
-        recordCtx.drawImage(video, 0, 0, width, height);
-        requestAnimationFrame(loop);
+
+///////////////////////// Socket Code /////////////////////////////////////
+
+const socket = io("https://chickchick.shop:3000", {
+    secure: true, // HTTPS 사용
+    transports: ["websocket", "polling"],
+    reconnection: true,              // 자동 재연결 활성화
+    reconnectionAttempts: 20,        // 최대 재시도 횟수
+    reconnectionDelay: 1000,         // 1초 간격
+});
+
+// 내가 들어가면 다른 참가자들이 'welcome' 이벤트를 받는다
+socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer를 생성 및 제안
+    if (peerLeftTimeout) {
+        clearTimeout(peerLeftTimeout); // 타이머 취소
+        peerLeftTimeout = null;
     }
-    loop();
+    if (!myPeerConnection) {
+        await makeConnection();
+    }
+    myDataChannel = myPeerConnection.createDataChannel('video/audio');
+    myDataChannel.addEventListener('message', console.log); // message 이벤트 - send에 반응
+    console.log('dataChannel 생성됨');
+    const offer = await myPeerConnection.createOffer();
+    myPeerConnection.setLocalDescription(offer); // 각자의 offer로 SDP(Session Description Protocol) 설정
+    socket.emit('offer', offer, roomName); // 만들어진 offer를 전송
+});
+
+socket.on('offer', async (offer) => {
+    myPeerConnection.addEventListener('datachannel', event => { // datachannel 감지
+        myDataChannel = event.channel;
+        myDataChannel.addEventListener('message', console.log);
+    });
+    /**
+     * WebRTC는 브라우저끼리 직접 연결을 하기 때문에
+     * 브라우저 A가 "나는 이런 정보로 연결할 준비됐어"라고 알려줘야
+     * 브라우저 B가 그에 맞춰 연결 정보를 세팅할 수 있다
+     * 'offer-answer' SDP 핸드셰이크
+     * 각 offer 마다 세션을 생성 -> 새로운 Web RTC 연결을 초기화
+     * 세션 업데이트 : 원격 peer의 새로운 offer 정보로 업데이트
+     */
+    myPeerConnection.setRemoteDescription(offer);
+    const answer = await myPeerConnection.createAnswer(); // offer를 받고 answer를 생성해 SDP 설정
+    myPeerConnection.setLocalDescription(answer); // 각자의 peer는 local, remote를 설정
+    socket.emit('answer', answer, roomName);
+});
+
+socket.on('answer', (answer) => {
+    myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
+});
+
+socket.on('ice', (ice) => {
+    console.log("상대방과 연결되었습니다.");
+    myPeerConnection.addIceCandidate(ice); // ICE(Interactive Connectivity Establishment); 서로 연결되는 경로를 찾아냄; 상대방의 후보 경로를 추가해서 연결을 시도
+});
+
+socket.on("peer_left", () => {
+    // 비디오 정리만 하고 연결은 유지
+    peerFace.srcObject = null;
+    console.log("상대방이 나갔습니다");
+
+    peerLeftTimeout = setTimeout(() => {
+        console.log("10초 지남, 연결 닫음");
+        myPeerConnection?.close();
+        myPeerConnection = null;
+    }, 10000); // 10초 대기
+});
+
+socket.on("force_disconnect", () => {
+    console.log("⚠️ 다른 기기에서 로그인되어 연결 종료됨");
+
+    // 연결 정리
+    if (myPeerConnection) {
+        myPeerConnection.close();
+        myPeerConnection = null;
+    }
+
+    if (myDataChannel) {
+        myDataChannel.close();
+        myDataChannel = null;
+    }
+
+    socket.disconnect(); // 소켓도 끊기
+    window.location.href = '/';
+
+    // 부모에게 전송
+    window.parent.postMessage("force-close", "*");
+});
+
+
+////////////////////////////// Util Function ////////////////////////////
+
+function getNowTimestamp() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    return `${yyyy}-${mm}-${dd}_${hh}${mi}${ss}`;
 }
+
+
+//////////////////////////////// Web RTC ///////////////////////////////////
 
 // 연결된 카메라 리스트 출력
 async function getCameras() {
@@ -138,7 +228,7 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
     try {
         myStream = await navigator.mediaDevices.getUserMedia(constraints);
         // console.log("myStream 연결 완료: ", myStream);
-        console.log("myStream 연결 완료");
+        // console.log("myStream 연결 완료");
         // 🔥 myStream에서 audio track의 deviceId 다시 저장
         const audioTrack = myStream.getAudioTracks()[0];
         if (audioTrack && audioTrack.getSettings) {
@@ -189,6 +279,103 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
         console.error("🎥 getMedia 에러:", err);
         alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
     }
+}
+
+/**
+ * WebRTC 연결을 설정
+ * 내 스트림(영상/음성)을 상대방에게 전송할 준비를 마친다
+ */
+async function makeConnection() { // 연결을 만든다.
+    myPeerConnection = new RTCPeerConnection({
+        iceServers: [ // STUN; 내 외부 IP를 알려주는 서버 (ICE 후보 생성을 도와줌)
+            {
+                urls: [
+                    'stun:stun.l.google.com:19302',
+                    'stun:stun1.l.google.com:19302',
+                    'stun:stun2.l.google.com:19302',
+                    'stun:stun3.l.google.com:19302'
+                ]
+            }
+            /*{
+                urls: "turn:your.turn.server:3478",
+                username: "user",
+                credential: "pass"
+            }*/
+        ]
+    });
+    // icecandidate; 연결 가능한 네트워크 경로(ICE candidate; IP + 포트)가 발견되면 발생하는 이벤트
+    myPeerConnection.addEventListener('icecandidate', handleIce); // 두 Peer사이의 가능한 모든 경로를 수집하고 다른 Peer에 전송
+    // myPeerConnection.addEventListener('addstream', handleAddStream);
+    myPeerConnection.addEventListener('track', handleTrack);
+
+    // 내 카메라/마이크 스트림을 WebRTC 연결에 추가
+    if (myStream) {
+        myStream.getTracks().forEach(track => {
+            myPeerConnection.addTrack(track, myStream); // 각각의 track(영상/음성)을 상대방에게 전송하도록 연결
+        });
+    }
+};
+
+function handleIce(data) {
+    socket.emit('ice', data.candidate, roomName); // data.candidate 안에는 이 브라우저가 사용할 수 있는 연결 정보가 들어 있음
+}
+
+/*function handleAddStream(data) {
+    const peerFace = document.getElementById('peerFace');
+    peerFace.srcObject = data.stream;
+}*/
+
+function handleTrack(event) {
+    const [stream] = event.streams;
+    peerFace.srcObject = stream;
+
+    peerFace.onloadedmetadata = () => {
+        recordCanvas.width = peerFace.videoWidth || 1280;
+        recordCanvas.height = peerFace.videoHeight || 720;
+        startDrawingLoop(peerFace, peerFace.videoWidth, peerFace.videoHeight);
+
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        const originalFps = settings.frameRate || 30;
+        const canvasStream = recordCanvas.captureStream(originalFps);
+
+        /*myPeerConnection.ontrack = (event) => {
+            const track = event.track;
+            const stream = event.streams[0];
+
+            if (track.kind === 'audio') {
+                console.log('🎤 Audio track received:', track);
+            }
+        };*/
+
+        // 오디오 트랙이 있다면 canvasStream에 추가
+        stream.getAudioTracks().forEach(track => {
+            console.log('enabled:', track.enabled, 'muted:', track.muted);
+            console.log('audioTrack', track)
+            canvasStream.addTrack(track);
+        });
+
+        //✅ 대안: MediaStreamAudioDestinationNode를 사용해 오디오 수동 믹싱
+        /*
+        const audioContext = new AudioContext();
+        const dest = audioContext.createMediaStreamDestination();
+
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(dest); // 상대 음성
+
+        // canvas stream과 믹스
+        const canvasStream = recordCanvas.captureStream(originalFps);
+        dest.stream.getAudioTracks().forEach(track => {
+            canvasStream.addTrack(track);
+        });
+        */
+
+        globalRecoder = new BufferedRecorder(canvasStream, {
+            chunkDuration: 5,
+            bufferDuration: 30
+        });
+        globalRecoder.start();
+    };
 }
 
 /////////////////////////// Button Event ////////////////////////////
@@ -300,183 +487,19 @@ function recordPeerStream() {
         recordIcon.className = 'fas fa-circle-dot';
     }, 500);
 
-    globalRecoder.uploadBufferedBlob('/upload', 'video-call').then(() => {
-
-    });
+    globalRecoder.uploadBufferedBlob('/upload', 'video-call').then(() => {});
 }
 
-muteBtn.addEventListener('click', handleMuteClick);
-cameraBtn.addEventListener('click', handleCameraClick);
-peerAudioBtn.addEventListener('click', handlePeerAudio);
-audioSelect?.addEventListener('change', handleAudioChange);
-microphoneSelect?.addEventListener('change', handleMicrophoneChange);
-swichCameraBtn.addEventListener("click", handleCameraChange);
-captureBtn.addEventListener('click', captureAndUpload);
-recordBtn.addEventListener('click', recordPeerStream);
+muteBtn.addEventListener('click', handleMuteClick); // 내 마이크 on/off
+cameraBtn.addEventListener('click', handleCameraClick); // 내 카메라 on/off
+peerAudioBtn.addEventListener('click', handlePeerAudio); // 상대 오디오 on/off
 
-///////////////////////// Socket Code /////////////////////////////////////
+captureBtn.addEventListener('click', captureAndUpload); // 캡쳐
+recordBtn.addEventListener('click', recordPeerStream); // 녹화
 
-// 내가 들어가면 다른 참가자들이 'welcome' 이벤트를 받는다
-socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer를 생성 및 제안
-    if (peerLeftTimeout) {
-        clearTimeout(peerLeftTimeout); // 타이머 취소
-        peerLeftTimeout = null;
-    }
-    if (!myPeerConnection) {
-        await makeConnection();
-    }
-    myDataChannel = myPeerConnection.createDataChannel('video/audio');
-    myDataChannel.addEventListener('message', console.log); // message 이벤트 - send에 반응
-    console.log('dataChannel 생성됨');
-    const offer = await myPeerConnection.createOffer();
-    myPeerConnection.setLocalDescription(offer); // 각자의 offer로 SDP(Session Description Protocol) 설정
-    socket.emit('offer', offer, roomName); // 만들어진 offer를 전송
-});
-
-socket.on('offer', async (offer) => {
-    myPeerConnection.addEventListener('datachannel', event => { // datachannel 감지
-        myDataChannel = event.channel;
-        myDataChannel.addEventListener('message', console.log);
-    });
-    /**
-     * WebRTC는 브라우저끼리 직접 연결을 하기 때문에
-     * 브라우저 A가 "나는 이런 정보로 연결할 준비됐어"라고 알려줘야
-     * 브라우저 B가 그에 맞춰 연결 정보를 세팅할 수 있다
-     * 'offer-answer' SDP 핸드셰이크
-     * 각 offer 마다 세션을 생성 -> 새로운 Web RTC 연결을 초기화
-     * 세션 업데이트 : 원격 peer의 새로운 offer 정보로 업데이트
-     */
-    myPeerConnection.setRemoteDescription(offer);
-    const answer = await myPeerConnection.createAnswer(); // offer를 받고 answer를 생성해 SDP 설정
-    myPeerConnection.setLocalDescription(answer); // 각자의 peer는 local, remote를 설정
-    socket.emit('answer', answer, roomName);
-});
-
-socket.on('answer', (answer) => {
-    myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
-});
-
-socket.on('ice', (ice) => {
-    console.log("상대방과 연결되었습니다.");
-    myPeerConnection.addIceCandidate(ice); // ICE(Interactive Connectivity Establishment); 서로 연결되는 경로를 찾아냄; 상대방의 후보 경로를 추가해서 연결을 시도
-});
-
-socket.on("peer_left", () => {
-    // 비디오 정리만 하고 연결은 유지
-    peerFace.srcObject = null;
-    console.log("상대방이 나갔습니다");
-
-    peerLeftTimeout = setTimeout(() => {
-        console.log("10초 지남, 연결 닫음");
-        myPeerConnection?.close();
-        myPeerConnection = null;
-    }, 10000); // 10초 대기
-});
-
-socket.on("force_disconnect", () => {
-    console.log("⚠️ 다른 기기에서 로그인되어 연결 종료됨");
-
-    // 연결 정리
-    if (myPeerConnection) {
-        myPeerConnection.close();
-        myPeerConnection = null;
-    }
-
-    if (myDataChannel) {
-        myDataChannel.close();
-        myDataChannel = null;
-    }
-
-    socket.disconnect(); // 소켓도 끊기
-    window.location.href = '/';
-
-    // 부모에게 전송
-    window.parent.postMessage("force-close", "*");
-});
-////////////////////////// RTC Code /////////////////////////////////////
-
-/**
- * WebRTC 연결을 설정
- * 내 스트림(영상/음성)을 상대방에게 전송할 준비를 마친다
- */
-async function makeConnection() { // 연결을 만든다.
-    myPeerConnection = new RTCPeerConnection({
-        iceServers: [ // STUN; 내 외부 IP를 알려주는 서버 (ICE 후보 생성을 도와줌)
-            {
-                urls: [
-                    'stun:stun.l.google.com:19302',
-                    'stun:stun1.l.google.com:19302',
-                    'stun:stun2.l.google.com:19302',
-                    'stun:stun3.l.google.com:19302'
-                ]
-            }
-            /*{
-                urls: "turn:your.turn.server:3478",
-                username: "user",
-                credential: "pass"
-            }*/
-        ]
-    });
-    // icecandidate; 연결 가능한 네트워크 경로(ICE candidate; IP + 포트)가 발견되면 발생하는 이벤트
-    myPeerConnection.addEventListener('icecandidate', handleIce); // 두 Peer사이의 가능한 모든 경로를 수집하고 다른 Peer에 전송
-    // myPeerConnection.addEventListener('addstream', handleAddStream);
-    myPeerConnection.addEventListener('track', handleTrack);
-
-    // 내 카메라/마이크 스트림을 WebRTC 연결에 추가
-    myStream.getTracks().forEach(track => {
-        myPeerConnection.addTrack(track, myStream); // 각각의 track(영상/음성)을 상대방에게 전송하도록 연결
-    });
-};
-
-function handleIce(data) {
-    socket.emit('ice', data.candidate, roomName); // data.candidate 안에는 이 브라우저가 사용할 수 있는 연결 정보가 들어 있음
-}
-
-/*function handleAddStream(data) {
-    const peerFace = document.getElementById('peerFace');
-    peerFace.srcObject = data.stream;
-}*/
-
-function handleTrack(event) {
-    const [stream] = event.streams;
-    peerFace.srcObject = stream;
-
-    peerFace.onloadedmetadata = () => {
-        recordCanvas.width = peerFace.videoWidth || 1280;
-        recordCanvas.height = peerFace.videoHeight || 720;
-        startDrawingLoop(peerFace, peerFace.videoWidth, peerFace.videoHeight);
-
-        const videoTrack = stream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-        const originalFps = settings.frameRate || 30;
-        const canvasStream = recordCanvas.captureStream(originalFps);
-
-        // 오디오 트랙이 있다면 canvasStream에 추가
-        stream.getAudioTracks().forEach(track => {
-            console.log('audioTrack', track)
-            canvasStream.addTrack(track);
-        });
-
-        globalRecoder = new BufferedRecorder(canvasStream, {
-            chunkDuration: 5,
-            bufferDuration: 30
-        });
-        globalRecoder.start();
-    };
-}
-
-
-/////////////////////////// Choose a room ///////////////////////////////
-async function handleWelcomeSubmit(event) {
-    await getMedia(); // myStream 초기화
-    makeConnection();
-    socket.emit('join_room', roomName, username);
-}
-
-window.addEventListener("beforeunload", () => {
-    socket.emit("leave_room", roomName, username); // 서버에 방 나간다고 알림
-    if (globalRecoder) globalRecoder.stop();
-});
+audioSelect?.addEventListener('change', handleAudioChange); // 내 오디오 전환 (사용안함 - 모바일에서는 마이크랑 같이 묶여 있음)
+microphoneSelect?.addEventListener('change', handleMicrophoneChange); // 내 마이크 전환
+swichCameraBtn.addEventListener("click", handleCameraChange); // 내 카메라 전환
 
 
 /////////////////////////// Drag Event //////////////////////////////////
@@ -541,18 +564,16 @@ myFace.addEventListener("touchstart", startDrag, { passive: false });
 document.addEventListener("touchmove", onDrag, { passive: false });
 document.addEventListener("touchend", endDrag);
 
+
 /////////////////////////////// SAVE SCREENSHOT /////////////////////////////////
 
-function getNowTimestamp() {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mi = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-
-    return `screenshot_${yyyy}-${mm}-${dd}_${hh}${mi}${ss}.png`;
+// 캔버스에 그려서 녹화
+function startDrawingLoop(video, width, height) {
+    function loop() {
+        recordCtx.drawImage(video, 0, 0, width, height);
+        requestAnimationFrame(loop);
+    }
+    loop();
 }
 
 function showFlashEffect() {
@@ -575,7 +596,7 @@ function captureAndUpload() {
 
     canvas.toBlob(blob => {
         const formData = new FormData();
-        formData.append('files[]', blob, getNowTimestamp());
+        formData.append('files[]', blob, `screenshot_`+getNowTimestamp()+`.png`);
         formData.append('title', 'video-call');
 
         fetch('/upload', {
@@ -600,7 +621,7 @@ function setVideoCallButtonsOpacity(opacity) {
     autdioSelectDiv.style.opacity = opacity;
 }
 
-document.getElementById('opacitySlider').addEventListener('input', (e) => {
+opacitySlider.addEventListener('input', (e) => {
     const opacity = e.target.value;
     setVideoCallButtonsOpacity(opacity)
 });
@@ -608,7 +629,14 @@ document.getElementById('opacitySlider').addEventListener('input', (e) => {
 
 
 
-document.addEventListener("DOMContentLoaded", () => {
-    handleWelcomeSubmit();
+document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
+    await getMedia(); // myStream 초기화
+    makeConnection();
+    socket.emit('join_room', roomName, username);
 })
+
+window.addEventListener("beforeunload", () => {
+    socket.emit("leave_room", roomName, username); // 서버에 방 나간다고 알림
+    if (globalRecoder) globalRecoder.stop();
+});
