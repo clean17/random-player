@@ -77,6 +77,12 @@ function openVideoCallWindow() {
 
     document.body.appendChild(videoCallWindow);
 
+    window.addEventListener("message", (event) => {
+        if (event.data === "force-close") {
+            videoCallWindow.remove();
+        }
+    });
+
     // closeBtn.click();
     // 소켓으로 컨트롤 해야할지도
 }

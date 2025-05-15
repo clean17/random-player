@@ -104,7 +104,7 @@ async function getAudios() {
         })
     } catch (err) {
         console.log(err);
-        alert('오류발생 12 : '+ err)
+        alert('오류발생 : '+ err)
     }
 }
 
@@ -123,28 +123,17 @@ async function getMicrophones() {
     });
 }
 
-async function getMedia(deviceId = null, switchCamera = false) {
+async function getMedia(audioDeviceId = null, switchCamera = false) {
     // 기존 스트림 종료
     if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
         myStream = null;
     }
 
-    // Constraints 설정
-    let constraints;
-    if (deviceId) {
-        constraints = {
-            audio: {
-                deviceId: { exact: deviceId }
-            },
-            video: { facingMode: currentFacingMode }
-        };
-    } else {
-        constraints = {
-            audio: true,
-            video: { facingMode: currentFacingMode }
-        };
-    }
+    let constraints = {
+        audio: audioDeviceId ? { deviceId: { exact: audioDeviceId }} : true,
+        video: { facingMode: currentFacingMode }
+    };
 
     try {
         myStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -170,7 +159,7 @@ async function getMedia(deviceId = null, switchCamera = false) {
 
         myFace.srcObject = myStream;
 
-        if (!deviceId) {
+        if (!audioDeviceId) {
             // await getAudios(); // 오디오 목록 갱신
             await getMicrophones();
         }
@@ -400,6 +389,9 @@ socket.on("force_disconnect", () => {
 
     socket.disconnect(); // 소켓도 끊기
     window.location.href = '/';
+
+    // 부모에게 전송
+    window.parent.postMessage("force-close", "*");
 });
 ////////////////////////// RTC Code /////////////////////////////////////
 
@@ -446,7 +438,6 @@ function handleIce(data) {
 }*/
 
 function handleTrack(event) {
-    const peerFace = document.getElementById('peerFace');
     const [stream] = event.streams;
     peerFace.srcObject = stream;
 
@@ -484,7 +475,7 @@ async function handleWelcomeSubmit(event) {
 
 window.addEventListener("beforeunload", () => {
     socket.emit("leave_room", roomName, username); // 서버에 방 나간다고 알림
-    globalRecoder.stop();
+    if (globalRecoder) globalRecoder.stop();
 });
 
 
