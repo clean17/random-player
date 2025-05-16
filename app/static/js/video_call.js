@@ -217,6 +217,7 @@ async function getMicrophones() {
     const microphones = devices.filter(device => device.kind === "audioinput");
     // console.log(microphones)
     microphoneSelect.innerHTML = ""; // 초기화
+    initMicrophoneDeviceId = microphones[0].deviceId;
 
     microphones.forEach(device => {
         const option = document.createElement("option");
@@ -226,7 +227,7 @@ async function getMicrophones() {
     });
 }
 
-async function getMedia(audioDeviceId = null, switchCamera = false) {
+async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = false) {
     // 기존 스트림 종료
     if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
@@ -239,8 +240,8 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
     });*/
 
     let constraints = {
-        audio: audioDeviceId ? { deviceId: { exact: audioDeviceId }} : true,
-        video: { facingMode: currentFacingMode }
+        audio: audioDeviceId ? { deviceId: { exact: audioDeviceId }} : false, // 모바일은 오디오 입출력 장치를 하나로 묶어서 관리한다 > 이어폰에서 폰으로 마이크를 변경하면 스피커도 묶여서 변경된다
+        video: keepVideo ? { facingMode: currentFacingMode } : false
     };
 
     try {
@@ -255,13 +256,22 @@ async function getMedia(audioDeviceId = null, switchCamera = false) {
             // console.log("🎤 현재 마이크 deviceId 저장:", currentMicrophoneDeviceId);
         }
 
-        if (myPeerConnection) {
+        if (myPeerConnection && audioDeviceId) {
             const audioSender = myPeerConnection.getSenders()
-                .find(sender => sender.track && sender.track.kind === "audio");
+                .find(sender => sender.track?.kind === "audio");
 
             if (audioSender && audioTrack) {
                 await audioSender.replaceTrack(audioTrack);
                 console.log("🎤 (카메라 전환) 오디오 트랙 교체 완료!");
+            }
+        }
+
+        if (myPeerConnection && keepVideo) {
+            const videoTrack = myStream?.getVideoTracks()[0]; // ✅ 새 비디오 트랙 가져오기
+            const videoSender = myPeerConnection.getSenders()
+                .find(sender => sender.track && sender.track.kind === "video");
+            if (videoSender && videoTrack) {
+                await videoSender.replaceTrack(videoTrack); // ✅ 새 비디오 트랙 교체
             }
         }
 
@@ -445,8 +455,8 @@ function handlePeerAudio() {
 async function handleCameraChange() {
     currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
 
-    await getMedia(currentMicrophoneDeviceId, true); // facingMode 바꿔서 새 스트림 가져옴
-    if (myPeerConnection) {
+    await getMedia(null); // 카메라 변경
+    /*if (myPeerConnection) {
         const videoTrack = myStream?.getVideoTracks()[0]; // ✅ 새 비디오 트랙 가져오기
         const videoSender = myPeerConnection.getSenders()
             .find(sender => sender.track && sender.track.kind === "video");
@@ -454,17 +464,17 @@ async function handleCameraChange() {
             await videoSender.replaceTrack(videoTrack); // ✅ 새 비디오 트랙 교체
         }
 
-        /*const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
+        /!*const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
         const audioSender = myPeerConnection.getSenders()
             .find((sender) => sender.track.kind === "audio");
         if (audioSender && audioTrack) {
             await audioSender.replaceTrack(audioTrack); // ✅ 올바르게 오디오 트랙 교체
-        }*/
-    }
+        }*!/
+    }*/
 }
 
 async function handleAudioChange() {
-    await getMedia(audioSelect?.value);
+    await getMedia(audioSelect?.value); // 오디오 변경
     if (myPeerConnection) {
         const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
         const audioSender = myPeerConnection.getSenders()
@@ -665,13 +675,14 @@ opacitySlider.addEventListener('input', (e) => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
-    await getMedia(); // myStream 초기화
+    // await getAudios(); // 오디오 목록 갱신
+    await getMicrophones();
+
+    await getMedia(initMicrophoneDeviceId); // 초기화
     makeConnection();
     socket.emit('join_room', roomName, username);
 
     // console.log('sender', myPeerConnection.getSenders())
-    // await getAudios(); // 오디오 목록 갱신
-    getMicrophones();
 })
 
 window.addEventListener("beforeunload", () => {
