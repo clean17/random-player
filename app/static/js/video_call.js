@@ -33,9 +33,8 @@ const recordCtx = recordCanvas.getContext('2d');
 const muteBtn = document.getElementById('mute');
 const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
-const audioSelect = document.getElementById('audios');
+const audioInputSelect = document.getElementById('audioInputs');
 const autdioSelectDiv = document.querySelector('.audio-select');
-const microphoneSelect = document.getElementById('microphones');
 const swichCameraBtn = document.getElementById('switchCamera');
 const captureBtn = document.getElementById('capture');
 const recordBtn = document.getElementById('record');
@@ -189,21 +188,24 @@ async function getCameras() {
     }
 }
 
-// 연결된 오디오 리스트 option 렌더링
-async function getAudios() {
+// 연결된 오디오 입력 리스트 option 렌더링
+async function getAudioInputs() {
     try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const audios = devices.filter(device => device.kind === 'audiooutput');
-        // console.log(audios)
+        const audioInputs = devices.filter(device => device.kind === "audioinput");
+        // console.log(audioInputs)
+
         const currentAudio = myStream.getAudioTracks()[0];
-        audios.forEach(audio => {
+        audioInputSelect.innerHTML = ""; // 초기화
+
+        audioInputs.forEach(audio => {
             const option = document.createElement('option')
             option.value = audio.deviceId;
             option.innerText = audio.label;
             if (currentAudio.label == audio.label) {
                 option.selected = true;
             }
-            audioSelect?.appendChild(option);
+            audioInputSelect?.appendChild(option);
         })
     } catch (err) {
         console.log(err);
@@ -211,21 +213,6 @@ async function getAudios() {
     }
 }
 
-// 연결된 마이크 목록 렌더링
-async function getMicrophones() {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const microphones = devices.filter(device => device.kind === "audioinput");
-    // console.log(microphones)
-    microphoneSelect.innerHTML = ""; // 초기화
-    initMicrophoneDeviceId = microphones[0].deviceId;
-
-    microphones.forEach(device => {
-        const option = document.createElement("option");
-        option.value = device.deviceId;
-        option.text = device.label || `Microphone ${microphoneSelect.length + 1}`;
-        microphoneSelect.appendChild(option);
-    });
-}
 
 async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = false) {
     // 기존 스트림 종료
@@ -473,54 +460,22 @@ async function handleCameraChange() {
     }*/
 }
 
-async function handleAudioChange() {
-    await getMedia(audioSelect?.value); // 오디오 변경
-    if (myPeerConnection) {
-        const audioTrack  = myStream?.getAudioTracks()[0]; // 변경된 myStream
-        const audioSender = myPeerConnection.getSenders()
-            .find((sender) => sender.track.kind === "audio");
-        if (audioSender && audioTrack) {
-            await audioSender.replaceTrack(audioTrack); // ✅ 올바르게 오디오 트랙 교체
-        }
+async function handleAudioInputChange() {
+    if (myStream) {
+        // myStream.getAudioTracks().forEach(track => track.stop());
     }
-}
 
-async function handleMicrophoneChange() {
-    const selectedDeviceId = microphoneSelect?.value;
-    if (!selectedDeviceId) return;
+    const newAudioStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: audioInputSelect?.value } }, video: false });
+    const newAudioTrack = newAudioStream.getAudioTracks()[0];
 
-    try {
-        // 새로 선택한 마이크로 스트림 얻기
-        const newStream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: { exact: selectedDeviceId } }, // 모바일은 오디오 입출력 장치를 하나로 묶어서 관리한다 > 이어폰에서 폰으로 마이크를 변경하면 스피커도 묶여서 변경된다
-            video: false // 변경하지 않는다
-        });
+    // 기존 스트림에서 교체
+    myStream.getAudioTracks().forEach(t => {
+        myStream.removeTrack(t);
+        t.stop();
+    });
+    myStream.addTrack(newAudioTrack);
 
-        const newAudioTrack = newStream.getAudioTracks()[0];
-        if (!newAudioTrack) {
-            console.warn("🎤 새 마이크 트랙이 없습니다.");
-            return;
-        }
-
-        if (myPeerConnection) {
-            const audioSender = myPeerConnection.getSenders()
-                .find(sender => sender.track && sender.track.kind === "audio");
-
-            if (audioSender) {
-                await audioSender.replaceTrack(newAudioTrack);
-                console.log("🎤 마이크 트랙 교체 완료!");
-            }
-        }
-
-        // 기존 myStream에 새 오디오 트랙만 교체
-        const oldAudioTracks = myStream.getAudioTracks();
-        oldAudioTracks.forEach(track => myStream.removeTrack(track)); // 기존 오디오 제거
-        myStream.addTrack(newAudioTrack); // 새 오디오 추가
-
-    } catch (err) {
-        console.error("🎤 마이크 변경 중 에러:", err);
-        alert("마이크 변경 중 문제가 발생했습니다.");
-    }
+    await updatePeerConnection();
 }
 
 function recordPeerStream() {
@@ -541,8 +496,7 @@ peerAudioBtn.addEventListener('click', handlePeerAudio); // 상대 오디오 on/
 captureBtn.addEventListener('click', captureAndUpload); // 캡쳐
 recordBtn.addEventListener('click', recordPeerStream); // 녹화
 
-// audioSelect?.addEventListener('change', handleAudioChange); // 내 오디오 전환 (사용안함 - 모바일에서는 마이크랑 같이 묶여 있음)
-microphoneSelect?.addEventListener('change', handleMicrophoneChange); // 내 마이크 전환
+audioInputSelect?.addEventListener('change', handleAudioInputChange); // 내 마이크 전환 (모바일에서는 마이크랑 같이 묶여 있음)
 swichCameraBtn.addEventListener("click", handleCameraChange); // 내 카메라 전환
 
 
@@ -675,10 +629,12 @@ opacitySlider.addEventListener('input', (e) => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
-    // await getAudios(); // 오디오 목록 갱신
-    await getMicrophones();
 
-    await getMedia(initMicrophoneDeviceId); // 초기화
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter(device => device.kind === "audioinput");
+
+    await getMedia(audioInputs[0].deviceId); // 초기화
+    updatePeerConnection();
     makeConnection();
     socket.emit('join_room', roomName, username);
 
