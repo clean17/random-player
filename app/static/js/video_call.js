@@ -57,6 +57,7 @@ let offsetY = 0;
 let currentFacingMode = "user"; // 기본은 전면 카메라 (user)
 let currentMicrophoneDeviceId = null;
 let globalRecoder = null;
+let candidateQueue = [];
 
 
 ///////////////////////// Socket Code /////////////////////////////////////
@@ -99,23 +100,20 @@ socket.on('offer', async (offer) => {
      * 각 offer 마다 세션을 생성 -> 새로운 Web RTC 연결을 초기화
      * 세션 업데이트 : 원격 peer의 새로운 offer 정보로 업데이트
      */
-    myPeerConnection.setRemoteDescription(offer);
+    await myPeerConnection.setRemoteDescription(offer);
     const answer = await myPeerConnection.createAnswer(); // offer를 받고 answer를 생성해 SDP 설정
     myPeerConnection.setLocalDescription(answer); // 각자의 peer는 local, remote를 설정
     socket.emit('answer', answer, roomName);
 });
 
 socket.on('answer', async (answer) => {
-    if (myPeerConnection.signalingState === "stable") {
-        await myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
-    } else {
-        console.warn("❗ 시그널링 상태가 stable이 아니므로 대기 또는 무시:", myPeerConnection.signalingState);
-    }
+    await myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
+    candidateQueue.forEach(c => myPeerConnection.addIceCandidate(c));
+    candidateQueue = [];
 });
 
 socket.on('ice', (ice) => {
-    console.log("상대방과 연결되었습니다.");
-    myPeerConnection.addIceCandidate(ice); // ICE(Interactive Connectivity Establishment); 서로 연결되는 경로를 찾아냄; 상대방의 후보 경로를 추가해서 연결을 시도
+    onIceCandidateReceived(ice);  // ICE(Interactive Connectivity Establishment); 서로 연결되는 경로를 찾아냄; 상대방의 후보 경로를 추가해서 연결을 시도
 });
 
 socket.on("peer_left", () => {
@@ -150,6 +148,17 @@ socket.on("force_disconnect", () => {
     // 부모에게 전송
     window.parent.postMessage("force-close", "*");
 });
+
+// ICE 후보가 먼저 도착했을 경우, 큐에 넣고 대기, 시그널링 순서가 뒤죽박죽이어도 오류 없음
+function onIceCandidateReceived(candidate) {
+    // if (remoteDescriptionSet) {
+    if (myPeerConnection.signalingState === "stable" || myPeerConnection.remoteDescription) {
+        myPeerConnection.addIceCandidate(candidate);
+    } else {
+        console.log("ICE 후보 대기열에 보관:", candidate);
+        candidateQueue.push(candidate);
+    }
+}
 
 
 ////////////////////////////// Util Function ////////////////////////////
