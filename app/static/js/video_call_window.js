@@ -47,9 +47,10 @@ function openVideoCallWindow() {
     closeBtn.innerHTML = '<i class="fas fa-times"></i>'; // ❌ 닫기
     closeBtn.style.cursor = "pointer";
     closeBtn.onclick = () => {
-        socket.emit("leave_room", videoCallRoomName, username); // 서버에 방 나간다고 알림
-        document.body.removeChild(videoCallWindow);
-        videoCallWindow = null;
+        if (videoCallWindow) {
+            document.body.removeChild(videoCallWindow);
+            videoCallWindow = null;
+        }
     };
 
     topBar.appendChild(hideBtn);
@@ -79,7 +80,7 @@ function openVideoCallWindow() {
 
     window.addEventListener("message", (event) => {
         if (event.data === "force-close") {
-            videoCallWindow.remove();
+            closeBtn.click();
         }
     });
 
