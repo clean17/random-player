@@ -79,11 +79,11 @@ body, html {
 /* 스크롤 조금 올리면 최하단으로 스크롤되는 버튼 생성 */
 #scroll-button {
     position: fixed;
-    bottom: 80px;
+    bottom: 100px;
     left: 50%;
     transform: translateX(-50%);
-    width: 50px;
-    height: 50px;
+    width: 40px;
+    height: 40px;
     padding: 0;
     color: #000000;
     background: #fff;
@@ -94,7 +94,7 @@ body, html {
     display: none;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     text-align: center; /* 텍스트 중앙 정렬 */
-    line-height: 50px; /* 버튼 높이와 동일하게 설정하여 아이콘 정중앙 */
+    line-height: 40px; /* 버튼 높이와 동일하게 설정하여 아이콘 정중앙 */
     opacity: 0.4;
 }
 
@@ -145,6 +145,7 @@ body, html {
 .link-preview {
     /*margin: 1rem 0;*/
     /*max-width: 500px;*/
+    max-height: 400px;
     border: 1px solid #e1e1e1;
     border-radius: 8px;
     overflow: hidden;
@@ -160,7 +161,7 @@ body, html {
 }
 
 .preview-thumbnail {
-    flex: 0 0 180px;
+    flex: 0 0 65%;
     overflow: hidden;
 }
 
