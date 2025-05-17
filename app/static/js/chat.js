@@ -485,7 +485,7 @@ function addMessage(data, load = false) {
         const matches = data.msg.match(urlRegex);
 
         if (data.msg.trim().startsWith('https://chickchick.shop/image/images/')) {
-            const fileUrl = '';
+            // const fileUrl = '';
 
             const img = document.createElement('img');
             img.src = data.msg;
@@ -525,22 +525,21 @@ function addMessage(data, load = false) {
             }*/
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             const matches = data.msg.match(urlRegex);
-
-            if (matches) {
-                // fetch('/api/url-preview', {
-                //     method: 'POST',
-                //     headers: { 'Content-Type': 'application/json' },
-                //     body: JSON.stringify({ url: matches[0] })
-                // })
-                //     .then(res => res.json())
-                //     .then(preview => {
-                //         if (preview) {
-                //             console.log(preview);
-                //             // renderPreviewCard(preview);
-                //         }
-                //     });
-            }
-
+        } else if (data.msg.trim().startsWith('https://chickchick.shop/video/temp-video/')) {
+            const video = document.createElement('video');
+            video.classList.add('thumbnail');
+            video.controls = true;
+            video.style.height = '500px';
+            const source = document.createElement('source');
+            source.type = 'video/mp4';
+            source.src = data.msg;
+            video.appendChild(source);
+            messageDiv.innerHTML = '';
+            messageDiv.appendChild(video);
+            messageDiv.classList.remove('p-2');
+            messageDiv.classList.remove('bg-gray-200')
+            messageDiv.classList.remove('bg-blue-200')
+            messageDiv.classList.add('border');
         } else {
             const messageSpan = document.createElement("span");
             const safeText = data.msg.replace(/ /g, "&nbsp;");
@@ -783,7 +782,23 @@ function uploadFile(event) {
                 const files = response.files;
 
                 files.forEach(file => {
-                    const url = "https://chickchick.shop/image/images/?filename="+file+"&dir=temp&selected_dir=chat";
+                    // 파일 타입 왜 안나오는거지 ?
+                    // const isImage = file.type.startsWith("image/");
+                    // const isVideo = file.type.startsWith("video/");
+
+                    const ext = file.split('.').pop().toLowerCase();
+
+                    const imageExts = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
+                    const videoExts = ["mp4", "webm", "mov", "ogg", "mkv"];
+
+                    let url = '';
+                    if (imageExts.includes(ext)) {
+                        url = "https://chickchick.shop/image/images/?filename="+file+"&dir=temp&selected_dir=chat";
+                    }
+                    if (videoExts.includes(ext)) {
+                        url = "https://chickchick.shop/video/temp-video/"+file+"?dir=temp&selected_dir=chat";
+                    }
+
                     const msg = url.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
                     if (msg !== "") {
                         socket.emit("new_msg", { chatId: Number(lastChatId)+1, username, msg, room: roomName });
@@ -916,22 +931,6 @@ function renderVideoCallWindow() {
     }
 }
 
-// touchmove 강제 차단
-function blockTouchMoveEvent (e) {
-    /*const isChatContainer = e.target.closest('#chat-container');
-    if (!isChatContainer) {
-        e.preventDefault();  // ❌ chat-container 아닌 경우만 터치 이동 막기
-    }*/
-    const isTextArea = e.target.closest('textarea');
-    const isScrollableContainer = e.target.closest('#chat-container');
-
-    if (isTextArea || isScrollableContainer) {
-        return; // ✅ 내부 스크롤 가능한 요소는 막지 않음
-    }
-
-    e.preventDefault(); // ❌ 외부 영역에서만 터치 이동 막기
-}
-
 // 스크롤 이동 버튼 클릭 > 최하단
 function moveBottonScroll() {
     requestAnimationFrame(() => {
@@ -954,7 +953,6 @@ function handleChatScroll() {
 
     sendReadDataLastChat();
 }
-
 
 
 
@@ -1030,7 +1028,7 @@ function initPage() {
 
     // 하단으로 스크롤링
     let attempt = 0;
-    const maxAttempts = 5;
+    const maxAttempts = 10;
 
     const intervalId = setInterval(() => {
         moveBottonScroll();
