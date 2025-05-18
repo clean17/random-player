@@ -8,6 +8,8 @@ from zipfile import ZipFile
 from utils.make_thumbnail import convert_file
 from utils.webm_to_mp4 import convert_webm_to_mp4
 import uuid
+from mimetypes import guess_type
+
 
 upload = Blueprint('upload', __name__)
 
@@ -67,7 +69,12 @@ def upload_file():
                                 if os.path.isfile(extracted_path):
                                     convert_file(extracted_path)
                                     # saved_files.append(extracted_path)
-                                    saved_files.append(filename)
+                                    mime_type, _ = guess_type(filename)
+                                    file_info ={
+                                        "name": filename,
+                                        "type": mime_type or "application/octet-stream"
+                                    }
+                                    saved_files.append(file_info)
                     except Exception as e:
                         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
                         print(f"### {current_time} - Error while extracting {archive_path}: {e}")
@@ -82,7 +89,12 @@ def upload_file():
                         file.save(file_path)
                         mp4_path = convert_webm_to_mp4(file_path, target_dir)
                         return jsonify({"result": "success", "mp4_file": mp4_path})
-                        saved_files.append(uuid_filename)
+                        mime_type, _ = guess_type(uuid_filename)
+                        file_info ={
+                            "name": uuid_filename,
+                            "type": mime_type or "application/octet-stream"
+                        }
+                        saved_files.append(file_info)
                     except Exception as e:
                         return jsonify({"error": str(e)}), 500
                 else:
@@ -90,7 +102,12 @@ def upload_file():
                     file.save(file_path)
                     convert_file(file_path)
                     # saved_files.append(file_path)
-                    saved_files.append(uuid_filename)
+                    mime_type, _ = guess_type(uuid_filename)
+                    file_info ={
+                        "name": uuid_filename,
+                        "type": mime_type or "application/octet-stream"
+                    }
+                    saved_files.append(file_info)
 
         return jsonify({"status": "success", "files": saved_files})
     except Exception as e:
