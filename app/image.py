@@ -218,7 +218,7 @@ def delete_images():
     return redirect(url_for('image.image_list', page=page, dir='image'))
 
 
-@image_bp.route('/images/')
+@image_bp.route('/images')
 @login_required
 def get_image():
     filename = request.args.get('filename')

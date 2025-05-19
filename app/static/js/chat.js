@@ -22,6 +22,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     scrollTop,    // 현재 스크롤 위치
     isMinimized = false,
     lastChatId = 0,
+    lastReadChatId = 0,
     submitted = false,
     videoCallRoomName = null,
     typingTimeout,
@@ -98,6 +99,31 @@ function extractDomain(url) {
     }
 }
 
+function getFilenameFromUrl(url) {
+    const urlObj = new URL(url);
+    const params = new URLSearchParams(urlObj.search);
+    return params.get('filename');
+}
+
+function showDebugToast(message, duration = 3000) {
+    let container = document.getElementById('debug-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'debug-toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'debug-toast';
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, duration);
+}
+
 /////////////////////////////// Web Socket /////////////////////////////
 
 function connectSocket() {
@@ -129,6 +155,8 @@ function connectSocket() {
         sendNotification(data);
         sendReadDataLastChat();
         updateUserReadChatId();
+
+        if (!isScrollAtTheBottom()) showDebugToast('새로운 메세지 도착');
     });
 
     socket.on("message_read_ack", function (data) {
@@ -138,6 +166,7 @@ function connectSocket() {
     })
 
     socket.on("bye", function(data) {
+        // console.log('현재 접속 중인 유저 목록:', userList);
         addMessage(data);
         updateUserCount(Number(roomUserCount.textContent)-1);
     });
@@ -147,8 +176,9 @@ function connectSocket() {
         addMessage(data);
     });
 
+    // enter_room >> room_user_list
     socket.on("room_user_list", (userList) => {
-        // console.log('현재 접속 중인 유저 목록:', userList);
+        console.log('현재 접속 중인 유저 목록:', userList);
         updateUserCount(userList.length);
         const tempUserList = [];
         userList.forEach(user => {
@@ -274,9 +304,9 @@ document.addEventListener('visibilitychange', () => {
                     alert("⚠️ socket 객체가 정의되지 않음");
                     connectSocket();
                 }
-                socket.emit("enter_room", { username: username, room: roomName });
             })
             .finally(() => {
+                socket.emit("enter_room", { username: username, room: roomName });
                 sendReadDataLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
             });
 
@@ -347,7 +377,12 @@ function isScrollAtTheBottom() {
 
 const readDebounce = debounce(() => {
     socket.emit("message_read", { chatId: lastChatId, room: roomName, username: username });
-    // updateUserReadChatId(); // 스크롤이 아래일 때 상대가 채팅을 치기만 해도 계속 요청을 보낸다
+    if (lastReadChatId !== lastChatId) {
+        debounce(() => {
+            updateUserReadChatId(); // 스크롤이 아래일 때 상대가 채팅을 치기만 해도 계속 요청을 보낸다
+            lastReadChatId = lastChatId;
+        }, 500)
+    }
 }, 100)
 
 // 스크롤이 최하단일 경우 읽음 표시를 보내는 함수
@@ -408,7 +443,9 @@ function loadMoreChats(event) {
             }
         })
         .then(() => {
-            updateUserReadChatId();
+            setTimeout(() => {
+                updateUserReadChatId();
+            }, 300);
             if (event === 'init') {
                 // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
                 moveBottonScroll();
@@ -484,7 +521,7 @@ function addMessage(data, load = false) {
         const urlRegex = /(https?:\/\/[^\s]+)/g;
         const matches = data.msg.match(urlRegex);
 
-        if (data.msg.trim().startsWith('https://chickchick.shop/image/images/')) {
+        if (data.msg.trim().startsWith('https://chickchick.shop/image/images')) {
             // const fileUrl = '';
 
             const img = document.createElement('img');
@@ -501,28 +538,6 @@ function addMessage(data, load = false) {
             messageDiv.classList.remove('p-2');
             messageDiv.classList.add('border');
 
-            /*if (fileUrl.match(/\.(jpeg|jpg|png|gif|webp)$/i)) {
-                // 이미지 파일
-                const img = document.createElement('img');
-                img.src = fileUrl;
-                img.className = 'w-40 h-40 object-cover rounded'; // Tailwind 예시
-                img.alt = 'Uploaded Image';
-                messageDiv.appendChild(img);
-            } else if (fileUrl.match(/\.(mp4|webm|ogg)$/i)) {
-                // 비디오 파일
-                const video = document.createElement('video');
-                video.src = fileUrl;
-                video.controls = true;
-                video.className = 'w-60 h-40 rounded';
-                messageDiv.appendChild(video);
-            } else {
-                // 기타 파일
-                const link = document.createElement('a');
-                link.href = fileUrl;
-                link.innerText = '파일 보기';
-                link.target = '_blank';
-                messageDiv.appendChild(link);
-            }*/
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             const matches = data.msg.match(urlRegex);
         } else if (data.msg.trim().startsWith('https://chickchick.shop/video/temp-video/')) {
@@ -540,6 +555,14 @@ function addMessage(data, load = false) {
             messageDiv.classList.remove('bg-gray-200')
             messageDiv.classList.remove('bg-blue-200')
             messageDiv.classList.add('border');
+        } else if (data.msg.trim().startsWith('https://chickchick.shop/file/files')) {
+            const link = document.createElement('a');
+            link.href = data.msg;
+            link.innerText = getFilenameFromUrl(data.msg);
+            link.target = '_blank';
+            link.style.color = 'blue';
+            messageDiv.innerHTML = '';
+            messageDiv.appendChild(link);
         } else {
             const messageSpan = document.createElement("span");
             const safeText = data.msg.replace(/ /g, "&nbsp;");
@@ -781,22 +804,24 @@ function uploadFile(event) {
                 const response = JSON.parse(xhr.responseText); // 서버 응답
                 const files = response.files;
 
+                // files는 서버에서 json 형태로 만들어줘야 한다
                 files.forEach(file => {
-                    // 파일 타입 왜 안나오는거지 ?
-                    // const isImage = file.type.startsWith("image/");
-                    // const isVideo = file.type.startsWith("video/");
+                    const filename = file.name;
+                    const isImage = file.type.startsWith("image/");
+                    const isVideo = file.type.startsWith("video/");
 
-                    const ext = file.split('.').pop().toLowerCase();
+                    /*const ext = file.split('.').pop().toLowerCase();
 
                     const imageExts = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
-                    const videoExts = ["mp4", "webm", "mov", "ogg", "mkv"];
+                    const videoExts = ["mp4", "webm", "mov", "ogg", "mkv"];*/
 
                     let url = '';
-                    if (imageExts.includes(ext)) {
-                        url = "https://chickchick.shop/image/images/?filename="+file+"&dir=temp&selected_dir=chat";
-                    }
-                    if (videoExts.includes(ext)) {
-                        url = "https://chickchick.shop/video/temp-video/"+file+"?dir=temp&selected_dir=chat";
+                    if (isImage) { // imageExts.includes(ext)
+                        url = "https://chickchick.shop/image/images?filename="+filename+"&dir=temp&selected_dir=chat";
+                    } else if (isVideo) { // videoExts.includes(ext)
+                        url = "https://chickchick.shop/video/temp-video/"+filename+"?dir=temp&selected_dir=chat";
+                    } else { // 파일
+                        url = "https://chickchick.shop/file/files?filename="+filename+"&dir=temp&selected_dir=chat";
                     }
 
                     const msg = url.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
@@ -1024,20 +1049,20 @@ function initPage() {
                 loadMoreChats();
             }
         });
+
+        // 하단으로 스크롤링
+        let attempt = 0;
+        const maxAttempts = 10;
+
+        const intervalId = setInterval(() => {
+            moveBottonScroll();
+
+            attempt++;
+            if (attempt >= maxAttempts) {
+                clearInterval(intervalId);
+            }
+        }, 20);
     }, 300)
-
-    // 하단으로 스크롤링
-    let attempt = 0;
-    const maxAttempts = 10;
-
-    const intervalId = setInterval(() => {
-        moveBottonScroll();
-
-        attempt++;
-        if (attempt >= maxAttempts) {
-            clearInterval(intervalId);
-        }
-    }, 20);
 }
 
 document.addEventListener("DOMContentLoaded", initPage);
