@@ -15,6 +15,7 @@ from .function import func, socketio
 from .upload import upload
 from .oauth import oauth
 from .rds import rds
+from .file import file_bp
 import fnmatch
 from datetime import datetime, timedelta
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -40,6 +41,8 @@ ALLOWED_PATHS = [
     '/func/video-call',
     '/auth/update-session-time',
     '/func/last-read-chat-id',
+    '/func/api/url-preview',
+    '/auth/check-verified',
 ]
 
 
@@ -105,6 +108,7 @@ def create_app():
     app.register_blueprint(upload, url_prefix='/upload')
     app.register_blueprint(oauth, url_prefix='/oauth')
     app.register_blueprint(rds, url_prefix='/rds')
+    app.register_blueprint(file_bp, url_prefix='/file')
     app.jinja_env.globals.update(max=max, min=min)
     # Jinja2 탬플릿 캐시 x
     app.jinja_env.auto_reload = True
