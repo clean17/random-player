@@ -28,7 +28,8 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     typingTimeout,
     peerLastReadChatId = 0,
     isTyping = false,
-    scrollButton = undefined;
+    scrollButton = undefined,
+    isVerifiedPassword = false;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
 const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
@@ -230,24 +231,8 @@ function connectSocket() {
 
 
 ////////////////////////// Focus on Browser  ///////////////////////////
-document.addEventListener('visibilitychange', () => {
+document.addEventListener('visibilitychange', async () => {
     if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
-        /*socket.emit("enter_room", { username: username, room: roomName });
-        if (typeof socket !== "undefined") {
-            if (!socket.connected) {
-                // alert("🔄 소켓 재연결 시도");
-                setTimeout(() => {
-                    if (!socket.connected) {
-                        console.log('⚠️ 소켓 연결 끊김')
-                        connectSocket();
-                    }
-                }, 400)
-            }
-        } else {
-            alert("⚠️ socket 객체가 정의되지 않음");
-            connectSocket();
-        }*/
-
         // 최후의 보루 아래 코드가 안되면 새로고침 할 수 밖에
         /*fetch("/func/chat", { method: "GET" })
             .then(res => {
@@ -260,6 +245,8 @@ document.addEventListener('visibilitychange', () => {
             });*/
 
         chatInput.focus();
+
+        await checkVerified();
 
         fetch("/func/chat/load-more-chat", {
             method: "POST",
@@ -283,7 +270,7 @@ document.addEventListener('visibilitychange', () => {
 
                     tempArr.forEach(log => {
                         const [chatId, timestamp, username, msg] = log.toString().split("|");
-                        chatObj = {chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
+                        chatObj = { chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
                         if (Number(lastChatId) < Number(chatObj.chatId)) {
                             addMessage(chatObj);
                         }
@@ -395,6 +382,28 @@ function sendReadDataLastChat() {
 // 채팅 세션 갱신 (10분 한정)
 function updateChatSession() {
     fetch("/auth/update-session-time").then(data => {})
+}
+
+// 클라이언트가 세션을 체크, 존재하는지만 판단.. 서버에서도 체크하므로 결과만 확인한다
+async function checkVerified() {
+    try {
+        const response = await fetch("/auth/check-verified", {
+            method: "GET",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        if (response.status === 200) {
+            const result = await response.json();
+            if (result && result.success) {
+                isVerifiedPassword = true;
+            } else {
+                isVerifiedPassword = false;
+            }
+        }
+    } catch (e) {
+        // console.error("❌ 서버 오류", e);
+        isVerifiedPassword = false;
+    }
 }
 
 
@@ -982,6 +991,7 @@ function handleChatScroll() {
 
 
 function initPage() {
+    checkVerified();
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
     getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
 
