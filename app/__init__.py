@@ -106,6 +106,10 @@ def create_app():
     app.register_blueprint(oauth, url_prefix='/oauth')
     app.register_blueprint(rds, url_prefix='/rds')
     app.jinja_env.globals.update(max=max, min=min)
+    # Jinja2 탬플릿 캐시 x
+    app.jinja_env.auto_reload = True
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+
 
     # ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
     # Flask가 실제로 클라이언트 요청을 처리할 때, 리버스 프록시(Nginx, Apache) 뒤에 있으면 원래 클라이언트의 정보(프로토콜, 호스트 등)가 프록시의 정보로 덮어쓰여질 수 있다
