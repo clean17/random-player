@@ -107,6 +107,13 @@
         }, 1000);
     });
 
+    document.addEventListener("keydown", function (e) {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+            e.preventDefault(); // 기본 브라우저 저장 막기
+            saveMemo();
+        }
+    });
+
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
             fetch("/func/memo", { method: "GET" })
