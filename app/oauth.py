@@ -19,19 +19,26 @@ def callback():
         return "No code received", 400
 
     # 코드 → 액세스 토큰 요청
-    token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
+    token_url = "https://graph.threads.net/oauth/access_token"
     params = {
         "client_id": THREADS_APP_ID,
         "client_secret": THREADS_APP_SECRET,
         "redirect_uri": "https://chickchick.shop/oauth/callback",
+        "grant_type": "authorization_code",
         "code": code,
     }
 
-    response = requests.get(token_url, params=params)
+    response = requests.post(token_url, params=params)
     token_data = response.json()
     access_token = token_data.get("access_token")
+    user_id = token_data.get("user_id")
 
-    return f"Access token: {access_token}"
+    exchange_token_url = "https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=" + THREADS_APP_SECRET + "&access_token=" + access_token
+    response = requests.get(exchange_token_url)
+    long_term_token_data = response.json()
+    # long_term_access_token = long_term_token_data.get("access_token")
+
+    return long_term_token_data
 
 @oauth.route("/deauthorize", methods=["POST"])
 def deauthorize_callback():
@@ -43,6 +50,7 @@ def deauthorize_callback():
 
     return "", 200
 
+# 페이스북 javascripts SDK 로그인 예제
 @oauth.route('/', methods=['GET'])
 def get_meta_oauth_page():
     return render_template('meta_oauth.html',  appId=FACEBOOK_APP_ID)
