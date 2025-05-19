@@ -162,6 +162,21 @@ def verify_password():
 
     return render_template("verify_password.html")
 
+@auth.route("/check-verified", methods=["GET"])
+@login_required
+def check_verified():
+    verified_time = get_verified_time(current_user.get_id())
+    if verified_time:
+        return jsonify({
+            "success": "true",
+            "verified_time": get_verified_time(current_user.get_id())
+        });
+    else:
+        return jsonify({
+            "success": "false",
+            "verified_time": "null"
+        });
+
 @auth.route("/update-session-time")
 @login_required
 def update_session_time():
