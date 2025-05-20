@@ -153,11 +153,13 @@ function connectSocket() {
         if (lastChatId < data.chatId) {
             addMessage(data);
         }
-        sendNotification(data);
-        sendReadDataLastChat();
-        updateUserReadChatId();
-
-        if (!isScrollAtTheBottom()) showDebugToast('새로운 메세지 도착');
+        if (data.username !== username) {
+            sendNotification(data);
+            sendReadDataLastChat();
+            if (!isScrollAtTheBottom()) showDebugToast('새로운 메세지 도착');
+        } else {
+            updateUserReadChatId(true); // 본인 메세지는 바로 읽도록 한다
+        }
     });
 
     socket.on("message_read_ack", function (data) {
@@ -168,13 +170,19 @@ function connectSocket() {
 
     socket.on("bye", function(data) {
         // console.log('현재 접속 중인 유저 목록:', userList);
-        addMessage(data);
+        // addMessage(data);
         updateUserCount(Number(roomUserCount.textContent)-1);
+
+        // 떠났는데 남아 있는 경우 처리
+        if (data.username !== username) {
+            document.getElementById('typingIndicator').style.display = 'none';
+            isTyping = false;
+        }
     });
 
     socket.on("enter_user", function(data) {
         roomName = data.room;
-        addMessage(data);
+        // addMessage(data);
     });
 
     // enter_room >> room_user_list
@@ -330,8 +338,8 @@ function getPeerLastReadChatId() {
 }
 
 // 본인이 읽은 마지막 chatId 변경 요청
-function updateUserReadChatId() {
-    if (isScrollAtTheBottom()) {
+function updateUserReadChatId(option = false) {
+    if (option || isScrollAtTheBottom()) {
         fetch('/func/last-read-chat-id', {
             method: 'POST',
             headers: {
