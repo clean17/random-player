@@ -26,7 +26,7 @@ NO_LOGS_URLS = ["/static/", "/func/chat/save-file", "/func/logs/stream", "/servi
                 "Client disconnected while serving", "dir=refine", "dir=image", "video-player",
                 "?dir=1", "?dir=2", "?dir=3", "?dir=4",
                 "update-session-time", "apple-touch-icon",
-                "/delete-images",
+                "/delete-images", "/func/logs/",
                 "Invalid HTTP version", "Bad request version"
                 ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]

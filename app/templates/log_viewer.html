@@ -63,7 +63,7 @@
         }
     }
 
-    setInterval(updateStatus, 300);
+    setInterval(updateStatus, 100);
 
     eventSource.onerror = updateStatus;
     eventSource.onopen = updateStatus;
@@ -148,12 +148,19 @@
         fetch(`/func/logs/${formattedDate}`, { cache: "no-cache" })  // 🔥 캐싱 방지 추가
             .then(response => response.text()) // json -> text
             .then(data => {
-                // document.getElementById("log-container").textContent = data;
+                // logContainer.textContent = data;
                 // logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
                 appendLog(data)
             })
             .catch(error => console.error("로그 가져오기 실패:", error))
     }
+
+    // 창으로 들어오면 새로고침
+    document.addEventListener('visibilitychange', () => {
+        // window.location.href = '/func/logs/view'; // home 으로 갈 수 없음..
+        logContainer.innerText = '';
+        loadLogs();
+    })
 
     function initPage() {
         datePicker.value = getTodayDate();
