@@ -471,6 +471,12 @@ function loadMoreChats(event) {
         })
         .finally(() => {
             loading = false;
+
+            // 감시 대상 등록, MutationObserver로 dom추가를 감시하지 않을 경우 매번 element를 감시 대상에 추가하면 된다.
+            /*document.querySelectorAll('img[data-src]').forEach(img => {
+                console.log('img', img)
+                observer.observe(img);
+            });*/
         });
 }
 
@@ -539,10 +545,11 @@ function addMessage(data, load = false) {
         const matches = data.msg.match(urlRegex);
 
         if (data.msg.trim().startsWith('https://chickchick.shop/image/images')) {
-            // const fileUrl = '';
-
+            // 이미지 첨부
             const img = document.createElement('img');
-            img.src = data.msg;
+            // img.src = data.msg;
+            img.src = '/static/no-image.png';
+            img.dataset.src = data.msg;
             // img.className = 'w-40 h-40 object-cover rounded'; // Tailwind 예시
             img.alt = 'Uploaded Image';
             img.style.width = '100%';
@@ -554,10 +561,8 @@ function addMessage(data, load = false) {
             messageDiv.appendChild(img);
             messageDiv.classList.remove('p-2');
             messageDiv.classList.add('border');
-
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            const matches = data.msg.match(urlRegex);
         } else if (data.msg.trim().startsWith('https://chickchick.shop/video/temp-video/')) {
+            // 비디오 첨부
             const video = document.createElement('video');
             video.classList.add('thumbnail');
             video.controls = true;
@@ -573,6 +578,7 @@ function addMessage(data, load = false) {
             messageDiv.classList.remove('bg-blue-200')
             messageDiv.classList.add('border');
         } else if (data.msg.trim().startsWith('https://chickchick.shop/file/files')) {
+            // 파일 첨부
             const link = document.createElement('a');
             link.href = data.msg;
             link.innerText = getFilenameFromUrl(data.msg);
@@ -767,6 +773,71 @@ function renderBottomScrollButton() {
     scrollButton.style.display = 'none';
     document.body.appendChild(scrollButton);
 }
+
+// 이미지 스켈레톤 > 본 이미지 체인지
+function preloadImage(img) {
+    const src = img.getAttribute('data-src');
+    if (src && img.src !== src) {
+        img.src = src;
+        img.removeAttribute('data-src');
+    }
+}
+
+// 옵저버 정의
+/**
+ * IntersectionObserver
+ * 브라우저에서 어떤 요소가 뷰포트(화면) 안에 들어왔는지 자동으로 감지하는 API
+ * >> 스크롤을 감지해서 이미지 로딩, 애니메이션 트리거, 광고 노출 등을 실행
+ *
+ * observe(element); 관찰 대상 등록
+ * unobserve(element); 관찰 대상 해제
+ * disconnect(); 모든 관찰 중단
+ */
+const observer = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) { // 화면에 나타났을 때
+            if (isVerifiedPassword) {
+                preloadImage(entry.target);
+                observer.unobserve(entry.target); // 한 번만 로드, 관찰 해제
+            }
+        }
+    });
+}, {
+    root: null,        // 뷰포트 기준 (null 이면 window)
+    // rootMargin: "0px", // 감지 범위 조절
+    // rootMargin: "top right bottom left",
+    rootMargin: "2000px 0px",     // 위/아래 200px, 좌/우 0px 미리 감지
+    // threshold: 0.05     // 5%만 보이면 isIntersecting = true
+    threshold: 0                 // 1픽셀만 보여도 감지
+});
+
+// DOM 추적 > 콜백 함수 실행
+const mutationObserver = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+            if (node.nodeType === 1 && node.matches?.('img[data-src]')) {
+                observer.observe(node);
+            }
+            // 자식 내부에 img[data-src]가 있는 경우
+            if (node.nodeType === 1) {
+                node.querySelectorAll?.('img[data-src]')?.forEach(img => observer.observe(img));
+            }
+        });
+    });
+});
+
+// 관찰 범위
+/**
+ * childList        자식 노드가 추가/삭제되면 감지
+ * attributes	    속성 변경 감지 (class, src, data-*, 등)
+ * subtree	        하위 모든 자식 노드까지 감시
+ * characterData	텍스트 노드 내용 변경 감지
+ *
+ */
+mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+});
 
 
 ////////////////////////// File Upload /////////////////////////////
