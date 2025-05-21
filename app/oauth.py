@@ -118,3 +118,12 @@ def delete_callback():
         'url': status_url,
         'confirmation_code': confirmation_code
     })
+
+
+
+
+
+
+@oauth.route('/<provider>')
+def oauth_login(provider):
+    return jsonify({"provider": provider})

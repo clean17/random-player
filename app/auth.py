@@ -5,6 +5,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from utils.wsgi_midleware import logger
 from utils.jwt import create_access_token
 from .rds import redis_client
+import time
 
 from config.config import settings
 from .repository.users.users import find_user_by_login_id
@@ -84,6 +85,8 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        remember = request.form.get('remember_username', False)
+
         # data = request.get_json()
         # username = data.get('username')
         # password = data.get('password')
@@ -99,7 +102,6 @@ def login():
                 session['lockout_time'] = None
 
         # print('attempt_username', username)
-        logger.info(f"############################### login_username: {username} ###############################")
 
         # 로그인 검증
         fetch_user = find_user_by_login_id(username) # db 조회
@@ -123,16 +125,26 @@ def login():
                 key = f"user_session:{username}"
                 redis_client.setex(key, SESSION_EXPIRATION_TIME, "active")
 
-            return redirect(url_for('main.home'))
+            logger.info(f"############################### login_username: {username} ###############################")
+
+            session['principal'] = fetch_user
+            resp = make_response(redirect('/'))
+            if remember:
+                resp.set_cookie('remember_username', username, max_age=60*60*24*30) # 30일
+            else:
+                resp.set_cookie('remember_username', '', expires=0)
+            return resp
+            # return redirect(url_for('main.home'))
         # 로그인 실패
         else:
+            logger.info(f"############################### login_fail: {username} {session['attempts']} ###############################")
             session['attempts'] += 1
             flash('Invalid username or password')
             if session['attempts'] >= 5:
                 # session['lockout_time'] = datetime.now() + timedelta(days=1)
                 session['lockout_time'] = (now + timedelta(days=1)).isoformat()  # UTC 시간 저장
 
-    return render_template('login.html')
+    return render_template('login.html', version=int(time.time()))
 
 @auth.route('/lockout')
 def lockout():
@@ -198,3 +210,12 @@ session.permanent = True 를 통해 세션을 영구적으로 설정, app.perman
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=10)  # 10분 비활동 시 만료
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
 '''
+
+
+@auth.route('/register')
+def register():
+    return jsonify({"succecss": True})
+
+@auth.route('/forgot-password')
+def forgot_password():
+    return jsonify({"succecss": True})

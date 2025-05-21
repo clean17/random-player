@@ -4,7 +4,7 @@
     {{ super() }}
     <title>Login</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <link rel="stylesheet" href="/static/css/login.css?v={{ version }}">
 {% endblock %}
 
 {% block content %}
@@ -13,7 +13,9 @@
     <!--    <form onsubmit="event.preventDefault(); login();">-->
     <div>
         <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
+        <input type="text" id="username" name="username"
+               value="{{ request.cookies.get('remember_username', '') }}"
+               required>
     </div>
     <div>
         <label for="password">Password:</label>
@@ -29,6 +31,41 @@
     {% endif %}
     {% endwith %}
     <button type="submit" class="btn-w100">Login</button>
+
+    <!-- Remember me 체크박스 -->
+    <div style="margin: 10px 0 0 0; display: flex; align-items: center;">
+        <input type="checkbox" id="remember_username" name="remember_username"
+               {% if request.cookies.get('remember_username') %}checked{% endif %}
+               style="margin-right: 7px;">
+        <label for="remember_username" style="font-size: 0.9em; padding-top: 2px">remember</label>
+    </div>
+
+    <!-- 하단 신규계정/비밀번호찾기 버튼 -->
+    <!--<div style="margin-top: 20px; display: flex; justify-content: space-between;">
+        <a href="{{ url_for('auth.register') }}" class="btn-link">new account</a>
+        <a href="{{ url_for('auth.forgot_password') }}" class="btn-link">forgot password</a>
+    </div>-->
+
+    <!-- 구분선 추가 -->
+    <div style="display: flex; align-items: center; margin: 28px 0 18px 0;">
+        <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">
+        <span style="margin: 0 14px; font-size: 0.98em; color: #888;">or other login</span>
+        <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">
+    </div>
+
+    <!-- OAuth 동그라미 버튼들 -->
+    <div style="margin-top: 30px; display: flex; justify-content: center; gap: 20px;">
+        <a href="{{ url_for('oauth.oauth_login', provider='google') }}" class="oauth-circle google" title="구글 로그인">
+            <img src="{{ url_for('static', filename='icons/google.svg') }}" alt="Google" width="36" height="36">
+        </a>
+        <a href="{{ url_for('oauth.oauth_login', provider='kakao') }}" class="oauth-circle kakao" title="카카오 로그인">
+            <img src="{{ url_for('static', filename='icons/kakao.svg') }}" alt="Kakao" width="36" height="36">
+        </a>
+        <a href="{{ url_for('oauth.oauth_login', provider='naver') }}" class="oauth-circle naver" title="네이버 로그인">
+            <img src="{{ url_for('static', filename='icons/naver.svg') }}" alt="Naver" width="36" height="36">
+        </a>
+        <!-- 필요한 소셜 로그인 버튼 추가 가능 -->
+    </div>
 </form>
 <script>
     document.querySelectorAll('input').forEach(input => {
