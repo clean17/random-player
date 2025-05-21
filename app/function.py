@@ -7,6 +7,9 @@ import io
 import json
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
+from app.repository.chats.ChatDTO import ChatDTO
+from app.repository.chats.chats import insert_chat, get_chats_count, get_chats_by_offset, chats_to_line_list
+from app.repository.users.users import find_user_by_login_id
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
@@ -364,7 +367,10 @@ def save_chat_message():
     with open(CHAT_FILE_PATH, "a", encoding="utf-8", errors='replace') as log_file: # errors='replace'; 인코딩할 수 없는 문자를 자동으로 '?'로 대체
         log_file.write(log_entry + "\n")
 
-    update_last_chat_id_in_state(data['chatId'])
+    fetch_user = find_user_by_login_id(data['username'])
+    chat = ChatDTO(created_at=str(datetime.now()), user_id=fetch_user.id, message=sanitized_message)
+    inserted_id = insert_chat(chat)
+    update_last_chat_id_in_state(inserted_id)
 
     return {"status": "success"}, 200
 
@@ -373,17 +379,23 @@ def save_chat_message():
 @login_required
 def load_more_logs():
     offset = int(request.json.get("offset", 0))  # 클라이언트가 요청한 로그 시작점
-    all_lines = get_last_n_lines(CHAT_FILE_PATH, 0, 1000)  # 최대 로그 유지
+    # all_lines = get_last_n_lines(CHAT_FILE_PATH, 0, 1000)  # 최대 로그 유지
+    all_chat_count = get_chats_count()
 
     # offset 0 =>  950 ~ 1000 라인
     # offset 1 =>  900 ~ 950 라인...
-    start = max(0, len(all_lines) - offset - MAX_FETCH_MESSAGE_SIZE)
-    end = len(all_lines) - offset
+    # start = max(0, len(all_lines) - offset - MAX_FETCH_MESSAGE_SIZE)
+    # end = len(all_lines) - offset
 
-    if (end > 0):
-        return jsonify({"logs": all_lines[start:end]})
-    else:
-        return jsonify({"logs": []})
+    # if (end > 0):
+    #     return jsonify({"logs": all_lines[start:end]})
+    # else:
+    #     return jsonify({"logs": []})
+
+    sql_offset = min(offset, all_chat_count)
+    chat_list = get_chats_by_offset(sql_offset, MAX_FETCH_MESSAGE_SIZE)
+    # return jsonify({"logs": all_lines[start:end]})
+    return jsonify({"logs": chats_to_line_list(chat_list)})
 
 
 def fetch_url_preview(url):

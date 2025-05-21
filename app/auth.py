@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from utils.wsgi_midleware import logger
 from utils.jwt import create_access_token
 from .rds import redis_client
 
 from config.config import settings
-
+from .repository.users.users import find_user_by_login_id
 
 auth = Blueprint('auth', __name__)
 
@@ -102,7 +102,11 @@ def login():
         logger.info(f"############################### login_username: {username} ###############################")
 
         # 로그인 검증
-        if username in users and check_password_hash(users[username]['password'], password):
+        fetch_user = find_user_by_login_id(username) # db 조회
+        if fetch_user and check_password_hash(fetch_user.password, password):
+        # if username in users and check_password_hash(users[username]['password'], password):
+        #     print(username, generate_password_hash(password))
+
             user = User(username)
             login_user(user)
             session['attempts'] = 0
