@@ -1,5 +1,6 @@
 import os
 import time
+import re
 from datetime import datetime, timezone
 from collections import defaultdict, deque
 from flask import Flask, session, send_file, render_template, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
@@ -25,7 +26,7 @@ from config.config import settings
 from redis import Redis
 from flask_wtf.csrf import CSRFProtect
 
-
+# 허용할 엔드포인트 경로 - 추가될수록 유지보수가 힘들어진다 > 블랙리스트로 전환 필요
 ALLOWED_PATHS = [
     '/favicon.ico',       # nginx 서버리스
     '/service-worker.js', # nginx 서버리스
@@ -33,16 +34,32 @@ ALLOWED_PATHS = [
     '/image/pages',
     '/image/move-image',
     '/upload',
+    '/video/temp-video', # 조회만 가능
     '/func/download-zip',
-    '/video/temp-video',
     '/func/chat',
     '/func/memo',
-    '/auth/verify-password',
     '/func/video-call',
-    '/auth/update-session-time',
     '/func/last-read-chat-id',
     '/func/api/url-preview',
-    '/auth/check-verified',
+    # '/auth/verify-password', # auth는 세션 확인용 모두가 들어올 수 있음
+    # '/auth/update-session-time',
+    # '/auth/check-verified',
+]
+
+# 차단할 엔드포인트 경로
+BLOCKED_PATHS = [
+    "/image/delete-images", # 어디서 사용하는지 확인 필요
+    "/image/shuffle/ref-images",
+    # "/video/select-directory", # video는 화이트리스트 하나만 허용하니까 블랙리스트 추가할 필요 없음
+    # "/video/video-player",
+    # "/video/videos",
+    # "/video/delete",
+    # "/video/stream",
+    "/ffmpeg",
+    "/func/empty-trash-bin",
+    "/func/logs",
+    "/func/buy/lotto-test",
+    "/rds"
 ]
 
 
@@ -257,7 +274,9 @@ def create_app():
 
             # print('request.path', request.path)
             if not any(request.path.startswith(path) for path in ALLOWED_PATHS):
-                return redirect(url_for('auth.logout'))
+                if any(request.path.startswith(path) for path in BLOCKED_PATHS):
+            # if any(re.match(pattern, request.path) for pattern in BLOCKED_PATTERNS):
+                    return redirect(url_for('auth.logout'))
         else:
             pass
 
