@@ -17,6 +17,7 @@ from .upload import upload
 from .oauth import oauth
 from .rds import rds
 from .file import file_bp
+from .admin import admin
 import fnmatch
 from datetime import datetime, timedelta
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -62,6 +63,12 @@ BLOCKED_PATHS = [
     "/rds"
 ]
 
+# 정규표현식 > 서브 경로까지 필터링
+BLOCKED_PATTERNS = [
+    r"^/admin.*",
+    r"^/debug/.*",
+    r"^/internal/api/.*"
+]
 
 # 파일 읽기
 def load_blocked_ips(filepath='data/blocked_ips.txt'):
@@ -126,6 +133,7 @@ def create_app():
     app.register_blueprint(oauth, url_prefix='/oauth')
     app.register_blueprint(rds, url_prefix='/rds')
     app.register_blueprint(file_bp, url_prefix='/file')
+    app.register_blueprint(admin, url_prefix='/admin')
     app.jinja_env.globals.update(max=max, min=min)
     # Jinja2 탬플릿 캐시 x
     app.jinja_env.auto_reload = True
@@ -315,11 +323,13 @@ def create_app():
         # 세션이 없음 + 404 응답이었으면 카운트 증가
         if not current_user.is_authenticated and response.status_code == 404:
             now = time.time()
-            dq = ip_404_log[ip]
-            dq.append(now)
+            dq = ip_404_log[ip] # 키에 해당하는 10칸 짜리 deque를 가져온다, 없으면 생성, 있으면 반환
+            dq.append(now)      # 요청이 들어올 때마다 해당 시간을 넣는다.
 
             # 5초 이내 404가 5회 이상?
-            recent = [t for t in dq if now - t <= BLOCK_THRESHOLD]
+            # 파이썬 리스트 컴프리헨션을 사용한 “필터링” > for t in dq
+            recent = [t for t in dq if now - t <= BLOCK_THRESHOLD] # 지금부터 BLOCK_THRESHOLD 이내인 값만 리스트로 반환
+            # recent = [t for t in dq] # 5회 누적으로 수정, 새로운 list 타입 생성
             if len(recent) >= BLOCK_THRESHOLD:
                 until = datetime.now() + BLOCK_DURATION # value
                 BLOCKED_IPS[ip] = until
