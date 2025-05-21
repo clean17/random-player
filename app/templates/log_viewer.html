@@ -131,7 +131,6 @@
                 logContainer.appendChild(span);
             }
         }
-        logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
     }
 
     // 날짜별 로그 가져오기
@@ -152,6 +151,9 @@
                 // logContainer.textContent = data;
                 // logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
                 appendLog(data)
+            })
+            .then(() => {
+                logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
             })
             .catch(error => console.error("로그 가져오기 실패:", error))
     }

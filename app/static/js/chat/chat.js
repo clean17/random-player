@@ -149,16 +149,18 @@ function connectSocket() {
         // socket.emit("user_info", { username: username, room: roomName });
     });
 
-    socket.on("new_msg", function(data) {
+    socket.on("new_msg", async function (data) {
         if (lastChatId < data.chatId) {
-            addMessage(data);
+            await addMessage(data);
         }
+
+        // 채팅 읽음 요청은 스크롤 이벤트에 일임한다
         if (data.username !== username) {
             sendNotification(data);
-            sendReadDataLastChat();
+            // sendReadDataLastChat(); // 상대 메세지를 읽어야 하는데
             if (!isScrollAtTheBottom()) showDebugToast('새로운 메세지 도착');
         } else {
-            updateUserReadChatId(true); // 본인 메세지는 바로 읽도록 한다
+            // updateUserReadChatId(true); // 본인 메세지는 바로 읽도록 한다
         }
     });
 
@@ -255,6 +257,7 @@ document.addEventListener('visibilitychange', async () => {
         chatInput.focus();
 
         await checkVerified();
+        await getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
 
         fetch("/func/chat/load-more-chat", {
             method: "POST",
@@ -319,7 +322,7 @@ document.addEventListener('visibilitychange', async () => {
 ////////////////////////// Chat State ////////////////////////////
 
 // 상대가 마지막으로 읽은 chatId 조회
-function getPeerLastReadChatId() {
+function getPeerLastReadChatId(option = null) {
     peername = username === 'nh824' ? 'fkaus14' : 'nh824'
     fetch('/func/last-read-chat-id?username=' + peername, {
         method: 'GET',
@@ -333,7 +336,9 @@ function getPeerLastReadChatId() {
             peerLastReadChatId = data['last_read_chat_id']
         })
         .then(() => {
-            loadMoreChats('init'); // 초기 채팅 데이터 조회
+            if (option === 'init') {
+                loadMoreChats('init'); // 초기 채팅 데이터 조회
+            }
         });
 }
 
@@ -373,10 +378,8 @@ function isScrollAtTheBottom() {
 const readDebounce = debounce(() => {
     socket.emit("message_read", { chatId: lastChatId, room: roomName, username: username });
     if (lastReadChatId !== lastChatId) {
-        debounce(() => {
-            updateUserReadChatId(); // 스크롤이 아래일 때 상대가 채팅을 치기만 해도 계속 요청을 보낸다
-            lastReadChatId = lastChatId;
-        }, 500)
+        updateUserReadChatId(); // 스크롤이 아래일 때 상대가 채팅을 치기만 해도 계속 요청을 보낸다
+        lastReadChatId = lastChatId;
     }
 }, 100)
 
@@ -484,7 +487,7 @@ function loadMoreChats(event) {
 function sendMessage() {
     const msg = chatInput.value.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
     if (msg !== "") {
-        socket.emit("new_msg", { chatId: Number(lastChatId)+1, username, msg, room: roomName });
+        socket.emit("new_msg", { username, msg, room: roomName });
         socket.emit("stop_typing", {room: roomName, username: username });
     }
     // chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
@@ -972,7 +975,7 @@ function handleChatScroll() {
 function initPage() {
     checkVerified();
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
-    getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
+    getPeerLastReadChatId('init'); // 상대가 마지막으로 읽은 채팅 ID 조회
 
     // 웹 소켓 최초 연결
     if (typeof socket !== "undefined") {
