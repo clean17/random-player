@@ -22,12 +22,13 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 # NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
-NO_LOGS_URLS = ["/static/", "/func/chat/save-file", "/func/logs/stream", "/service-worker.js", "/favicon.ico",
-                "Client disconnected while serving", "dir=refine", "dir=image", "video-player",
-                "?dir=1", "?dir=2", "?dir=3", "?dir=4",
+NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
+                "/func/chat/save-file", "/func/logs/stream", "/func/logs/",
+                "dir=refine", "dir=image", "?dir=1", "?dir=2", "?dir=3", "?dir=4",
+                 "video-player", "/video/select-directory",
                 "update-session-time", "apple-touch-icon",
-                "/delete-images", "/func/logs/",
-                "Invalid HTTP version", "Bad request version"
+                "/delete-images",
+                "Client disconnected while serving", "Invalid HTTP version", "Bad request version"
                 ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 
