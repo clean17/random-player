@@ -204,6 +204,7 @@ def move_image():
 
 
 # @image_bp.route('/delete-images/<path:filename>', methods=['POST'], endpoint='delete-images')
+# 어디서 사용하는지 확인 필요
 @image_bp.route('/delete-images', methods=['POST'], endpoint='delete-images')
 @login_required
 def delete_images():
@@ -212,7 +213,7 @@ def delete_images():
 
     for image in images_to_delete:
         if image not in moved_images:
-            send2trash(os.path.join(IMAGE_DIR, image))
+            send2trash(os.path.join(IMAGE_DIR, image)) # 휴지통으로 보낸다
 
     page = int(request.form.get('page', 1))
     return redirect(url_for('image.image_list', page=page, dir='image'))

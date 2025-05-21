@@ -850,6 +850,16 @@ function uploadFile(event) {
         return;
     }
 
+    // files 구조
+    /*{
+        "0": {},
+        "1": {},
+        "2": {}
+    }*/
+    Object.keys(files).forEach(key => {
+        console.log(key, files[key]);
+    });
+
     const file = files[0];
     if (file) {
         const form = event.target.closest('form');  // 🔧 이걸 먼저 정의해줘야 아래에서 사용 가능
@@ -883,9 +893,6 @@ function uploadFile(event) {
         xhr.onload = function () {
             // submitted = false; // 다시 전송 가능하게
             if (xhr.status === 200) {
-
-                // submitted = false; // 다시 전송 가능하게
-                // progressContainer.style.display = 'none';
                 submitted = false;
                 progressContainer.style.display = 'none';
 
