@@ -9,7 +9,7 @@ from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, get_chats_by_offset, chats_to_line_list
-from app.repository.users.users import find_user_by_login_id
+from app.repository.users.users import find_user_by_username
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
@@ -22,6 +22,8 @@ from utils.wsgi_midleware import logger
 from filelock import FileLock, Timeout
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 func = Blueprint('func', __name__)
 
@@ -367,12 +369,12 @@ def save_chat_message():
     with open(CHAT_FILE_PATH, "a", encoding="utf-8", errors='replace') as log_file: # errors='replace'; 인코딩할 수 없는 문자를 자동으로 '?'로 대체
         log_file.write(log_entry + "\n")
 
-    fetch_user = find_user_by_login_id(data['username'])
+    fetch_user = find_user_by_username(data['username'])
     chat = ChatDTO(created_at=str(datetime.now()), user_id=fetch_user.id, message=sanitized_message)
     inserted_id = insert_chat(chat)
     update_last_chat_id_in_state(inserted_id)
 
-    return {"status": "success"}, 200
+    return {"status": "success", "inserted_id": inserted_id}, 200
 
 # 비동기로 추가 채팅 로그 요청 API
 @func.route("/chat/load-more-chat", methods=["POST"])
@@ -402,6 +404,33 @@ def fetch_url_preview(url):
     try:
         response = requests.get(url, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
+
+        def get_meta(property_name):
+            tag = soup.find('meta', attrs={'property': property_name}) or \
+                  soup.find('meta', attrs={'name': property_name})
+            return tag['content'] if tag and 'content' in tag.attrs else None
+
+        return {
+            'title': soup.title.string if soup.title else '',
+            'description': get_meta('og:description') or get_meta('description'),
+            'image': get_meta('og:image'),
+            'url': url
+        }
+    except Exception as e:
+        return None
+
+def fetch_url_preview_by_selenium(url):
+    try:
+        options = Options()
+        options.add_argument("--headless")  # 창 없이 실행
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--window-size=1280,800")  # (필수는 아님)
+
+        driver = webdriver.Chrome(options=options)
+        driver.get(url)
+
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
 
         def get_meta(property_name):
             tag = soup.find('meta', attrs={'property': property_name}) or \
@@ -583,4 +612,5 @@ def handle_last_chat_id():
 def render_preview():
     data = request.get_json()
     url = data.get('url')
-    return fetch_url_preview(url)
+    # return fetch_url_preview(url)
+    return fetch_url_preview_by_selenium(url)
