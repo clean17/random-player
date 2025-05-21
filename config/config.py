@@ -33,7 +33,7 @@ def load_config():
         'MUD_USERNAME': config['settings']['mudfish_username'],
         'MUD_PASSWORD': config['settings']['mudfish_password'],
         'USERNAME': config['settings']['username'],
-        'PASSWORD': generate_password_hash(config['settings']['password']),
+        'PASSWORD': generate_password_hash(config['settings']['password']), # generate_password_hash 는 솔트가 있어서 매번 다른 값이 나온다. DB 검증에는 사용하지 않는다.
         'GUEST_USERNAME': config['settings']['guest_username'],
         'GUEST_PASSWORD': generate_password_hash(config['settings']['guest_password']),
         'SUPER_USERNAME': config['settings']['super_username'],
@@ -47,6 +47,11 @@ def load_config():
         'FACEBOOK_APP_ID': config['meta']['facebook_app_id'],
         'THREADS_APP_ID': config['meta']['threads_app_id'],
         'THREADS_APP_SECRET': config['meta']['threads_app_secret'],
+        'DB_NAME': config['db']['db_name'],
+        'DB_ID': config['db']['db_id'],
+        'DB_PASSWORD': config['db']['db_password'],
+        'DB_HOST': config['db']['db_host'],
+        'DB_PORT': config['db']['db_port'],
     }
 
 settings = load_config()
