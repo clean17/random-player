@@ -250,3 +250,60 @@ SERVICE_NAME: redis
 127.0.0.1:6379> ping
 PONG
 ```
+
+## PostgreSQL 도입
+도커에 설치하기 위해 먼저 Docker Desktop을 실행 후 이미지 다운로드
+```bash
+docker pull postgres
+```
+다운받은 이미지로 컨테이너 실행
+```bash
+docker run --name mypg -e POSTGRES_PASSWORD=dlsdn317! -p 5432:5432 -d postgres
+```
+Docker Desktop이 실행되면 자동으로 컨테이너 실행
+```bash
+docker run --name mypg -e POSTGRES_PASSWORD=dlsdn317! -p 5432:5432 -d --restart unless-stopped postgres
+또는
+docker update --restart unless-stopped mypg
+```
+bash로 진입
+```bash
+docker exec -it mypg /bin/bash
+```
+dbeaver로 간단한 연결<br>
+![img.png](app/static/readme/img_12.png)
+bash에서 psql로 PostgreSQL 접속
+```bash
+psql -U postgres
+```
+```sql
+CREATE USER chick WITH PASSWORD 'password';
+CREATE DATABASE mydb OWNER myuser;
+```
+데이터베이스 접속
+```sql
+\c mydb chick
+
+\dt : 현재 DB의 테이블 목록 보기
+
+\du : 유저 목록 보기
+
+\q : psql 종료
+```
+문법 차이
+```sql
+ALTER TABLE users ADD login_attempt NUMERIC(1,0);
+ALTER TABLE users ALTER COLUMN password TYPE VARCHAR(256);
+ALTER TABLE users RENAME COLUMN login_id TO username;
+
+SELECT conname FROM pg_constraint WHERE conrelid = 'chats'::regclass;
+ALTER TABLE chats DROP CONSTRAINT chats_message_key;
+
+SELECT setval('chats_id_seq', (SELECT MAX(id) FROM chats));
+```
+
+파이썬에서 db 연결
+```bash
+pip install psycopg-binary
+```
+(설치가 안되는 이슈가 있으면 윈도우에 PostgreSql을 설치하고 Path 에 bin 경로 추가 필요)
