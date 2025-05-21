@@ -79,3 +79,34 @@ button, select.styled-select {
 button:hover, select.styled-select:hover {
     background-color: #007BFF;
 }
+
+a {
+    width: 100%;
+}
+
+.chat-btn-wrapper {
+    display: inline-block;
+    position: relative;
+}
+
+.unread-badge {
+    position: absolute;
+    top: -0.6em;
+    right: 1em;
+    min-width: 1.6em;
+    height: 1.6em;
+    padding: 0 0.2em;
+    background: #ff4b4b;
+    color: #fff;
+    border-radius: 1em;
+    font-size: 1em;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0.3em #f77c7c3d;
+    pointer-events: none;
+    line-height: 1;
+    z-index: 2;
+}

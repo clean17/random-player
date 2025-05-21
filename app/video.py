@@ -54,6 +54,7 @@ def get_video(filename):
     video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
     return send_file(os.path.join(video_directory, filename))
 
+# 이미지 리스트, 채팅 페이지에서 임시로 사용할 엔드포인트
 @video.route('/temp-video/<path:filename>', methods=['GET'])
 @login_required
 def get_temp_video(filename):

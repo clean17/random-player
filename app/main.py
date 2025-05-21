@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, session, Flask, send_from_directory
 from flask_login import login_required
 from config.config import settings
+import time
 
 main = Blueprint('main', __name__)
 
@@ -22,7 +23,10 @@ def home():
                            , IMAGE_DIR=IMAGE_DIR
                            , REF_IMAGE_DIR=REF_IMAGE_DIR
                            , TRIP_IMAGE_DIR=TRIP_IMAGE_DIR
-                           , TEMP_IMAGE_DIR=TEMP_IMAGE_DIR)
+                           , TEMP_IMAGE_DIR=TEMP_IMAGE_DIR
+                           , username=session["_user_id"]
+                           , version=int(time.time())
+                           )
 
 # Flask에서 favicon 설정 (동작확인은 안했음) 주석처리하고 nginx에서 /static/ 연결함
 # @main.route('/favicon.ico')
