@@ -8,5 +8,8 @@ class UserDTO:
     password: str = None
     role: str = None
     created_at: str = None  # datetime 사용 가능
-    is_active: bool = True
+    updated_at: str = None  # datetime 사용 가능
     login_attempt: int = None
+    is_active: bool = True
+    is_lockout: bool = False
+    lockout_time: str = None

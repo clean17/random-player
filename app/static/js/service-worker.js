@@ -29,7 +29,7 @@ self.addEventListener("notificationclick", function(event) {
                     }
                 }
                 console.log("새로운 창 열기: /chat");
-                return clients.openWindow("/func/chat");
+                return clients.openWindow("/func/chat?noti=test");
             })
         ])
     );

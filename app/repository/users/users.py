@@ -2,12 +2,14 @@ import psycopg
 from typing import Optional
 
 from app.repository.users.UserDTO import UserDTO
-from config.db_connect import conn
+from config.db_connect import db_transaction
+
 
 
 # dict 반환: psycopg3는 row_factory로 처리
 
-def find_user_by_login_id(username: str) -> Optional["UserDTO"]:
+@db_transaction
+def find_user_by_username(username: str, conn=None) -> Optional["UserDTO"]:
     # row_factory를 dict로 설정
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute("SELECT * FROM users WHERE username = %s;", (username,))
@@ -16,20 +18,44 @@ def find_user_by_login_id(username: str) -> Optional["UserDTO"]:
         return UserDTO(**row)
     return None
 
-def insert_user(user: "UserDTO") -> int:
+@db_transaction
+def insert_user(user: "UserDTO", conn=None) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO users (login_id, email, password, role, is_active) VALUES (%s, %s, %s, %s, %s) RETURNING id;",
-            (user.login_id, user.email, user.password, user.role, user.is_active)
+            "INSERT INTO users (username, email, password, role, is_active) VALUES (%s, %s, %s, %s, %s) RETURNING id;",
+            (user.username, user.email, user.password, user.role, user.is_active)
         )
         user_id = cur.fetchone()[0]
-        conn.commit()
     return user_id
 
-def update_user_password(login_id: str, new_password: str) -> None:
+@db_transaction
+def update_user_password(username: str, new_password: str, conn=None) -> None:
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE users SET password = %s WHERE login_id = %s;",
-            (new_password, login_id)
+            "UPDATE users SET password = %s, updated_at = now() WHERE username = %s;",
+            (new_password, username)
         )
-        conn.commit()
+
+@db_transaction
+def update_user_login_attempt(username: str, login_attempt: str, conn=None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE users SET login_attempt = %s, updated_at = now() WHERE username = %s;",
+            (login_attempt, username)
+        )
+
+@db_transaction
+def update_user_is_lockout(username: str, is_lockout: str, conn=None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE users SET is_lockout = %s, updated_at = now() WHERE username = %s;",
+            (is_lockout, username)
+        )
+
+@db_transaction
+def update_user_lockout_time(username: str, lockout_time=None, conn=None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE users SET lockout_time = %s, updated_at = now() WHERE username = %s;",
+            (lockout_time, username)
+        )
