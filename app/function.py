@@ -8,7 +8,8 @@ import json
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
 from app.repository.chats.ChatDTO import ChatDTO
-from app.repository.chats.chats import insert_chat, get_chats_count, get_chats_by_offset, chats_to_line_list
+from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
+    find_chats_roos_by_roomname
 from app.repository.users.users import find_user_by_username
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
@@ -349,28 +350,31 @@ def save_chat_message():
     # client_ip = normalize_ip(client_ip)
     # print(f"✅ 클린 IP 주소: {client_ip}")
 
-    if not data['timestamp']:
-        now = datetime.now()
-        data['timestamp'] = now.strftime("%y%m%d%H%M%S")
+    # if not data['timestamp']:
+    #     now = datetime.now()
+    #     data['timestamp'] = now.strftime("%y%m%d%H%M%S")
 
-    if not data['username']:
-        data['username'] = 'error'
+    # if not data['username']:
+    #     data['username'] = 'error'
 
-    try:
-        with open(CHAT_FILE_PATH, "r", encoding="utf-8") as f:
-            line_count = sum(1 for _ in f)
-    except FileNotFoundError:
-        line_count = 0  # 파일이 없으면 0부터 시작
-
-    next_line_number = line_count + 1
+    # try:
+    #     with open(CHAT_FILE_PATH, "r", encoding="utf-8") as f:
+    #         line_count = sum(1 for _ in f)
+    # except FileNotFoundError:
+    #     line_count = 0  # 파일이 없으면 0부터 시작
+    #
+    # next_line_number = line_count + 1
 
     sanitized_message = sanitize_text(data['message'])
-    log_entry = f"{next_line_number} | {data['timestamp']} | {data['username']} | {sanitized_message}"
-    with open(CHAT_FILE_PATH, "a", encoding="utf-8", errors='replace') as log_file: # errors='replace'; 인코딩할 수 없는 문자를 자동으로 '?'로 대체
-        log_file.write(log_entry + "\n")
+
+    # 아래는 파일에 저장하는 코드
+    # log_entry = f"{next_line_number} | {data['timestamp']} | {data['username']} | {sanitized_message}"
+    # with open(CHAT_FILE_PATH, "a", encoding="utf-8", errors='replace') as log_file: # errors='replace'; 인코딩할 수 없는 문자를 자동으로 '?'로 대체
+    #     log_file.write(log_entry + "\n")
 
     fetch_user = find_user_by_username(data['username'])
-    chat = ChatDTO(created_at=str(datetime.now()), user_id=fetch_user.id, message=sanitized_message)
+    chats_room = find_chats_roos_by_roomname(data['roomname'])
+    chat = ChatDTO(created_at=str(datetime.now()), user_id=fetch_user.id, message=sanitized_message, chats_room_id=chats_room.id)
     inserted_id = insert_chat(chat)
     update_last_chat_id_in_state(inserted_id)
 
@@ -395,7 +399,7 @@ def load_more_logs():
     #     return jsonify({"logs": []})
 
     sql_offset = min(offset, all_chat_count)
-    chat_list = get_chats_by_offset(sql_offset, MAX_FETCH_MESSAGE_SIZE)
+    chat_list = find_chats_by_offset(sql_offset, MAX_FETCH_MESSAGE_SIZE)
     # return jsonify({"logs": all_lines[start:end]})
     return jsonify({"logs": chats_to_line_list(chat_list)})
 
