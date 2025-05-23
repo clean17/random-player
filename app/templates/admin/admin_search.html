@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>관리자 - 사용자 세션 초기화</title>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+        .search-box { margin-bottom: 30px; }
+        .user-info { border: 1px solid #ddd; padding: 18px 22px; background: #fafafa; }
+        .reset-btn { background: #ec5353; color: white; border: none; padding: 7px 18px; border-radius: 5px; cursor: pointer; margin-top: 12px; }
+    </style>
+</head>
+<body>
+<h2>사용자 세션 초기화 (관리자 전용)</h2>
+<form class="search-box" method="post" action="/admin/search-user">
+    <label>아이디(Username) 검색:
+        <input type="text" name="username" value="{{ request.form.username or '' }}" required>
+    </label>
+    <button type="submit">검색</button>
+</form>
+
+{% if found_user %}
+<div class="user-info">
+    <b>아이디:</b> {{ found_user.username }}<br>
+    <b>이메일:</b> {{ found_user.email }}<br>
+    <b>상태:</b>
+    {% if found_user.lockout_time %}
+    <span style="color:red">락아웃 중 ({{ found_user.lockout_time }})</span>
+    {% else %}
+    정상
+    {% endif %}<br>
+    <form method="post" action="/admin/reset-user-session/{{ found_user.username }}" onsubmit="return confirm('정말 초기화하시겠습니까?');">
+        <button class="reset-btn" type="submit">이 유저의 세션(시도횟수/락아웃) 초기화</button>
+    </form>
+</div>
+{% elif request.method == 'POST' %}
+<p>검색 결과가 없습니다.</p>
+{% endif %}
+</body>
+</html>
