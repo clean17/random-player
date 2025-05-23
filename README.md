@@ -272,9 +272,11 @@ docker exec -it mypg /bin/bash
 ```
 dbeaver로 간단한 연결<br>
 ![img.png](app/static/readme/img_12.png)
-bash에서 psql로 PostgreSQL 접속
+bash에서 psql로 PostgreSQL 접속<br>
+`-U postgres` : postgres(관리자) 계정으로 접속<br>
+`-d mydb` : 사용할 데이터베이스 이름
 ```bash
-psql -U postgres
+psql -U postgres -d mydb
 ```
 ```sql
 CREATE USER chick WITH PASSWORD 'password';
@@ -290,6 +292,18 @@ CREATE DATABASE mydb OWNER myuser;
 
 \q : psql 종료
 ```
+한국시간으로 변경
+```bash
+vi /var/lib/postgresql/data/postgresql.conf
+
+vi 없으면
+echo "timezone = 'Asia/Seoul'" >> postgresql.conf
+
+이후 컨테이너 재시작
+docker restart <container>
+```
+
+
 문법 차이
 ```sql
 ALTER TABLE users ADD login_attempt NUMERIC(1,0);
@@ -300,6 +314,9 @@ SELECT conname FROM pg_constraint WHERE conrelid = 'chats'::regclass;
 ALTER TABLE chats DROP CONSTRAINT chats_message_key;
 
 SELECT setval('chats_id_seq', (SELECT MAX(id) FROM chats));
+
+GRANT ALL PRIVILEGES ON TABLE chats_room TO myuser;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO myuser;
 ```
 
 파이썬에서 db 연결
