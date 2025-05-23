@@ -195,29 +195,29 @@ def create_app():
             return
 
 
-        ###################### 세션 잠금 확인 ######################
-        if 'lockout_time' in session and session['lockout_time']:
-            lockout_time = session['lockout_time']
+        ###################### 세션 잠금 확인 ###################### >> 로그인에서 처리
+        # if 'lockout_time' in session and session['lockout_time']:
+        #     lockout_time = session['lockout_time']
+        #
+        #     # lockout_time 값이 문자열인지 확인
+        #     if isinstance(lockout_time, str):
+        #         # 문자열을 datetime 객체로 변환
+        #         lockout_time = datetime.fromisoformat(lockout_time)
+        #     else:
+        #         # 예상치 못한 데이터 타입이면 세션 초기화
+        #         session.pop('lockout_time', None) # dict.pop(key[, default]) default: null일경우 기본값
+        #         session['attempts'] = 0
+        #         return
+        #
+        #     # 현재 시간을 UTC로 설정
+        #     now = datetime.now(timezone.utc)
+        #
+        #     if now >= lockout_time:
+        #         session.pop('lockout_time', None)  # lockout_time 제거
+        #         session['attempts'] = 0
 
-            # lockout_time 값이 문자열인지 확인
-            if isinstance(lockout_time, str):
-                # 문자열을 datetime 객체로 변환
-                lockout_time = datetime.fromisoformat(lockout_time)
-            else:
-                # 예상치 못한 데이터 타입이면 세션 초기화
-                session.pop('lockout_time', None) # dict.pop(key[, default]) default: null일경우 기본값
-                session['attempts'] = 0
-                return
-
-            # 현재 시간을 UTC로 설정
-            now = datetime.now(timezone.utc)
-
-            if now >= lockout_time:
-                session.pop('lockout_time', None)  # lockout_time 제거
-                session['attempts'] = 0
-
-        if check_server_restarted():
-            session.clear()
+        # if check_server_restarted(): # 세션관리는 db로 이관했음 25.05.22.
+        #     session.clear()
 
 
         ####################### 추가 인증 #########################
@@ -239,9 +239,11 @@ def create_app():
             verified_at_str = get_verified_time(current_user.get_id())
 
             if not verified and current_user.get_id() == app.config['GUEST_USERNAME']:
+                print('test - 1')
                 return redirect(url_for('auth.verify_password', next=base_path))
             if not verified_at_str:
                 # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
+                print('test - 2')
                 return redirect(url_for('auth.verify_password', next=base_path))
 
             try:
