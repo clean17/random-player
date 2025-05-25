@@ -1,0 +1,47 @@
+.my-title-ellipsis{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.my-propile{
+    margin-left: 10px;
+}
+.my-grid{
+    /* display: grid;
+    grid-auto-flow: column;
+    grid-template-columns: auto auto auto auto;
+    gap: 20px; */
+
+    /* display: flex;
+    flex-wrap: wrap;
+    justify-content: start; */
+
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 10px;
+}
+.width-53{
+    width: 1300px;
+}
+#img-frame {
+    margin-bottom: 1rem;
+    text-align: center;
+    width: 50%;
+    height: auto;
+    object-fit: contain;
+    border-radius: 50%;
+}
+#imagePreview {
+    margin-top: 20px;
+    width: 100%;
+    height: auto;
+    border-radius: 5%;
+    margin-bottom: 1rem;
+    border: 1px solid gray;
+    object-fit: contain;
+    aspect-ratio: 3/4;
+}
+#photo-btn {
+    margin-top: 1rem;
+    width: 20%;
+}

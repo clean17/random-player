@@ -3,11 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <title>관리자 - 사용자 세션 초기화</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
         .search-box { margin-bottom: 30px; }
         .user-info { border: 1px solid #ddd; padding: 18px 22px; background: #fafafa; }
         .reset-btn { background: #ec5353; color: white; border: none; padding: 7px 18px; border-radius: 5px; cursor: pointer; margin-top: 12px; }
+
+        /* 디버깅 토스트 메세지 */
+        #debug-toast-container {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .debug-toast {
+            position: relative;  /* 부모인 container 기준 위치 */
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            animation: fadeInOut 3s ease-in-out forwards;
+            max-width: 80vw;
+            word-break: break-word;
+            text-align: center;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(10px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
     </style>
 </head>
 <body>
@@ -29,12 +61,48 @@
     {% else %}
     정상
     {% endif %}<br>
-    <form method="post" action="/admin/reset-user-session/{{ found_user.username }}" onsubmit="return confirm('정말 초기화하시겠습니까?');">
+    <form onsubmit="event.preventDefault(); reset_user_session();">
         <button class="reset-btn" type="submit">이 유저의 세션(시도횟수/락아웃) 초기화</button>
     </form>
 </div>
 {% elif request.method == 'POST' %}
 <p>검색 결과가 없습니다.</p>
 {% endif %}
+<script>
+    function showDebugToast(message, duration = 3000) {
+        let container = document.getElementById('debug-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'debug-toast-container';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'debug-toast';
+        toast.textContent = message;
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, duration);
+    }
+
+    function reset_user_session() {
+        if (confirm('정말 초기화하시겠습니까?')) {
+            axios.post('/admin/reset-user-session/{{ found_user.username }}', {
+            }, {
+            }).then(response => {
+                    if (response.status === 200) {
+                        showDebugToast(response.data);
+                    } else {
+                        showDebugToast('요청 실패');
+                    }
+                }).catch(err => {
+                    console.error(err);
+            });
+        }
+    }
+</script>
 </body>
 </html>
