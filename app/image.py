@@ -72,6 +72,13 @@ def get_images(start, count, dir):
         images.sort()
     return images[start:start + count]
 
+def get_reverse_images(start, count, dir):
+    images = sorted(
+        [f for f in os.listdir(dir) if not f.lower().endswith(('.zip', '.ini'))],
+        reverse=True
+    )
+    return images[start:start + count]
+
 
 def get_stock_graphs(dir, start, count):
     all_items = os.listdir(dir)
@@ -113,6 +120,7 @@ def get_stock_graphs(dir, start, count):
 @image_bp.route('/pages', methods=['GET'])
 @login_required
 def image_list():
+    # ?title=video-call&dir=temp
     # if current_user.username == settings['GUEST_USERNAME']:
     dir = request.args.get('dir')
     firstRequst = request.args.get('firstRequst')
@@ -136,7 +144,10 @@ def image_list():
             selected_dir = title_list[0] if title_list else TEMP_IMAGE_DIR  # 첫 번째 항목 자동 선택
 
         target_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
-        images = get_images(start, LIMIT_PAGE_NUM, target_dir)
+        if selected_dir == 'video-call':
+            images = get_reverse_images(start, LIMIT_PAGE_NUM, target_dir)
+        else:
+            images = get_images(start, LIMIT_PAGE_NUM, target_dir)
         images_length = count_non_zip_files(target_dir)
         dir = 'temp'
 
