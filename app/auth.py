@@ -1,14 +1,15 @@
 from datetime import datetime, timedelta, timezone
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, make_response
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from utils.wsgi_midleware import logger
 from utils.jwt import create_access_token
 from .rds import redis_client
 import time
+import pytz
 
 from config.config import settings
-from .repository.users.users import find_user_by_login_id
+from .repository.users.users import find_user_by_username, update_user_login_attempt, update_user_lockout_time
 
 auth = Blueprint('auth', __name__)
 
@@ -66,52 +67,50 @@ def issue_token():
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'attempts' not in session:
-        session['attempts'] = 0
-        session['lockout_time'] = None
-
-    # 현재 시간을 UTC로 설정
-    now = datetime.now(timezone.utc)
-
-    # 로그인 시도 제한을 초과했을 경우
-    if 'lockout_time' in session and session['lockout_time']:
-        # 문자열을 datetime으로 변환
-        lockout_time = datetime.fromisoformat(session['lockout_time'])
-        if now < lockout_time:
-            flash('Too many login attempts. Try again later.')
-            # return render_template('login.html')
-            return redirect(url_for('auth.lockout'))  # 로그인 제한 페이지로 리다이렉트
 
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         remember = request.form.get('remember_username', False)
 
+        # 현재 시간을 UTC로 설정
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+
         # data = request.get_json()
         # username = data.get('username')
         # password = data.get('password')
 
-        if session['attempts'] >= 5:
-            lockout_time = datetime.fromisoformat(session['lockout_time'])
-            if now < lockout_time:
-                flash('Too many login attempts. Try again later.')
-                # return render_template('login.html')
-                return redirect(url_for('auth.lockout'))
-            else:
-                session['attempts'] = 0
-                session['lockout_time'] = None
-
-        # print('attempt_username', username)
-
         # 로그인 검증
-        fetch_user = find_user_by_login_id(username) # db 조회
+        fetch_user = find_user_by_username(username) # db 조회
+
         if fetch_user and check_password_hash(fetch_user.password, password):
-        # if username in users and check_password_hash(users[username]['password'], password):
+        # if username in users and check_password_hash(users[username]['password'], password): # db 사용하지 않았을 때
         #     print(username, generate_password_hash(password))
+
+            if fetch_user.lockout_time:
+                lockout_time = fetch_user.lockout_time
+                if isinstance(lockout_time, str):
+                    dt = datetime.fromisoformat(lockout_time)
+                elif isinstance(lockout_time, datetime):
+                    dt = lockout_time
+                elif lockout_time is None:
+                    dt = None
+                else:
+                    raise ValueError(f"Unexpected type: {type(lockout_time)}")
+
+                lockout_time = dt.replace(tzinfo=kst)
+                if now < lockout_time:
+                    # flash('Too many login attempts. Try again later')
+                    print('Too many login attempts. Try again later')
+                    return redirect(url_for('auth.lockout'))  # 로그인 제한 페이지로 리다이렉트
+
 
             user = User(username)
             login_user(user)
+            update_user_login_attempt(username, 0)
             session['attempts'] = 0
+            session['lockout_time'] = None
 
             # GUEST_USERNAME 사용자라면
             if username == settings['GUEST_USERNAME']:
@@ -134,15 +133,43 @@ def login():
             else:
                 resp.set_cookie('remember_username', '', expires=0)
             return resp
-            # return redirect(url_for('main.home'))
+
         # 로그인 실패
         else:
-            logger.info(f"############################### login_fail: {username} {session['attempts']} ###############################")
-            session['attempts'] += 1
+            logger.info(f"############################### login_fail: {username} ###############################")
+
+            if fetch_user:
+                update_user_login_attempt(username, (fetch_user.login_attempt or 0) + 1)
+
+                if int(fetch_user.login_attempt or 0) >= 5:
+                    update_user_lockout_time(username, (now + timedelta(days=1)).isoformat())
+                    return redirect(url_for('auth.lockout'))  # 로그인 제한 페이지로 리다이렉트
+
+            # 로그인 아이디가 정보가 없음
+            else:
+                if 'attempts' not in session:
+                    session['attempts'] = 0
+                    session['lockout_time'] = None
+
+                session['attempts'] += 1
+
+                # 로그인 실패가 5번이 되면 세션에 락아웃 타임 저장
+                if session['attempts'] >= 5 and not session['lockout_time']:
+                    session['lockout_time'] = (now + timedelta(days=1)).isoformat() # UTC 시간 저장
+
+                # 세션에 락아웃이 걸렸을 경우
+                if 'lockout_time' in session and session['lockout_time']: # 키 있는지 + 키의 값이 falsy가 아닌지
+                    # 문자열을 datetime으로 변환
+                    lockout_time = datetime.fromisoformat(session['lockout_time'])
+                    if now < lockout_time:
+                        return redirect(url_for('auth.lockout'))  # 로그인 제한 페이지로 리다이렉트
+                    else:
+                        # 차단 시간이 지났을 경우 초기화
+                        session['attempts'] = 1
+                        session['lockout_time'] = None
+
             flash('Invalid username or password')
-            if session['attempts'] >= 5:
-                # session['lockout_time'] = datetime.now() + timedelta(days=1)
-                session['lockout_time'] = (now + timedelta(days=1)).isoformat()  # UTC 시간 저장
+
 
     return render_template('login.html', version=int(time.time()))
 
@@ -185,7 +212,7 @@ def check_verified():
     if verified_time:
         return jsonify({
             "success": "true",
-            "verified_time": get_verified_time(current_user.get_id())
+            "verified_time": verified_time
         });
     else:
         return jsonify({
