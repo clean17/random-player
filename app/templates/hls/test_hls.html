@@ -20,6 +20,9 @@
 <body>
 <video id="video" controls playsinline autoplay></video>
 <button onclick="loadVideo()">Load Video</button>
+<a href="/admin">
+    <button>관리자 페이지</button>
+</a>
 
 <script>
     const video = document.querySelector('#video');
@@ -52,6 +55,38 @@
             .then(res => console.log("Success:", res))
             .catch(err => console.error("Error:", err.response?.status, err.response?.data));
     }
+
+
+    ///////////////////// 테스트 스크립트 시작
+    function requestWithTimeout(obj, onTimeout) {
+        return axios.post(obj.url, obj.data, {
+            headers: {"Content-Type": "application/json"},
+            timeout: 3000 // 3초 초과시 자동 reject
+        }).then(res => {
+            console.log(res.data)
+            requestWithTimeout(obj, retryHandler);
+        }).catch(error => {
+            if (error.code === 'ECONNABORTED') { // reject
+                onTimeout();
+                return;
+            }
+            throw error; // 기타 에러는 그대로 던짐
+        });
+    }
+
+    const obj = {
+        url: '/func/settimeout'
+    }
+
+    // 사용 예시
+    const retryHandler = () => {
+        if (confirm('처리 중 장애가 발생했습니다. 재요청 하시겠습니까 ?')) {
+            requestWithTimeout(obj, retryHandler);
+        }
+    };
+    requestWithTimeout(obj, retryHandler);
+    //////////////////// 테스트 스크립트 종료
+
 
     document.addEventListener('DOMContentLoaded', () => {
         fetchSize();

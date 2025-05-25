@@ -25,6 +25,7 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+import random
 
 func = Blueprint('func', __name__)
 
@@ -618,3 +619,13 @@ def render_preview():
     url = data.get('url')
     # return fetch_url_preview(url)
     return fetch_url_preview_by_selenium(url)
+
+
+
+
+# test axios timeout
+@func.route('/settimeout', methods=['POST'])
+def test_settimeout():
+    delay = random.uniform(2.78, 2.99)
+    time.sleep(delay)
+    return "ok";
