@@ -130,3 +130,38 @@ button:hover {
     width: 100px;
     height: 100px;
 }
+
+
+/* 디버깅 토스트 메세지 */
+#debug-toast-container {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+
+.debug-toast {
+    position: relative;  /* 부모인 container 기준 위치 */
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    animation: fadeInOut 3s ease-in-out forwards;
+    max-width: 80vw;
+    word-break: break-word;
+    text-align: center;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(10px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
