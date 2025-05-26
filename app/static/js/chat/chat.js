@@ -48,14 +48,14 @@ function debounce(func, delay) {
     };
 }
 
-// throttle 적용 (일정 시간마다 요청)
+// throttle 적용 (짧은 시간에 여러 번 호출해도 일정 주기마다 한 번씩만 실행)
 function throttle(func, delay) {
     let throttleTimer = null;
     return function (...args) {
-        if (throttleTimer) return;
+        if (throttleTimer) return;  // 타이머가 돌아가는 중이면 아무 것도 하지 않음
         throttleTimer = setTimeout(() => {
             func.apply(this, args);
-            throttleTimer = null;
+            throttleTimer = null;   // 타이머 초기화 > 다음 실행 허용
         }, delay);
     };
 }
@@ -149,6 +149,23 @@ function connectSocket() {
         // socket.emit("user_info", { username: username, room: roomName });
     });
 
+    socket.on("enter_user", function(data) {
+        roomName = data.room;
+        // addMessage(data);
+    });
+
+    socket.on("bye", function(data) {
+        // console.log('현재 접속 중인 유저 목록:', userList);
+        // addMessage(data); // '나갔습니다.' 문구
+        // updateUserCount(Number(roomUserCount.textContent)-1); // 인원 표시 기능의 고찰이 필요
+
+        // 떠났는데 남아 있는 경우 처리
+        if (data.username !== username) {
+            document.getElementById('typingIndicator').style.display = 'none';
+            isTyping = false;
+        }
+    });
+
     socket.on("new_msg", async function (data) {
         if (lastChatId < data.chatId) {
             await addMessage(data);
@@ -164,29 +181,6 @@ function connectSocket() {
         }
     });
 
-    socket.on("message_read_ack", function (data) {
-        if (data.username !== username) {
-            setCheckIconsGreenUpTo(data.chatId);
-        }
-    })
-
-    socket.on("bye", function(data) {
-        // console.log('현재 접속 중인 유저 목록:', userList);
-        // addMessage(data);
-        updateUserCount(Number(roomUserCount.textContent)-1);
-
-        // 떠났는데 남아 있는 경우 처리
-        if (data.username !== username) {
-            document.getElementById('typingIndicator').style.display = 'none';
-            isTyping = false;
-        }
-    });
-
-    socket.on("enter_user", function(data) {
-        roomName = data.room;
-        // addMessage(data);
-    });
-
     // enter_room >> room_user_list
     socket.on("room_user_list", (userList) => {
         console.log('현재 접속 중인 유저 목록:', userList);
@@ -200,25 +194,11 @@ function connectSocket() {
         socket.emit("check_video_call_by_user", { userList: tempUserList });
     });
 
-    socket.on("find_video_call", (data) => {
-        if (data.socketId && !data.userList.includes(username)) {
-            videoCallBtn.style.backgroundColor = "green";
+    socket.on("message_read_ack", function (data) {
+        if (data.username !== username) {
+            setCheckIconsGreenUpTo(data.chatId);
         }
-    });
-
-    socket.on("video_call_ready", (data) => {
-        videoCallRoomName = data.videoCallRoomName;
-        if (username !== data.username) {
-            videoCallBtn.style.backgroundColor = "green";
-        }
-    });
-
-    socket.on("video_call_ended", (data) => {
-        videoCallRoomName = null;
-        if (username !== data.username) {
-            videoCallBtn.style.backgroundColor = "";
-        }
-    });
+    })
 
     socket.on("typing", (data) => {
         if ( data.username !== username ) {
@@ -236,6 +216,31 @@ function connectSocket() {
             document.getElementById('typingIndicator').style.display = 'none';
             isTyping = false;
         }
+    });
+
+
+
+    // 채팅방에 들어오고 나서 진행중인 영상통화 소켓 데이터 받음
+    socket.on("find_video_call", (data) => {
+        if (data.socketId && !data.userList.includes(username)) {
+            videoCallBtn.style.backgroundColor = "green";
+        }
+    });
+
+    // 채팅방에 들어와있는데 상대가 영상통화를 시작하면 채팅방으로 알림을 보낸다
+    socket.on("video_call_ready", (data) => {
+        videoCallRoomName = data.videoCallRoomName;
+        if (username !== data.username) {
+            videoCallBtn.style.backgroundColor = "green";
+        }
+    });
+
+    socket.on("video_call_ended", (data) => {
+        videoCallRoomName = null;
+        // if (username !== data.username) {
+        //     videoCallBtn.style.backgroundColor = "";
+        // }
+        videoCallBtn.style.backgroundColor = "";
     });
 }
 
@@ -284,6 +289,7 @@ document.addEventListener('visibilitychange', async () => {
                         chatObj = { chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
                         if (Number(lastChatId) < Number(chatObj.chatId)) {
                             addMessage(chatObj);
+                            setCheckIconsGreenUpTo(chatObj.chatId);
                         }
                     });
                 }
@@ -463,9 +469,9 @@ function loadMoreChats(event) {
             }
         })
         .then(() => {
-            setTimeout(() => {
+            /*setTimeout(() => {
                 updateUserReadChatId();
-            }, 300);
+            }, 300);*/
             if (event === 'init') {
                 // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
                 moveBottonScroll();
@@ -929,11 +935,22 @@ function enterEvent(event) {
     }
 }
 
+function renewChatSession() {
+    let tempInterval = setInterval(() => {
+        if (videoCallWindow) {
+            updateChatSession();
+        } else {
+            clearInterval(tempInterval);
+        }
+    }, 1000 * 60)
+}
+
 // 영상통화 창 열기
 function renderVideoCallWindow() {
     if (!videoCallWindow) {
         openVideoCallWindow();
-        trottledUpdate();
+        // trottledUpdate();
+        renewChatSession();
     } else {
         if (isMinimized) {
             videoCallWindow.style.visibility = "";
