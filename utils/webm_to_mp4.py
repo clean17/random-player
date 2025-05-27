@@ -29,7 +29,10 @@ def convert_webm_to_mp4(webm_path, output_dir):
         "-y",                                # overwrite
         mp4_path
     ]
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except Exception as e:
+        print(f"❗ FFMPEG 오류: {e}")
 
     if result.returncode == 0:
         # return mp4_path

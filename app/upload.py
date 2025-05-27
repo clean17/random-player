@@ -86,6 +86,8 @@ def upload_file():
                 elif file_ext in ['.webm']:
                     try:
                         file_path = os.path.join(target_dir, f"{uuid_filename}")
+                        if os.path.getsize(file_path) < 1024:  # 1KB 이하라면 사실상 빈 파일
+                            return jsonify({"error": "업로드된 파일이 손상되었거나 비어 있습니다."}), 400
                         file.save(file_path)
                         mp4_path = convert_webm_to_mp4(file_path, target_dir)
                         return jsonify({"result": "success", "mp4_file": mp4_path})
