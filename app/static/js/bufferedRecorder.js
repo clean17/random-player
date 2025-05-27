@@ -40,7 +40,7 @@ class BufferedRecorder {
     uploadBufferedBlob(uploadUrl, title = "video-call") {
         const blob = this.getBufferedBlob();
         const formData = new FormData();
-        formData.append('files[]', blob, `video-call_recording_${this._getTimestamp()}.webm`);
+        formData.append('files[]', blob, `video-call_${this._getTimestamp()}_recording.webm`);
         formData.append('title', title);
 
         return fetch(uploadUrl, {
@@ -48,15 +48,51 @@ class BufferedRecorder {
             body: formData
         }).then(res => {
             if (res.ok) {
-                console.log('✅ 업로드 성공');
+                this._showDebugToast('✅ 업로드 성공');
             } else {
-                console.error('❌ 업로드 실패');
+                this._showDebugToast('❌ 업로드 실패, retry');
             }
+        }).catch(error => {
+            this._showDebugToast('❌ 업로드 실패');
         });
     }
 
-    _getTimestamp() {
+    // 2025-05-09T10-05-16-041Z
+    /*_getTimestamp() {
         const now = new Date();
         return now.toISOString().replace(/[:.]/g, '-');
+    }*/
+
+    // 2025-05-09_220933
+    _getTimestamp() {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mi = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+
+        return `${yyyy}-${mm}-${dd}_${hh}${mi}${ss}`;
     }
+
+    _showDebugToast(message, duration = 3000) {
+        let container = document.getElementById('debug-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'debug-toast-container';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'debug-toast';
+        toast.textContent = message;
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, duration);
+    }
+
 }
