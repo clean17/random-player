@@ -1,8 +1,8 @@
-### 1. 가상환경 세팅
+## 가상환경 세팅
 ```bash
 $ python -m venv venv
 ```
-### 2. 가상환경 활성화
+## 가상환경 활성화
 ```bash
 $ source venv/bin/activate 
 
@@ -11,86 +11,48 @@ $ source venv/Scripts/activate  # windows (git bash)
 $ venv\Scripts\activate.bat     # cmd (windows terminal)
 ```
 
-### 2-1. push 전 requirements.txt 생성
+## push 전 requirements.txt 생성
 ```bash
 $ pip freeze > requirements.txt
 ```
-### 2-2. pull 후 가상환경에 패키지 설치
+## pull 후 가상환경에 패키지 설치
 ```bash
 $ pip install -r requirements.txt
 ```
 
-### 3. 애플리케이션 실행
+## 애플리케이션 실행
 ```bash
 python run.py
 ```
+<br>
 
-### 가상환경 제거
+---
+
+## 가상환경 제거
 ```bash
 rmdir /s /q venv # cmd
 ```
-### pip upgrade
+## pip upgrade
 ```bash
 python -m pip install --upgrade pip
 ```
 
-### 버전차이로 문제가 되는 패키지 재설치
+## 버전차이로 문제가 되는 패키지 재설치
 ```bash
 pip uninstall ffmpeg-python
 pip install ffmpeg-python
 ```
 
-### 사용 방법
-`config.ini` 파일을 생성 후 내부에 디렉토리를 지정한다
-```
-[settings]
-secret_key = 
-username = 
-password = 
-
-[directories]
-video_directory1 =
-video_directory2 = 
-ffmpeg_directory = 
-
-[paths]
-ffmpeg_script_path = 
-work_directory = 
-```
-
-### encodeURIComponent
+## encodeURIComponent
 JavaScript의 내장 함수로 URI의 특정 구성 요소를 인코딩하여 안전하게 전달한다<br>
 의미를 가지는 일부문자를 이스케이프한다
 ```js
 `/video/video/${encodeURIComponent(currentVideo)}?directory=${directory}`
 ```
+<br>
 
-### 인증서 생성
-```bash
-$ openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
-```
-```bash
-Generating a RSA private key
-................................................++++
-........................................................................................++++
-writing new private key to 'key.pem'
------
-You are about to be asked to enter information that will be incorporated
-into your certificate request.
-What you are about to enter is what is called a Distinguished Name or a DN.
-There are quite a few fields but you can leave some blank
-For some fields there will be a default value,
-If you enter '.', the field will be left blank.
------
-Country Name (2 letter code) [AU]:
-State or Province Name (full name) [Some-State]:
-Locality Name (eg, city) []:
-Organization Name (eg, company) [Internet Widgits Pty Ltd]:
-Organizational Unit Name (eg, section) []:
-Common Name (e.g. server FQDN or YOUR name) []:
-Email Address []:
-```
-### nginx 서버
+---
+## nginx 서버 (windows)
 `https://nginx.org/en/download.html` 에서 zip 파일을 다운받고 푼다 <br>
 `nginx.exe` 파일이 있는 위치에서 아래 명령어로 실행
 ```bash
@@ -113,12 +75,30 @@ C:/nginx/nginx-1.26.2/nginx.exe -s reload
 실행 결과 <br>
 
 ![img.png](app/static/readme/img.png)
-- Nginx와 Flask 연동 <br>
-  Flask 애플리케이션이 8090 포트에서 실행중이라면
+## nginx 재기동
 ```bash
-waitress-serve --port=80 run:app
+cd /c/nginx/nginx-1.26.2
+# graceful 종료
+./nginx.exe -s quit
+# 즉시 종료
+./nginx.exe -s stop
+# 기동 (백그라운드)
+start ./nginx.exe
+# 재기동 
+./nginx.exe -s reload
 ```
-- nginx 설정 수정 (`/conf/nginx.conf`) <br>
+작업스케줄러를 통해 실행되었다면 직접 제거 후 재기동한다
+```bash
+# Nginx 프로세스를 확인
+tasklist | findstr nginx
+# Nginx 프로세스를 강제 종료
+taskkill /F /IM nginx.exe
+# pid 파일 삭제
+cd ..\..\nginx\nginx-1.26.2\logs
+del nginx.pid
+```
+## Nginx와 Flask 연동 <br>
+Flask 애플리케이션이 8090 포트에서 실행중이라면 nginx 설정 수정 (`/conf/nginx.conf`) <br>
 80 포트를 내부서버 8090으로 연결
 ```bash
 server {
@@ -134,12 +114,75 @@ server {
     }
 }
 ```
-### ssl 적용
+<br>
 
-생성한 `cert.pem`, `key.pem`을 `conf`디렉토리의 `ssl`디렉토리에 넣는다<br>
+---
+## 작업 스케줄러
+
+- 작업 스케줄러 > 작업 만들기
+
+![img_3.png](app/static/readme/img_3.png)
+
+- 트리거 > 새로 만들기
+
+![img_5.png](app/static/readme/img_5.png)
+
+- 동작 > 새로 만들기
+
+![img_1.png](app/static/readme/img_1.png) <br>
+아래 값을 넣어서 nginx 서버 자동 시작<br>
+스크립트 `"C:\Program Files\Git\bin\bash.exe"` <br>
+인수 `-c "cd /c/nginx/nginx-1.26.2 && ./nginx.exe &"`
+
+마찬가지로 python 서버 자동 시작<br>
+스크립트 `wt.exe
+`<br>
+인수 `new-tab -p "Command Prompt" -d C:\my-project\random-player cmd /k "venv\Scripts\activate && python run.py"`
+
+<br>
+
+---
+## 인증서 생성
+자체 서명된(=self-signed) SSL 인증서 (개발용)
+```bash
+$ openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
+```
+
+
+## Let’s Encrypt 계열 무료 SSL 인증서 발급
+무료 인증서로 만료기한은 3월이다<br>
+사전 조건은 도메인을 등록해야 한다.
+- certbot (리눅스/WSL/유닉스 계열에서 많이 씀)
+```bash
+sudo certbot certonly --webroot -w certbot -d www.chickchick.shop
+```
+- wacs.exe (Windows용 Let's Encrypt 클라이언트, win-acme)<br>
+wacs.exe 가 설치된 디렉토리에서 아래 명령어 실행
+```bash
+wacs.exe --target manual --host "chickchick.shop, www.chickchick.shop" --webroot "C:\nginx\nginx-1.26.2\html" --accepttos --validation filesystem --store pemfiles --pemfilespath "C:\nginx\nginx-1.26.2\ssl"
+```
+아래 파일이 생성된다<br>
+![img_13.png](app/static/readme/img_13.png)
+
+무료 인증서 기한 3개월이 지나면 인증서가 만료된다 > 갱신 필요
+
+bash창에서 서버가 보내는 인증서로 만료기한 확인
+```bash
+$ openssl s_client -connect chickchick.shop:443 -servername chickchick.shop < /dev/null 2>/dev/null | openssl x509 -noout -dates
+
+notBefore=May 27 07:22:59 2025 GMT
+notAfter=Aug 25 07:22:58 2025 GMT
+```
+<br>
+
+---
+
+## Nginx SSL 적용
+
+
 ```bash
 server {
-    listen 443 ssl;  # 443 포트에서 SSL을 사용
+    listen 443 ssl;
     server_name yourdomain.com;  # 또는 localhost
 
     ssl_certificate     ssl/cert.pem;   # 인증서 파일 경로
@@ -165,52 +208,17 @@ server {
 }
 
 ```
-
-### 작업 스케줄러
-
-작업 스케줄러 > 작업 만들기
-
-![img_3.png](app/static/readme/img_3.png)
-
-트리거 > 새로 만들기
-
-![img_5.png](app/static/readme/img_5.png)
-
-동작 > 새로 만들기
-
-![img_1.png](app/static/readme/img_1.png) <br>
-스크립트 `"C:\Program Files\Git\bin\bash.exe"` <br>
-인수 `-c "cd /c/nginx/nginx-1.26.2 && ./nginx.exe &"`
-
-마찬가지로 python 서버 자동 시작<br>
-
-스크립트 `wt.exe
-`<br>
-인수 `new-tab -p "Command Prompt" -d C:\my-project\random-player cmd /k "venv\Scripts\activate && python run.py"`
-
-### nginx 재기동
+`ssl_certificate` : 서버 인증서 + 체인(중간 인증서 포함) 파일<br>
+win-acme에서는 `crt.pem`, `chain.pem`이 따로 생성되므로
+`crt.pem`+`chain.pem`을 합쳐서 넣는다.
 ```bash
-cd /c/nginx/nginx-1.26.2
-# graceful 종료
-./nginx.exe -s quit
-# 즉시 종료
-./nginx.exe -s stop
-# 기동 (백그라운드)
-start ./nginx.exe
-# 재기동 
-./nginx.exe -s reload
+$ copy chickchick.shop-crt.pem + chickchick.shop-chain.pem fullchain.pem
 ```
-작업스케줄러를 통해 실행되었다면 직접 제거 후 재기동한다
-```bash
-# Nginx 프로세스를 확인
-tasklist | findstr nginx
-# Nginx 프로세스를 강제 종료
-taskkill /F /IM nginx.exe
-# pid 파일 삭제
-cd ..\..\nginx\nginx-1.26.2\logs
-del nginx.pid
-```
-### 병렬 작업 비교
+<br>
+
+---
+
+## 병렬 작업 비교
 ![img_6.png](app/static/readme/img_6.png)
 ![img_11.png](app/static/readme/img_11.png)
 ### 멀티스레드, 멀티프로세스, asyncio I/O 처리 관점
@@ -218,7 +226,9 @@ del nginx.pid
 ![img_8.png](app/static/readme/img_8.png)
 ![img_9.png](app/static/readme/img_9.png)
 ![img_10.png](app/static/readme/img_10.png)
+<br>
 
+---
 ## Redis 설치
 Redis를 Windows 서비스로 설치
 ```cmd
@@ -250,7 +260,9 @@ SERVICE_NAME: redis
 127.0.0.1:6379> ping
 PONG
 ```
+<br>
 
+---
 ## PostgreSQL 도입
 도커에 설치하기 위해 먼저 Docker Desktop을 실행 후 이미지 다운로드
 ```bash
@@ -266,7 +278,7 @@ docker run --name mypg -e POSTGRES_PASSWORD=dlsdn317! -p 5432:5432 -d --restart 
 또는
 docker update --restart unless-stopped mypg
 ```
-bash로 진입
+bash로 실행한 컨테이너 진입
 ```bash
 docker exec -it mypg /bin/bash
 ```
@@ -282,7 +294,7 @@ psql -U postgres -d mydb
 CREATE USER chick WITH PASSWORD 'password';
 CREATE DATABASE mydb OWNER myuser;
 ```
-데이터베이스 접속
+PostgreSQL 데이터베이스 접속 명령어
 ```sql
 \c mydb chick
 
@@ -292,7 +304,7 @@ CREATE DATABASE mydb OWNER myuser;
 
 \q : psql 종료
 ```
-한국시간으로 변경
+DB 시간이 안맞아서 한국시간으로 변경
 ```bash
 vi /var/lib/postgresql/data/postgresql.conf
 
@@ -315,7 +327,7 @@ ALTER TABLE chats DROP CONSTRAINT chats_message_key;
 
 SELECT setval('chats_id_seq', (SELECT MAX(id) FROM chats));
 
-GRANT ALL PRIVILEGES ON TABLE chats_room TO myuser;
+GRANT ALL PRIVILEGES ON TABLE chat_rooms TO myuser;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO myuser;
 ```
 
@@ -323,4 +335,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO myuser;
 ```bash
 pip install psycopg-binary
 ```
+`app/repository/users/users.py` 참고<br>
 (설치가 안되는 이슈가 있으면 윈도우에 PostgreSql을 설치하고 Path 에 bin 경로 추가 필요)
+
+
