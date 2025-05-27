@@ -35,6 +35,7 @@ const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
 const audioInputSelect = document.getElementById('audioInputs');
 const autdioSelectDiv = document.querySelector('.audio-select');
+const expendWindowBtn = document.getElementById('expendWindow');
 const swichCameraBtn = document.getElementById('switchCamera');
 const captureBtn = document.getElementById('capture');
 const recordBtn = document.getElementById('record');
@@ -47,6 +48,7 @@ let muted = false;
 let myPeerConnection;
 let myDataChannel;
 let peerLeftTimeout;
+let windowFullSizeOn = false;
 let cameraOn = true;
 let audioOn = false;
 let micOn = false;
@@ -174,6 +176,24 @@ function getNowTimestamp() {
     return `${yyyy}-${mm}-${dd}_${hh}${mi}${ss}`;
 }
 
+function showDebugToast(message, duration = 3000) {
+    let container = document.getElementById('debug-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'debug-toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'debug-toast';
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, duration);
+}
 
 //////////////////////////////// Web RTC ///////////////////////////////////
 
@@ -349,42 +369,42 @@ function handleTrack(event) {
         const originalFps = settings.frameRate || 30;
         const canvasStream = recordCanvas.captureStream(originalFps);
 
-        /*myPeerConnection.ontrack = (event) => {
-            const track = event.track;
-            const stream = event.streams[0];
+        // 무음이면 노이즈 삽입 ? 테스트
+        if (stream.getAudioTracks().length === 0) {
+            // 무음 트랙을 강제로 삽입하는 코드 예시
+            const audioCtx = new AudioContext();
+            const oscillator = audioCtx.createOscillator();
+            const dst = audioCtx.createMediaStreamDestination();
+            oscillator.connect(dst);
+            oscillator.start();
+            canvasStream.addTrack(dst.stream.getAudioTracks()[0]);
+            // oscillator.stop()은 필요에 따라 적절히 관리
+        }
 
-            if (track.kind === 'audio') {
-                console.log('🎤 Audio track received:', track);
-            }
-        };*/
-
-        // 오디오 트랙이 있다면 canvasStream에 추가
+        // 1. 오디오 트랙이 있다면 canvasStream에 추가
         stream.getAudioTracks().forEach(track => {
-            // console.log('enabled:', track.enabled, 'muted:', track.muted);
-            console.log('audioTrack', track)
             canvasStream.addTrack(track);
         });
 
-        //✅ 대안: MediaStreamAudioDestinationNode를 사용해 오디오 수동 믹싱
-        /*
-        const audioContext = new AudioContext();
+        //✅ 2. 대안: MediaStreamAudioDestinationNode를 사용해 오디오 수동 믹싱
+        /*const audioContext = new AudioContext();
         const dest = audioContext.createMediaStreamDestination();
 
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(dest); // 상대 음성
 
         // canvas stream과 믹스
-        const canvasStream = recordCanvas.captureStream(originalFps);
         dest.stream.getAudioTracks().forEach(track => {
             canvasStream.addTrack(track);
-        });
-        */
+        });*/
 
-        globalRecoder = new BufferedRecorder(canvasStream, {
-            chunkDuration: 5,
-            bufferDuration: 30
-        });
-        globalRecoder.start();
+        if (!globalRecoder) {
+            globalRecoder = new BufferedRecorder(canvasStream, {
+                chunkDuration: 5,
+                bufferDuration: 30
+            });
+            globalRecoder.start();
+        }
     };
 }
 
@@ -416,6 +436,13 @@ function handlePeerAudio() {
 
     const icon = document.getElementById("audioIcon");
     icon.className = audioOn ? "fas fa-volume-up" : "fas fa-volume-mute";
+}
+
+function handleWindowSize() {
+    windowFullSizeOn = !windowFullSizeOn;
+
+    const icon = document.getElementById("expendWindowIcon");
+    icon.className = windowFullSizeOn ? "fas fa-compress" : "fas fa-expand";
 }
 
 async function handleCameraChange() {
@@ -499,6 +526,8 @@ recordBtn.addEventListener('click', recordPeerStream); // 녹화
 
 audioInputSelect?.addEventListener('change', handleAudioInputChange); // 내 마이크 전환 (모바일에서는 마이크랑 같이 묶여 있음)
 swichCameraBtn.addEventListener("click", handleCameraChange); // 내 카메라 전환
+
+expendWindowBtn.addEventListener('click', handleWindowSize);
 
 
 /////////////////////////// Drag Event //////////////////////////////////
@@ -595,7 +624,7 @@ function captureAndUpload() {
 
     canvas.toBlob(blob => {
         const formData = new FormData();
-        formData.append('files[]', blob, `screenshot_`+getNowTimestamp()+`.png`);
+        formData.append('files[]', blob, `video-call_`+getNowTimestamp()+`_screenshot.png`);
         formData.append('title', 'video-call');
 
         fetch('/upload', {
@@ -603,9 +632,9 @@ function captureAndUpload() {
             body: formData
         }).then(res => {
             if (res.ok) {
-                console.log('캡처 업로드 성공');
+                showDebugToast('✅ 캡쳐 성공');
             } else {
-                console.error('업로드 실패');
+                showDebugToast('❌ 캡쳐 실패');
             }
         });
     }, 'image/png');

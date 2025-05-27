@@ -9,10 +9,10 @@ function openVideoCallWindow() {
     if (!videoCallWindow) {
         videoCallWindow = document.createElement("div");
         videoCallWindow.style.position = "fixed";
-        videoCallWindow.style.bottom = "140px";
-        videoCallWindow.style.right = "30px";
-        videoCallWindow.style.width = "350px";
-        videoCallWindow.style.height = "500px";
+        videoCallWindow.style.top = "30px";
+        videoCallWindow.style.left = "30px";
+        videoCallWindow.style.width = "400px";
+        videoCallWindow.style.height = "560px";
         videoCallWindow.style.maxWidth = "100vw";
         videoCallWindow.style.maxHeight = "100vh";
         videoCallWindow.style.minWidth = "200px";
@@ -107,11 +107,13 @@ function getClientPosition(e) {
 }
 
 function startDrag(e) {
+    if (e.target.tagName.toLowerCase() !== 'span') { // 터치 스크롤, 새로고침 방지
+        // e.preventDefault();
+    }
     isDragging = true;
     const pos = getClientPosition(e);
     offsetX = pos.x - videoCallWindow.offsetLeft;
     offsetY = pos.y - videoCallWindow.offsetTop;
-    // e.preventDefault(); // 터치 스크롤 방지
 }
 
 function onDrag(e) {
