@@ -66,3 +66,21 @@ ul {
 .oauth-circle:hover {
     box-shadow: 0 2px 8px rgba(0,0,0,0.13);
 }
+
+
+.comic-font {
+    font-family: 'Gloria Hallelujah', 'Indie Flower', cursive;
+    margin: 15px 0 0 0;
+}
+.center-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;      /* 가로 중앙 정렬 */
+    justify-content: flex-start;  /* 위쪽부터 정렬 (필요하면 center로 변경) */
+    /*min-height: 100vh;        !* 세로 꽉 차게 (선택) *!*/
+}
+
+.center-image {
+    width: 30%;
+    margin-bottom: 20px;
+}
