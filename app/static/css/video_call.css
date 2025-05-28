@@ -50,28 +50,21 @@ button {
     border-radius: 5px;
     cursor: pointer;
 }
-/*.icon-buttons {
-    position: absolute;
-    top: 45%;
-    right: 5px;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;   !* ✅ 세로 정렬 핵심 *!
-    gap: 10px;                !* 버튼 사이 간격 *!
-    z-index: 10;
-}*/
+button:hover {
+    background: rgba(0, 0, 0, 0.6); /* ✅ hover 시 살짝 더 어둡게 */
+    transform: scale(1.1);
+}
 .icon-buttons {
     position: absolute;
     top: 45%;
     right: 5px;
     transform: translateY(-50%);
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* 2열 */
-    grid-template-rows: 1fr 1fr;    /* 2행 */
-    gap: 10px;                     /* 버튼 사이 간격 */
+    display: flex;
+    flex-direction: column;   /* ✅ 세로 정렬 핵심 */
+    gap: 10px;                /* 버튼 사이 간격 */
     z-index: 10;
 }
-.icon-buttons button {
+.circle-button {
     background: rgba(0, 0, 0, 0.4); /* ✅ 어두운 반투명 배경 추가 */
     border: 2px solid whitesmoke;
     border-radius: 50%;       /* ✅ 동그랗게 */
@@ -85,11 +78,11 @@ button {
     cursor: pointer;
     transition: background 0.2s, transform 0.2s;
 }
-.icon-buttons button:hover {
+.circle-button button:hover {
     background: rgba(0, 0, 0, 0.6); /* ✅ hover 시 살짝 더 어둡게 */
     transform: scale(1.1);
 }
-.icon-buttons i {
+.circle-button i {
     pointer-events: none;
 }
 

@@ -35,8 +35,7 @@ const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
 const audioInputSelect = document.getElementById('audioInputs');
 const autdioSelectDiv = document.querySelector('.audio-select');
-const expendWindowBtn = document.getElementById('expendWindow');
-const swichCameraBtn = document.getElementById('switchCamera');
+let switchCameraBtn = document.getElementById('switchCamera');
 const captureBtn = document.getElementById('capture');
 const recordBtn = document.getElementById('record');
 const recordIcon = recordBtn.querySelector('i');
@@ -48,7 +47,6 @@ let muted = false;
 let myPeerConnection;
 let myDataChannel;
 let peerLeftTimeout;
-let windowFullSizeOn = false;
 let cameraOn = true;
 let audioOn = false;
 let micOn = false;
@@ -382,12 +380,12 @@ function handleTrack(event) {
         }
 
         // 1. 오디오 트랙이 있다면 canvasStream에 추가
-        stream.getAudioTracks().forEach(track => {
+        /*stream.getAudioTracks().forEach(track => {
             canvasStream.addTrack(track);
-        });
+        });*/
 
         //✅ 2. 대안: MediaStreamAudioDestinationNode를 사용해 오디오 수동 믹싱
-        /*const audioContext = new AudioContext();
+        const audioContext = new AudioContext();
         const dest = audioContext.createMediaStreamDestination();
 
         const source = audioContext.createMediaStreamSource(stream);
@@ -396,7 +394,7 @@ function handleTrack(event) {
         // canvas stream과 믹스
         dest.stream.getAudioTracks().forEach(track => {
             canvasStream.addTrack(track);
-        });*/
+        });
 
         if (!globalRecoder) {
             globalRecoder = new BufferedRecorder(canvasStream, {
@@ -436,13 +434,6 @@ function handlePeerAudio() {
 
     const icon = document.getElementById("audioIcon");
     icon.className = audioOn ? "fas fa-volume-up" : "fas fa-volume-mute";
-}
-
-function handleWindowSize() {
-    windowFullSizeOn = !windowFullSizeOn;
-
-    const icon = document.getElementById("expendWindowIcon");
-    icon.className = windowFullSizeOn ? "fas fa-compress" : "fas fa-expand";
 }
 
 async function handleCameraChange() {
@@ -525,9 +516,6 @@ captureBtn.addEventListener('click', captureAndUpload); // 캡쳐
 recordBtn.addEventListener('click', recordPeerStream); // 녹화
 
 audioInputSelect?.addEventListener('change', handleAudioInputChange); // 내 마이크 전환 (모바일에서는 마이크랑 같이 묶여 있음)
-swichCameraBtn.addEventListener("click", handleCameraChange); // 내 카메라 전환
-
-expendWindowBtn.addEventListener('click', handleWindowSize);
 
 
 /////////////////////////// Drag Event //////////////////////////////////
@@ -555,6 +543,7 @@ function startDrag(e) {
     e.preventDefault(); // 터치 스크롤 방지
 }
 
+
 function onDrag(e) {
     if (!isDragging) return;
     const pos = getClientPosition(e);
@@ -576,6 +565,16 @@ function onDrag(e) {
     myFace.style.top = `${clampedY}px`;
     myFace.style.right = "auto";
     myFace.style.bottom = "auto";
+
+    // 버튼을 myFace의 좌하단에 위치시키기
+    const btnWidth = switchCameraBtn.offsetWidth;
+    const btnHeight = switchCameraBtn.offsetHeight;
+    switchCameraBtn.style.left = `${clampedX-15}px`;
+    switchCameraBtn.style.top = `${clampedY-15}px`;
+    // switchCameraBtn.style.top = `${clampedY + elemHeight - btnHeight - 10}px`;
+    switchCameraBtn.style.right = "auto";
+    switchCameraBtn.style.bottom = "auto";
+    switchCameraBtn.style.position = "absolute";
 }
 
 function endDrag() {
@@ -592,8 +591,35 @@ myFace.addEventListener("touchstart", startDrag, { passive: false });
 document.addEventListener("touchmove", onDrag, { passive: false });
 document.addEventListener("touchend", endDrag);
 
+function setSwitchCameraPos() {
+    if (!switchCameraBtn) {
+        switchCameraBtn = document.createElement('button');
+        switchCameraBtn.id = 'switchCamera';
+        switchCameraBtn.title = 'Switch Camera';
+        switchCameraBtn.className = 'circle-button';
+
+        const icon = document.createElement('i');
+        icon.id = 'switchCameraIcon';
+        icon.className = 'fas fa-sync-alt';
+        switchCameraBtn.appendChild(icon);
+
+        document.body.appendChild(switchCameraBtn);
+    }
+
+    const rect = myFace.getBoundingClientRect();
+    const btnWidth = switchCameraBtn.offsetWidth;
+    const btnHeight = switchCameraBtn.offsetHeight;
+    switchCameraBtn.style.left = rect.left - 15 + "px";
+    switchCameraBtn.style.top = rect.top - 15 + "px";
+    // switchCameraBtn.style.top = (rect.top + myFace.offsetHeight - btnHeight - 10) + "px";
+    switchCameraBtn.style.position = "absolute";
+    switchCameraBtn.style.zIndex = '10';
+    switchCameraBtn.addEventListener("click", handleCameraChange); // 내 카메라 전환
+    setVideoCallButtonsOpacity(0.5);
+}
 
 /////////////////////////////// SAVE SCREENSHOT /////////////////////////////////
+
 
 // 캔버스에 그려서 녹화
 function startDrawingLoop(video, width, height) {
@@ -643,8 +669,8 @@ function captureAndUpload() {
 /////////////////////// Control Buttons Opacity ///////////////////////
 
 function setVideoCallButtonsOpacity(opacity) {
-    document.querySelectorAll('.icon-buttons button').forEach(btn => {
-        btn.style.opacity = opacity;
+    document.querySelectorAll('.fas').forEach(btn => {
+        btn.closest('button').style.opacity = opacity;
     });
     autdioSelectDiv.style.opacity = opacity;
 }
@@ -662,6 +688,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     await getMedia(); // stream 초기화, RTCrtpSender에 stream track 추가
     await makeConnection();
     socket.emit('join_room', roomName, username);
+    setSwitchCameraPos();
+
 
     // console.log('sender', myPeerConnection.getSenders())
 })

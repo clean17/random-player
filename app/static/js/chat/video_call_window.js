@@ -1,7 +1,8 @@
 let videoCallWindow = null,
     isDragging = false,
     offsetX = 0,
-    offsetY = 0;
+    offsetY = 0,
+    windowFullSizeOn = true;
 
 ////////////////////////// Video Call //////////////////////////////
 
@@ -9,10 +10,10 @@ function openVideoCallWindow() {
     if (!videoCallWindow) {
         videoCallWindow = document.createElement("div");
         videoCallWindow.style.position = "fixed";
-        videoCallWindow.style.top = "30px";
-        videoCallWindow.style.left = "30px";
-        videoCallWindow.style.width = "400px";
-        videoCallWindow.style.height = "560px";
+        videoCallWindow.style.top = "15px";
+        videoCallWindow.style.left = "15px";
+        videoCallWindow.style.width = "380px";
+        videoCallWindow.style.height = "530px";
         videoCallWindow.style.maxWidth = "100vw";
         videoCallWindow.style.maxHeight = "100vh";
         videoCallWindow.style.minWidth = "200px";
@@ -34,13 +35,20 @@ function openVideoCallWindow() {
     topBar.style.color = "#fff";
     topBar.style.padding = "4px 8px";
 
+
     const hideBtn = document.createElement("span");
-    hideBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';  // 🔽 숨기기
+    // hideBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';  // 🔽 숨기기
+    hideBtn.innerHTML = '<i id="expendWindowIcon" class="fas fa-compress"></i>';  // 🔽 숨기기
     hideBtn.style.cursor = "pointer";
     hideBtn.onclick = () => {
-        videoCallWindow.style.visibility = "hidden";
-        videoCallWindow.style.opacity = "0";
-        isMinimized = true;
+        // videoCallWindow.style.visibility = "hidden";
+        // videoCallWindow.style.opacity = "0";
+
+        windowFullSizeOn = !windowFullSizeOn;
+        const icon = document.getElementById("expendWindowIcon");
+        icon.className = windowFullSizeOn ? "fas fa-compress" : "fas fa-expand";
+        videoCallWindow.style.width = windowFullSizeOn ? "380px" : "200px";
+        videoCallWindow.style.height = windowFullSizeOn ? "530px" : "300px";
     };
 
     const closeBtn = document.createElement("span");
@@ -52,6 +60,21 @@ function openVideoCallWindow() {
             videoCallWindow = null;
         }
     };
+
+    hideBtn.addEventListener("touchstart", function(e) {
+        e.stopPropagation();
+    }, { passive: false });
+
+    closeBtn.addEventListener("touchstart", function(e) {
+        e.stopPropagation();
+    }, { passive: false });
+
+    hideBtn.addEventListener("mousedown", function(e) {
+        e.stopPropagation();
+    });
+    closeBtn.addEventListener("mousedown", function(e) {
+        e.stopPropagation();
+    });
 
     topBar.appendChild(hideBtn);
     topBar.appendChild(closeBtn);
@@ -108,7 +131,7 @@ function getClientPosition(e) {
 
 function startDrag(e) {
     if (e.target.tagName.toLowerCase() !== 'span') { // 터치 스크롤, 새로고침 방지
-        // e.preventDefault();
+        e.preventDefault();
     }
     isDragging = true;
     const pos = getClientPosition(e);
