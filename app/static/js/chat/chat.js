@@ -167,7 +167,7 @@ function connectSocket() {
     });
 
     socket.on("new_msg", async function (data) {
-        if (lastChatId < data.chatId) {
+        if (lastChatId < Number(data.chatId)) {
             await addMessage(data);
         }
 
@@ -196,7 +196,7 @@ function connectSocket() {
 
     socket.on("message_read_ack", function (data) {
         if (data.username !== username) {
-            setCheckIconsGreenUpTo(data.chatId);
+            setCheckIconsGreenUpTo(Number(data.chatId));
         }
     })
 
@@ -278,16 +278,18 @@ document.addEventListener('visibilitychange', async () => {
             })
             .then(data => {
                 if (data.logs.length > 0) {
-                    const tempArr = []
+                    /*const tempArr = []
 
                     data.logs.map(log => {
                         tempArr.push(log)
-                    });
+                    });*/
+
+                    const tempArr = data.logs.map(log => log);
 
                     tempArr.forEach(log => {
                         const [chatId, timestamp, username, msg] = log.toString().split("|");
                         chatObj = { chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
-                        if (Number(lastChatId) < Number(chatObj.chatId)) {
+                        if (lastChatId < Number(chatObj.chatId)) {
                             addMessage(chatObj);
                             setCheckIconsGreenUpTo(chatObj.chatId);
                         }
@@ -339,7 +341,7 @@ function getPeerLastReadChatId(option = null) {
     })
         .then(response => response.json())
         .then(data => {
-            peerLastReadChatId = data['last_read_chat_id']
+            peerLastReadChatId = Number(data['last_read_chat_id']);
         })
         .then(() => {
             if (option === 'init') {
@@ -529,11 +531,7 @@ function addMessage(data, load = false) {
         data.timestamp = timestamp;
     }
 
-    if (Number(lastChatId) < Number(data.chatId)) { // 로드한 메세지가 아닌 추가된 메세지는 chatId가 없는데 ?
-        lastChatId = data.chatId;
-    }
-
-    const messageRow = renderMessageRow(isMine, data.chatId);
+    const messageRow = renderMessageRow(isMine, Number(data.chatId));
     const messageDiv = renderMessageDiv();
 
     if (isMine) {
@@ -655,7 +653,7 @@ function addMessage(data, load = false) {
         if (isMine) {
             messageRow.appendChild(renderTimeDiv(timeStr));
             const checkIcon = renderCheckIcon();
-            if (peerLastReadChatId && Number(peerLastReadChatId) >= Number(data.chatId)) {
+            if (peerLastReadChatId && peerLastReadChatId >= Number(data.chatId)) {
                 if (load) {
                     // checkIcon.style.color = "green";
                     checkIcon.style.setProperty("color", "green", "important");
@@ -667,6 +665,10 @@ function addMessage(data, load = false) {
             messageRow.appendChild(messageDiv);
             messageRow.appendChild(renderTimeDiv(timeStr));
         }
+    }
+
+    if (lastChatId < Number(data.chatId)) {
+        lastChatId = Number(data.chatId);
     }
 }
 
@@ -989,8 +991,8 @@ function handleChatScroll() {
 
 
 
-function initPage() {
-    checkVerified();
+async function initPage() {
+    await checkVerified();
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
     getPeerLastReadChatId('init'); // 상대가 마지막으로 읽은 채팅 ID 조회
 
@@ -1007,7 +1009,7 @@ function initPage() {
     chatInput.removeEventListener('keydown', enterEvent);
     chatInput.addEventListener('keydown', enterEvent)
     // 모바일에서 키보드가 사라질 때의 이벤트
-    chatInput.addEventListener('blur', () => {
+    /*chatInput.addEventListener('blur', () => {
         let attempt = 0;
         const maxAttempts = 20;
 
@@ -1019,7 +1021,7 @@ function initPage() {
                 clearInterval(intervalId);
             }
         }, 50);
-    });
+    });*/
     chatInput.focus();
 
     // 채팅 전송
@@ -1048,7 +1050,7 @@ function initPage() {
     // document.addEventListener('touchmove', blockTouchMoveEvent, {passive: false});
 
     // 웹 소켓 연결 > 유저 입장
-    socket.emit("enter_room", { username: username, room: roomName });
+    socket.emit("enter_room", {username: username, room: roomName});
 
     setTimeout(() => {
         // 채팅 데이터가 렌더링 된 이후 리스너 추가

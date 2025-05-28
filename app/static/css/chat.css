@@ -22,7 +22,7 @@ body, html {
 
 .top-bar {
     position: fixed;
-    opacity: 0.4;
+    /*opacity: 0.4;*/
     top: 15px;
     left: 0;
     width: 100%;
