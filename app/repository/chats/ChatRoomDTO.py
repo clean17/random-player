@@ -7,3 +7,4 @@ class ChatRoomDTO:
     created_at: str = None  # datetime 사용 가능
     updated_at: str = None  # datetime 사용 가능
     room_name: str = None
+    last_chat_id: int = None

@@ -23,10 +23,10 @@ def find_chats_by_offset(offset: int, limit: int, conn=None) -> List["ChatDTO"]:
     return chats
 
 @db_transaction
-def find_chats_roos_by_roomname(roomname: str, conn=None) -> List["ChatRoomDTO"]:
+def find_chat_room_by_roomname(roomname: str, conn=None) -> List["ChatRoomDTO"]:
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
-            "SELECT * FROM chats_room WHERE room_name = %s;",
+            "SELECT * FROM chat_rooms WHERE room_name = %s;",
             (roomname,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
         )
         row = cur.fetchone()
@@ -47,8 +47,8 @@ def get_chats_count(conn=None) -> int:
 def insert_chat(chat: "ChatDTO", conn=None) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO chats (created_at, user_id, message, chats_room_id) VALUES (%s, %s, %s, %s) RETURNING id;",
-            (chat.created_at, chat.user_id, chat.message, chat.chats_room_id)
+            "INSERT INTO chats (created_at, user_id, message, chat_room_id) VALUES (%s, %s, %s, %s) RETURNING id;",
+            (chat.created_at, chat.user_id, chat.message, chat.chat_room_id)
         )
         chat_id = cur.fetchone()[0]
         return chat_id

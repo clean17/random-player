@@ -3,7 +3,7 @@ from datetime import datetime
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.chats import insert_chat, find_chats_by_offset, chats_to_line_list, get_chats_count
 
-chat = ChatDTO(created_at=str(datetime.now()), user_id=3, message="칼럼 추가 테스트", chats_room_id=1)
+chat = ChatDTO(created_at=str(datetime.now()), user_id=3, message="칼럼 추가 테스트", chat_room_id=1)
 inserted_id = insert_chat(chat)
 print("Inserted chat id:", inserted_id)
 
