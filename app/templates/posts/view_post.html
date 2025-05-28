@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <title>{{ post.title }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            margin: 0;
+            background: #f4f6fa;
+            min-height: 100vh;
+        }
+        .post-container {
+            max-width: 540px;
+            margin: 60px auto 0 auto;
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 4px 20px #0001;
+            padding: 32px 28px 24px 28px;
+        }
+        .post-title {
+            font-size: 1.7em;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #134aa9;
+            letter-spacing: -1px;
+        }
+        .post-meta {
+            color: #7b7b7b;
+            font-size: 0.96em;
+            margin-bottom: 10px;
+        }
+        hr {
+            border: none;
+            border-top: 1px solid #ebebeb;
+            margin: 20px 0 18px 0;
+        }
+        .post-content {
+            font-size: 1.12em;
+            color: #222;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .post-actions {
+            margin-top: 36px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .btn-main {
+            background: linear-gradient(90deg, #1565c0, #2492ff 90%);
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 10px 26px;
+            font-size: 1em;
+            font-weight: 500;
+            box-shadow: 0 1px 6px #0001;
+            cursor: pointer;
+            transition: background 0.18s, box-shadow 0.18s, transform 0.13s;
+        }
+        .btn-main:hover {
+            background: #134aa9;
+            box-shadow: 0 2px 12px #2492ff22;
+            transform: translateY(-2px) scale(1.04);
+        }
+        .btn-secondary {
+            background: #f1f3f7;
+            color: #134aa9;
+            border: 1px solid #dbe7fa;
+            border-radius: 7px;
+            padding: 10px 24px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s, border 0.15s, color 0.15s;
+        }
+        .btn-secondary:hover {
+            background: #eaf1fb;
+            color: #1565c0;
+            border-color: #b7d5f7;
+        }
+
+        @media (max-width: 640px) {
+            .post-container {
+                max-width: 98vw;
+                margin: 16px 1vw 0 1vw;
+                padding: 20px 5vw 18px 5vw;
+            }
+            .post-title {
+                font-size: 1.27em;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="post-container">
+    <h2 class="post-title">{{ post.title }}</h2>
+    <div class="post-meta">작성자: {{ post.author }} &nbsp;|&nbsp; {{ post.date }}</div>
+    <hr>
+    <div class="post-content">{{ post.content }}</div>
+    <div class="post-actions">
+        <a href="/posts/{{ post.id }}/edit"><button class="btn-main">수정</button></a>
+        <a href="/posts"><button class="btn-secondary">목록</button></a>
+    </div>
+</div>
+</body>
+</html>

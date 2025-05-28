@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <title>Post List</title>
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            margin: 0;
+            background: #f4f6fa;
+            min-height: 100vh;
+        }
+        .post-list {
+            max-width: 640px;
+            margin: 60px auto 0 auto;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .top-bar h2 {
+            margin: 0;
+            font-size: 1.35em;
+            color: #1458c1;
+            letter-spacing: -1px;
+        }
+        .top-bar .new-post-btn {
+            background: linear-gradient(90deg, #1565c0, #2492ff 90%);
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 8px 20px;
+            font-size: 1em;
+            font-weight: 500;
+            box-shadow: 0 1px 6px #1565c016;
+            cursor: pointer;
+            transition: background 0.15s, box-shadow 0.15s;
+        }
+        .top-bar .new-post-btn:hover {
+            background: #134aa9;
+            box-shadow: 0 3px 14px #2492ff22;
+        }
+        .post-box {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 4px 20px #0001;
+            margin-bottom: 26px;
+            padding: 24px 22px 16px 22px;
+            transition: box-shadow 0.18s;
+        }
+        .post-box:hover {
+            box-shadow: 0 6px 24px #2492ff1b;
+        }
+        .post-title {
+            font-size: 1.15em;
+            font-weight: bold;
+            margin: 0 0 8px 0;
+            color: #134aa9;
+            transition: color 0.14s;
+        }
+        .post-title a {
+            color: inherit;
+            text-decoration: none;
+            transition: color 0.14s;
+        }
+        .post-title a:hover {
+            color: #2492ff;
+        }
+        .post-meta {
+            font-size: 0.96em;
+            color: #7b7b7b;
+            margin-bottom: 8px;
+        }
+        .post-content {
+            margin: 0;
+            color: #222;
+            font-size: 1.08em;
+            white-space: pre-wrap;
+            line-height: 1.75;
+        }
+        .pagination {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .pagination button, .pagination a > button {
+            margin: 0 4px;
+            padding: 7px 15px;
+            border: none;
+            border-radius: 6px;
+            background: #eee;
+            color: #333;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.15s, color 0.15s;
+        }
+        .pagination button.active {
+            background: #1565c0;
+            color: #fff;
+        }
+        .pagination button:not(.active):hover {
+            background: #e3ecfa;
+            color: #1565c0;
+        }
+        @media (max-width: 700px) {
+            .post-list {
+                max-width: 98vw;
+                margin: 18px 1vw 0 1vw;
+            }
+            .post-box {
+                padding: 14px 3vw 12px 3vw;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="post-list">
+    <div class="top-bar">
+        <h2>게시글 목록</h2>
+        <a href="/posts/create"><button class="new-post-btn">글쓰기</button></a>
+    </div>
+
+    {% for post in posts %}
+    <div class="post-box">
+        <div class="post-title">
+            <a href="/posts/{{ post.id }}">{{ post.title }}</a>
+        </div>
+        <div class="post-meta">작성자: {{ post.author }} | {{ post.date }}</div>
+        <div class="post-content">{{ post.content }}</div>
+    </div>
+    {% endfor %}
+
+    <div class="pagination">
+        {% for p in range(1, max_page+1) %}
+        {% if p == page %}
+        <button class="active">{{ p }}</button>
+        {% else %}
+        <a href="/posts?page={{ p }}"><button>{{ p }}</button></a>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+</body>
+</html>
