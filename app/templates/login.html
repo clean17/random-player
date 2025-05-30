@@ -8,21 +8,21 @@
 {% endblock %}
 
 {% block content %}
-<div class="center-wrapper">
-    <h1 class="comic-font">chickchick.shop</h1>
-    <img src="/static/favicon.ico" class="center-image">
+<div class="logo-center-wrapper">
+    <h1 class="comic-font" style="margin-bottom: 0px">chickchick.shop</h1>
+    <img src="/static/favicon.ico" class="login-logo-image">
 
 </div>
 <form method="POST" action="/auth/login">
     {# <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> #}
     <!--    <form onsubmit="event.preventDefault(); login();">-->
-    <div>
+    <div class="input-login">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username"
                value="{{ request.cookies.get('remember_username', '') }}"
                required>
     </div>
-    <div>
+    <div class="input-login">
         <label for="password">Password:</label>
         <input type="password" id="password" name="password" value="" required>
     </div>
@@ -38,7 +38,7 @@
     <button type="submit" class="btn-w100">Login</button>
 
     <!-- Remember me 체크박스 -->
-    <div style="margin: 10px 0 0 0; display: flex; align-items: center;">
+    <div style="margin: 5px 0 0 0; display: flex; align-items: center;">
         <input type="checkbox" id="remember_username" name="remember_username"
                {% if request.cookies.get('remember_username') %}checked{% endif %}
                style="margin-right: 7px;">
@@ -52,7 +52,7 @@
     </div>-->
 
     <!-- 구분선 추가 -->
-    <div style="display: flex; align-items: center; margin: 28px 0 18px 0;">
+    <div style="display: flex; align-items: center; margin: 20px 0 0 0;">
         <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">
         <span style="margin: 0 14px; font-size: 0.98em; color: #888;">or other login</span>
         <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">

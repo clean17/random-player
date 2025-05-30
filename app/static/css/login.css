@@ -14,8 +14,9 @@ form {
     width: 250px;
     margin: 0 auto;
 }
-div {
-    margin-bottom: 15px;
+/* input 태그 */
+.input-login {
+    margin-bottom: 20px;
 }
 label {
     display: block;
@@ -30,11 +31,9 @@ input[type="text"], input[type="password"] {
 }
 button {
     padding: 10px;
-    background-color: #007BFF;
 }
-button:hover {
-    background-color: #0056b3;
-}
+
+/* flask login 오류 메세지 */
 ul {
     padding: 0;
     list-style: none;
@@ -42,7 +41,7 @@ ul {
 }
 
 
-
+/* 비밀번호 찾기 주석됨 */
 .btn-link {
     background: none;
     border: none;
@@ -52,6 +51,7 @@ ul {
     font-size: 1rem;
 }
 
+/* 로그인 oauth 버튼 */
 .oauth-circle {
     display: flex;
     align-items: center;
@@ -64,23 +64,20 @@ ul {
     transition: box-shadow 0.2s;
 }
 .oauth-circle:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.13);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 
-.comic-font {
-    font-family: 'Gloria Hallelujah', 'Indie Flower', cursive;
+.h1 {
     margin: 15px 0 0 0;
 }
-.center-wrapper {
+.logo-center-wrapper {
     display: flex;
     flex-direction: column;
-    align-items: center;      /* 가로 중앙 정렬 */
+    align-items: center;
     justify-content: flex-start;  /* 위쪽부터 정렬 (필요하면 center로 변경) */
-    /*min-height: 100vh;        !* 세로 꽉 차게 (선택) *!*/
 }
-
-.center-image {
+.login-logo-image {
     width: 30%;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
 }

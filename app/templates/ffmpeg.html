@@ -23,8 +23,8 @@
     <form action="{{ url_for('ffmpeg.run-batch') }}" method="post" onsubmit="return valid()">
         <input type="text" id="clipboard_input" name="keyword" placeholder="Enter keyword" class="input-size" autocomplete="off">
         <input type="hidden" id="hidden_input" name="clipboard_content" placeholder="Enter keyword" class="input-size">
-<!--        <button type="button" onclick="pasteFromClipboard()" class="input-button-size">Paste from Clipboard</button>-->
-        <button type="submit" class="input-button-size">Run Batch</button>
+<!--        <button type="button" onclick="pasteFromClipboard()" class="">Paste from Clipboard</button>-->
+        <button type="submit" class="btn-w100">Run Batch</button>
     </form>
 </div>
 <script>
