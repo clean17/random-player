@@ -4,13 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Uppy Upload</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/file_uploader.css') }}">
+
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/directory_select.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/file_uploader.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/uppy.css">
+
+    <script src="/static/js/uppy/uppy.min.js"></script>
+    <script src="/static/js/common.js?v={{ version }}"></script>
+
     <!--    <link href="https://releases.transloadit.com/uppy/v4.12.2/uppy.min.css" rel="stylesheet">-->
     <!--    <script src="https://releases.transloadit.com/uppy/v4.12.2/uppy.min.js"></script>-->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/uppy.css') }}">
-    <script src="{{ url_for('static', filename='js/uppy/uppy.min.js') }}"></script>
+    <style>
+        .uppy-Dashboard-inner {
+            background-color: #f8f8f8;
+        }
+
+        /* 토스트로 변경 */
+        /*.save-message {
+            top: 35%;
+            right: 47%;
+        }*/
+    </style>
 </head>
 <body>
 <div class="top-bar">
@@ -44,7 +59,7 @@
             {% endfor %}
         </select>
         <input type="file" name="files[]" multiple style="margin-bottom: 10px" id="fileInput" class="input-size">
-        <button type="submit" class="input-button-size">Start Upload</button>
+        <button type="submit" class="btn-w100">Start Upload</button>
     </form>
 
     <!-- 진행률 표시 영역 -->
@@ -67,7 +82,7 @@
 
 
     // 공통 //
-    function showMessagePopup(text = '기본메세지', state = 'success') {
+    /*function showMessagePopup(text = '기본메세지', state = 'success') {
         let message = document.getElementById("save-message");
         message.textContent = text;
         message.style.display = "block";  // 메시지 표시
@@ -79,7 +94,7 @@
         setTimeout(() => {
             message.style.display = "none";  // 2초 후 메시지 숨김
         }, 2000);
-    }
+    }*/
 
     function enterTitle() {
         titleInput.value = titleSelect.value;
@@ -263,7 +278,8 @@
                 // submitted = false; // 다시 전송 가능하게
                 if (xhr.status === 200) {
                     submitted = false; // 다시 전송 가능하게
-                    showMessagePopup('✔ 저장되었습니다', 'success');
+                    // showMessagePopup('✔ 저장되었습니다', 'success');
+                    showDebugToast('✔ 저장되었습니다');
                     setTimeout(() => {
                         window.location.href = `/upload/?title=${encodeURIComponent(titleInput.value)}`;
                     }, 1000);
