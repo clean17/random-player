@@ -1,12 +1,16 @@
 body, html {
     margin: 0;
     padding: 0;
-    height: 100%;
-    width: 100%;
+    /*height: 100%;*/
+    /*width: 100%;*/
+    min-height: 100%; /* flex가 있으면 가운데 정렬 */
     background-color: black;
     font-family: Arial, sans-serif;
 }
 
+.comic-font {
+    font-family: 'Gloria Hallelujah', 'Indie Flower', cursive;
+}
 
 .top-bar {
     position: absolute;
@@ -34,36 +38,19 @@ body, html {
 .top-bar a:hover{
     background-color: #0056b3;
 }
-
-
-.back {
+.top-bar .back {
     position: absolute;
     top: 10px;
     left: 10px;
 }
-.logout {
+.top-bar .logout {
     position: absolute;
     top: 10px;
     right: 10px;
-    z-index: 2;
-}
-.back a, .logout a {
-    font-size: 16px;
-    padding: 10px;
-    margin: 5px;
-    cursor: pointer;
-    background-color: black;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    opacity: 0.8;
-    text-decoration: none;
-}
-.back a:hover, .logout a:hover {
-    background-color: #0056b3;
 }
 
 
+/* form 입력박스 */
 .input-size {
     width: 100%;
     padding: 15px;
@@ -73,8 +60,8 @@ body, html {
     box-sizing: border-box;
     margin-bottom: 10px;
 }
-.input-button-size {
-    width: 100%;
+
+button {
     padding: 15px;
     border: none;
     border-radius: 5px;
@@ -82,22 +69,8 @@ body, html {
     color: white;
     font-size: 18px;
     cursor: pointer;
-    margin-bottom: 10px;
     box-sizing: border-box;
-}
-.input-button-size:hover {
-    background-color: #007BFF;
-}
-
-
-button {
-    /*width: 100%;*/
-    border: none;
-    border-radius: 5px;
-    background-color: #0056b3;
-    color: white;
-    font-size: 18px;
-    cursor: pointer;
+    margin-bottom: 10px;
 }
 .btn-w100 {
     width: 100%;
@@ -121,7 +94,6 @@ button:hover {
     z-index: 9999;
     pointer-events: all; /* 모든 이벤트를 이 요소로 제한 */
 }
-
 #overlay img {
     position: absolute;
     top: 45%;
@@ -144,8 +116,6 @@ button:hover {
     align-items: center;
     gap: 8px;
 }
-
-
 .debug-toast {
     position: relative;  /* 부모인 container 기준 위치 */
     background-color: rgba(0, 0, 0, 0.8);
@@ -158,10 +128,23 @@ button:hover {
     word-break: break-word;
     text-align: center;
 }
-
 @keyframes fadeInOut {
     0% { opacity: 0; transform: translateY(10px); }
     10% { opacity: 1; transform: translateY(0); }
     90% { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-10px); }
+}
+
+
+/* 저장 완료 메시지 스타일 */
+.save-message {
+    position: absolute;
+    background: rgba(0, 128, 0, 0.8);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-size: 14pt;
+    font-weight: bold;
+    display: none;
+    z-index: 10;
 }
