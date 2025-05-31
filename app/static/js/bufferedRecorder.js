@@ -40,7 +40,7 @@ class BufferedRecorder {
     uploadBufferedBlob(uploadUrl, title = "video-call") {
         const blob = this.getBufferedBlob();
         const formData = new FormData();
-        formData.append('files[]', blob, `video-call_${this._getTimestamp()}_recording.webm`);
+        formData.append('files[]', blob, `video-call_${this.#getTimestamp()}_recording.webm`);
         formData.append('title', title);
 
         return fetch(uploadUrl, {
@@ -48,23 +48,23 @@ class BufferedRecorder {
             body: formData
         }).then(res => {
             if (res.ok) {
-                this._showDebugToast('✅ 업로드 성공');
+                this.#showDebugToast('✅ 업로드 성공');
             } else {
-                this._showDebugToast('❌ 업로드 실패, retry');
+                this.#showDebugToast('❌ 업로드 실패, retry');
             }
         }).catch(error => {
-            this._showDebugToast('❌ 업로드 실패');
+            this.#showDebugToast('❌ 업로드 실패');
         });
     }
 
     // 2025-05-09T10-05-16-041Z
-    /*_getTimestamp() {
+    /*#getTimestamp() {
         const now = new Date();
         return now.toISOString().replace(/[:.]/g, '-');
     }*/
 
     // 2025-05-09_220933
-    _getTimestamp() {
+    #getTimestamp() {
         const now = new Date();
         const yyyy = now.getFullYear();
         const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -76,7 +76,7 @@ class BufferedRecorder {
         return `${yyyy}-${mm}-${dd}_${hh}${mi}${ss}`;
     }
 
-    _showDebugToast(message, duration = 3000) {
+    #showDebugToast(message, duration = 3000) {
         let container = document.getElementById('debug-toast-container');
         if (!container) {
             container = document.createElement('div');
