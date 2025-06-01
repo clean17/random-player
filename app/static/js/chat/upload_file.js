@@ -15,7 +15,7 @@ function uploadFile(event) {
         "2": {}
     }*/
     Object.keys(files).forEach(key => {
-        console.log(key, files[key]);
+        // console.log(key, files[key]);
     });
 
     const file = files[0];
