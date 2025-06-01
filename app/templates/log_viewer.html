@@ -5,12 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Viewer</title>
 <!--    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>-->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/directory_select.css') }}">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f4;}
-        #log-container {height: 71vh; overflow-y: scroll; background: #fff; padding: 10px; border: 1px solid #ccc; text-align: left }
-        #date-picker { margin: 0px 10px 10px 10px}
+        body, html {
+            background-color: #f4f4f4;
+            /* 가운데 정렬 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+        .container {
+            min-width: 400px;
+            max-width: 70vw;
+            height: 80%;
+            min-height: 750px;
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
+        }
+        #log-container {
+            background: #fff;
+            font-family: monospace;
+            height: 80%;
+            white-space: pre;
+            overflow-y: scroll;
+            border-radius: 7px;
+            border: 1px solid #ccc;
+            box-shadow: 0 1px 6px #0001;
+            padding: 10px;
+            text-align: left
+        }
+        #date-picker { margin: 3px 10px 10px 10px}
+        .datepicker-block { display: flex; justify-content: center}
     </style>
 </head>
 <body>
@@ -24,14 +54,14 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
-<div class="container" style="height: 100%; width: 100%;">
+<div class="container">
     <h2>로그 뷰어</h2>
-    <div style="display: flex; justify-content: center;">
+    <div class="datepicker-block">
         <label for="date-picker">날짜 선택:</label>
         <input type="date" id="date-picker">
         <span id="sse-status">연결 상태 🔄</span>
     </div>
-    <pre id="log-container" style="font-family: monospace; white-space: pre;"></pre>
+    <pre id="log-container"></pre>
 </div>
 
 <script>
