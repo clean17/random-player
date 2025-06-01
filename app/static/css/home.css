@@ -1,0 +1,73 @@
+body, html {
+    background-color: #f4f4f4;
+    /* 가운데 정렬 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    min-width: 400px;
+    max-width: 30vw;
+    background: white;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
+    overflow-y: hidden;
+}
+h2 {
+    margin-bottom: 20px;
+    font-size: 24px;
+}
+
+.select-dropdown { /* div */
+    width: 100%;
+    margin-bottom: 10px;
+    text-align: center;
+    text-align-last: center; /* 마지막 줄도 가운데 정렬 (크로스 브라우저 호환) */
+    padding: 15px;
+    appearance: none; /* Remove default arrow */
+    cursor: pointer;
+    background-color: #0056b3;
+    color: white;
+    font-size: 18px;
+    border-radius: 5px;
+}
+.select-dropdown option {
+    padding: 10px;
+    background-color: white;
+    color: #333;
+}
+select.select-dropdown:hover {
+    background-color: #007BFF;
+}
+
+/* 뱃지를 위한 설정 */
+.chat-btn-wrapper {
+    display: inline-block;
+    position: relative;
+    width: 100%;
+}
+.unread-badge {
+    position: absolute;
+    top: -0.6em;
+    right: 1em;
+    min-width: 1.6em;
+    height: 1.6em;
+    padding: 0 0.2em;
+    background: #ff4b4b;
+    color: #fff;
+    border-radius: 1em;
+    font-size: 1em;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0.3em #f77c7c3d;
+    pointer-events: none;
+    line-height: 1;
+    z-index: 2;
+}
