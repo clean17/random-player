@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <title>Chat UI</title>
+    <!--<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />-->
+    <title>Chat</title>
 
-    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
-    <link rel="stylesheet" href="/static/css/chat.css?v={{ version }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
+    <!-- tailwindcss가 .container를 정의하고 있음 -->
     <script src="/static/js/tailwindcss.js"></script> <!--<script src="https://cdn.tailwindcss.com"></script>-->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="/static/js/common.js?v={{ version }}"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"> <!-- 아이콘, 체크 표시 -->
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/chat.css?v={{ version }}">
 </head>
 <body>
 <div class="icon-buttons">
@@ -36,6 +37,17 @@
     <span id="userCount">0</span>
 </div>
 <div class="container">
+    <!-- tailwindcss
+        background: #fff;
+        box-shadow: 0 4px 8px #0003;
+        border-radius: 8px;
+        width: 100%;
+        height: 100%;
+        text-align: center;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    -->
     <div class="bg-white shadow-md rounded-lg w-full h-full text-center overflow-hidden flex flex-col">
         <!-- 채팅 메시지 목록 -->
         <!-- flex-1; flex-grow: 1; 부모가 flex면 남은 공간 다 차지
@@ -84,11 +96,11 @@
             </form>
             <!-- box-content: padding이 height에 포함되지 않도록 함 -->
             <textarea type="text" id="chat-input"
-                      class="p-2 px-3 py-[6px] border rounded-lg focus:outline-none w-[90%] box-content resize-none"
+                      class="p-2 px-3 py-[6px] border rounded-lg focus:outline-none w-[95%] box-content resize-none"
                       placeholder="Type a message..."
                       data-textarea-auto-resize="8"
             ></textarea>
-            <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[10%] ml-2">📤</button>
+            <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[auto] ml-2">📤</button>
         </div>
     </div>
     <!-- 진행률 표시 영역 -->

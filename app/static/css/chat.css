@@ -1,45 +1,32 @@
 body, html {
-    height: 100%;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     background-color: #f4f4f4;
-    /*overflow: hidden;*/ /* 넘치면 숨긴다 */
-    overflow: auto; /* 넘치면 자동 스크롤 */
-    position: fixed;  /* ✅ 추가: 뷰포트에 고정 */
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    /*display: flex;*/
+    /*justify-content: center;*/
+    /*align-items: center;*/
     touch-action: manipulation; /* 탭 허용, 더블 탭 차단 > button, a 반응속도 빠르게 하기 위해서 */
     -webkit-overflow-scrolling: touch; /* iOS Safari에서 overflow: scroll 영역에 자연스러운 관성 스크롤을 적용, iOS Safari에서 반드시 필요 */
 }
 
+/* (임시) 모바일에서 버튼 누르면 색이 돌아오지 않아서 흰색으로 */
 button:hover {
     background-color: #ffffff;
 }
 
-
-.container {
+/* specificity(선택자 우선순위)를 높이면 tailwind보다 앞서게 할 수 있다 */
+body .container {
+    max-width: 550px;
     position: fixed;
     top: 0; bottom: 0; left: 0; right: 0;
-    max-width: 600px;
-    margin: auto;
-    display: flex;
-    flex-direction: column;
-    background: white; /* ✅ body 색상이 아닌 container 자체 배경 */
+    margin: auto; /* 좌우 정렬 */
 }
 #chat-container {
-    overflow-y: auto;
-    flex: 1;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain; /* 상단 당겼을 때 body 스크롤 방지 (선택) */
 }
 #chat-input {
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch; /* iOS 자연스러운 스크롤 */
-    touch-action: auto;
+    -webkit-overflow-scrolling: touch; /* iOS 자연스러운 스크롤 >> overflow: auto 관성 스크롤 */
+    touch-action: none; /* 모바일/태블릿/터치 지원 기기에서 제스처를 해석하는 방법; auto: 모두 허용, manipulation: 더블탭 확대 차단, pan-y: 세로 스크롤만 허용 */
     line-height: 1.5;
 }
 
