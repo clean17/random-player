@@ -199,7 +199,7 @@ def get_log_filename(date=None):
 @login_required
 def get_log_viewer():
     """로그 뷰어 HTML 페이지 제공"""
-    return render_template("log_viewer.html")
+    return render_template("log_viewer.html", version=int(time.time()))
 
 @func.route("/logs")
 @login_required

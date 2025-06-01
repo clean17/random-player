@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Select Menu</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
-    <link rel="stylesheet" href="/static/css/directory_select.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/home.css?v={{ version }}">
 </head>
 <body>
-<!--
-    url_for('blueprint_name.endpoint_function', **params)
--->
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
@@ -23,16 +20,14 @@
     {% if current_user.get_id() == config.SUPER_USERNAME %}
 <!--    <a href="{{ url_for('main.home') }}">Back</a>-->
     <form action="/video/select-directory" method="post">
-        <div class="select-container">
-            <select name="directory" id="directory-select" class="styled-select" onchange="this.form.submit()">
-                <option value="">Video Directory</option>
-                <option value="1" id="btn1">Directory T</option>
-                <option value="2" id="btn2">Directory A</option>
-                <option value="3" id="btn3">Directory D120</option>
-                <option value="4" id="btn4">Directory R120</option>
-                <option value="5" >Directory NH</option>
-            </select>
-        </div>
+        <select name="directory" id="directory-select" class="select-dropdown" onchange="this.form.submit()">
+            <option value="">Video Directory</option>
+            <option value="1" id="btn1">Directory T</option>
+            <option value="2" id="btn2">Directory A</option>
+            <option value="3" id="btn3">Directory D120</option>
+            <option value="4" id="btn4">Directory R120</option>
+            <option value="5" >Directory NH</option>
+        </select>
     </form>
     {% endif %}
 <!--    <form action="{{ url_for('video.select-directory') }}" method="post">-->
@@ -49,22 +44,20 @@
         <a href="{{ url_for('image.image_list', dir=REF_IMAGE_DIR) }}"><button type="button" id="btn8">REF Images</button></a>
         <a href="/image/stock-graph-list/kospi"><button type="button" id="btn9">Stocks_Graph</button></a>-->
         <form id="image-select-form">
-            <div class="select-container">
-<!--                <label for="image-select">Select Image</label>-->
-                <select id="image-select" class="styled-select">
-                    <option value="">Select Image Dir</option>
-                    <option value="{{ url_for('image.image_list', dir=TRIP_IMAGE_DIR) }}">Trip Images</option>
-<!--                    <option value="{{ url_for('image.image_list', dir=TEMP_IMAGE_DIR) }}">Temp Images</option>-->
-                    {% if current_user.get_id() == config.SUPER_USERNAME %}
-                    <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
-                    <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
-                    <option value="/image/stock-graph-list/kospi">Stocks Graph</option>
-                    {% endif %}
-                </select>
-            </div>
+            <select id="image-select" class="select-dropdown">
+                <option value="">Select Image Dir</option>
+                <option value="{{ url_for('image.image_list', dir=TRIP_IMAGE_DIR) }}">Trip Images</option>
+                <!--                    <option value="{{ url_for('image.image_list', dir=TEMP_IMAGE_DIR) }}">Temp Images</option>-->
+                {% if current_user.get_id() == config.SUPER_USERNAME %}
+                <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
+                <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
+                <option value="/image/stock-graph-list/kospi">Stocks Graph</option>
+                {% endif %}
+            </select>
         </form>
         <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload File</button></a>
     {% if current_user.get_id() != config.GUEST_USERNAME %}
+        <a href="/posts"><button type="button" id="btn913" class="btn-w100">Posts</button></a>
         <a href="{{ url_for('func.get_log_viewer') }}"><button type="button" id="btn923" class="btn-w100">View Log</button></a>
     {% endif %}
         <a href="{{ url_for('func.get_video_call') }}"><button type="button" id="btn9224" class="btn-w100">Video Call</button></a>
@@ -74,7 +67,7 @@
     {% if current_user.get_id() != config.GUEST_USERNAME %}
         <button type="button" id="buy-lotto" class="btn-w100">Buy Lotto</button>
         <a href="{{ url_for('func.get_hls') }}"><button type="button" id="btn927" class="btn-w100">HLS</button></a>
-        <a href="/htmltest"><button type="button" id="btn9272" class="btn-w100">TEST</button></a>
+<!--        <a href="/htmltest"><button type="button" id="btn9272" class="btn-w100">TEST</button></a>-->
     {% endif %}
 <!--    </form>-->
 </div>
