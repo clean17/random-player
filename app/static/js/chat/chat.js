@@ -29,6 +29,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     peerLastReadChatId = 0,
     isTyping = false,
     scrollButton = undefined,
+    intervalId,
     isVerifiedPassword = false;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -38,27 +39,6 @@ const trottledUpdate = throttle(updateChatSession, 1000 * 10);
 let controller = new AbortController();
 
 ////////////////////////////// Util Function ////////////////////////////
-
-// debounce 적용 (일정 시간동안의 마지막 요청만)
-function debounce(func, delay) {
-    let debounceTimer;
-    return function (...args) {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => func.apply(this, args), delay);
-    };
-}
-
-// throttle 적용 (짧은 시간에 여러 번 호출해도 일정 주기마다 한 번씩만 실행)
-function throttle(func, delay) {
-    let throttleTimer = null;
-    return function (...args) {
-        if (throttleTimer) return;  // 타이머가 돌아가는 중이면 아무 것도 하지 않음
-        throttleTimer = setTimeout(() => {
-            func.apply(this, args);
-            throttleTimer = null;   // 타이머 초기화 > 다음 실행 허용
-        }, delay);
-    };
-}
 
 // 채팅 입력창 자동으로 높이 조절
 document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textarea => {
@@ -106,24 +86,6 @@ function getFilenameFromUrl(url) {
     return params.get('filename');
 }
 
-function showDebugToast(message, duration = 3000) {
-    let container = document.getElementById('debug-toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'debug-toast-container';
-        document.body.appendChild(container);
-    }
-
-    const toast = document.createElement('div');
-    toast.className = 'debug-toast';
-    toast.textContent = message;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.remove();
-    }, duration);
-}
 
 /////////////////////////////// Web Socket /////////////////////////////
 
@@ -975,6 +937,7 @@ function moveBottonScroll() {
 
 // 현재 스크롤 높이에 따른 스크롤 버튼 보여주기 유무
 function handleChatScroll() {
+    clearInterval(intervalId);
     scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
     scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
 
@@ -1065,15 +1028,15 @@ async function initPage() {
         let attempt = 0;
         const maxAttempts = 10;
 
-        const intervalId = setInterval(() => {
+        intervalId = setInterval(() => {
             moveBottonScroll();
 
             attempt++;
             if (attempt >= maxAttempts) {
                 clearInterval(intervalId);
             }
-        }, 20);
-    }, 300)
+        }, 15);
+    }, 250)
 }
 
 document.addEventListener("DOMContentLoaded", initPage);
