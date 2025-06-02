@@ -102,9 +102,25 @@ ip_404_log = defaultdict(lambda: deque(maxlen=10))    # IP별 최근 404 기록 
 IP_404_COUNTS = {}                                    # IP 기록: {ip: [404_count, last_404_time]}
 BLOCK_THRESHOLD = 5                                   # 차단 설정 임계횟수
 BLOCK_DURATION = timedelta(days=99999)                # 차단 기간
-
+BLOCKED_IP_PREFIXES = ['43', '45', '167', '185', '64', '65', '162', '172', '170']
 
 # csrf = CSRFProtect()
+
+def get_client_ip(request):
+    # 1. X-Real-IP (Nginx에서 주로 세팅, 프록시 뒤에 있을 경우)
+    ip = request.environ.get("HTTP_X_REAL_IP")
+    if ip:
+        return ip
+
+    # 2. X-Forwarded-For (여러 프록시 거칠 때, 제일 앞이 원본 IP)
+    ip = request.headers.get("X-Forwarded-For")
+    if ip:
+        # 여러 IP가 있을 경우, 첫 번째(IP 체인의 가장 앞쪽)가 원래 클라이언트
+        return ip.split(',')[0].strip()
+
+    # 3. 그 외에는 Flask 기본값
+    return request.remote_addr
+
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
@@ -163,18 +179,17 @@ def create_app():
     # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
     @app.before_request
     def before_request():
-        # 실 IP 추출 (프록시 뒤에 있을 경우)
-        ip = request.environ.get("HTTP_X_REAL_IP")
-        # if ip == '127.0.0.1':
-        #     ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
-        # print(ip)
+        ip = get_client_ip(request)
+
+        if ip and any(ip.startswith(prefix + '.') for prefix in BLOCKED_IP_PREFIXES):
+            return abort(403, description="Access blocked IP.")
 
         # 차단된 경우 -> 시간 지난 건 해제
-        if ip in BLOCKED_IPS:
+        if ip and ip in BLOCKED_IPS:
             if datetime.now() >= BLOCKED_IPS[ip]:
                 del BLOCKED_IPS[ip]  # 차단 해제
             else:
-                return abort(403, description="접근이 차단된 IP입니다.")
+
 
         ###################### 엔드포인트 허용 ######################
         if request.path == '/auth/logout':
