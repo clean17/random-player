@@ -239,11 +239,9 @@ def create_app():
             verified_at_str = get_verified_time(current_user.get_id())
 
             if not verified and current_user.get_id() == app.config['GUEST_USERNAME']:
-                print('test - 1')
                 return redirect(url_for('auth.verify_password', next=base_path))
             if not verified_at_str:
                 # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
-                print('test - 2')
                 return redirect(url_for('auth.verify_password', next=base_path))
 
             try:
@@ -252,6 +250,7 @@ def create_app():
                 # 시간 파싱 실패 → 인증 무효 처리
                 session.pop(SECOND_PASSWORD_SESSION_KEY, None)
                 session.pop('second_password_verified_at', None)
+                print('test - 3')
                 return redirect(url_for('auth.verify_password', next=base_path))
 
             # 10분 유효시간 초과 시 인증 무효
@@ -260,6 +259,7 @@ def create_app():
                 print('    before_request - Function Session Expires ', current_user.get_id())
                 session.pop(SECOND_PASSWORD_SESSION_KEY, None)
                 session.pop('second_password_verified_at', None)
+                print('test - 4')
                 return redirect(url_for('auth.verify_password', next=base_path))
 
             # 현재 uri 요청을 반복하면 세션 시간 갱신
@@ -277,6 +277,7 @@ def create_app():
                 timeout = GUEST_SESSION_EXPIRATION_TIME.total_seconds()
 
                 if elapsed > timeout:
+                    print(f"    request.path - {request.path}")
                     print(f"    before_request - ⏱ 경과 시간: {elapsed:.2f}초 redirect logout")
                     return redirect(url_for("auth.logout"))
 

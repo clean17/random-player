@@ -223,7 +223,10 @@ document.addEventListener('visibilitychange', async () => {
 
         chatInput.focus();
 
-        await checkVerified();
+        const isValidSession = await checkVerified();
+        if (!isValidSession) {
+            return false; // 세션 유효 시간이 끝났으면 요청 종료
+        }
         await getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
 
         fetch("/func/chat/load-more-chat", {
@@ -367,6 +370,7 @@ function updateChatSession() {
 
 // 클라이언트가 세션을 체크, 존재하는지만 판단.. 서버에서도 체크하므로 결과만 확인한다
 async function checkVerified() {
+    let funcResult = false;
     try {
         const response = await fetch("/auth/check-verified", {
             method: "GET",
@@ -374,6 +378,7 @@ async function checkVerified() {
         });
 
         if (response.status === 200) {
+            funcResult = true;
             const result = await response.json();
             if (result && result.success) {
                 isVerifiedPassword = true;
@@ -384,6 +389,8 @@ async function checkVerified() {
     } catch (e) {
         // console.error("❌ 서버 오류", e);
         isVerifiedPassword = false;
+    } finally {
+        return funcResult;
     }
 }
 
@@ -955,7 +962,10 @@ function handleChatScroll() {
 
 
 async function initPage() {
-    await checkVerified();
+    const isValidSession = await checkVerified();
+    if (!isValidSession) {
+        return false; // 세션 유효 시간이 끝났으면 요청 종료
+    }
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
     getPeerLastReadChatId('init'); // 상대가 마지막으로 읽은 채팅 ID 조회
 
