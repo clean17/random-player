@@ -8,6 +8,7 @@
     <script src="/static/js/tailwindcss.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/home.css?v={{ version }}">
 </head>
 <body>
 <div class="top-bar">
@@ -20,6 +21,10 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+<!--<video src="/static/sample.mov" controls style="width:100%" poster="/static/no-image.png" preload="metadata"></video>-->
+<video controls style="width:100%" poster="/static/no-image.png" preload="none">
+    <source src="/static/sample.mov" type="video/mp4">
+</video>
 
 <script>
     const username = "{{ username }}";
