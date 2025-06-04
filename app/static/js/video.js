@@ -213,7 +213,7 @@ function getVideoEvent() {
     let decodedUrl = decodeURIComponent(videoSource.src)
     let videoFilename = extractFilename(decodedUrl);
     filenameDisplay.textContent = videoFilename;
-    document.title = videoFilename;
+    // document.title = videoFilename;
     // console.log('getvideo', videoFilename)
 
     videoPlayer.addEventListener('timeupdate', function() {
@@ -247,7 +247,7 @@ function changeVideo() {
     const videoUrl = makeGetUrl(currentVideo)
     const fileExtension = currentVideo.split('.').pop();
     mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
-    document.title = currentVideo.split('/')[1]
+    // document.title = currentVideo.split('/')[1]
 
     if (videojs.players['videoPlayer']) { // 재사용
         player = videojs.players['videoPlayer'];

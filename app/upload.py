@@ -83,6 +83,7 @@ def upload_file():
                         if os.path.exists(archive_path):
                             os.remove(archive_path)
 
+                # 영상통화 녹화일 경우
                 elif file_ext in ['.webm']:
                     try:
                         file_path = os.path.join(target_dir, f"{uuid_filename}")
