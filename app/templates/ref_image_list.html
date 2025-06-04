@@ -19,6 +19,7 @@
     </div>
 </div>
 <button id="shuffle-button" class="floating-button2">Shuffle</button>
+<button id="slideshow-btn" class="floating-button2" style="top: 120px">Slide show</button>
 <div class="pagination-buttons">
     <button class="pagination-button prev-button" id="prevButton">&lt;</button>
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
@@ -74,6 +75,9 @@
 <script>
     let nextImageElement = null,
         loading_size = 8;
+    let slideShowTimer = null;
+    let slideShowImgs = [];
+    let slideShowIdx = 0;
 
     const nextBtn = document.getElementById('next-image-button'),
           shuffleBtn = document.getElementById('shuffle-button'),
@@ -427,6 +431,58 @@
             nextBtn.click();
         }
     });
+
+    function showSlideshowModal(imgList) {
+        // 모달이 이미 있으면 재활용, 없으면 새로 만듦
+        let modal = document.getElementById('slideshow-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = "slideshow-modal";
+            modal.style.display = "flex";
+            modal.innerHTML = `
+            <button class="close-modal" title="닫기" ><i class="fas fa-times" style="color:white"></i></button>
+            <img src="" alt="슬라이드" id="slideshow-img">
+        `;
+            document.body.appendChild(modal);
+
+            // 닫기 버튼 이벤트
+            modal.querySelector('.close-modal').onclick = () => {
+                clearInterval(slideShowTimer);
+                modal.style.display = "none";
+            };
+        }
+        modal.style.display = "flex";
+        const imgEl = modal.querySelector("#slideshow-img");
+
+        // 슬라이드 쇼 상태 초기화
+        slideShowIdx = 0;
+        slideShowImgs = imgList;
+        imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(imgList[0])+"&dir=refine";
+
+        // 기존 타이머 종료
+        if (slideShowTimer) clearInterval(slideShowTimer);
+
+        slideShowTimer = setInterval(() => {
+            slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
+            imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(slideShowImgs[slideShowIdx])+"&dir=refine";
+        }, 8000);
+    }
+
+    // 슬라이드쇼 버튼 클릭 이벤트
+    document.getElementById("slideshow-btn").onclick = async function() {
+        try {
+            const resp = await fetch("/image/pages?slide=y&dir=refine");
+            const imgList = await resp.json();  // 서버에서 JSON 배열로 이미지 URL 목록 반환한다고 가정
+
+            if (!Array.isArray(imgList['slide_show_images']) || imgList['slide_show_images'].length === 0) {
+                alert("이미지가 없습니다.");
+                return;
+            }
+            showSlideshowModal(imgList['slide_show_images']);
+        } catch(e) {
+            alert("이미지 목록을 가져오는 데 실패했습니다.");
+        }
+    };
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
