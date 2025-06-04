@@ -125,6 +125,7 @@ def image_list():
     dir = request.args.get('dir')
     firstRequst = request.args.get('firstRequst')
     selected_dir = request.args.get('title')
+    isSlide = request.args.get('slide', '')
     title_list = []
     images = []
     images_length = 0
@@ -154,8 +155,12 @@ def image_list():
     elif dir == 'refine':
         if firstRequst == 'True':
             initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
-        images = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR)
         images_length = count_non_zip_files(REF_IMAGE_DIR)
+        if isSlide == 'y':
+            images = get_images(0, images_length, REF_IMAGE_DIR)
+            return jsonify({"slide_show_images": images})
+        else:
+            images = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR)
         template_html = 'ref_image_list.html'
     elif dir == 'image':
         images = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR)

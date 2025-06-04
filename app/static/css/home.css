@@ -9,6 +9,7 @@ body, html {
 .container {
     min-width: 400px;
     max-width: 30vw;
+    max-height: 90vh;
     background: white;
     padding: 10px;
     border-radius: 10px;

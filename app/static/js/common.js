@@ -20,7 +20,7 @@ function showDebugToast(message, duration = 3000) {
 }
 
 
-// debounce 적용 (일정 시간동안의 마지막 요청만)
+// debounce 적용 (동일한 함수 호출이라면 마지막으로 호출한지 지정한 시간이 지났을 경우에만 실행, 중복으로 호출하면 시간은 계속 리셋)
 function debounce(func, delay) {
     let debounceTimer;
     return function (...args) {
@@ -29,7 +29,7 @@ function debounce(func, delay) {
     };
 }
 
-// throttle 적용 (짧은 시간에 여러 번 호출해도 일정 주기마다 한 번씩만 실행)
+// throttle 적용 (의도적으로 성능을 낮춤, 주어진 시간 간격 내에 특정 함수가 최대 한 번만 실행되도록 제한하는 기술)
 function throttle(func, delay) {
     let throttleTimer = null;
     return function (...args) {
