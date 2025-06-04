@@ -19,7 +19,6 @@
             border: 1px solid #ccc;
             text-align: left
         }
-
         /* 저장 완료 메시지 스타일 */
         .save-message {
             top: 2%;
@@ -109,9 +108,7 @@
         if (!document.hidden) {
             fetch("/func/memo", { method: "GET" })
                 .then(res => {
-                    if (res.redirected) {
-                        window.location.href = res.url;
-                    }
+                    window.location.href = res.url;
                 })
                 .catch(err => {
                     console.error("요청 실패:", err);
