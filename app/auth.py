@@ -127,7 +127,11 @@ def login():
             logger.info(f"############################### login_username: {username} ###############################")
 
             session['principal'] = fetch_user
-            resp = make_response(redirect('/'))
+            resp = None
+            if username == settings['GUEST_USERNAME']:
+                resp = make_response(redirect('/func/chat'))
+            else:
+                resp = make_response(redirect('/'))
             if remember:
                 resp.set_cookie('remember_username', username, max_age=60*60*24*30) # 30일
             else:
@@ -225,7 +229,7 @@ def check_verified():
 def update_session_time():
     # session['second_password_verified_at'] = datetime.utcnow().isoformat()
     save_verified_time(current_user.get_id()) # redis 동기화
-    return "update-session-time"
+    return jsonify({"update_session_time": "true"})
 
 '''
 Flask의 세션은 기본적으로 비영속적(non-permanent)
