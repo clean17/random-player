@@ -30,6 +30,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     isTyping = false,
     scrollButton = undefined,
     intervalId,
+    dateDividerPreviousDate,
     isVerifiedPassword = false;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -688,6 +689,14 @@ function renderEnterOrExit(msg) {
     }
 }
 
+function formatDateWithKoreanDay(dateStr) {
+    const [year, month, day] = dateStr.split('.').map(s => s.trim()).map(Number);
+    const date = new Date(year, month - 1, day);
+    const weekKor = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+    const dayOfWeek = weekKor[date.getDay()];
+    return `${dateStr} ${dayOfWeek}`;
+}
+
 // 날짜 구분선 추가
 function renderDateDivider(chatState, dateStr) {
     // 메세지를 불러오다가 lastMessageDate > dateStr => prepend; lastMessageDate 직 후 lastMessageDate = dateStr;
@@ -703,9 +712,11 @@ function renderDateDivider(chatState, dateStr) {
 
     // 스크롤 올려서 이전 날짜가 나오면 메세지 렌더링 전에 prepend
     if (lastest && otherDate && otherDate < previos) {
-        const divider = createDateDivider(chatState.previousDate);
+        const divider = createDateDivider(formatDateWithKoreanDay(chatState.previousDate));
         chatContainer.prepend(divider);
+        dateDividerPreviousDate = dateStr;
         chatState.previousDate = dateStr;
+        dateDividerObserver.observe(divider);
     }
     // 채팅을 쳤는데 오늘 첫 메세지라면 메세지 렌더링 전에 append
     if (lastest && otherDate && otherDate > lastest) {
@@ -817,6 +828,17 @@ const mutationObserver = new MutationObserver(mutations => {
 mutationObserver.observe(document.body, {
     childList: true,
     subtree: true
+});
+
+const dateDividerObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) { // 뷰포트에 나타났을 때
+            showDebugToast(formatDateWithKoreanDay(dateDividerPreviousDate));
+            observer.unobserve(entry.target); // 한 번만 실행하려면 옵저버 해제
+        }
+    });
+}, {
+    threshold: 0.1 // 10%만 보여도 감지 (필요에 따라 0~1 조정)
 });
 
 
