@@ -52,13 +52,13 @@
     </div>-->
 
     <!-- 구분선 추가 -->
-    <div style="display: flex; align-items: center; margin: 20px 0 0 0;">
+    <!--<div style="display: flex; align-items: center; margin: 20px 0 0 0;">
         <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">
         <span style="margin: 0 14px; font-size: 0.98em; color: #888;">or other login</span>
         <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">
     </div>
 
-    <!-- OAuth 동그라미 버튼들 -->
+    &lt;!&ndash; OAuth 동그라미 버튼들 &ndash;&gt;
     <div style="margin-top: 30px; display: flex; justify-content: center; gap: 20px;">
         <a href="{{ url_for('oauth.oauth_login', provider='google') }}" class="oauth-circle google" title="구글 로그인">
             <img src="{{ url_for('static', filename='icons/google.svg') }}" alt="Google" width="36" height="36">
@@ -69,8 +69,8 @@
         <a href="{{ url_for('oauth.oauth_login', provider='naver') }}" class="oauth-circle naver" title="네이버 로그인">
             <img src="{{ url_for('static', filename='icons/naver.svg') }}" alt="Naver" width="36" height="36">
         </a>
-        <!-- 필요한 소셜 로그인 버튼 추가 가능 -->
-    </div>
+        &lt;!&ndash; 필요한 소셜 로그인 버튼 추가 가능 &ndash;&gt;
+    </div>-->
 </form>
 <script>
     document.querySelectorAll('input').forEach(input => {

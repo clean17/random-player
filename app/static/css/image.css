@@ -31,25 +31,28 @@ body {
     }
 }
 
+/* back, logout 투명도 */
+.top-bar {
+    position: fixed;
+    opacity: 0.4;
+}
+
 .image-container {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
-
 .image-item {
     margin-bottom: 5px;
     position: relative;
     width: 100%;
     /*display: inline-block;*/
 }
-
 .image-item img {
     max-width: 100%;
     max-height: 100vh; /* 이미지 높이를 뷰포트 높이에 맞춤 */
     object-fit: contain; /* 이미지의 비율을 유지하면서 크기를 조정 */
 }
-
 .thumbnail {
     height: auto;
     max-height: 100vh;
@@ -59,16 +62,12 @@ body {
     object-fit: contain;
 }
 
+/* 버튼 */
 button {
+    padding: 0;
+    margin-bottom: 0;
     width: 100%;
-    border: none;
-    border-radius: 5px;
-    /* background-color: #0056b3; */
-    color: white;
-    font-size: 20px;
-    cursor: pointer;
 }
-
 button.delete-button {
     margin: 10px 0px 10px 0px;
     background-color: #d9534f;
@@ -80,10 +79,28 @@ button.delete-button {
     padding: 0 20px;
     cursor: pointer;
 }
-
 button.delete-button:hover {
     background-color: #c9302c;
 }
+.delete-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 45px;
+    height: 45px;
+    font-size: 30px;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.2s;
+}
+.delete-btn:hover {
+    background: red;
+}
+
 
 /* 최하단 페이징 버튼 */
 .pagination {
@@ -92,7 +109,6 @@ button.delete-button:hover {
     align-items: center;
     margin-top: 20px;
 }
-
 .pagination a {
     margin: 0 3px;
     margin-bottom: 10px;
@@ -108,19 +124,11 @@ button.delete-button:hover {
     align-items: center;
     font-size: 1.2em;
 }
-
 .pagination a:hover {
     background-color: #007BFF;
 }
-
 .pagination a.active {
     background-color: #007BFF;
-}
-
-/* back, logout 투명도 */
-.top-bar {
-    position: fixed;
-    opacity: 0.4;
 }
 
 /* NextImage */
@@ -142,7 +150,7 @@ button.delete-button:hover {
     cursor: pointer;
     transition: background-color 0.3s ease;
 }
-
+/* PreviousImage */
 .floating-button-left {
     position: fixed;
     z-index: 5;
@@ -161,7 +169,6 @@ button.delete-button:hover {
     cursor: pointer;
     transition: background-color 0.3s ease;
 }
-
 /* empty-trash-bin */
 .floating-button2 {
     position: fixed;
@@ -181,39 +188,8 @@ button.delete-button:hover {
     cursor: pointer;
     transition: background-color 0.3s ease;
 }
-
 .floating-button-right:hover {
     background-color: #0056b3;
-}
-
-/* 드롭다운 메뉴 기본 스타일 */
-.dropdown-menu {
-    display: none;
-    position: absolute;
-    background-color: white;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
-    list-style-type: none;
-    padding: 10px 0;
-    min-width: 150px;
-}
-
-/* 드롭다운 메뉴 항목 스타일 */
-.dropdown-menu li {
-    padding: 10px 15px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-.dropdown-menu li:hover {
-    background-color: #f1f1f1;
-}
-
-/* 아이콘 스타일 📂 */
-.icon {
-    margin-right: 10px;
 }
 
 .scroll-buttons {
@@ -226,7 +202,6 @@ button.delete-button:hover {
     z-index: 9999;
     opacity: 0.2;
 }
-
 .scroll-buttons button {
     width: 50px;
     height: 50px;
@@ -237,25 +212,8 @@ button.delete-button:hover {
     border: none;
 }
 
-/* 최하단으로 이동 (사용하지 않음) */
-.scroll-bottom-button {
-    top: 50px;
-    left: 15px;
-    width: 35%;
-    position: fixed;
-    max-width: 160px;
-    z-index: 5;
-    margin-top: 20px;
-    padding: 10px 10px;
-    font-size: 16px;
-    cursor: pointer;
-    display: inline-block;
-    background-color: #008CBA;
-    color: white;
-    border: none;
-}
 
-/* 하단 이전/다음 네비게이터 버튼 */
+/* 하단 이전/다음 페이지 바로가기 버튼 */
 .pagination-buttons {
     position: fixed;
     bottom: 10px;
@@ -266,7 +224,6 @@ button.delete-button:hover {
     z-index: 1000;
     pointer-events: none;
 }
-
 .pagination-button {
     background-color: #007BFF;
     color: white;
@@ -282,7 +239,6 @@ button.delete-button:hover {
     transition: background-color 0.3s ease;
     pointer-events: auto;
 }
-
 .pagination-button:hover {
     background-color: #0056b3
 }
@@ -290,11 +246,33 @@ button.delete-button:hover {
 .prev-button {
     margin-left: 15px;
 }
-
 .next-button {
     margin-right: 15px;
 }
 
+
+/* 드롭다운 메뉴 기본 스타일 */
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    list-style-type: none;
+    padding: 10px 0;
+    min-width: 150px;
+}
+/* 드롭다운 메뉴 항목 스타일 */
+.dropdown-menu li {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+.dropdown-menu li:hover {
+    background-color: #f1f1f1;
+}
 
 /* 드롭다운 */
 .dropdown-selector {
@@ -302,14 +280,12 @@ button.delete-button:hover {
     display: flex;
     justify-content: center;
 }
-
 .dropdown-selector label {
     margin-right: 10px;
     font-weight: bold;
     font-size: 18px;
     align-self: center;
 }
-
 .dropdown-selector select {
     width: 200px;
     height: 40px;
@@ -319,34 +295,17 @@ button.delete-button:hover {
     font-size: 16px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
-
 .dropdown-selector select:focus {
     border-color: #007bff;
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
 }
-
-
-.delete-btn {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    background: rgba(0, 0, 0, 0.5);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 48px;         /* 24px → 48px */
-    height: 48px;        /* 24px → 48px */
-    font-size: 28px;     /* 16px → 더 큼 */
-    cursor: pointer;
-    z-index: 10;
-    transition: background 0.2s;
-}
-
-.delete-btn:hover {
-    background: red;
+/* 드롭다운 아이콘 스타일 📂 */
+.icon {
+    margin-right: 10px;
 }
 
 
+/* 이미지 슬라이드 쇼 */
 #slideshow-modal {
     display: none;
     position: fixed;

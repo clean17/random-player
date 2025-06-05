@@ -1,4 +1,3 @@
-
 // 토스트 메시지
 function showDebugToast(message, duration = 3000) {
     let container = document.getElementById('debug-toast-container');
