@@ -24,7 +24,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 # NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
 NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "/func/chat/save-file", "/func/logs/stream", "/func/logs/",
-                "dir=refine", "dir=image", "?dir=1", "?dir=2", "?dir=3", "?dir=4",
+                "dir=refine", "dir=image", "?dir=1", "?dir=2", "?dir=3", "?dir=4", "?dir=5",
                  "video-player", "/video/select-directory",
                 "update-session-time", "apple-touch-icon",
                 "/delete-images",
