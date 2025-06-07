@@ -100,6 +100,25 @@ button.delete-button:hover {
 .delete-btn:hover {
     background: red;
 }
+.play-btn {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    width: 64px;
+    height: 64px;
+    font-size: 2em;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+}
+.play-btn:hover {
+    background: #0056b3;
+}
+
 
 
 /* 최하단 페이징 버튼 */
