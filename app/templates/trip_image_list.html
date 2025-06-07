@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
+    <script src="/static/js/common.js?v={{ version }}"></script>
 </head>
 
 <body>
@@ -79,17 +80,13 @@
 
                 {% if file_extension in video_extensions %}
                 <button class="delete-btn" type="button">×</button>
-
-                <!-- 비디오 파일인 경우 -->
-<!--                <video class="thumbnail" controls preload="metadata" poster="thumbnail.jpg" playsinline muted>-->
-                    <!--<video class="thumbnail" controls preload="metadata">
-                    &lt;!&ndash; preload="none" 브라우저가 비디오 데이터를 아예 사전 로드하지 않음 &ndash;&gt;
-                    <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
-                            type="video/mp4" data-filename="{{ image|urlencode }}">
-                </video>-->
-
-                <video class="thumbnail" controls preload="metadata" muted playsinline data-index="{{ loop.index }}">
-                    <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}" type="video/mp4" data-filename="{{ image|urlencode }}">
+                <video class="thumbnail"
+                       muted playsinline preload="metadata"
+                       data-index="{{ loop.index }}"
+                       data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}">
+                    <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
+                            type="video/mp4"
+                    data-filename="{{ image|urlencode }}">
                 </video>
                 {% elif file_extension in image_extensions %}
                 <button class="delete-btn" type="button">×</button>
@@ -130,8 +127,6 @@
     </form>
 </div>
 
-{#<button type="button" class="scroll-bottom-button" onclick="scrollToBottom()">Scroll to Bottom</button>#}
-
 <button id="previous-image-button" class="floating-button-left">Previous</button>
 <button id="next-image-button" class="floating-button-right">Next</button>
 
@@ -164,33 +159,14 @@
         nextImageElement = element.nextElementSibling;
     }
 
-    /*function scrollToBottom() {
-        let scrollInterval = setInterval(() => {
-            window.scrollTo({
-                top: document.body.scrollHeight,
-                behavior: 'smooth'
-            });
-            if (isScrolledToBottom()) {
-                clearInterval(scrollInterval);
-            }
-        }, 100);
-    }
-
-    function isScrolledToBottom() {
-        return (window.innerHeight + window.scrollY) >= document.body.scrollHeight;
-    }*/
-
-
     // 영역을 몇 초간 클릭하고 있을 때 호출시킬 함수
     const startPress = (event) => {
-        // event.preventDefault();
-
-        /*pressTimer = setTimeout(() => {
+        pressTimer = setTimeout(() => {
             // 파일 삭제
-            if (confirm('Delete the file ?')) {
+            /*if (confirm('Delete the file ?')) {
                 moveImage(event)
-            }
-        }, longPressDuration);*/
+            }*/
+        }, longPressDuration);
     };
 
     const cancelPress = () => {
@@ -211,6 +187,23 @@
 
         return 'No image with alt attribute found at the center of the viewport.';
     }
+
+    // video태그 중 마지막으로 재생한 video만 재생되도록 함
+    function playSingleVideo(targetVideo) {
+        const videos = document.querySelectorAll('video');
+
+        videos.forEach(video => {
+            if (video !== targetVideo) {
+                video.pause();
+                // video.currentTime = 0;
+            }
+        });
+
+        if (targetVideo.paused) {
+            targetVideo.play();
+        }
+    }
+
 
     function moveImage(event, name, index) {
         const centerImage = findCenterImageByCoordinates();
@@ -270,7 +263,7 @@
 
         // ZIP 파일 요청
         // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
-        fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}&title=${titleName}`, {
+        fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}&title=${encodeURIComponent(titleName)}`, {
             method: 'GET'
         })
             .then(response => {
@@ -308,7 +301,7 @@
         const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
         const titleName = $title.options[$title.selectedIndex].textContent.trim();
 
-        const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}&title=${titleName}`;
+        const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}&title=${encodeURIComponent(titleName)}`;
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
@@ -318,19 +311,7 @@
         window.URL.revokeObjectURL(url);
     }
 
-    // Throttling 적용 - 고의로 성능을 낮춤, 주어진 시간 간격 내에 특정 함수가 최대 한 번만 실행되도록 제한하는 기술
-    let throttleTimer;
-    const throttle = (callback, time) => {
-        if (throttleTimer) return;
-        throttleTimer = setTimeout(() => {
-            callback();
-            throttleTimer = null;
-        }, time);
-    };
-
     function initPage() {
-        // renderTopScrollButton();
-        // renderBottomScrollButton();
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
         const imageItems = document.querySelectorAll('.image-item');
         imageItems.forEach(item => {
@@ -350,8 +331,8 @@
             item.addEventListener('touchcancel', cancelPress);
         });
 
-        document.addEventListener('keydown', function(event) {
-            switch(event.key) {
+        document.addEventListener('keydown', function (event) {
+            switch (event.key) {
                 case 'ArrowRight':
                 case 'ArrowDown':
                 case 'PageDown':
@@ -364,7 +345,8 @@
                     event.preventDefault();
                     previousImage();
                     break;
-                case ' ': case 'Enter':
+                case ' ':
+                case 'Enter':
                     event.preventDefault();
                     // clickCenterImage();
                     playCenterVideo();
@@ -382,7 +364,8 @@
                     } else {
                         moveImage();
                     }
-                default: break;
+                default:
+                    break;
             }
         });
 
@@ -644,22 +627,6 @@
 
         videos.forEach(video => observer.observe(video));
     }
-
-    /*function renderBottomScrollButton() {
-        scrollButton = document.createElement("button");
-        scrollButton.id = "scroll-button";
-        scrollButton.innerHTML = "↓";
-        document.body.appendChild(scrollButton);
-        console.log(scrollButton)
-    }
-
-    function renderTopScrollButton() {
-        scrollButton = document.createElement("button");
-        scrollButton.id = "scroll-button";
-        scrollButton.innerHTML = "↑";
-        document.body.appendChild(scrollButton);
-        console.log(scrollButton)
-    }*/
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
