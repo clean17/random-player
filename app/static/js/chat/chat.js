@@ -8,7 +8,8 @@ const chatContainer = document.getElementById("chat-container"),
     fileInput = document.getElementById('file-input'),
     progressContainer = document.getElementById('progressContainer'),
     videoCallBtn = document.getElementById("videoCallBtn"),
-    roomUserCount = document.getElementById('userCount');
+    roomUserCount = document.getElementById('userCount'),
+    typingIndicator = document.getElementById('typingIndicator');
 
 let offset = 0, // 가장 최근 10개는 이미 로드됨
     socket,
@@ -36,7 +37,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
 const openTimestamp = openDate.toISOString().slice(2, 19).replace(/[-T:]/g, "");
 const debouncedUpdate = debounce(updateChatSession, 1000 * 10);
-const trottledUpdate = throttle(updateChatSession, 1000 * 10);
+// const trottledUpdate = throttle(updateChatSession, 1000 * 10);
 let controller = new AbortController();
 
 ////////////////////////////// Util Function ////////////////////////////
@@ -124,7 +125,8 @@ function connectSocket() {
 
         // 떠났는데 남아 있는 경우 처리
         if (data.username !== username) {
-            document.getElementById('typingIndicator').style.display = 'none';
+            // typingIndicator.style.display = 'none';
+            document.querySelector('.messageRow[data-chat-id="-1"]')?.remove();
             isTyping = false;
         }
     });
@@ -165,7 +167,8 @@ function connectSocket() {
 
     socket.on("typing", (data) => {
         if ( data.username !== username ) {
-            document.getElementById('typingIndicator').style.display = 'block';
+            // typingIndicator.style.display = 'block';
+            addTypingBox(typingIndicator);
 
             if (isScrollAtTheBottom() && !isTyping) {
                 moveBottonScroll();
@@ -176,7 +179,8 @@ function connectSocket() {
 
     socket.on("stop_typing", (data) => {
         if (data.username !== username) {
-            document.getElementById('typingIndicator').style.display = 'none';
+            // typingIndicator.style.display = 'none';
+            document.querySelector('.messageRow[data-chat-id="-1"]')?.remove();
             isTyping = false;
         }
     });
@@ -222,10 +226,12 @@ document.addEventListener('visibilitychange', async () => {
                 console.error("요청 실패:", err);
             });*/
 
+        await forceBlurInput();
         chatInput.focus();
 
         const isValidSession = await checkVerified();
         if (!isValidSession) {
+            console.log('return false')
             return false; // 세션 유효 시간이 끝났으면 요청 종료
         }
         await getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
@@ -283,15 +289,23 @@ document.addEventListener('visibilitychange', async () => {
             });
 
     } else {
+        await forceBlurInput();
         socket.emit("exit_room", { username: username, room: roomName });
         // 소켓을 끊어버리면 알림이 안온다..
         // if (typeof socket !== "undefined") socket.disconnect();
 
-        document.getElementById('typingIndicator').style.display = 'none';
+        // typingIndicator.style.display = 'none';
+        document.querySelector('.messageRow[data-chat-id="-1"]')?.remove();
         isTyping = false;
     }
 });
 
+function forceBlurInput() {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+        active.blur();
+    }
+}
 
 ////////////////////////// Chat State ////////////////////////////
 
@@ -366,7 +380,12 @@ function sendReadDataLastChat() {
 
 // 채팅 세션 갱신 (10분 한정)
 function updateChatSession() {
-    fetch("/auth/update-session-time").then(data => {})
+    return axios.get("/auth/update-session-time")
+        .then(resp => {
+            if (resp.status === 200) {
+                return resp.data["update_session_time"];
+            }
+        })
 }
 
 // 클라이언트가 세션을 체크, 존재하는지만 판단.. 서버에서도 체크하므로 결과만 확인한다
@@ -379,10 +398,10 @@ async function checkVerified() {
         });
 
         if (response.status === 200) {
-            funcResult = true;
             const result = await response.json();
-            if (result && result.success) {
+            if (result && result['success']) {
                 isVerifiedPassword = true;
+                funcResult = true;
             } else {
                 isVerifiedPassword = false;
             }
@@ -642,6 +661,28 @@ function addMessage(data, load = false) {
     }
 }
 
+function addTypingBox(typingIndicator) {
+    const messageRow = renderMessageRow(false, -1);
+    const messageDiv = renderMessageDiv();
+    messageDiv.classList.add("bg-gray-200", "text-left");
+
+    const cloneTypingIndicator = typingIndicator.cloneNode(true);
+    cloneTypingIndicator.style.display = '';
+    cloneTypingIndicator.style.padding = '7px';
+    messageDiv.appendChild(cloneTypingIndicator);
+
+    const typingBox = document.querySelectorAll('.messageRow[data-chat-id="-1"]');
+    if (typingBox.length === 0) {
+        chatContainer.appendChild(messageRow);
+    }
+    if (isScrollAtTheBottom()) {
+        moveBottonScroll();
+    }
+
+    messageRow.appendChild(messageDiv);
+}
+
+
 // 바깥 컨테이너: 메시지 한 줄을 구성
 function renderMessageRow(isMine, chatId) {
     const messageRow = document.createElement("div");
@@ -900,7 +941,7 @@ function setCheckIconsGreenUpTo(chatId) {
 
 // 채팅 입력 이벤트 함수
 function enterEvent(event) {
-    debouncedUpdate();
+    // debouncedUpdate();
 
     if (event.key === 'Enter') {
         if (event.shiftKey) {
@@ -931,7 +972,7 @@ function enterEvent(event) {
 function renewChatSession() {
     let tempInterval = setInterval(() => {
         if (videoCallWindow) {
-            updateChatSession();
+            // updateChatSession();
         } else {
             clearInterval(tempInterval);
         }
@@ -986,6 +1027,7 @@ function handleChatScroll() {
 async function initPage() {
     const isValidSession = await checkVerified();
     if (!isValidSession) {
+        console.log('return false')
         return false; // 세션 유효 시간이 끝났으면 요청 종료
     }
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
