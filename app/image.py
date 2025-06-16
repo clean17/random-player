@@ -29,8 +29,7 @@ SP500_DIR = settings['SP500_DIR']
 # 시장 디렉터리 매핑
 DIRECTORY_MAP = {
     'kospi': KOSPI_DIR,
-    'kospi_10': KOSDAQ_DIR,
-    'sp500': SP500_DIR
+    'nasdaq': SP500_DIR
 }
 
 # MOVE_DIR = os.path.join(os.getcwd(), 'move')
