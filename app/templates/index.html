@@ -47,11 +47,11 @@
             <select id="image-select" class="select-dropdown">
                 <option value="">Select Image Dir</option>
                 <option value="{{ url_for('image.image_list', dir=TRIP_IMAGE_DIR) }}">Trip Images</option>
+                <option value="/image/stock-graph-list/kospi">Stocks Graph</option>
                 <!--                    <option value="{{ url_for('image.image_list', dir=TEMP_IMAGE_DIR) }}">Temp Images</option>-->
                 {% if current_user.get_id() == config.SUPER_USERNAME %}
                 <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
                 <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
-                <option value="/image/stock-graph-list/kospi">Stocks Graph</option>
                 {% endif %}
             </select>
         </form>
