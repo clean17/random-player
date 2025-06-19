@@ -7,12 +7,13 @@ from urllib.parse import urljoin
 from PIL import Image
 from io import BytesIO
 import uuid, os, requests
+import json
 
 # 게시글 목록 페이지 URL 템플릿
 url_template = settings['CRAWL_URL']
 url_host = settings['CRAWL_HOST']
 IMAGE_DIR = settings['IMAGE_DIR']
-
+crawl_run = None
 
 # 이미지 저장 경로 설정
 os.makedirs(IMAGE_DIR, exist_ok=True)
@@ -65,6 +66,7 @@ def auto_scroll_page(page):
 
 
 def crawl_images_from_page(page_num):
+    global crawl_run   # 전역 변수를 함수 내부에서 변경(할당)할 때는 꼭 global 사용!
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
@@ -76,17 +78,46 @@ def crawl_images_from_page(page_num):
 
         # 게시글 링크 추출
         links = page.eval_on_selector_all(
-            "a.vrow.column",
+            "a.vrow.column:not(.notice)",
             "els => els.map(e => e.getAttribute('href'))"
         )
 
         post_links = [url_host + link for link in links if link and link.startswith("/")]
         # print(f"Page {page_num} post links:", post_links)
 
+        # 현재 스크립트 파일의 경로
+        SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(SCRIPT_DIR, '..', 'data', 'data.json')  # 상위폴더 data/data.json
+
+        # 정규화 (불필요한 .. 처리)
+        file_path = os.path.normpath(file_path)
+
+        print('file_path', file_path)  # 실제 참조 경로 확인
+
         # for post_url in post_links:
         for i, post_url in enumerate(post_links, start=1):
             try:
                 print(f"[{i}/{len(post_links)}] ************************** post_url: {post_url}")
+                check_url = post_url.split('?')[0]
+
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                if data.get('ai_scheduler_uri') == check_url:
+                    print(f"동일함! for문 중단")
+                    sys.exit(0)  # 여기서 프로그램 전체가 종료됨
+
+                if not crawl_run:
+                    with open(file_path, "r", encoding="utf-8") as f: # 읽기
+                        data = json.load(f)
+
+                    data['ai_scheduler_uri'] = check_url
+
+                    with open(file_path, "w", encoding="utf-8") as f: # 쓰기
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+
+                    crawl_run = True
+
                 page.goto(post_url, timeout=15000)
 
                 # ✅ 천천히 자동 스크롤
@@ -126,10 +157,10 @@ def crawl_images_from_page(page_num):
             except Exception as e:
                 print(f"Error in {post_url}: {e}")
 
-        browser.close()
-
+        # browser.close()
 # 실행
 # 25.05.07
-for page_num in range(1, 26):
+# 25.06.13
+for page_num in range(1, 21):
     crawl_images_from_page(page_num)
     print(f"##### Done: page {page_num} #####")

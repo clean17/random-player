@@ -73,7 +73,7 @@ def crawl_images_from_page(page_num):
     # 페이지 소스를 출력하여 확인
     # print(f"Page {page_num} HTML:\n", soup.prettify())
 
-    post_links = [a['href'] for a in soup.select('a.vrow.column') if 'href' in a.attrs]
+    post_links = [a['href'] for a in soup.select('a.vrow.column:not(.notice)') if 'href' in a.attrs]
 
     # 추출된 링크를 출력하여 확인
     # print(f"Page {page_num} post links: {post_links}")
