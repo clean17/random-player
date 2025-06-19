@@ -18,6 +18,7 @@ from .oauth import oauth
 from .rds import rds
 from .file import file_bp
 from .admin import admin
+from .post import posts
 import fnmatch
 from datetime import datetime, timedelta
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -26,6 +27,7 @@ import uuid
 from config.config import settings
 from redis import Redis
 from flask_wtf.csrf import CSRFProtect
+from urllib.parse import urlparse, urljoin
 
 # 허용할 엔드포인트 경로 - 추가될수록 유지보수가 힘들어진다 > 블랙리스트로 전환 필요
 ALLOWED_PATHS = [
@@ -121,6 +123,16 @@ def get_client_ip(request):
     # 3. 그 외에는 Flask 기본값
     return request.remote_addr
 
+def to_jpg(filename):
+    return filename.rsplit('.', 1)[0] + '.jpg'
+
+def format_hms(elapsed):
+    h = int(elapsed // 3600)
+    m = int((elapsed % 3600) // 60)
+    # s = elapsed % 60
+    s = int(elapsed % 60)
+    # return f"{h}시간 {m}분 {s:.2f}초"
+    return f"{h}시간 {m}분 {s}초"
 
 def create_app():
     print("✅ create_app() called", uuid.uuid4())
@@ -150,10 +162,13 @@ def create_app():
     app.register_blueprint(rds, url_prefix='/rds')
     app.register_blueprint(file_bp, url_prefix='/file')
     app.register_blueprint(admin, url_prefix='/admin')
+    app.register_blueprint(posts, url_prefix='/posts')
     app.jinja_env.globals.update(max=max, min=min)
     # Jinja2 탬플릿 캐시 x
     app.jinja_env.auto_reload = True
     app.config['TEMPLATES_AUTO_RELOAD'] = True
+    # Jinja2 커스텀 필터 등록
+    app.jinja_env.filters['to_jpg'] = to_jpg
 
 
     # ProxyFix 미들웨어 적용 (리버스 프록시 뒤에서 올바르게 동작하도록)
@@ -189,7 +204,11 @@ def create_app():
             if datetime.now() >= BLOCKED_IPS[ip]:
                 del BLOCKED_IPS[ip]  # 차단 해제
             else:
+                return abort(403, description="Access blocked IP.")
 
+        if not ip:
+            print('# No ip information')
+            return
 
         ###################### 엔드포인트 허용 ######################
         if request.path == '/auth/logout':
@@ -245,40 +264,54 @@ def create_app():
             if not current_user.is_authenticated:
                 return redirect(url_for("auth.logout"))
 
-            url = request.path
-            parts = url.split("/")
-            base_path = "/" + "/".join(parts[1:3])
+            now = datetime.now()
+            weekday = now.weekday()   # 0=월요일, ..., 4=금요일
+            hour = now.hour
+            check_date_conditions = True
 
-            verified = session.get(SECOND_PASSWORD_SESSION_KEY)
-            # verified_at_str = session.get('second_password_verified_at') # 마지막 인증 시간
-            verified_at_str = get_verified_time(current_user.get_id())
+            # 월 08:00 ~ 금 20:00 사이면 추가 검증 X
+            if ( (weekday == 0 and hour >= 8) or            # 월요일 8시 이후
+                    (weekday > 0 and weekday < 4) or        # 화, 수, 목 (종일)
+                    (weekday == 4 and hour <= 20) ):        # 금요일 20시 이전
+                check_date_conditions = False
 
-            if not verified and current_user.get_id() == app.config['GUEST_USERNAME']:
-                return redirect(url_for('auth.verify_password', next=base_path))
-            if not verified_at_str:
-                # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
-                return redirect(url_for('auth.verify_password', next=base_path))
+            # if check_date_conditions:
+            if False:
+                url = request.path
+                parts = url.split("/")
+                base_path = "/" + "/".join(parts[1:3])
 
-            try:
-                verified_at = datetime.fromisoformat(verified_at_str)
-            except Exception:
+                verified = session.get(SECOND_PASSWORD_SESSION_KEY) # 로그인 후 추가 인증을 했는지 여부
+                # verified_at_str = session.get('second_password_verified_at') # 마지막 인증 시간
+                verified_at_str = get_verified_time(current_user.get_id())
+
+                # nh에게 추가 검증을 요구
+                if not verified and current_user.get_id() == app.config['GUEST_USERNAME']:
+                    return redirect(url_for('auth.verify_password', next=base_path))
+
+                # redis에 추가 검증 시간이 없으면
+                if not verified_at_str:
+                    # 인증 안했거나 인증시간 없음 → 인증 페이지로 이동
+                    return redirect(url_for('auth.verify_password', next=base_path))
+
                 # 시간 파싱 실패 → 인증 무효 처리
-                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
-                session.pop('second_password_verified_at', None)
-                print('test - 3')
-                return redirect(url_for('auth.verify_password', next=base_path))
+                try:
+                    verified_at = datetime.fromisoformat(verified_at_str)
+                except Exception:
+                    session.pop(SECOND_PASSWORD_SESSION_KEY, None)
+                    session.pop('second_password_verified_at', None)
+                    return redirect(url_for('auth.verify_password', next=base_path))
 
-            # 10분 유효시간 초과 시 인증 무효
-            # if datetime.utcnow() - verified_at > timedelta(seconds=5):
-            if datetime.utcnow() - verified_at > timedelta(minutes=10):
-                print('    before_request - Function Session Expires ', current_user.get_id())
-                session.pop(SECOND_PASSWORD_SESSION_KEY, None)
-                session.pop('second_password_verified_at', None)
-                print('test - 4')
-                return redirect(url_for('auth.verify_password', next=base_path))
+                # 추가 검증 후 10분 초과 시
+                # if datetime.now() - verified_at > timedelta(seconds=5):
+                if datetime.now() - verified_at > timedelta(minutes=10):
+                    print('    # The second password authentication time has expired : ', current_user.get_id())
+                    session.pop(SECOND_PASSWORD_SESSION_KEY, None)
+                    session.pop('second_password_verified_at', None)
+                    return redirect(url_for('auth.verify_password', next=base_path))
 
             # 현재 uri 요청을 반복하면 세션 시간 갱신
-            # session['second_password_verified_at'] = datetime.utcnow().isoformat()
+            # session['second_password_verified_at'] = datetime.now().isoformat()
             save_verified_time(current_user.get_id())
 
 
@@ -287,13 +320,13 @@ def create_app():
         if current_user.get_id() == app.config['GUEST_USERNAME']:
             last_active = session.get("last_active")
             if last_active:
-                now = datetime.utcnow().timestamp()
+                now = datetime.now().timestamp()
                 elapsed = now - last_active
                 timeout = GUEST_SESSION_EXPIRATION_TIME.total_seconds()
 
                 if elapsed > timeout:
                     print(f"    request.path - {request.path}")
-                    print(f"    before_request - ⏱ 경과 시간: {elapsed:.2f}초 redirect logout")
+                    print(f"    before_request - ⏱ 경과 시간: {format_hms(elapsed)} redirect logout")
                     return redirect(url_for("auth.logout"))
 
                 session["last_active"] = now
