@@ -45,7 +45,7 @@ def save_verified_time(username):
     redis_client.setex(
         f"second_password_verified:{username}",
         timedelta(minutes=10),
-        datetime.utcnow().isoformat()
+        datetime.now().isoformat()
     )
 
 def get_verified_time(username):
@@ -115,7 +115,7 @@ def login():
             # GUEST_USERNAME 사용자라면
             if username == settings['GUEST_USERNAME']:
                 session.permanent = False  # False; 브라우저 세션, 브라우저를 닫으면 세션 쿠키는 사라진다
-                session["last_active"] = datetime.utcnow().timestamp() # session["last_active"]
+                session["last_active"] = datetime.now().timestamp() # session["last_active"]
 
                 if not current_user.is_authenticated:
                     return redirect(url_for('auth.logout'))
@@ -199,7 +199,7 @@ def verify_password():
 
         if password == YOUR_SECRET_PASSWORD:
             session[SECOND_PASSWORD_SESSION_KEY] = True # session.get(SECOND_PASSWORD_SESSION_KEY)
-            # session['second_password_verified_at'] = datetime.utcnow().isoformat()
+            # session['second_password_verified_at'] = datetime.now().isoformat()
             save_verified_time(current_user.get_id()) # redis 동기화
 
             next_page = request.args.get("next", "/func/memo")
@@ -227,7 +227,7 @@ def check_verified():
 @auth.route("/update-session-time")
 @login_required
 def update_session_time():
-    # session['second_password_verified_at'] = datetime.utcnow().isoformat()
+    # session['second_password_verified_at'] = datetime.now().isoformat()
     save_verified_time(current_user.get_id()) # redis 동기화
     return jsonify({"update_session_time": "true"})
 
