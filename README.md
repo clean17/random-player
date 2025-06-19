@@ -230,7 +230,8 @@ $ copy chickchick.shop-crt.pem + chickchick.shop-chain.pem fullchain.pem
 
 ---
 ## Redis 설치
-Redis를 Windows 서비스로 설치
+Redis를 Windows 서비스로 설치<br>
+https://github.com/microsoftarchive/redis/releases 에 들어가서 msi파일 설치
 ```cmd
 redis-server --service-install redis.windows.conf --loglevel verbose
 ```
