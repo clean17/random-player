@@ -12,7 +12,6 @@ REF_IMAGE_DIR = 'refine'
 TRIP_IMAGE_DIR = 'trip'
 TEMP_IMAGE_DIR = 'temp'
 KOSPI_DIR = settings['KOSPI_DIR']
-KOSDAQ_DIR = settings['KOSDAQ_DIR']
 SP500_DIR = settings['SP500_DIR']
 
 @main.route('/')

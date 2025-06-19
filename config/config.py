@@ -21,7 +21,6 @@ def load_config():
         'TEMP_IMAGE_DIR': config['directories']['temp_images_directory'],
         'DEL_TEMP_IMAGE_DIR': config['directories']['del_temp_images_directory'],
         'KOSPI_DIR': config['directories']['kospi_stocks_directory'],
-        'KOSDAQ_DIR': config['directories']['kosdaq_stocks_directory'],
         'SP500_DIR': config['directories']['sp500_stocks_directory'],
         'NODE_SERVER_PATH': config['directories']['node_server_path'],
         'HTM_DIRECTORY': config['directories']['htm_directory'],

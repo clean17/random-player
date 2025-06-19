@@ -23,7 +23,6 @@ TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 DEL_TEMP_IMAGE_DIR = settings['DEL_TEMP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
-KOSDAQ_DIR = settings['KOSDAQ_DIR']
 SP500_DIR = settings['SP500_DIR']
 
 # 시장 디렉터리 매핑
