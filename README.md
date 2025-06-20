@@ -340,3 +340,52 @@ pip install psycopg-binary
 (설치가 안되는 이슈가 있으면 윈도우에 PostgreSql을 설치하고 Path 에 bin 경로 추가 필요)
 
 
+## gsutil 설치
+
+- 설치 (리눅스/Mac/WSL)
+```bash
+curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-456.0.0-linux-x86_64.tar.gz
+tar -xf google-cloud-sdk-456.0.0-linux-x86_64.tar.gz
+./google-cloud-sdk/install.sh
+
+
+```
+- 설치 후 환경설정
+```bash
+./google-cloud-sdk/bin/gcloud init
+```
+
+- windows 설치 (powershell) <br>
+https://cloud.google.com/sdk/docs/install?hl=ko
+```bash
+(New-Object Net.WebClient).DownloadFile("https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe", "$env:Temp\GoogleCloudSDKInstaller.exe")
+
+& $env:Temp\GoogleCloudSDKInstaller.exe
+    
+```
+
+## 이슈 
+- 구글 패키지 꼬임 
+
+```bash
+pip list | findstr google 
+
+pip uninstall google google-cloud google-cloud-api google-cloud-core googleapis-common-protos protobuf
+
+pip install --upgrade pip
+pip install --upgrade google-cloud-speech google-cloud-storage protobuf
+
+```
+- 캐시/컴파일 삭제
+```bash
+find . -name "*.pyc" -delete
+find . -name "__pycache__" -delete
+```
+
+## pip 복구 및 업그레이드
+```bash
+$ python -m ensurepip --upgrade
+
+$ python -m pip install --upgrade pip
+
+```
