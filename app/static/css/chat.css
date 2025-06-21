@@ -5,6 +5,7 @@ body, html {
     /*align-items: center;*/
     touch-action: manipulation; /* 탭 허용, 더블 탭 차단 > button, a 반응속도 빠르게 하기 위해서 */
     -webkit-overflow-scrolling: touch; /* iOS Safari에서 overflow: scroll 영역에 자연스러운 관성 스크롤을 적용, iOS Safari에서 반드시 필요 */
+    overflow-x: hidden;
 }
 
 /* (임시) 모바일에서 버튼 누르면 색이 돌아오지 않아서 흰색으로 */
@@ -18,10 +19,32 @@ body .container {
     position: fixed;
     top: 0; bottom: 0; left: 0; right: 0;
     margin: auto; /* 좌우 정렬 */
+
+    background: #fff;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
 }
 #chat-container {
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain; /* 상단 당겼을 때 body 스크롤 방지 (선택) */
+
+    /* contain: 현재 요소에서 스크롤 바운스 등 "부모로 전파"를 막음 >> 확대 시 가로 스크롤 안됨 */
+    /* none: 바운스/부모 스크롤/새로고침(당기기) 전혀 없음 */
+    overscroll-behavior: auto;
+
+    flex: 1 1 0%;             /* flex-1: grow, shrink, basis */
+    overflow-y: auto;
+    padding-left: 12px;       /* px-3 */
+    padding-right: 12px;      /* px-3 */
+    padding-top: 4px;         /* py-1 */
+    padding-bottom: 4px;      /* py-1 */
+    display: flex;            /* space-y-*을 위해 flex-col 구조 사용 */
+    flex-direction: column;
+    gap: 8px;                 /* space-y-2: 자식 요소 간 수직 간격 8px */
 }
 #chat-input {
     overflow-y: auto;
