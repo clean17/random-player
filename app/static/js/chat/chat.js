@@ -168,12 +168,15 @@ function connectSocket() {
     socket.on("typing", (data) => {
         if ( data.username !== username ) {
             // typingIndicator.style.display = 'block';
-            addTypingBox(typingIndicator);
 
-            if (isScrollAtTheBottom() && !isTyping) {
-                moveBottonScroll();
-                isTyping = true;
-            }
+            setTimeout(()=>{
+                addTypingBox(typingIndicator);
+
+                if (isScrollAtTheBottom() && !isTyping) {
+                    moveBottonScroll();
+                    isTyping = true;
+                }
+            }, 200);
         }
     });
 
