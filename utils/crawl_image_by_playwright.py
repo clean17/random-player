@@ -13,7 +13,8 @@ import json
 url_template = settings['CRAWL_URL']
 url_host = settings['CRAWL_HOST']
 IMAGE_DIR = settings['IMAGE_DIR']
-crawl_run = None
+is_first = True
+save_url = None
 
 # 이미지 저장 경로 설정
 os.makedirs(IMAGE_DIR, exist_ok=True)
@@ -32,7 +33,7 @@ def download_image(img_url, save_path):
             with open(save_path, 'wb') as handler:
                 handler.write(img_data)
             # print(f"Downloaded {img_url} to {save_path}")
-            print(f"{save_path}")
+            # print(f"{save_path}")
         else:
             # print(f"Skipped {img_url}, width: {img.width}px")
             pass
@@ -66,7 +67,9 @@ def auto_scroll_page(page):
 
 
 def crawl_images_from_page(page_num):
-    global crawl_run   # 전역 변수를 함수 내부에서 변경(할당)할 때는 꼭 global 사용!
+    global is_first   # 전역 변수를 함수 내부에서 변경(할당)할 때는 꼭 global 사용!
+    global save_url
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
@@ -74,7 +77,9 @@ def crawl_images_from_page(page_num):
         page_url = url_template.format(page_num)
         print('url', page_url)
         page.goto(page_url, timeout=15000)
-        page.wait_for_timeout(10000)  # 10초 대기 (ms 단위)
+        page.wait_for_timeout(4000)
+        page.reload()
+        page.wait_for_timeout(4000)  # 10초 대기 (ms 단위)
 
         # 게시글 링크 추출
         links = page.eval_on_selector_all(
@@ -92,31 +97,30 @@ def crawl_images_from_page(page_num):
         # 정규화 (불필요한 .. 처리)
         file_path = os.path.normpath(file_path)
 
-        print('file_path', file_path)  # 실제 참조 경로 확인
+        # print('file_path', file_path)  # 실제 참조 경로 확인
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
         # for post_url in post_links:
         for i, post_url in enumerate(post_links, start=1):
             try:
                 print(f"[{i}/{len(post_links)}] ************************** post_url: {post_url}")
-                check_url = post_url.split('?')[0]
+                current_url = post_url.split('?')[0]
 
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                if is_first and page_num == 1:
+                    save_url = current_url
+                    is_first = False
 
-                if data.get('ai_scheduler_uri') == check_url:
-                    print(f"동일함! for문 중단")
-                    sys.exit(0)  # 여기서 프로그램 전체가 종료됨
+                if data.get('ai_scheduler_uri') == current_url:
+                    print(f"동일함! for문 중단  {data.get('ai_scheduler_uri')}")
 
-                if not crawl_run:
-                    with open(file_path, "r", encoding="utf-8") as f: # 읽기
-                        data = json.load(f)
-
-                    data['ai_scheduler_uri'] = check_url
+                    data['ai_scheduler_uri'] = save_url
 
                     with open(file_path, "w", encoding="utf-8") as f: # 쓰기
                         json.dump(data, f, ensure_ascii=False, indent=2)
 
-                    crawl_run = True
+                    sys.exit(0)  # 여기서 프로그램 전체가 종료됨
 
                 page.goto(post_url, timeout=15000)
 
@@ -145,6 +149,7 @@ def crawl_images_from_page(page_num):
                     if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
                 ]
 
+                count = 0
                 for img_url in img_urls:
                     if img_url.startswith('//'):
                         img_url = 'https:' + img_url
@@ -153,6 +158,8 @@ def crawl_images_from_page(page_num):
 
                     img_name = os.path.basename(img_url.split('?')[0])
                     save_image_with_uuid(img_name, img_url, IMAGE_DIR)
+                    count = count + 1
+                print(f'download success : {count}')
 
             except Exception as e:
                 print(f"Error in {post_url}: {e}")
@@ -161,6 +168,19 @@ def crawl_images_from_page(page_num):
 # 실행
 # 25.05.07
 # 25.06.13
-for page_num in range(1, 21):
-    crawl_images_from_page(page_num)
-    print(f"##### Done: page {page_num} #####")
+# for page_num in range(1, 21):
+#     crawl_images_from_page(page_num)
+#     print(f"##### Done: page {page_num} #####")
+
+def crawl_ai():
+    for page_num in range(1, 21):
+        print(f"##### Start: page {page_num} #####")
+        crawl_images_from_page(page_num)
+        print(f"##### Done: page {page_num} #####")
+
+async def crawl_ai_worker():
+    for page_num in range(1, 21):
+        await crawl_images_from_page(page_num)
+        print(f"##### Done: page {page_num} #####")
+
+crawl_ai()
