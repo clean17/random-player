@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import random
-from utils.task_manager import run_crawl_ai_image
+from utils.task_manager import run_crawl_ai_image, predict_stock_graph
 
 func = Blueprint('func', __name__)
 
@@ -508,6 +508,15 @@ def crawl_ai():
     run_crawl_ai_image()
     return {"status": "success", "message": "크롤링 시작!!"}
 
+@func.route("/predict-stocks/<stock>", methods=['POST'], endpoint='predict-kospi')
+@login_required
+def predict_stocks(stock):
+    predict_stock_graph(stock)
+    if stock == 'kospi':
+        stock_name = '코스피'
+    if stock == 'nasdaq':
+        stock_name = '나스닥'
+    return {"status": "success", "message": stock_name+" 예측 시작!!"}
 
 ################################# STATE ####################################
 

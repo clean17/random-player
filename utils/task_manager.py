@@ -362,7 +362,7 @@ def run_async_function(coroutine):
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
-    schedule.every().at("06:00").do(run_crawl_ai_image)
+    schedule.every().day.at("06:00").do(run_crawl_ai_image)
     # schedule.every().friday.at("06:00").do(run_crawl_ai_image)
 
     while True:
@@ -399,6 +399,29 @@ def run_crawl_ai_image():
     process = subprocess.Popen(
         cmd,
         # creationflags=subprocess.CREATE_NEW_CONSOLE,  # ⭐️ 새 콘솔창에서 실행!
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        shell=True,
+        encoding='utf-8'
+    )
+
+def predict_stock_graph(stock):
+    script_dir = r'C:\my-project\python'
+    venv_activate = r'venv\Scripts\activate'
+    if stock == 'kospi':
+        py_script = r'python multi_kor_stocks.py'
+    if stock == 'nasdaq':
+        py_script = r'python new_nasdaq_multi.py'
+
+    # 전체 명령어 (venv 활성화 → 스크립트 실행)
+    # 주의: activate.bat는 cmd에서만 인식, powershell은 다름
+    cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
+
+    # subprocess 실행
+    process = subprocess.Popen(
+        cmd,
+        creationflags=subprocess.CREATE_NEW_CONSOLE,  # ⭐️ 새 콘솔창에서 실행!
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
