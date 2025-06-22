@@ -9,30 +9,30 @@
 
     <link href="//vjs.zencdn.net/8.3.0/video-js.min.css" rel="stylesheet">
     <script src="//vjs.zencdn.net/8.3.0/video.min.js"></script>
-    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
-    <link rel="stylesheet" href="/static/css/video.css?v={{ version }}">
+<!--    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">-->
+<!--    <link rel="stylesheet" href="/static/css/video.css?v={{ version }}">-->
     <style>
-        /*video {*/
-        /*    max-width: 1500px;*/
-        /*    width: 100%;*/
-        /*    max-height: 1500px;*/
-        /*    height: 100%;*/
-        /*    object-fit: fill;*/
-        /*}*/
+        video {
+            max-width: 1500px;
+            width: 100%;
+            max-height: 1500px;
+            height: 100%;
+            object-fit: fill;
+        }
     </style>
 </head>
 <body>
-<div id="videoContainer"></div>
+<!--<div id="videoContainer"></div>-->
 
-<!--<video id="video" controls playsinline autoplay></video>-->
-<!--<button onclick="loadVideo()">Load Video</button>-->
-<!--<a href="/admin">-->
-<!--    <button>관리자 페이지</button>-->
-<!--</a>-->
+<video id="video" controls playsinline autoplay></video>
+<button onclick="loadVideo()">Load Video</button>
+<a href="/admin">
+    <button>관리자 페이지</button>
+</a>
 
 <script>
     const video = document.querySelector('#video');
-    // const videoSrc = 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8'
+    const videoSrc = 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8'
 
     function loadVideo() {
         var video = document.getElementById('video');
@@ -74,7 +74,7 @@
         initVideoSrc()
         initVideoElem();
         if (videoSource) {
-            videoSource.src = 'https://chickchick.shop/video/videos/.%2F2025-06-07_15-29-57.SVP.mp4?dir=1';
+            videoSource.src = '';
         }
 
         if (videoPlayer) {
