@@ -8,6 +8,7 @@ const chatContainer = document.getElementById("chat-container"),
     fileInput = document.getElementById('file-input'),
     progressContainer = document.getElementById('progressContainer'),
     videoCallBtn = document.getElementById("videoCallBtn"),
+    toggleNotificationBtn = document.getElementById("toggleNotification"),
     roomUserCount = document.getElementById('userCount'),
     typingIndicator = document.getElementById('typingIndicator');
 
@@ -32,6 +33,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     scrollButton = undefined,
     intervalId,
     dateDividerPreviousDate,
+    isNotificationOn = true,
     isVerifiedPassword = false;
 
 openDate.setHours(openDate.getHours() + 9);  // UTC → KST 변환
@@ -64,15 +66,6 @@ document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textare
     resize();
 });
 
-function getCurrentTimeStr() {
-    const now = new Date();
-
-    const hour = now.getHours().toString().padStart(2, "0");
-    const minute = now.getMinutes().toString().padStart(2, "0");
-
-    return `${hour}:${minute}`;
-}
-
 function extractDomain(url) {
     try {
         const parsed = new URL(url);
@@ -88,7 +81,8 @@ function getFilenameFromUrl(url) {
     return params.get('filename');
 }
 
-    function replaceSpacesOutsideTags(html) {
+// 태그 내부 text만 replace
+function replaceSpacesOutsideTags(html) {
     // 임시 컨테이너에 html 파싱
     const div = document.createElement('div');
     div.innerHTML = html;
@@ -103,8 +97,16 @@ function getFilenameFromUrl(url) {
             }
         });
     }
+
     traverse(div);
     return div.innerHTML;
+}
+
+function isWithin1Min(openTimestamp, dataTimestamp) {
+    const openDt = parseTimestamp(openTimestamp);
+    const dataDt = parseTimestamp(dataTimestamp);
+    const diff = (dataDt - openDt) / 1000; // ms → 초
+    return diff > 0 && diff <= 60;
 }
 
 
@@ -156,7 +158,7 @@ function connectSocket() {
         }
 
         // 채팅 읽음 요청은 스크롤 이벤트에 일임한다
-        if (data.username !== username) {
+        if (data.username !== username && isNotificationOn) {
             sendNotification(data);
             // sendReadDataLastChat(); // 상대 메세지를 읽어야 하는데
             if (!isScrollAtTheBottom()) showDebugToast('새로운 메세지 도착');
@@ -179,7 +181,8 @@ function connectSocket() {
     });
 
     socket.on("message_read_ack", function (data) {
-        if (data.username !== username) {
+        // 임시 하드코딩
+        if ((username === 'nh824' && data.username === 'fkaus14') || (username === 'fkaus14' && data.username === 'nh824')) {
             setCheckIconsGreenUpTo(Number(data.chatId));
         }
     })
@@ -548,8 +551,8 @@ function addMessage(data, load = false) {
     if (isMine) {
         messageDiv.classList.add("bg-blue-200", "text-left");
     } else {
-        if (data.underline !== 1 && openTimestamp < data.timestamp) {
-            callNotification();
+        if (data.underline !== 1 && openTimestamp < data.timestamp && isWithin1Min(openTimestamp, data.timestamp) && isNotificationOn) {
+            vibrate();
         }
         messageDiv.classList.add("bg-gray-200", "text-left");
     }
@@ -1021,6 +1024,17 @@ function renderVideoCallWindow() {
     }
 }
 
+// 알림 토글 버튼
+function toggleNotification() {
+    const i = toggleNotificationBtn.querySelector('i');
+    if (i.classList.contains('fa-bell-slash')) {
+        i.classList.replace('fa-bell-slash', 'fa-bell');
+    } else {
+        i.classList.replace('fa-bell', 'fa-bell-slash');
+    }
+    isNotificationOn = !isNotificationOn;
+}
+
 // 스크롤 이동 버튼 클릭 > 최하단
 function moveBottonScroll() {
     requestAnimationFrame(() => {
@@ -1091,6 +1105,10 @@ async function initPage() {
     // 영상통화 버튼
     videoCallBtn?.removeEventListener('click', renderVideoCallWindow)
     videoCallBtn?.addEventListener('click', renderVideoCallWindow)
+
+    // 알림 on/off
+    toggleNotificationBtn?.removeEventListener('click', toggleNotification)
+    toggleNotificationBtn?.addEventListener('click', toggleNotification)
 
     // 파일 업로드 기능
     fileInput.removeEventListener('change', uploadFile);

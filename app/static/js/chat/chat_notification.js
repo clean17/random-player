@@ -35,7 +35,7 @@ function requestNotificationPermission() {
     });
 }
 
-function callNotification() {
+function vibrate() {
     if (userInteracted && "vibrate" in navigator) {
         navigator.vibrate([400, 200, 400]); // 400ms 진동 → 200ms 정지 → 400ms 진동
     }

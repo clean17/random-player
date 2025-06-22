@@ -39,3 +39,25 @@ function throttle(func, delay) {
         }, delay);
     };
 }
+
+// 현재 시간 19:52 반환
+function getCurrentTimeStr() {
+    const now = new Date();
+
+    const hour = now.getHours().toString().padStart(2, "0");
+    const minute = now.getMinutes().toString().padStart(2, "0");
+
+    return `${hour}:${minute}`;
+}
+
+// "250622194841" → "2025-06-22 19:48:41"
+// YYMMDDHHmmss
+function parseTimestamp(ts) {
+    const year = 2000 + parseInt(ts.slice(0, 2), 10);
+    const month = parseInt(ts.slice(2, 4), 10) - 1; // JS는 0~11월
+    const day = parseInt(ts.slice(4, 6), 10);
+    const hour = parseInt(ts.slice(6, 8), 10);
+    const min = parseInt(ts.slice(8, 10), 10);
+    const sec = parseInt(ts.slice(10, 12), 10);
+    return new Date(year, month, day, hour, min, sec);
+}
