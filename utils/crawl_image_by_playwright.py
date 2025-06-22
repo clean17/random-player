@@ -3,13 +3,11 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config.config import settings
 from playwright.sync_api import Playwright, sync_playwright
-from playwright.async_api import async_playwright
 from urllib.parse import urljoin
 from PIL import Image
 from io import BytesIO
 import uuid, os, requests
 import json
-import asyncio
 
 # 게시글 목록 페이지 URL 템플릿
 url_template = settings['CRAWL_URL']
@@ -76,7 +74,8 @@ def crawl_images_from_page(page_num):
     global save_url
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=False) # 개발
+        # browser = p.chromium.launch(headless=True) # 운영
         page = browser.new_page()
 
         page_url = url_template.format(page_num)
@@ -113,14 +112,19 @@ def crawl_images_from_page(page_num):
                 print(f"[{i}/{len(post_links)}] ************************** post_url: {post_url}")
                 current_url = post_url.split('?')[0]
 
+                data['current_ai_scheduler_uri'] = current_url
+
+                with open(file_path, "w", encoding="utf-8") as f: # 쓰기
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+
                 if is_first and page_num == 1:
                     save_url = current_url
                     is_first = False
 
-                if data.get('ai_scheduler_uri') == current_url:
-                    print(f"동일함! for문 중단  {data.get('ai_scheduler_uri')}")
+                if data.get('last_ai_scheduler_uri') == current_url:
+                    print(f"동일함! for문 중단  {data.get('last_ai_scheduler_uri')}")
 
-                    data['ai_scheduler_uri'] = save_url
+                    data['last_ai_scheduler_uri'] = save_url
 
                     with open(file_path, "w", encoding="utf-8") as f: # 쓰기
                         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -184,3 +188,5 @@ def crawl_ai():
         print(f"##### Start: page {page_num} #####")
         crawl_images_from_page(page_num)
         print(f"##### Done: page {page_num} #####")
+
+crawl_ai()

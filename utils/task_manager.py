@@ -362,6 +362,8 @@ def run_async_function(coroutine):
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
+    schedule.every().at("06:00").do(run_crawl_ai_image)
+    # schedule.every().friday.at("06:00").do(run_crawl_ai_image)
 
     while True:
         schedule.run_pending()
@@ -380,6 +382,29 @@ def start_lotto_scheduler():
         loop.run_until_complete(run_schedule())  # 비동기 코드 실행
     except KeyboardInterrupt:
         print("스케줄러 종료됨")
+
+def run_crawl_ai_image():
+    # 명령어 조합
+    # Windows에서는 여러 명령을 &&로 연결하여 한 줄에 실행 가능
+    # venv 활성화 후 바로 실행
+    script_dir = r'C:\my-project\random-player'
+    venv_activate = r'venv\Scripts\activate'
+    py_script = r'python utils\crawl_image_by_playwright.py'
+
+    # 전체 명령어 (venv 활성화 → 스크립트 실행)
+    # 주의: activate.bat는 cmd에서만 인식, powershell은 다름
+    cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
+
+    # subprocess 실행
+    process = subprocess.Popen(
+        cmd,
+        # creationflags=subprocess.CREATE_NEW_CONSOLE,  # ⭐️ 새 콘솔창에서 실행!
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        shell=True,
+        encoding='utf-8'
+    )
 
 # 주기적 작업을 위한 프로세스 시작 (두 개의 별도 프로세스를 데몬으로 실행, 앱이 또 생성됨)
 # asyncio 또는 threading.Thread를 사용하면, Waitress 앱 하나 안에서 주기작업, 스케줄러 등을 백그라운드에서 실행 가능

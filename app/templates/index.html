@@ -6,6 +6,7 @@
     <title>Select Menu</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/home.css?v={{ version }}">
+    <script src="/static/js/common.js?v={{ version }}"></script>
 </head>
 <body>
 <div class="top-bar">
@@ -66,6 +67,7 @@
         <a href="{{ url_for('func.memo') }}"><button type="button" id="btn925" class="btn-w100">Memo</button></a>
     {% if current_user.get_id() != config.GUEST_USERNAME %}
         <button type="button" id="buy-lotto" class="btn-w100">Buy Lotto</button>
+        <!--<button type="button" id="run-crawl" class="btn-w100">Run Crawl</button>-->
         <a href="{{ url_for('func.get_hls') }}"><button type="button" id="btn927" class="btn-w100">HLS</button></a>
 <!--        <a href="/htmltest"><button type="button" id="btn9272" class="btn-w100">TEST</button></a>-->
     {% endif %}
@@ -77,6 +79,7 @@
     const videoOption = document.getElementById("directory-select");
     const imageOption = document.getElementById("image-select");
     const buyLottoBtn = document.getElementById("buy-lotto");
+    const runCrawlBtn = document.getElementById("run-crawl");
 
     const username = "{{ username }}";
     const chatBadgeCnt = document.querySelector('.unread-badge');
@@ -179,6 +182,17 @@
         }
     }
 
+    async function run_crawl() {
+        const response = await fetch("/func/crawl-ai", {method: "POST"});
+        const result = await response.json();
+
+        if (response.ok) {
+            showDebugToast(result.message);
+        } else {
+            alert("요청 실패: 서버 오류");
+        }
+    }
+
     async function getLastChatId() {
         const response = await fetch('/func/last-chat-id', {
             method: 'GET',
@@ -233,6 +247,9 @@
 
         buyLottoBtn?.removeEventListener('click', buy_lotto);
         buyLottoBtn?.addEventListener('click', buy_lotto);
+
+        runCrawlBtn?.removeEventListener('click', run_crawl);
+        runCrawlBtn?.addEventListener('click', run_crawl);
     });
 </script>
 </html>

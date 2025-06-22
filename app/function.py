@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import random
+from utils.task_manager import run_crawl_ai_image
 
 func = Blueprint('func', __name__)
 
@@ -499,6 +500,14 @@ def get_video_call_window():
 def test_lotto():
     asyncio.run(async_buy_lotto())  # 코루틴 실행
     return {"status": "success", "message": "로또 구매 완료!!"}
+
+
+@func.route("/crawl-ai", methods=['POST'], endpoint='crawl-ai')
+@login_required
+def crawl_ai():
+    run_crawl_ai_image()
+    return {"status": "success", "message": "크롤링 시작!!"}
+
 
 ################################# STATE ####################################
 
