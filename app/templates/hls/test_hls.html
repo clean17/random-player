@@ -5,28 +5,34 @@
     <title>Live TS Video Streaming</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<!--    <script src="https://vjs.zencdn.net/8.3.0/video.min.js"></script>-->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <link href="//vjs.zencdn.net/8.3.0/video-js.min.css" rel="stylesheet">
+    <script src="//vjs.zencdn.net/8.3.0/video.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/video.css?v={{ version }}">
     <style>
-        video {
-            max-width: 1500px;
-            width: 100%;
-            max-height: 1500px;
-            height: 100%;
-            object-fit: fill;
-        }
+        /*video {*/
+        /*    max-width: 1500px;*/
+        /*    width: 100%;*/
+        /*    max-height: 1500px;*/
+        /*    height: 100%;*/
+        /*    object-fit: fill;*/
+        /*}*/
     </style>
 </head>
 <body>
-<video id="video" controls playsinline autoplay></video>
-<button onclick="loadVideo()">Load Video</button>
-<a href="/admin">
-    <button>관리자 페이지</button>
-</a>
+<div id="videoContainer"></div>
+
+<!--<video id="video" controls playsinline autoplay></video>-->
+<!--<button onclick="loadVideo()">Load Video</button>-->
+<!--<a href="/admin">-->
+<!--    <button>관리자 페이지</button>-->
+<!--</a>-->
 
 <script>
     const video = document.querySelector('#video');
-    const videoSrc = 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8'
+    // const videoSrc = 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8'
 
     function loadVideo() {
         var video = document.getElementById('video');
@@ -57,8 +63,139 @@
     }
 
 
+
+
+
+
+
+
+
+    function playVideo() {
+        initVideoSrc()
+        initVideoElem();
+        if (videoSource) {
+            videoSource.src = 'https://chickchick.shop/video/videos/.%2F2025-06-07_15-29-57.SVP.mp4?dir=1';
+        }
+
+        if (videoPlayer) {
+            videoPlayer.load();
+        }
+        setupThreeSplitCanvas();
+
+    }
+
+    function initVideoElem() {
+        const currentVideoPlayer = document.querySelector('#videoPlayer')
+        if (currentVideoPlayer) {
+            currentVideoPlayer.remove();
+        }
+
+        videoContainer.appendChild(getDefaultVideoElem())
+        videoPlayer = videoContainer.querySelector('#videoPlayer')
+        videoSource = videoPlayer.querySelector('#videoSource')
+    }
+
+    function initVideoSrc() {
+        const currentVideoPlayer = document.querySelector('#videoPlayer')
+        if (currentVideoPlayer) {
+            currentVideoPlayer.pause();
+            currentVideoPlayer.onloadedmetadata = null;
+            currentVideoPlayer.querySelector('#videoSource').src = '';
+            currentVideoPlayer.load();
+        }
+    }
+
+    function getDefaultVideoElem() {
+        /*<video id="videoPlayer" controls autoPlay preload="auto">
+            <source src="" type="video/mp4" id="videoSource">
+        </video>*/
+        const video = document.createElement('video')
+        const source = document.createElement('source')
+        video.id = 'videoPlayer'
+        video.controls = true
+        video.autoplay = true
+        video.preload = "auto"
+        source.src = ""
+        source.type ="video/mp4"
+        source.id = 'videoSource'
+        video.appendChild(source)
+        return video;
+    }
+
+    function setupThreeSplitCanvas() {
+        const videoPlayer = document.getElementById('videoPlayer');
+        const videoContainer = document.getElementById('videoContainer');
+
+        videoPlayer.addEventListener('loadedmetadata', function() {
+            // 캔버스 생성
+            let leftCanvas = document.createElement('canvas');
+            leftCanvas.id = 'leftCanvas';
+            leftCanvas.style.position = 'absolute';
+            leftCanvas.style.top = '0';
+
+            let rightCanvas = document.createElement('canvas');
+            rightCanvas.id = 'rightCanvas';
+            rightCanvas.style.position = 'absolute';
+            rightCanvas.style.top = '0';
+
+            // 비디오와 같은 크기
+            const videoW = videoPlayer.videoWidth;
+            const videoH = videoPlayer.videoHeight;
+
+            // 컨테이너(부모) 크기에 맞춰 리사이즈
+            function positionAll() {
+                // 현재 비디오의 보이는 크기 계산
+                const containerW = videoContainer.clientWidth;
+                const containerH = videoContainer.clientHeight;
+                let scale = Math.min(containerW / videoW, containerH / videoH);
+                let shownW = videoW * scale;
+                let shownH = videoH * scale;
+
+                // videoPlayer 가운데 배치
+                videoPlayer.style.position = 'absolute';
+                videoPlayer.style.width = shownW + 'px';
+                videoPlayer.style.height = shownH + 'px';
+                videoPlayer.style.left = (containerW - shownW) / 2 + 'px';
+                videoPlayer.style.top = (containerH - shownH) / 2 + 'px';
+
+                // leftCanvas: 비디오 왼쪽으로 가로길이만큼 떨어져 배치
+                leftCanvas.width = shownW;
+                leftCanvas.height = shownH;
+                leftCanvas.style.left = (containerW - shownW) / 2 - shownW + 'px';
+                leftCanvas.style.top = videoPlayer.style.top;
+
+                // rightCanvas: 비디오 오른쪽으로 가로길이만큼 떨어져 배치
+                rightCanvas.width = shownW;
+                rightCanvas.height = shownH;
+                rightCanvas.style.left = (containerW - shownW) / 2 + shownW + 'px';
+                rightCanvas.style.top = videoPlayer.style.top;
+            }
+
+            positionAll();
+            window.addEventListener('resize', positionAll);
+
+            // DOM에 추가 (중복 방지)
+            if (!document.getElementById('leftCanvas')) videoContainer.appendChild(leftCanvas);
+            if (!document.getElementById('rightCanvas')) videoContainer.appendChild(rightCanvas);
+
+            // drawImage로 영상 복제
+            function draw() {
+                [leftCanvas, rightCanvas].forEach(canvas => {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+                });
+                if (!videoPlayer.paused && !videoPlayer.ended) {
+                    requestAnimationFrame(draw);
+                }
+            }
+            videoPlayer.addEventListener('play', draw);
+        });
+    }
+
+
     ///////////////////// 테스트 스크립트 시작
-    function requestWithTimeout(obj, onTimeout) {
+    /*function requestWithTimeout(obj, onTimeout) {
         return axios.post(obj.url, obj.data, {
             headers: {"Content-Type": "application/json"},
             timeout: 3000 // 3초 초과시 자동 reject
@@ -84,12 +221,13 @@
             requestWithTimeout(obj, retryHandler);
         }
     };
-    requestWithTimeout(obj, retryHandler);
+    requestWithTimeout(obj, retryHandler);*/
     //////////////////// 테스트 스크립트 종료
 
 
     document.addEventListener('DOMContentLoaded', () => {
         fetchSize();
+        playVideo();
     })
 </script>
 </body>

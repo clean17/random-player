@@ -177,7 +177,7 @@ function selectVideoFromArr(videos, randomIndex) {
     }
 
     const videoUrl = makeGetUrl(currentVideo);
-    // console.log('videoUrl', videoUrl)
+    console.log('videoUrl', videoUrl)
     playVideo(videoUrl)
 }
 
@@ -226,8 +226,6 @@ function getVideoEvent() {
     let decodedUrl = decodeURIComponent(videoSource.src)
     let videoFilename = extractFilename(decodedUrl);
     filenameDisplay.textContent = videoFilename;
-    // document.title = videoFilename;
-    // console.log('getvideo', videoFilename)
 
     videoPlayer.addEventListener('timeupdate', function() {
         if (isLooping && endTime > startTime) {
@@ -247,16 +245,100 @@ function getVideoEvent() {
 
     if (!isMobile) {
         // if (!threeSplitLayout()) {
-            changeVideo(); // change to videojs
+        //     changeVideo(); // change to videojs
         // }
     }
+    setupThreeSplitCanvas();
     addKeyboardControls();
+}
+
+function setupThreeSplitCanvas() {
+    let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
+    if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
+        const checkLeftCanvas = document.getElementById('leftCanvas');
+        let leftCanvas;
+        if (!checkLeftCanvas) {
+            leftCanvas = document.createElement('canvas');
+            leftCanvas.id = 'leftCanvas';
+            leftCanvas.style.position = 'absolute';
+            leftCanvas.style.top = '0';
+        } else {
+            leftCanvas = checkLeftCanvas;
+        }
+
+        const checkRightCanvas = document.getElementById('rightCanvas');
+        let rightCanvas;
+        if (!checkRightCanvas) {
+            rightCanvas = document.createElement('canvas');
+            rightCanvas.id = 'rightCanvas';
+            rightCanvas.style.position = 'absolute';
+            rightCanvas.style.top = '0';
+        } else {
+            rightCanvas = checkRightCanvas;
+        }
+
+        // 비디오와 같은 크기
+        const videoW = videoPlayer.videoWidth;
+        const videoH = videoPlayer.videoHeight;
+
+        // 컨테이너(부모) 크기에 맞춰 리사이즈
+        function positionAll() {
+            // 현재 비디오의 보이는 크기 계산
+            const containerW = videoContainer.clientWidth;
+            const containerH = videoContainer.clientHeight;
+            let scale = Math.min(containerW / videoW, containerH / videoH);
+            let shownW = videoW * scale;
+            let shownH = videoH * scale;
+
+            // videoPlayer 가운데 배치
+            videoPlayer.style.position = 'absolute';
+            videoPlayer.style.width = shownW + 'px';
+            videoPlayer.style.height = shownH + 'px';
+            videoPlayer.style.left = (containerW - shownW) / 2 + 'px';
+            videoPlayer.style.top = (containerH - shownH) / 2 + 'px';
+
+            // leftCanvas: 비디오 왼쪽으로 가로길이만큼 떨어져 배치
+            leftCanvas.width = shownW;
+            leftCanvas.height = shownH;
+            leftCanvas.style.left = (containerW - shownW) / 2 - shownW + 'px';
+            leftCanvas.style.top = videoPlayer.style.top;
+
+            // rightCanvas: 비디오 오른쪽으로 가로길이만큼 떨어져 배치
+            rightCanvas.width = shownW;
+            rightCanvas.height = shownH;
+            rightCanvas.style.left = (containerW - shownW) / 2 + shownW + 'px';
+            rightCanvas.style.top = videoPlayer.style.top;
+        }
+
+        positionAll();
+        window.addEventListener('resize', positionAll);
+
+        // DOM에 추가 (중복 방지)
+        if (!document.getElementById('leftCanvas')) videoContainer.appendChild(leftCanvas);
+        if (!document.getElementById('rightCanvas')) videoContainer.appendChild(rightCanvas);
+
+        // drawImage로 영상 복제
+        function draw() {
+            [leftCanvas, rightCanvas].forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+            });
+            if (!videoPlayer.paused && !videoPlayer.ended) {
+                requestAnimationFrame(draw);
+            }
+        }
+        videoPlayer.addEventListener('play', draw);
+    } else {
+        changeVideo(); // change to videojs
+    }
 }
 
 function changeVideo() {
     initVideoSrc()
     initVideoElem();
     videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
+    // videoPlayer.addEventListener('loadedmetadata', getVideoEvent); # 여기서 넣으면 안된다
     videoPlayer.classList.add('video-js', ',vjs-default-skin')
 
     const videoUrl = makeGetUrl(currentVideo)
