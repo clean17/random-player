@@ -32,6 +32,8 @@ let previousVolume = 1.0;
 let startTime = 0;
 let endTime = 0;
 let gainNode;
+let fetchVideoArr = [];
+let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 /************************************************************************/
 /******************************   Common   ******************************/
@@ -83,10 +85,11 @@ function initVideoElem() {
         if (isVideoJs()) {
             let player = videojs.getPlayer(currentVideoPlayer.id);
             if (player) {
-                player.dispose(); // video.js 인스턴스 해제
+                player.dispose(); // video.js 인스턴스 해제 > #videoPlayer도 자동으로 DOM에서 제거된다
             }
+        } else {
+            currentVideoPlayer.remove();
         }
-        currentVideoPlayer.remove();
     }
 
     videoContainer.appendChild(getDefaultVideoElem())
@@ -102,7 +105,6 @@ function initVideoSrc() {
             player.pause();
             player.src({ src: '', type: 'video/mp4' });
             player.load();
-            player.reset();
         } else if (currentVideoPlayer) {
             currentVideoPlayer.pause();
             currentVideoPlayer.onloadedmetadata = null;
@@ -149,7 +151,7 @@ function getDefaultVideoElem() {
 }
 
 function resetLoop() {
-    console.log('resetLoop')
+    // console.log('resetLoop')
     isClickAbtn = false;
     isClickBbtn = false;
     isClickGain = false;
@@ -164,28 +166,39 @@ function resetLoop() {
 /*************************   Video Function   ***************************/
 /************************************************************************/
 
+function selectVideoFromArr(videos, randomIndex) {
+    currentVideo = videos[randomIndex]
+    fetchVideoArr.splice(randomIndex, 1); // randomIndex에서 1개 제거
+    // console.log('currentVideo', currentVideo)
+
+    const previousVideo = previousVideos.slice(-1)[0]
+    if (currentVideo === previousVideo) {
+        currentVideo = videos[randomIndex === 0 ? 1 : 0]
+    }
+
+    const videoUrl = makeGetUrl(currentVideo);
+    // console.log('videoUrl', videoUrl)
+    playVideo(videoUrl)
+}
+
 function getVideo() {
     resetLoop();
-    axios.get(`/video/videos?dir=${dir}`)
-        .then(response => {
-            let videos = response.data;
-            if (videos.length > 0) {
-                let randomIndex = Math.floor(Math.random() * videos.length);
-                currentVideo = videos[randomIndex]
-                console.log('currentVideo', currentVideo)
-
-                const previousVideo = previousVideos.slice(-1)[0]
-                if (currentVideo === previousVideo) {
-                    currentVideo = videos[randomIndex === 0 ? 1 : 0]
+    if (fetchVideoArr.length === 0) {
+        axios.get(`/video/videos?dir=${dir}`)
+            .then(response => {
+                let videos = response.data;
+                if (videos.length > 0) {
+                    fetchVideoArr = [...videos];
+                    const randomIndex = Math.floor(Math.random() * fetchVideoArr.length);
+                    selectVideoFromArr(fetchVideoArr, randomIndex);
+                } else {
+                    alert('No videos found');
                 }
-
-                const videoUrl = makeGetUrl(currentVideo);
-                console.log('videoUrl', videoUrl)
-                playVideo(videoUrl)
-            } else {
-                alert('No videos found');
-            }
-        });
+            });
+    } else {
+        const randomIndex = Math.floor(Math.random() * fetchVideoArr.length);
+        selectVideoFromArr(fetchVideoArr, randomIndex);
+    }
 }
 
 function playVideo(videoUrl) {
@@ -232,8 +245,10 @@ function getVideoEvent() {
         }
     });
 
-    if (!threeSplitLayout()) {
-        changeVideo() // change to videojs
+    if (!isMobile) {
+        // if (!threeSplitLayout()) {
+            changeVideo(); // change to videojs
+        // }
     }
     addKeyboardControls();
 }
@@ -325,6 +340,7 @@ function pushVideoArr(url) {
     previousVideos.push(url)
 }
 
+// 싱크 안맞음.. 네트워크 3번 요청..
 function threeSplitLayout() {
     let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
     if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
@@ -371,7 +387,7 @@ function threeSplitLayout() {
             }
         }
 
-        videoLeft.onloadedmetadata = () => {
+        videoPlayer.onloadedmetadata = () => {
             videoPlayerLoaded = true;
             checkBothVideosLoaded();
         };
@@ -419,17 +435,21 @@ function threeSplitLayout() {
 
 function playTripleVideo() {
     videoPlayer.play().catch(error => {});
-    videoLeft.play().catch(error => {});
-    videoRight.play().catch(error => {});
+    if (videoLeft) videoLeft.play().catch(error => {});
+    if (videoRight) videoRight.play().catch(error => {});
 }
 
 function initTriple() {
+    const currentTime = videoPlayer.currentTime;
     videoPlayer.pause();
-    videoLeft.pause();
-    videoRight.pause();
-    let currentTime = videoPlayer.currentTime;
-    videoLeft.currentTime = currentTime;
-    videoRight.currentTime = currentTime;
+    if (videoLeft) {
+        videoLeft.pause();
+        videoLeft.currentTime = currentTime;
+    }
+    if (videoRight) {
+        videoRight.pause();
+        videoRight.currentTime = currentTime;
+    }
 
     setTimeout(() => {
         playTripleVideo()
@@ -813,7 +833,7 @@ function videoKeyEvent(event) {
 
 
 function delayAudio() {
-    console.log('delayAudio')
+    // console.log('delayAudio')
     let video = document.querySelector('#videoPlayer')
     if (video) {
         if (isVideoJs()) {
@@ -969,6 +989,11 @@ function removeWidthFromVideoMirror() {
 /***************************   init  ************************************/
 /************************************************************************/
 
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        // initTriple();
+    }
+});
 function initPage() {
     previousVideos.push(undefined)
     // player = videojs('videoPlayer');

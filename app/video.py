@@ -25,7 +25,7 @@ def select_directory():
 @video.route('/video-player/<directory>')
 @login_required
 def video_player(directory):
-    return render_template('video.html', directory=directory)
+    return render_template('video.html', directory=directory, version=int(time.time()))
 
 @video.route('/videos', methods=['GET'])
 @login_required
