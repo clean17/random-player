@@ -88,6 +88,25 @@ function getFilenameFromUrl(url) {
     return params.get('filename');
 }
 
+    function replaceSpacesOutsideTags(html) {
+    // 임시 컨테이너에 html 파싱
+    const div = document.createElement('div');
+    div.innerHTML = html;
+
+    // 재귀적으로 text node만 &nbsp; 처리
+    function traverse(node) {
+        node.childNodes.forEach(child => {
+            if (child.nodeType === Node.TEXT_NODE) {
+                child.nodeValue = child.nodeValue.replace(/ /g, "\u00A0");
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+                traverse(child);
+            }
+        });
+    }
+    traverse(div);
+    return div.innerHTML;
+}
+
 
 /////////////////////////////// Web Socket /////////////////////////////
 
@@ -587,7 +606,8 @@ function addMessage(data, load = false) {
             messageDiv.appendChild(link);
         } else {
             const messageSpan = document.createElement("span");
-            const safeText = data.msg.replace(/ /g, "&nbsp;");
+            // const safeText = data.msg.replace(/ /g, "&nbsp;");
+            const safeText = replaceSpacesOutsideTags(data.msg);
             messageSpan.innerHTML = safeText;
             messageDiv.appendChild(messageSpan);
 
@@ -876,7 +896,7 @@ mutationObserver.observe(document.body, {
 
 const dateDividerObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
-        if (entry.isIntersecting) { // 뷰포트에 나타났을 때
+        if (entry.isIntersecting && !isScrollAtTheBottom()) { // 뷰포트에 나타났을 때
             showDebugToast(formatDateWithKoreanDay(dateDividerPreviousDate));
             observer.unobserve(entry.target); // 한 번만 실행하려면 옵저버 해제
         }

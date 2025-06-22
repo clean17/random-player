@@ -107,6 +107,14 @@ function openVideoCallWindow() {
         }
     });
 
+
+    // const msg = '<span style="font-size:2em; color:green;">📞 통화요청</span>';
+    const msg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화요청';
+    if (msg !== "") {
+        socket.emit("new_msg", { username, msg, room: roomName });
+        socket.emit("stop_typing", {room: roomName, username: username });
+    }
+
     // closeBtn.click();
     // 소켓으로 컨트롤 해야할지도
 }
