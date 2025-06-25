@@ -1061,6 +1061,27 @@ function handleChatScroll() {
     sendReadDataLastChat();
 }
 
+function moveMinusOneToEnd() {
+    const chatContainer = document.getElementById('chat-container');
+    if (!chatContainer) return;
+
+    // 모든 messageRow 중에서 data-chat-id="-1" 인 요소 찾기
+    const rows = chatContainer.querySelectorAll('.messageRow');
+    let minusOneRow = null;
+
+    rows.forEach(row => {
+        if (row.dataset.chatId === "-1") {
+            minusOneRow = row;
+        }
+    });
+
+    if (!minusOneRow) return; // 해당 요소 없음
+
+    // 이미 마지막이면 아무 것도 안 함
+    if (minusOneRow !== chatContainer.lastElementChild) {
+        chatContainer.appendChild(minusOneRow);
+    }
+}
 
 
 async function initPage() {
@@ -1152,11 +1173,11 @@ async function initPage() {
             if (attempt >= maxAttempts) {
                 clearInterval(intervalId);
             }
-        }, 15);
+        }, 20);
     }, 250)
 
     setInterval(() => {
-
+        moveMinusOneToEnd();
     }, 100)
 }
 
