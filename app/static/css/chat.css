@@ -145,7 +145,7 @@ body .container {
 
 .icon-buttons {
     position: absolute;
-    top: 12%;
+    top: 15%;
     right: 10px;
     transform: translateY(-50%);
     display: flex;

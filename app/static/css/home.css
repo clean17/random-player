@@ -4,19 +4,19 @@ body, html {
     display: flex;
     justify-content: center;
     align-items: center;
+    height: auto;
 }
 
 .container {
     min-width: 400px;
     max-width: 30vw;
-    max-height: 90vh;
+    /*max-height: 90vh;*/
     background: white;
     padding: 10px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     text-align: center;
     box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
-    overflow-y: hidden;
 }
 h2 {
     margin-bottom: 20px;

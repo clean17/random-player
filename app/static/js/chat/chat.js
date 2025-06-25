@@ -159,7 +159,9 @@ function connectSocket() {
 
         // 채팅 읽음 요청은 스크롤 이벤트에 일임한다
         if (data.username !== username && isNotificationOn) {
-            sendNotification(data);
+            if (isWithin1Min(openTimestamp, data.timestamp)) {
+                sendNotification(data);
+            }
             // sendReadDataLastChat(); // 상대 메세지를 읽어야 하는데
             if (!isScrollAtTheBottom()) showDebugToast('새로운 메세지 도착');
         } else {
@@ -1152,6 +1154,10 @@ async function initPage() {
             }
         }, 15);
     }, 250)
+
+    setInterval(() => {
+
+    }, 100)
 }
 
 document.addEventListener("DOMContentLoaded", initPage);
