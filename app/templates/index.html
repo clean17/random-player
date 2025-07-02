@@ -53,6 +53,8 @@
                 <!--                    <option value="{{ url_for('image.image_list', dir=TEMP_IMAGE_DIR) }}">Temp Images</option>-->
                 {% if current_user.get_id() == config.SUPER_USERNAME %}
                 <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
+                <option value="{{ url_for('image.image_list', dir=IMAGE_DIR2) }}">View Images2</option>
+<!--                <option value="{{ url_for('image.image_list', dir=CHK_IMAGE_DIR) }}">Check Images</option>-->
                 <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
                 {% endif %}
             </select>

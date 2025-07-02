@@ -17,6 +17,7 @@ shuffled_images = None
 
 # 설정
 IMAGE_DIR = settings['IMAGE_DIR']
+IMAGE_DIR2 = settings['IMAGE_DIR2']
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
@@ -68,6 +69,23 @@ def get_images(start, count, dir):
             if not f.lower().endswith(('.zip', '.ini'))  # ✅ .zip 파일 제외
         ]
         images.sort()
+    return images[start:start + count]
+
+def get_subdir_images(start, count, dirs):
+    if isinstance(dirs, str):
+        dirs = [dirs]
+
+    images = []
+    for dir_path in dirs:
+        for subdir in os.listdir(dir_path):
+            subdir_path = os.path.join(dir_path, subdir)
+            if os.path.isdir(subdir_path):
+                for f in os.listdir(subdir_path):
+                    full_path = os.path.join(subdir_path, f)
+                    if os.path.isfile(full_path) and not f.lower().endswith(('.zip', '.ini')):
+                        # 내부 디렉토리명과 파일명을 붙임 (ex: data1/filename.jpg)
+                        images.append(f"{subdir}/{f}")
+    images.sort()
     return images[start:start + count]
 
 def get_reverse_images(start, count, dir):
@@ -130,7 +148,6 @@ def image_list():
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
 
-
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
         # images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
         # images_length = count_non_zip_files(TEMP_IMAGE_DIR)
@@ -150,6 +167,7 @@ def image_list():
         images_length = count_non_zip_files(target_dir)
         dir = 'temp'
 
+
     elif dir == 'refine':
         if firstRequst == 'True':
             initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
@@ -163,6 +181,12 @@ def image_list():
     elif dir == 'image':
         images = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR)
         images_length = count_non_zip_files(IMAGE_DIR)
+        template_html = 'image_list.html'
+    elif dir == 'image2':
+
+
+        images = get_subdir_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2)
+        images_length = count_non_zip_files_in_subfolders(IMAGE_DIR2)
         template_html = 'image_list.html'
     # elif dir == 'trip':
     #     images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
@@ -183,12 +207,16 @@ def move_image():
     imagepath = request.get_json().get('imagepath')
     subpath = request.get_json().get('subpath', '')
     filename = request.get_json().get('filename')
-    dest_path = os.path.join(MOVE_DIR, filename)
+    only_filename = os.path.basename(filename)
+    dest_path = os.path.join(MOVE_DIR, only_filename)
     name_without_ext = os.path.splitext(filename)[0]
 
     if imagepath == "image":
         src_path = os.path.join(IMAGE_DIR, filename)
         thumb_dir = os.path.join(IMAGE_DIR, "thumb")
+    elif imagepath == "image2":
+        src_path = os.path.join(IMAGE_DIR2, filename)
+        thumb_dir = os.path.join(IMAGE_DIR2, "thumb")
     elif imagepath == "ref_image":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
         thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
@@ -224,13 +252,23 @@ def move_image():
 def delete_images():
     images_to_delete = request.form.getlist('images[]')
     moved_images = os.listdir(MOVE_DIR)
+    dir = request.args.get('dir')
 
     for image in images_to_delete:
         if image not in moved_images:
-            send2trash(os.path.join(IMAGE_DIR, image)) # 휴지통으로 보낸다
+            if dir == 'image':
+                send2trash(os.path.join(IMAGE_DIR, image)) # 휴지통으로 보낸다
+            elif dir == 'image2':
+                # only_filename = os.path.basename(image)
+                dir_part = os.path.dirname(image)
+                file_part = os.path.basename(image)
+                clean_file_part = clean_filename(file_part)
+                new_path = os.path.join(IMAGE_DIR2, dir_part, clean_file_part)
+                send2trash(os.path.join(IMAGE_DIR2, new_path)) # 휴지통으로 보낸다
+
 
     page = int(request.form.get('page', 1))
-    return redirect(url_for('image.image_list', page=page, dir='image'))
+    return redirect(url_for('image.image_list', page=page, dir=dir))
 
 
 @image_bp.route('/images')
@@ -242,6 +280,8 @@ def get_image():
 
     if dir == 'image':
         base_dir = IMAGE_DIR
+    if dir == 'image2':
+        base_dir = IMAGE_DIR2
     elif dir == 'refine':
         base_dir = REF_IMAGE_DIR
     elif dir == 'trip':
@@ -338,3 +378,20 @@ def count_non_zip_files(directory):
         f for f in os.listdir(directory)
         if os.path.isfile(os.path.join(directory, f)) and not f.lower().endswith('.zip')
     ])
+
+
+def count_non_zip_files_in_subfolders(parent_dir):
+    count = 0
+    for entry in os.listdir(parent_dir):
+        sub_path = os.path.join(parent_dir, entry)
+        if os.path.isdir(sub_path):
+            # 하위 디렉토리 내부 파일만 카운트
+            for f in os.listdir(sub_path):
+                file_path = os.path.join(sub_path, f)
+                if os.path.isfile(file_path) and not f.lower().endswith('.zip'):
+                    count += 1
+    return count
+
+def clean_filename(filename):
+    # Windows에서 허용되지 않는 문자(: * ? " < > | / \)를 _로 변경
+    return re.sub(r'[<>:"/\\|?*]', '_', filename)

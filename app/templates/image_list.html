@@ -31,7 +31,7 @@
     <button onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })">⬇</button>
 </div>
 <div class="container">
-    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images') }}">
+    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images', dir=dir) }}">
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
@@ -51,7 +51,7 @@
                 {% elif file_extension in image_extensions %}
                 <!-- 이미지 파일인 경우 -->
                 <img class="thumbnail"
-                     src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                     src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
                      data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
                      alt="{{ image }}"
                      onclick="moveImage('{{ image }}', {{ loop.index }})"
@@ -376,7 +376,7 @@
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                imagepath: 'image',
+                imagepath: `{{dir}}`,
                 filename: filename
             })
         })

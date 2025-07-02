@@ -7,6 +7,7 @@ main = Blueprint('main', __name__)
 
 # 설정
 IMAGE_DIR = 'image'
+IMAGE_DIR2 = 'image2'
 MOVE_DIR = 'move'
 REF_IMAGE_DIR = 'refine'
 TRIP_IMAGE_DIR = 'trip'
@@ -20,6 +21,7 @@ def home():
     session['visits'] = session.get('visits', 0) + 1
     return render_template('index.html'
                            , IMAGE_DIR=IMAGE_DIR
+                           , IMAGE_DIR2=IMAGE_DIR2
                            , REF_IMAGE_DIR=REF_IMAGE_DIR
                            , TRIP_IMAGE_DIR=TRIP_IMAGE_DIR
                            , TEMP_IMAGE_DIR=TEMP_IMAGE_DIR
