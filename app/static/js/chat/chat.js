@@ -106,7 +106,7 @@ function isWithin1Min(openTimestamp, dataTimestamp) {
     const openDt = parseTimestamp(openTimestamp);
     const dataDt = parseTimestamp(dataTimestamp);
     const diff = (dataDt - openDt) / 1000; // ms → 초
-    return diff > 0 && diff <= 60;
+    return isMobile || diff > 0 && diff <= 60;
 }
 
 
@@ -159,9 +159,14 @@ function connectSocket() {
 
         // 채팅 읽음 요청은 스크롤 이벤트에 일임한다
         if (data.username !== username && isNotificationOn) {
-            if (isWithin1Min(openTimestamp, data.timestamp)) {
+            if (!isMobile) {
                 sendNotification(data);
+            } else {
+                if (isWithin1Min(openTimestamp, data.timestamp)) {
+                    sendNotification(data);
+                }
             }
+
             // sendReadDataLastChat(); // 상대 메세지를 읽어야 하는데
             if (!isScrollAtTheBottom()) showDebugToast('새로운 메세지 도착');
         } else {
