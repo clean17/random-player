@@ -15,6 +15,7 @@ video = Blueprint('video', __name__)
 # 설정
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 IMAGE_DIR = settings['IMAGE_DIR']
+IMAGE_DIR2 = settings['IMAGE_DIR2']
 
 @video.route('/select-directory', methods=['POST'], endpoint='select-directory')
 @login_required
@@ -65,7 +66,9 @@ def get_temp_video(filename):
         dir = TEMP_IMAGE_DIR
         if selected_dir:
             dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
-    else:
+    elif dir == 'image2':
+        dir = IMAGE_DIR2
+    elif dir == 'image':
         dir = IMAGE_DIR
 
     return send_file(os.path.join(dir, filename))

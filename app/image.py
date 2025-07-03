@@ -8,7 +8,7 @@ from jinja2 import Environment
 from config.config import settings
 import random
 import time
-from urllib.parse import unquote
+import urllib.parse
 import shutil
 
 image_bp = Blueprint('image', __name__)
@@ -183,8 +183,6 @@ def image_list():
         images_length = count_non_zip_files(IMAGE_DIR)
         template_html = 'image_list.html'
     elif dir == 'image2':
-
-
         images = get_subdir_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2)
         images_length = count_non_zip_files_in_subfolders(IMAGE_DIR2)
         template_html = 'image_list.html'
@@ -207,9 +205,17 @@ def move_image():
     imagepath = request.get_json().get('imagepath')
     subpath = request.get_json().get('subpath', '')
     filename = request.get_json().get('filename')
-    only_filename = os.path.basename(filename)
-    dest_path = os.path.join(MOVE_DIR, only_filename)
+    filename = urllib.parse.unquote(filename)
+
+    filename = os.path.join(os.path.dirname(filename),
+                            clean_filename(os.path.basename(filename)))
+    dest_path = os.path.join(MOVE_DIR,
+                             clean_filename(os.path.basename(filename)))
+
     name_without_ext = os.path.splitext(filename)[0]
+
+
+    # send2trash(os.path.join(IMAGE_DIR2, new_path)) # 휴지통으로 보낸다
 
     if imagepath == "image":
         src_path = os.path.join(IMAGE_DIR, filename)
@@ -280,7 +286,7 @@ def get_image():
 
     if dir == 'image':
         base_dir = IMAGE_DIR
-    if dir == 'image2':
+    elif dir == 'image2':
         base_dir = IMAGE_DIR2
     elif dir == 'refine':
         base_dir = REF_IMAGE_DIR
