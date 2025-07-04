@@ -88,6 +88,28 @@ def get_subdir_images(start, count, dirs):
     images.sort()
     return images[start:start + count]
 
+
+def get_subdir_and_reels_images(start, count, parent_dir):
+    images = []
+    for subdir in os.listdir(parent_dir):
+        subdir_path = os.path.join(parent_dir, subdir)
+        if os.path.isdir(subdir_path):
+            # 1. dirA, dirB 바로 아래 파일
+            for f in os.listdir(subdir_path):
+                file_path = os.path.join(subdir_path, f)
+                if os.path.isfile(file_path) and not f.lower().endswith(('.zip', '.ini')):
+                    images.append(f"{subdir}/{f}")
+            # 2. reels 서브디렉토리의 파일도 포함
+            reels_path = os.path.join(subdir_path, "reels")
+            if os.path.isdir(reels_path):
+                for f in os.listdir(reels_path):
+                    reels_file_path = os.path.join(reels_path, f)
+                    if os.path.isfile(reels_file_path) and not f.lower().endswith(('.zip', '.ini')):
+                        images.append(f"{subdir}/reels/{f}")
+    images.sort()
+    return images[start:start + count]
+
+
 def get_reverse_images(start, count, dir):
     images = sorted(
         [f for f in os.listdir(dir) if not f.lower().endswith(('.zip', '.ini'))],
@@ -130,6 +152,57 @@ def get_stock_graphs(dir, start, count):
     images.sort(key=sort_key, reverse=True)
     return images[start:start + count]
 
+
+# Jinja2 템플릿에서 max와 min 함수 사용을 위한 설정
+def environment(**options):
+    env = Environment(**options)
+    env.globals.update(max=max, min=min)
+    return env
+
+
+def count_non_zip_files(directory):
+    return len([
+        f for f in os.listdir(directory)
+        if os.path.isfile(os.path.join(directory, f)) and not f.lower().endswith('.zip')
+    ])
+
+
+def count_non_zip_files_in_subfolders(parent_dir):
+    count = 0
+    for entry in os.listdir(parent_dir):
+        sub_path = os.path.join(parent_dir, entry)
+        if os.path.isdir(sub_path):
+            # 하위 디렉토리 내부 파일만 카운트
+            for f in os.listdir(sub_path):
+                file_path = os.path.join(sub_path, f)
+                if os.path.isfile(file_path) and not f.lower().endswith('.zip'):
+                    count += 1
+    return count
+
+
+def count_non_zip_files_in_subfolders_and_reels(parent_dir):
+    count = 0
+    for subdir in os.listdir(parent_dir):
+        subdir_path = os.path.join(parent_dir, subdir)
+        if os.path.isdir(subdir_path):
+            # 1. dirA, dirB 바로 아래 파일
+            for f in os.listdir(subdir_path):
+                file_path = os.path.join(subdir_path, f)
+                if os.path.isfile(file_path) and not f.lower().endswith('.zip'):
+                    count += 1
+            # 2. reels 서브디렉토리의 파일도 포함
+            reels_path = os.path.join(subdir_path, "reels")
+            if os.path.isdir(reels_path):
+                for f in os.listdir(reels_path):
+                    reels_file_path = os.path.join(reels_path, f)
+                    if os.path.isfile(reels_file_path) and not f.lower().endswith('.zip'):
+                        count += 1
+    return count
+
+
+def clean_filename(filename):
+    # Windows에서 허용되지 않는 문자(: * ? " < > | / \)를 _로 변경
+    return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 ###################### image ########################
 
@@ -183,8 +256,8 @@ def image_list():
         images_length = count_non_zip_files(IMAGE_DIR)
         template_html = 'image_list.html'
     elif dir == 'image2':
-        images = get_subdir_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2)
-        images_length = count_non_zip_files_in_subfolders(IMAGE_DIR2)
+        images = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2)
+        images_length = count_non_zip_files_in_subfolders_and_reels(IMAGE_DIR2)
         template_html = 'image_list.html'
     # elif dir == 'trip':
     #     images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
@@ -263,14 +336,17 @@ def delete_images():
     for image in images_to_delete:
         if image not in moved_images:
             if dir == 'image':
-                send2trash(os.path.join(IMAGE_DIR, image)) # 휴지통으로 보낸다
+                raw_path = os.path.join(IMAGE_DIR, image)
+                safe_path = os.path.normpath(raw_path)
+                send2trash(safe_path) # 휴지통으로 보낸다
             elif dir == 'image2':
                 # only_filename = os.path.basename(image)
                 dir_part = os.path.dirname(image)
                 file_part = os.path.basename(image)
                 clean_file_part = clean_filename(file_part)
                 new_path = os.path.join(IMAGE_DIR2, dir_part, clean_file_part)
-                send2trash(os.path.join(IMAGE_DIR2, new_path)) # 휴지통으로 보낸다
+                safe_path = os.path.normpath(new_path)
+                send2trash(safe_path) # 휴지통으로 보낸다
 
 
     page = int(request.form.get('page', 1))
@@ -370,34 +446,3 @@ def move_stock_image(market, filename):
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
-
-# Jinja2 템플릿에서 max와 min 함수 사용을 위한 설정
-def environment(**options):
-    env = Environment(**options)
-    env.globals.update(max=max, min=min)
-    return env
-
-import os
-
-def count_non_zip_files(directory):
-    return len([
-        f for f in os.listdir(directory)
-        if os.path.isfile(os.path.join(directory, f)) and not f.lower().endswith('.zip')
-    ])
-
-
-def count_non_zip_files_in_subfolders(parent_dir):
-    count = 0
-    for entry in os.listdir(parent_dir):
-        sub_path = os.path.join(parent_dir, entry)
-        if os.path.isdir(sub_path):
-            # 하위 디렉토리 내부 파일만 카운트
-            for f in os.listdir(sub_path):
-                file_path = os.path.join(sub_path, f)
-                if os.path.isfile(file_path) and not f.lower().endswith('.zip'):
-                    count += 1
-    return count
-
-def clean_filename(filename):
-    # Windows에서 허용되지 않는 문자(: * ? " < > | / \)를 _로 변경
-    return re.sub(r'[<>:"/\\|?*]', '_', filename)

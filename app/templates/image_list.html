@@ -46,15 +46,15 @@
                 <!-- 비디오 파일인 경우 -->
                 <button class="delete-btn" type="button">×</button>
                 <video class="thumbnail"
-                       muted playsinline preload="metadata"
+                       muted playsinline preload="auto" autoplay controls
                        data-index="{{ loop.index }}"
-                       alt="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
-                       data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}">
-                    <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
+                       alt="{{ image }}"
+                       >
+                    <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
                             type="video/mp4"
                             data-filename="{{ image|urlencode }}">
                 </video>
-                <button class="play-btn" onclick="event.preventDefault();">▶</button>
+                <!--<button class="play-btn" onclick="event.preventDefault();">▶</button>-->
                 {% elif file_extension in image_extensions %}
                 <!-- 이미지 파일인 경우 -->
                 <img class="thumbnail"
@@ -245,9 +245,19 @@
 
         function clickCenterImage() {
             const centerImage = getCenterImage();
+            // console.log('center', centerImage)
             if (centerImage) {
-                const filename = centerImage.querySelector('img').getAttribute('alt');
-                const index = centerImage.querySelector('img').getAttribute('data-index');
+                let filename;
+                let index;
+                const imgTag = centerImage.querySelector('img');
+                if (imgTag) {
+                    filename = imgTag.getAttribute('alt');
+                    index = imgTag.getAttribute('data-index');
+                } else {
+                    const videoTag = centerImage.querySelector('video');
+                    filename = videoTag.getAttribute('alt');
+                    index = videoTag.getAttribute('data-index');
+                }
                 if (filename && index) {
                     moveImage(filename, index);
                 }
@@ -393,7 +403,7 @@
             }
         }
 
-        lazyLoadVideos();
+        // lazyLoadVideos();
     }
 
     function moveImage(filename, index) {
