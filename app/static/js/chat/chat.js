@@ -524,6 +524,7 @@ function sendMessage() {
     chatInput.style.height = textAreaOffsetHeight + "px";
     chatInput.focus();
     // chatInput.setSelectionRange(0, 0);  // 커서 위치 맨 앞으로 다시 지정,  iOS Safari에서 포커스 후 스크롤 위치 이상 현상을 유발할 수도
+    localStorage.setItem("#tempChat-250706", '');
 }
 
 // url 미리보기 카드 렌더링
@@ -985,6 +986,7 @@ function enterEvent(event) {
             // sendMessage();
             sendButton.click();
         }
+        localStorage.setItem("#tempChat-250706", '');
     } else {
         setTimeout(() => {
             if (chatInput.value.trim().length > 0) {
@@ -999,6 +1001,8 @@ function enterEvent(event) {
         typingTimeout = setTimeout(() => {
             socket.emit("stop_typing", { room: roomName, username: username }); // 일정 시간 입력 없으면 중단 알림
         }, 2000); // 2초간 입력 없으면 stop_typing
+
+        localStorage.setItem("#tempChat-250706", chatInput.value);
     }
 }
 
@@ -1108,8 +1112,8 @@ async function initPage() {
     }
 
     // keydown 에서만 event.preventDefault() 가 적용된다 !!
-    chatInput.removeEventListener('keydown', enterEvent);
-    chatInput.addEventListener('keydown', enterEvent)
+    chatInput.removeEventListener('keyup', enterEvent);
+    chatInput.addEventListener('keyup', enterEvent)
     // 모바일에서 키보드가 사라질 때의 이벤트
     /*chatInput.addEventListener('blur', () => {
         let attempt = 0;
@@ -1124,7 +1128,6 @@ async function initPage() {
             }
         }, 50);
     });*/
-    chatInput.focus();
 
     // 채팅 전송
     sendButton.removeEventListener('click', sendMessage);
@@ -1184,6 +1187,11 @@ async function initPage() {
     setInterval(() => {
         moveMinusOneToEnd();
     }, 100)
+
+    chatInput.textContent = localStorage.getItem("#tempChat-250706");
+
+    chatInput.focus();
+    chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
 }
 
 document.addEventListener("DOMContentLoaded", initPage);
