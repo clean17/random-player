@@ -557,12 +557,16 @@ function addMessage(data, load = false) {
     const messageDiv = renderMessageDiv();
 
     if (isMine) {
-        messageDiv.classList.add("bg-blue-200", "text-left");
+        // messageDiv.classList.add("bg-blue-200", "text-left");
+        messageDiv.classList.add("text-left");
+        messageDiv.style.backgroundColor = '#fef01b'; // 노란색
     } else {
         if (data.underline !== 1 && openTimestamp < data.timestamp && isWithin1Min(openTimestamp, data.timestamp) && isNotificationOn) {
             vibrate();
         }
-        messageDiv.classList.add("bg-gray-200", "text-left");
+        // messageDiv.classList.add("bg-gray-200", "text-left");
+        messageDiv.classList.add("text-left");
+        messageDiv.style.backgroundColor = '#ffffff'; // 흰색
     }
 
     if (data.underline) { // 출입 알림
@@ -677,12 +681,10 @@ function addMessage(data, load = false) {
             messageRow.appendChild(renderTimeDiv(timeStr));
             const checkIcon = renderCheckIcon();
             if (peerLastReadChatId && peerLastReadChatId >= Number(data.chatId)) {
-                if (load) {
-                    // checkIcon.style.color = "green";
-                    checkIcon.style.setProperty("color", "green", "important");
-                }
+                checkIcon.style.setProperty("color", "green", "important");
+            } else { // 읽지 않은 채팅만 아이콘 추가
+                messageRow.appendChild(checkIcon);
             }
-            messageRow.appendChild(checkIcon);
             messageRow.appendChild(messageDiv);
         } else {
             messageRow.appendChild(messageDiv);
@@ -938,21 +940,12 @@ function renderCheckIcon() {
     checkIcon.style.flexShrink = "0";
     checkIcon.style.fontSize = "0.9em";
     checkIcon.style.color = "whitesmoke";
-    checkIcon.style.background = "#ddd"; // 밝은 회색 배경
+    // checkIcon.style.background = "#ddd"; // 밝은 회색 배경
+    checkIcon.style.background = "#9bbbd4"; // 어두운 하늘색
     checkIcon.style.borderRadius = "4px";
     checkIcon.style.fontWeight = "bold";
 
     return checkIcon;
-}
-
-function setCheckIconGreen(chatId) {
-    const row = document.querySelector(`.messageRow[data-chat-id="${chatId}"]`);
-    if (!row) return;
-
-    const checkIcon = row.querySelector('.checkIcon');
-    if (checkIcon) {
-        checkIcon.style.color = "green";
-    }
 }
 
 // 파라미터 보다 낮은 채팅 ID들 모두 읽음 표시 전환
@@ -963,8 +956,8 @@ function setCheckIconsGreenUpTo(chatId) {
         if (!isNaN(rowChatId) && rowChatId <= chatId) {
             const checkIcon = row.querySelector('.checkIcon');
             if (checkIcon) {
-                // checkIcon.style.color = "green";
                 checkIcon.style.setProperty("color", "green", "important");
+                checkIcon.remove();
             }
         }
     });
@@ -981,7 +974,7 @@ function enterEvent(event) {
         if (event.shiftKey) {
             return; // 줄바꿈만 하고 종료
         }
-        if (!isMobile) {
+        if (!isMobile || true) {
             event.preventDefault(); // 기본 Enter 줄바꿈 방지
             // sendMessage();
             sendButton.click();

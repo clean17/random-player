@@ -78,18 +78,19 @@
         <!--            <button id="camera-button" class="p-2 text-gray-500 hover:text-gray-700 w-[10%] mr-2">📷</button>-->
         <form id="uploadForm" enctype="multipart/form-data">
             <input type="hidden" id="title" name="title" value="chat">
-            <label for="file-input" class="p-2 text-gray-600 cursor-pointer hover:bg-gray-200 w-[auto] mr-2">
-                📁
+            <label for="file-input" class="p-2 text-gray-600 bg-gray-100 cursor-pointer hover:bg-gray-200 w-[auto] mr-2 rounded">
+                <!--📁-->
+                ＋
             </label>
             <input type="file" name="files[]" id="file-input" multiple  class="hidden">
         </form>
         <!-- box-content: padding이 height에 포함되지 않도록 함 -->
         <textarea type="text" id="chat-input"
-                  class="p-2 px-3 py-[6px] border rounded-lg focus:outline-none w-[95%] box-content resize-none"
+                  class="p-2 px-3 py-[6px] border rounded-lg focus:outline-none w-[95%] box-content resize-none bg-gray-100"
                   placeholder="Type a message..."
                   data-textarea-auto-resize="8"
         ></textarea>
-        <button id="send-button" class="p-2 text-blue-500 hover:text-blue-700 w-[auto] ml-2">📤</button>
+        <button id="send-button" class="p-2 bg-gray-100 hover:bg-gray-200 w-[auto] ml-2">📤</button>
     </div>
     <!-- 진행률 표시 영역 -->
     <div id="progressContainer" style="display: none;">
