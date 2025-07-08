@@ -566,7 +566,9 @@ function addMessage(data, load = false) {
         }
         // messageDiv.classList.add("bg-gray-200", "text-left");
         messageDiv.classList.add("text-left");
-        messageDiv.style.backgroundColor = '#ffffff'; // 흰색
+        messageDiv.style.backgroundColor = '#ffffff'; // 흰색 (카톡 기본테마)
+        messageDiv.style.backgroundColor = '#303030'; // 어두운 회색 (카톡 다크모드)
+        messageDiv.style.color = 'lightgray'; // 글자색 (카톡 다크모드)
     }
 
     if (data.underline) { // 출입 알림
@@ -700,7 +702,9 @@ function addMessage(data, load = false) {
 function addTypingBox(typingIndicator) {
     const messageRow = renderMessageRow(false, -1);
     const messageDiv = renderMessageDiv();
-    messageDiv.classList.add("bg-gray-200", "text-left");
+    // messageDiv.classList.add("bg-gray-200", "text-left");
+    messageDiv.classList.add("text-left");
+    messageDiv.style.backgroundColor = '#303030'; // 어두운 회색 (카톡 다크모드)
 
     const cloneTypingIndicator = typingIndicator.cloneNode(true);
     cloneTypingIndicator.style.display = '';
@@ -942,6 +946,7 @@ function renderCheckIcon() {
     checkIcon.style.color = "whitesmoke";
     // checkIcon.style.background = "#ddd"; // 밝은 회색 배경
     checkIcon.style.background = "#9bbbd4"; // 어두운 하늘색
+    checkIcon.style.background = "#303030"; // 어두운 회색 (카톡 다크모드)
     checkIcon.style.borderRadius = "4px";
     checkIcon.style.fontWeight = "bold";
 

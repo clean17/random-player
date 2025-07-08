@@ -20,8 +20,8 @@ body .container {
     top: 0; bottom: 0; left: 0; right: 0;
     margin: auto; /* 좌우 정렬 */
 
-    background: #fff;
-    background: #9bbbd4; /* 노란색 */
+    /*background: #9bbbd4; !* 노란색 *!*/
+    background: #222222;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     /*border-radius: 8px;*/
     width: 100%;
@@ -175,4 +175,17 @@ body .container {
 }
 .icon-buttons i {
     pointer-events: none;
+}
+
+.chat-bottom-input {
+    /*background-color: #303030;*/
+}
+.chat-bottom-btn {
+    background-color: f3f4f6; /* bg-gray-100 */
+    background-color: #303030;
+    color: whitesmoke;
+}
+.chat-bottom-btn:hover {
+    /*background-color: #e5e7eb;*/ /* bg-gray-200 */
+    background-color: #303030;
 }
