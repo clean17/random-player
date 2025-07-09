@@ -363,7 +363,11 @@ async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
     schedule.every().day.at("06:00").do(run_crawl_ai_image)
-    # schedule.every().friday.at("06:00").do(run_crawl_ai_image)
+    for weekday in ["sunday", "monday", "tuesday", "wednesday", "thursday"]:
+        getattr(schedule.every(), weekday).at("20:00").do(predict_stock_graph, 'kospi')
+
+    for weekday in ["monday", "tuesday", "wednesday", "thursday", "friday"]:
+        getattr(schedule.every(), weekday).at("10:00").do(predict_stock_graph, 'nasdaq')
 
     while True:
         schedule.run_pending()
@@ -407,7 +411,7 @@ def run_crawl_ai_image():
     )
 
 def predict_stock_graph(stock):
-    script_dir = r'C:\my-project\python'
+    script_dir = r'C:\my-project\AutoSales.py'
     venv_activate = r'venv\Scripts\activate'
     if stock == 'kospi':
         py_script = r'python multi_kor_stocks.py'
@@ -428,6 +432,7 @@ def predict_stock_graph(stock):
         shell=True,
         encoding='utf-8'
     )
+
 
 # 주기적 작업을 위한 프로세스 시작 (두 개의 별도 프로세스를 데몬으로 실행, 앱이 또 생성됨)
 # asyncio 또는 threading.Thread를 사용하면, Waitress 앱 하나 안에서 주기작업, 스케줄러 등을 백그라운드에서 실행 가능
