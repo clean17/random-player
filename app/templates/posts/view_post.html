@@ -8,7 +8,7 @@
         body {
             font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
             margin: 0;
-            background: #f4f6fa;
+            background: #f4f4f4;
             min-height: 100vh;
         }
         .post-container {
@@ -23,7 +23,7 @@
             font-size: 1.7em;
             margin-bottom: 6px;
             font-weight: 600;
-            color: #134aa9;
+            /*color: #134aa9;*/
             letter-spacing: -1px;
         }
         .post-meta {
@@ -98,7 +98,7 @@
 <body>
 <div class="post-container">
     <h2 class="post-title">{{ post.title }}</h2>
-    <div class="post-meta">작성자: {{ post.author }} &nbsp;|&nbsp; {{ post.date }}</div>
+    <div class="post-meta">{{ post.author }} &nbsp;|&nbsp; {{ post.date }}</div>
     <hr>
     <div class="post-content">{{ post.content }}</div>
     <div class="post-actions">

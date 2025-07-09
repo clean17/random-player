@@ -21,21 +21,27 @@
         }
 
         .container {
-            padding: 5px;
-            height: 100vh;
+            min-width: 400px;
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
+            margin: 0 auto 0 auto;
         }
-
         .post-top-bar {
+            margin-top: 10px;
             display: flex;
-            justify-content: space-between;
+            /*justify-content: space-between;*/
+            justify-content: center;
             align-items: center;
             margin-bottom: 24px;
         }
         .post-top-bar h2 {
             margin: 0;
             font-size: 1.35em;
-            color: #1458c1;
-            letter-spacing: -1px;
+            /*color: #1458c1;*/
         }
         .post-top-bar .new-post-btn {
             background: linear-gradient(90deg, #1565c0, #2492ff 90%);
@@ -66,9 +72,7 @@
         }
 
         .post-list {
-            width: 540px;
-            max-width: 640px;
-            margin: 60px auto 0 auto;
+            margin: 80px auto 0 auto;
         }
         .post-list a {
             color: inherit;
@@ -104,7 +108,6 @@
             align-items: center;
             margin-top: 20px;
         }
-
         .pagination a {
             margin: 0 3px;
             margin-bottom: 10px;
@@ -119,11 +122,9 @@
             align-items: center;
             font-size: 1.2em;
         }
-
         .pagination a:hover {
             background-color: #6fb5ff;
         }
-
         .pagination a.active {
             background-color: #007BFF;
         }
@@ -140,20 +141,22 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
-<div class="post-list container">
+<div class="container">
     <div class="post-top-bar">
-        <h2>글 목록</h2>
+<!--        <h2>글 목록</h2>-->
         <a href="/posts/create"><button class="new-post-btn">글쓰기</button></a>
     </div>
 
-    {% for post in posts %}
-    <a href="/posts/{{ post.id }}">
-        <div class="post-box">
-            <div class="post-title">{{ post.title }}</div>
-            <div class="post-meta">{{ post.author }} / {{ post.date }}</div>
-        </div>
-    </a>
-    {% endfor %}
+    <div class="post-list">
+        {% for post in posts %}
+        <a href="/posts/{{ post.id }}">
+            <div class="post-box">
+                <div class="post-title">{{ post.title }}</div>
+                <div class="post-meta">{{ post.author }} &nbsp;|&nbsp; {{ post.date }}</div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
 
     <div class="pagination">
         {% if page > 1 %}
