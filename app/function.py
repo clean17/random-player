@@ -9,7 +9,7 @@ from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
-    find_chat_room_by_roomname
+    find_chat_room_by_roomname, update_chat_room
 from app.repository.users.users import find_user_by_username
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
@@ -378,6 +378,8 @@ def save_chat_message():
     chat_room = find_chat_room_by_roomname(data['roomname'])
     chat = ChatDTO(created_at=str(datetime.now()), user_id=fetch_user.id, message=sanitized_message, chat_room_id=chat_room.id)
     inserted_id = insert_chat(chat)
+    chat.last_chat_id = inserted_id
+    last_chat_id = update_chat_room(chat)
     update_last_chat_id_in_state(inserted_id)
 
     return {"status": "success", "inserted_id": inserted_id}, 200

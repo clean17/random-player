@@ -8,3 +8,4 @@ class ChatDTO:
     created_at: str = None  # datetime 사용 가능
     username: str = None
     chat_room_id: int = None
+    last_chat_id: int = None

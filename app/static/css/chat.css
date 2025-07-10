@@ -181,7 +181,7 @@ body .container {
     /*background-color: #303030;*/
 }
 .chat-bottom-btn {
-    background-color: f3f4f6; /* bg-gray-100 */
+    /*background-color: f3f4f6;*/ /* bg-gray-100 */
     background-color: #303030;
     color: whitesmoke;
 }

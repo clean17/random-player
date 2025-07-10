@@ -559,7 +559,8 @@ function addMessage(data, load = false) {
     if (isMine) {
         // messageDiv.classList.add("bg-blue-200", "text-left");
         messageDiv.classList.add("text-left");
-        messageDiv.style.backgroundColor = '#fef01b'; // 노란색
+        // messageDiv.style.backgroundColor = '#fef01b'; // 노란색
+        messageDiv.style.backgroundColor = '#fbe843'; // 옅은 노란색
     } else {
         if (data.underline !== 1 && openTimestamp < data.timestamp && isWithin1Min(openTimestamp, data.timestamp) && isNotificationOn) {
             vibrate();
