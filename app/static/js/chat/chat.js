@@ -176,7 +176,7 @@ function connectSocket() {
 
     // enter_room >> room_user_list
     socket.on("room_user_list", (userList) => {
-        console.log('현재 접속 중인 유저 목록:', userList);
+        // console.log('현재 접속 중인 유저 목록:', userList);
         updateUserCount(userList.length);
         const tempUserList = [];
         userList.forEach(user => {
@@ -323,6 +323,9 @@ document.addEventListener('visibilitychange', async () => {
             })
             .finally(() => {
                 socket.emit("enter_room", { username: username, room: roomName });
+                /*setInterval(()=>{
+                    socket.emit("pending_chat_user", { username: username, room: roomName })
+                }, 200);*/
                 sendReadDataLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
             });
 
@@ -1191,6 +1194,7 @@ async function initPage() {
 
     setInterval(() => {
         moveMinusOneToEnd();
+        socket.emit("pending_chat_user", { username: username, room: roomName })
     }, 100)
 
     chatInput.textContent = localStorage.getItem("#tempChat-250706");
