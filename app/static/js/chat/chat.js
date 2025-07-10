@@ -291,11 +291,17 @@ document.addEventListener('visibilitychange', async () => {
                     const tempArr = data.logs.map(log => log);
 
                     tempArr.forEach(log => {
-                        const [chatId, timestamp, username, msg] = log.toString().split("|");
-                        chatObj = { chatId: chatId.trim(), timestamp: timestamp.trim(), username: username.trim(), msg: msg.replace('\n', '').trim() }
+                        const [chatId, timestamp, username, msg, chatRoomId] = log.toString().split("|");
+                        chatObj = {
+                            chatId: chatId.trim(),
+                            timestamp: timestamp.trim(),
+                            username: username.trim(),
+                            msg: msg.replace('\n', '').trim(),
+                            chatRoomId: chatRoomId.trim(),
+                        }
                         if (lastChatId < Number(chatObj.chatId)) {
                             addMessage(chatObj);
-                            setCheckIconsGreenUpTo(chatObj.chatId);
+                            // setCheckIconsGreenUpTo(chatObj.chatId);
                         }
                     });
                 }

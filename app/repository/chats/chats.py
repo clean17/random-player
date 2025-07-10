@@ -70,7 +70,7 @@ def chats_to_line_list(chat_list):
         # created_at을 원하는 형식(예: yymmddHHMMSS)으로 변환
         create_at_str = c.created_at.strftime("%y%m%d%H%M%S")
         # id가 None일 수 있으니 str() 처리
-        line = f"{c.id} | {create_at_str} | {c.username} | {c.message}\n"
+        line = f"{c.id} | {create_at_str} | {c.username} | {c.message} | {c.chat_room_id}\n"
         line_list.append(line)
     return line_list
 
