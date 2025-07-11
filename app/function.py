@@ -520,6 +520,30 @@ def predict_stocks(stock):
         stock_name = '나스닥'
     return {"status": "success", "message": stock_name+" 예측 시작!!"}
 
+kospi_progress = {"percent": 0.0, "done": False}
+nasdaq_progress = {"percent": 0.0, "done": False}
+
+@func.route("/stocks/progress/<stock>")
+def get_progress(stock):
+    if stock == 'kospi':
+        return jsonify(kospi_progress)
+    if stock == 'nasdaq':
+        return jsonify(nasdaq_progress)
+
+
+@func.route("/stocks/progress-update/<stock>", methods=["POST"])
+def update_progress(stock):
+    data = request.json
+    if stock == 'kospi':
+        kospi_progress["percent"] = data["percent"]
+        kospi_progress["done"] = data.get("done", False)
+        return jsonify(kospi_progress)
+    if stock == 'nasdaq':
+        nasdaq_progress["percent"] = data["percent"]
+        nasdaq_progress["done"] = data.get("done", False)
+        return jsonify(nasdaq_progress)
+
+
 ################################# STATE ####################################
 
 

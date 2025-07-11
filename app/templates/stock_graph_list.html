@@ -24,6 +24,10 @@
     <button onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })">⬇</button>
 </div>
 <div class="container">
+    <div id="progress-bar" style="width:100%; border:1px solid #ccc;">
+        <div id="progress-fill" style="width:0; height:30px; background:#4caf50; color:#fff; text-align:center;">0%</div>
+    </div>
+    <div id="progress-status"></div>
     <!-- 드롭다운 리스트 추가 -->
     <div class="dropdown-selector">
         <form id="market-form">
@@ -73,6 +77,7 @@
 <script>
     let nextImageElement = null;
     let loading_size = 8;
+    const stock_name = `{{market}}`
     const nextBtn = document.getElementById('next-image-button');
 
     function setNextImage(element) {
@@ -305,6 +310,10 @@
                 loadImagesAroundIndex(centerImageIndex);*/
             }, 100);
         });
+
+        pollProgress(stock_name);
+
+        // end initPage //
     }
 
     function moveImage(event) {
@@ -334,6 +343,30 @@
                 console.error('Error:', error);
             });
     }
+
+    function updateProgressBar(percent, done) {
+        const fill = document.getElementById('progress-fill');
+        fill.style.width = percent + '%';
+        fill.textContent = percent + '%';
+        document.getElementById('progress-status').textContent = done ? '완료' : '';
+    }
+
+    function pollProgress(stock) {
+        fetch('/func/stocks/progress/'+stock)
+            .then(resp => {
+                if (!resp.ok) throw new Error('네트워크 오류 또는 인증 필요');
+                return resp.json();
+            })
+            .then(data => {
+                updateProgressBar(data.percent, data.done);
+                if (!data.done) setTimeout(()=> pollProgress(stock), 1000);
+                else document.getElementById('progress-status').textContent = '완료';
+            })
+            .catch(err => {
+                document.getElementById('progress-status').textContent = '에러 발생: ' + err.message;
+            });
+    }
+
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
