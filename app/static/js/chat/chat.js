@@ -142,7 +142,7 @@ function connectSocket() {
     socket.on("bye", function(data) {
         // console.log('현재 접속 중인 유저 목록:', userList);
         // addMessage(data); // '나갔습니다.' 문구
-        // updateUserCount(Number(roomUserCount.textContent)-1); // 인원 표시 기능의 고찰이 필요
+        updateUserCount(Number(roomUserCount.textContent)-1); // 인원 표시 기능의 고찰이 필요
 
         // 떠났는데 남아 있는 경우 처리
         if (data.username !== username) {
@@ -187,11 +187,13 @@ function connectSocket() {
         socket.emit("check_video_call_by_user", { userList: tempUserList });
     });
 
-    socket.on("message_read_ack", function (data) {
+    socket.on("message_read_ack", async function (data) {
         // 임시 하드코딩
-        if ((username === 'nh824' && data.username === 'fkaus14') || (username === 'fkaus14' && data.username === 'nh824')) {
-            setCheckIconsGreenUpTo(Number(data.chatId));
-        }
+        /*if ((username === 'nh824' && data.username === 'fkaus14') || (username === 'fkaus14' && data.username === 'nh824')) {
+            setCheckIconsGreenUpTo();
+        }*/
+        await getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
+        setCheckIconsGreenUpTo();
     })
 
     socket.on("typing", (data) => {
@@ -301,7 +303,7 @@ document.addEventListener('visibilitychange', async () => {
                         }
                         if (lastChatId < Number(chatObj.chatId)) {
                             addMessage(chatObj);
-                            // setCheckIconsGreenUpTo(chatObj.chatId);
+                            setCheckIconsGreenUpTo();
                         }
                     });
                 }
@@ -324,7 +326,7 @@ document.addEventListener('visibilitychange', async () => {
             .finally(() => {
                 socket.emit("enter_room", { username: username, room: roomName });
                 /*setInterval(()=>{
-                    socket.emit("pending_chat_user", { username: username, room: roomName })
+                    socket.emit("polling_chat_user", { username: username, room: roomName })
                 }, 200);*/
                 sendReadDataLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
             });
@@ -841,7 +843,7 @@ function createDateDivider(dateStr) {
 
 // 참여중 인원 수 표기 변경
 function updateUserCount(number) {
-    roomUserCount.textContent = number;
+    roomUserCount.textContent = number < 0 ? 1 : number;
     if (number === 1) {
         videoCallBtn.style.backgroundColor = "";
     }
@@ -964,11 +966,11 @@ function renderCheckIcon() {
 }
 
 // 파라미터 보다 낮은 채팅 ID들 모두 읽음 표시 전환
-function setCheckIconsGreenUpTo(chatId) {
+function setCheckIconsGreenUpTo() {
     const rows = document.querySelectorAll('.messageRow[data-chat-id]');
     rows.forEach(row => {
         const rowChatId = parseInt(row.dataset.chatId, 10);
-        if (!isNaN(rowChatId) && rowChatId <= chatId) {
+        if (!isNaN(rowChatId) && rowChatId <= peerLastReadChatId) {
             const checkIcon = row.querySelector('.checkIcon');
             if (checkIcon) {
                 checkIcon.style.setProperty("color", "green", "important");
@@ -1194,7 +1196,7 @@ async function initPage() {
 
     setInterval(() => {
         moveMinusOneToEnd();
-        socket.emit("pending_chat_user", { username: username, room: roomName })
+        socket.emit("polling_chat_user", { username: username, room: roomName })
     }, 100)
 
     chatInput.textContent = localStorage.getItem("#tempChat-250706");
