@@ -335,6 +335,7 @@ def create_app():
             if not any(request.path.startswith(path) for path in ALLOWED_PATHS):
                 if any(request.path.startswith(path) for path in BLOCKED_PATHS):
             # if any(re.match(pattern, request.path) for pattern in BLOCKED_PATTERNS):
+                    print(f"    request.path - {request.path} : 로깅 여기서 302 ?? ")
                     return redirect(url_for('auth.logout'))
         else:
             pass

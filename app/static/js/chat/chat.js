@@ -387,6 +387,13 @@ function updateUserReadChatId(option = false) {
                 lastReadChatId: lastChatId
             })
         })
+            .then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url; // 302 응답 처리 - 미들웨어가 보내버린다면
+                    return;
+                }
+                return response.json();
+            })
             .then(response => response.json())
             .then(data => {
                 // console.log('POST /last-read-chat-id:', data);

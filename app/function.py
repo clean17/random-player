@@ -601,7 +601,7 @@ def last_read_chat_id():
     if not username:
         return jsonify({'error': 'username is required'}), 400
 
-    if request.method == 'POST':
+    if request.method == 'POST': # 유저가 읽은 채팅 ID 갱신 요청
         chat_id = request.get_json().get('lastReadChatId')
         if chat_id is None:
             return jsonify({'error': 'lastReadChatId is required'}), 400
