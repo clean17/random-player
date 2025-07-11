@@ -28,7 +28,9 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                  "video-player", "/video/select-directory",
                 "update-session-time", "apple-touch-icon",
                 "/delete-images",
-                "Client disconnected while serving", "Invalid HTTP version", "Bad request version"
+                "Client disconnected while serving", "Invalid HTTP version", "Bad request version",
+                "/func/stocks",
+                "/func/last-read-chat-id?username",
                 ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 

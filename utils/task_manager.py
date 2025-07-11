@@ -354,20 +354,24 @@ def periodic_compression_task():
     except KeyboardInterrupt:
         print("압축 작업 중단됨")
 
-def run_async_function(coroutine):
-    """ 스케줄러에서 비동기 함수를 실행하는 래퍼 함수 """
-    loop = asyncio.get_event_loop()
-    asyncio.run_coroutine_threadsafe(coroutine, loop)
+def should_predict(market):
+    today = datetime.datetime.today().weekday()
+    if market == 'kospi':
+        return today not in (4, 5)    # 금, 토 제외
+    elif market == 'nasdaq':
+        return today not in (5, 6)    # 토, 일 제외
+    return False
+
+def predict_stock_graph_scheduled(market):
+    if should_predict(market):
+        predict_stock_graph(market)
 
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
     schedule.every().day.at("06:00").do(run_crawl_ai_image)
-    for weekday in ["sunday", "monday", "tuesday", "wednesday", "thursday"]:
-        getattr(schedule.every(), weekday).at("20:00").do(predict_stock_graph, 'kospi')
-
-    for weekday in ["monday", "tuesday", "wednesday", "thursday", "friday"]:
-        getattr(schedule.every(), weekday).at("10:00").do(predict_stock_graph, 'nasdaq')
+    schedule.every().day.at("20:00").do(predict_stock_graph_scheduled, 'kospi')
+    schedule.every().day.at("10:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
     while True:
         schedule.run_pending()
