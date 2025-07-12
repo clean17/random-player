@@ -520,7 +520,14 @@ def predict_stocks(stock):
         stock_name = '나스닥'
     return {"status": "success", "message": stock_name+" 예측 시작!!"}
 
-kospi_progress = {"percent": 0.0, "done": False}
+kospi_progress = {
+    "percent": 0.0,
+    "count": 0,
+    "total_count": 0,
+    "ticker": "",
+    "stock_name": "",
+    "done": False
+}
 nasdaq_progress = {"percent": 0.0, "done": False}
 
 @func.route("/stocks/progress/<stock>")
@@ -536,6 +543,10 @@ def update_progress(stock):
     data = request.json
     if stock == 'kospi':
         kospi_progress["percent"] = data["percent"]
+        kospi_progress["count"] = data["count"]
+        kospi_progress["total_count"] = data["total_count"]
+        kospi_progress["ticker"] = data["ticker"]
+        kospi_progress["stock_name"] = data["stock_name"]
         kospi_progress["done"] = data.get("done", False)
         return jsonify(kospi_progress)
     if stock == 'nasdaq':
@@ -673,3 +684,7 @@ def test_settimeout():
     delay = random.uniform(2.78, 2.99)
     time.sleep(delay)
     return "ok";
+
+@func.route('/ping', methods=['GET'])
+def pingpong():
+    return "pong";

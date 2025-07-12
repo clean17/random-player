@@ -8,6 +8,14 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
 </head>
+<style>
+    #progress-fill {
+        white-space: nowrap;
+    }
+    #progress-text {
+        padding-left: 20px;
+    }
+</style>
 <body>
 <div class="top-bar">
     <div class="logout">
@@ -25,7 +33,9 @@
 </div>
 <div class="container">
     <div id="progress-bar" style="width:100%; border:1px solid #ccc;">
-        <div id="progress-fill" style="width:0; height:30px; background:#4caf50; color:#fff; text-align:center;">0%</div>
+        <div id="progress-fill" style="width:0; height:25px; background:#4caf50; color:#020202; text-align:center;">
+            <span id="progress-text"></span>
+        </div>
     </div>
     <div id="progress-status"></div>
     <!-- 드롭다운 리스트 추가 -->
@@ -344,11 +354,13 @@
             });
     }
 
-    function updateProgressBar(percent, done) {
+    function updateProgressBar(data) {
+        console.log(data)
         const fill = document.getElementById('progress-fill');
-        fill.style.width = percent + '%';
-        fill.textContent = percent + '%';
-        document.getElementById('progress-status').textContent = done ? '완료' : '';
+        fill.style.width = data.percent + '%';
+        const fillText = document.getElementById('progress-text');
+        fillText.textContent = data.percent + '% ' + '(' + data.count + '/' + data.total_count + ')  ' + '[ '+ data.ticker + ' ] ' + data.stock_name;
+        document.getElementById('progress-status').textContent = data.done ? '완료' : '';
     }
 
     function pollProgress(stock) {
@@ -358,7 +370,7 @@
                 return resp.json();
             })
             .then(data => {
-                updateProgressBar(data.percent, data.done);
+                updateProgressBar(data);
                 if (!data.done) setTimeout(()=> pollProgress(stock), 1000);
                 else document.getElementById('progress-status').textContent = '완료';
             })

@@ -413,7 +413,13 @@ def run_crawl_ai_image():
         shell=True,
         encoding='utf-8'
     )
+    stdout, stderr = process.communicate()
 
+'''
+cd /d C:\my-project\AutoSales.py
+venv\Scripts\activate
+python multi_kor_stocks.py
+'''
 def predict_stock_graph(stock):
     script_dir = r'C:\my-project\AutoSales.py'
     venv_activate = r'venv\Scripts\activate'
@@ -429,13 +435,16 @@ def predict_stock_graph(stock):
     # subprocess 실행
     process = subprocess.Popen(
         cmd,
-        creationflags=subprocess.CREATE_NEW_CONSOLE,  # ⭐️ 새 콘솔창에서 실행!
-        stdout=subprocess.PIPE,
+        # creationflags=subprocess.CREATE_NEW_CONSOLE,  # ⭐️ 새 콘솔창에서 실행!
+        stdout=subprocess.PIPE, # 버퍼가 꽉 차서 죽는다 ? > 서브프로세스(=실행된 명령)의 표준출력(stdout)이 '파이썬 부모 프로세스'로 파이프로 전달
         stderr=subprocess.PIPE,
-        text=True,
+        # text=True,
         shell=True,
         encoding='utf-8'
     )
+    stdout, stderr = process.communicate() # 버퍼를 읽어줘야 죽지 않는다
+    print("STDOUT:", stdout)
+    print("STDERR:", stderr)
 
 
 # 주기적 작업을 위한 프로세스 시작 (두 개의 별도 프로세스를 데몬으로 실행, 앱이 또 생성됨)
