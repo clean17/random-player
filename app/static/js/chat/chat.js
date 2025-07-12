@@ -1204,6 +1204,8 @@ async function initPage() {
     setInterval(() => {
         moveMinusOneToEnd();
         socket.emit("polling_chat_user", { username: username, room: roomName })
+        getPeerLastReadChatId();
+        setCheckIconsGreenUpTo();
     }, 100)
 
     chatInput.textContent = localStorage.getItem("#tempChat-250706");
