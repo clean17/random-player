@@ -4,6 +4,7 @@ from dataclasses import dataclass
 class UserDTO:
     id: int = None
     username: str = None
+    realname: str = None
     email: str = None
     password: str = None
     role: str = None

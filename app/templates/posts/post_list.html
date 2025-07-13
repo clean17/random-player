@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>-->
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <style>
-        body {
+        body, html {
             font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
             background-color: #f4f4f4;
             display: flex;
@@ -152,7 +152,7 @@
         <a href="/posts/{{ post.id }}">
             <div class="post-box">
                 <div class="post-title">{{ post.title }}</div>
-                <div class="post-meta">{{ post.author }} &nbsp;|&nbsp; {{ post.date }}</div>
+                <div class="post-meta">{{ post.realname }} &nbsp;|&nbsp; {{ post.updated_at }}</div>
             </div>
         </a>
         {% endfor %}

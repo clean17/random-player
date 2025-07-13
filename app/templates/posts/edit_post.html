@@ -114,15 +114,15 @@
     <h2>게시글 수정</h2>
     <div class="form-group">
         <label for="title">제목</label>
-        <input type="text" name="title" id="title" value="첫 번째 게시글 제목" required>
+        <input type="text" name="title" id="title" value="{{ post.title }}" required>
     </div>
     <div class="form-group">
         <label for="author">작성자</label>
-        <input type="text" name="author" id="author" value="홍길동" disabled>
+        <input type="text" name="author" id="author" value="{{ post.realname }}" disabled>
     </div>
     <div class="form-group">
         <label for="content">내용</label>
-        <textarea name="content" id="content" required>이곳은 게시글의 내용 일부가 표시됩니다...</textarea>
+        <textarea name="content" id="content" required>{{ post.content }}</textarea>
     </div>
     <div class="form-actions">
         <button type="submit" class="btn-main">수정완료</button>
