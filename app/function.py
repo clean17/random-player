@@ -8,8 +8,9 @@ import json
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
 from app.repository.chats.ChatDTO import ChatDTO
+from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
-    find_chat_room_by_roomname, update_chat_room
+    find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview
 from app.repository.users.users import find_user_by_username
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
@@ -448,8 +449,8 @@ def fetch_url_preview_by_selenium(url):
         return {
             'title': soup.title.string if soup.title else '',
             'description': get_meta('og:description') or get_meta('description'),
-            'image': get_meta('og:image'),
-            'url': url
+            'image': get_meta('og:image'), # 이미지 url
+            'url': url # 입력한 url
         }
     except Exception as e:
         return None
@@ -528,7 +529,14 @@ kospi_progress = {
     "stock_name": "",
     "done": False
 }
-nasdaq_progress = {"percent": 0.0, "done": False}
+nasdaq_progress = {
+    "percent": 0.0,
+    "count": 0,
+    "total_count": 0,
+    "ticker": "",
+    "stock_name": "",
+    "done": False
+}
 
 @func.route("/stocks/progress/<stock>")
 def get_progress(stock):
@@ -542,16 +550,20 @@ def get_progress(stock):
 def update_progress(stock):
     data = request.json
     if stock == 'kospi':
-        kospi_progress["percent"] = data["percent"]
-        kospi_progress["count"] = data["count"]
-        kospi_progress["total_count"] = data["total_count"]
-        kospi_progress["ticker"] = data["ticker"]
-        kospi_progress["stock_name"] = data["stock_name"]
+        kospi_progress["percent"] = data.get("percent", 0)
+        kospi_progress["count"] = data.get("count", 0)
+        kospi_progress["total_count"] = data.get("total_count", 0)
+        kospi_progress["ticker"] = data.get("ticker", "")
+        kospi_progress["stock_name"] = data.get("stock_name", "")
         kospi_progress["done"] = data.get("done", False)
         return jsonify(kospi_progress)
     if stock == 'nasdaq':
         nasdaq_progress["percent"] = data["percent"]
         nasdaq_progress["done"] = data.get("done", False)
+        nasdaq_progress["count"] = data.get("count", 0)
+        nasdaq_progress["total_count"] = data.get("total_count", 0)
+        nasdaq_progress["ticker"] = data.get("ticker", "")
+        nasdaq_progress["stock_name"] = data.get("stock_name", "")
         return jsonify(nasdaq_progress)
 
 
@@ -672,10 +684,28 @@ def handle_last_chat_id():
 def render_preview():
     data = request.get_json()
     url = data.get('url')
+    chat_id = data.get('chat_id')
     # return fetch_url_preview(url)
-    return fetch_url_preview_by_selenium(url)
 
+    # chat_id 로 검색한 결과가 없으면 데이터 fetch
+    result = find_chat_url_preview(chat_id)
+    if not result:
+        result = fetch_url_preview_by_selenium(url)
+        preview = ChatPreviewDTO(
+            created_at=str(datetime.now()),
+            chat_id=chat_id,
+            origin_url=url,
+            thumbnail_url = result.get('image'),
+            title = result.get('title'),
+            description = result.get('description'),
+        )
+        insert_chat_url_preview(preview)
 
+    if not result:
+        # result가 여전히 None이라면 안전하게 처리 (예: 로그/예외/기본값 등)
+       raise Exception("미리보기 데이터가 존재하지 않습니다.")
+
+    return jsonify(result)
 
 
 # test axios timeout

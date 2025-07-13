@@ -247,6 +247,36 @@ function connectSocket() {
 
 
 ////////////////////////// Focus on Browser  ///////////////////////////
+
+let m_intervalId = null;
+
+function startPolling() {
+    if (!m_intervalId) {
+        m_intervalId = setInterval(() => {
+            const now = new Date();
+            now.setHours(now.getHours() + 9);
+            const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
+            // socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp })
+            // console.log('015', timestamp)
+        }, 100);
+    }
+}
+function stopPolling() {
+    if (m_intervalId) {
+        clearInterval(m_intervalId);
+        m_intervalId = null;
+    }
+}
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        startPolling();
+    } else {
+        stopPolling();
+    }
+});
+
+// 3. 관찰 시작
 document.addEventListener('visibilitychange', async () => {
     if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
         // 최후의 보루 아래 코드가 안되면 새로고침 할 수 밖에
@@ -394,7 +424,6 @@ function updateUserReadChatId(option = false) {
                 }
                 return response.json();
             })
-            .then(response => response.json())
             .then(data => {
                 // console.log('POST /last-read-chat-id:', data);
             });
@@ -551,8 +580,8 @@ function renderPreviewCard(data) {
     copyLinkPreview.style.display = '';
     copyLinkPreview.querySelector('a').href = data.url;
     copyLinkPreview.querySelector('a').classList.add('bg-white');
-    copyLinkPreview.querySelector('img').src = data.image;
-    copyLinkPreview.querySelector('.message').textContent = data.url;
+    copyLinkPreview.querySelector('img').src = data.thumbnail_url;
+    copyLinkPreview.querySelector('.message').textContent = data.origin_url;
     copyLinkPreview.querySelector('.preview-title').textContent = data.title;
     copyLinkPreview.querySelector('.preview-description').textContent = data.description;
     copyLinkPreview.querySelector('.preview-url').textContent = extractDomain(data.url);
@@ -651,7 +680,7 @@ function addMessage(data, load = false) {
                 fetch('/func/api/url-preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: matches[0] })
+                    body: JSON.stringify({ url: matches[0], chat_id:data.chatId })
                 })
                     .then(res => res.json())
                     .then(preview => {

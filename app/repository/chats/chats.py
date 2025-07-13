@@ -2,6 +2,7 @@ import psycopg
 
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.ChatRoomDTO import ChatRoomDTO
+from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from config.db_connect import conn, db_transaction
 from typing import List
 
@@ -73,6 +74,28 @@ def chats_to_line_list(chat_list):
         line = f"{c.id} | {create_at_str} | {c.username} | {c.message} | {c.chat_room_id}\n"
         line_list.append(line)
     return line_list
+
+@db_transaction
+def find_chat_url_preview(chat_id: str, conn=None) -> List["ChatPreviewDTO"]:
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(
+            "SELECT * FROM chats_preview WHERE chat_id = %s;",
+            (chat_id,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
+        )
+        row = cur.fetchone()
+        if row:
+            return ChatPreviewDTO(**row)
+        return None
+
+@db_transaction
+def insert_chat_url_preview(chat: "ChatPreviewDTO", conn=None) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO chats_preview (chat_id, origin_url, thumbnail_url, title, description, created_at) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;",
+            (chat.chat_id, chat.origin_url, chat.thumbnail_url, chat.title, chat.description, chat.created_at)
+        )
+        chat_id = cur.fetchone()[0]
+        return chat_id
 
 # @db_transaction
 # def find_temp_chat_by_username():
