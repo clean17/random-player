@@ -29,9 +29,15 @@ def post_list():
 @login_required
 def view_post(post_id):
     post = find_post(post_id)
+    user = find_user_by_username(current_user.get_id())
+
     if not post:
         return "존재하지 않는 게시글", 404
-    return render_template("posts/view_post.html", post=post)
+    return render_template(
+        "posts/view_post.html"
+        , post=post
+        , user=user
+    )
 
 @posts.route('/create', methods=['GET', 'POST'])
 @login_required

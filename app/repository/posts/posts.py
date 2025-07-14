@@ -28,7 +28,7 @@ def update_post(post: "PostDTO", conn=None) -> int:
 def find_post(post_id: str, conn=None) -> List["PostDTO"]:
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
-            "SELECT p.*, u.realname FROM posts p "
+            "SELECT p.*, TO_CHAR(p.updated_at, 'YYYY-MM-DD HH24:MI') as updated_at, u.realname FROM posts p "
             "JOIN users u ON u.id = p.user_id "
             "WHERE p.id = %s ;",
             (post_id,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
