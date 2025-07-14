@@ -37,7 +37,7 @@
             {% for image in images %}
             <div class="image-item" id="image-{{ loop.index }}">
                 {% set video_extensions = ['mp4', 'mov', 'mkv', 'avi'] %}
-                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'] %}
+                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'jfif'] %}
                 {% set file_extension = image.split('.')[-1].lower() %}
 
                 <input type="hidden" name="images[]" value="{{ image }}">
@@ -46,7 +46,7 @@
                 <!-- 비디오 파일인 경우 -->
                 <button class="delete-btn" type="button">×</button>
                 <video class="thumbnail"
-                       muted playsinline preload="auto" autoplay controls
+                       muted playsinline preload="auto" autoplay controls loop
                        data-index="{{ loop.index }}"
                        alt="{{ image }}"
                        >

@@ -33,19 +33,36 @@
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
-                <div class="image-item" id="image-{{ loop.index }}">
-                    {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'jfif'] %}
-                    {% set file_extension = image.split('.')[-1].lower() %}
-                    <!-- 처음 5개 이미지만 실제 이미지 로드 -->
-                    {% if file_extension in image_extensions %}
-                    <button class="delete-btn" type="button">×</button>
-                    <img class="thumbnail"
-                         src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                         data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
-                         alt="{{ image }}" {#onclick="moveImage('{{ image }}', {{ loop.index }})"#} data-index="{{ loop.index }}">
-                    {% endif %}
-                    <input type="hidden" name="images[]" value="{{ image }}">
-                </div>
+            <div class="image-item" id="image-{{ loop.index }}">
+                {% set video_extensions = ['mp4', 'mov', 'mkv', 'avi'] %}
+                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'jfif'] %}
+                {% set file_extension = image.split('.')[-1].lower() %}
+
+                <input type="hidden" name="images[]" value="{{ image }}">
+
+                {% if file_extension in video_extensions %}
+                <!-- 비디오 파일인 경우 -->
+                <button class="delete-btn" type="button">×</button>
+                <video class="thumbnail"
+                       muted playsinline preload="auto" autoplay controls loop
+                       data-index="{{ loop.index }}"
+                       alt="{{ image }}"
+                >
+                    <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
+                            type="video/mp4"
+                            data-filename="{{ image|urlencode }}">
+                </video>
+                <!--<button class="play-btn" onclick="event.preventDefault();">▶</button>-->
+                {% elif file_extension in image_extensions %}
+                <!-- 이미지 파일인 경우 -->
+                <img class="thumbnail"
+                     src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
+                     data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
+                     alt="{{ image }}"
+                     onclick="moveImage('{{ image }}', {{ loop.index }})"
+                     data-index="{{ loop.index }}">
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
         <div>
@@ -362,14 +379,14 @@
 
         const element = document.elementFromPoint(centerX, centerY);
 
-        if (element && element.tagName === 'IMG') {
+        if (element && (element.tagName === 'IMG' || element.tagName === 'VIDEO')) {
             return element;
         }
 
         return 'No image with alt attribute found at the center of the viewport.';
     }
 
-    function moveImage(event, name) {
+    function moveImage(event, name, idx) {
         const centerImage = getCenterImage();
         let filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
         if (name) {
@@ -412,7 +429,11 @@
                 if (!filename) {
                     filename = imageItem.querySelector('source').dataset.filename;
                 }
-                moveImage(e, filename);
+                let idx = 0;
+                if (imageItem.hasAttribute("id")) {
+                    idx = imageItem.id.split('-')[1]
+                }
+                moveImage(null, filename, idx);
             }
         });
     });
@@ -467,6 +488,7 @@
             imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(slideShowImgs[slideShowIdx])+"&dir=refine";
         }, 8000);
     }
+
 
     // 슬라이드쇼 버튼 클릭 이벤트
     document.getElementById("slideshow-btn").onclick = async function() {

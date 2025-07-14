@@ -94,7 +94,7 @@ button.delete-button:hover {
     height: 45px;
     font-size: 30px;
     cursor: pointer;
-    z-index: 2;
+    z-index: 10;
     transition: background 0.2s;
 }
 .delete-btn:hover {

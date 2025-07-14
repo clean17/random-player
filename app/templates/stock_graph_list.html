@@ -359,7 +359,7 @@
         const fill = document.getElementById('progress-fill');
         fill.style.width = data.percent + '%';
         const fillText = document.getElementById('progress-text');
-        fillText.textContent = data.percent + '% ' + '(' + data.count + '/' + data.total_count + ')  ' + '[ '+ data.ticker + ' ] ' + data.stock_name;
+        fillText.textContent = data.done ? data.percent + '%' : data.percent + '% ' + '(' + data.count + '/' + data.total_count + ')  ' + '[ '+ data.ticker + ' ] ' + data.stock_name;
         document.getElementById('progress-status').textContent = data.done ? '완료' : '';
     }
 
