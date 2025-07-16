@@ -449,8 +449,8 @@ def fetch_url_preview_by_selenium(url):
         return {
             'title': soup.title.string if soup.title else '',
             'description': get_meta('og:description') or get_meta('description'),
-            'image': get_meta('og:image'), # 이미지 url
-            'url': url # 입력한 url
+            'thumbnail_url': get_meta('og:image'), # 이미지 url
+            'origin_url': url # 입력한 url
         }
     except Exception as e:
         return None
@@ -688,14 +688,14 @@ def render_preview():
     # return fetch_url_preview(url)
 
     # chat_id 로 검색한 결과가 없으면 데이터 fetch
-    result = find_chat_url_preview(chat_id)
+    result = find_chat_url_preview(url)
     if not result:
         result = fetch_url_preview_by_selenium(url)
         preview = ChatPreviewDTO(
             created_at=str(datetime.now()),
             chat_id=chat_id,
             origin_url=url,
-            thumbnail_url = result.get('image'),
+            thumbnail_url = result.get('thumbnail_url'),
             title = result.get('title'),
             description = result.get('description'),
         )

@@ -10,3 +10,4 @@ class PostDTO:
     created_at: str = None  # datetime 사용 가능
     updated_at: str = None
     realname: str = None
+    view_count: int = None

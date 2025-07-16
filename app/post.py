@@ -37,6 +37,7 @@ def view_post(post_id):
         "posts/view_post.html"
         , post=post
         , user=user
+        , version=int(time.time())
     )
 
 @posts.route('/create', methods=['GET', 'POST'])
@@ -51,6 +52,7 @@ def create_post():
     return render_template(
         "posts/create_post.html"
         , realname=user.realname
+        , version=int(time.time())
     )
 
 @posts.route('/<int:post_id>/edit', methods=['GET', 'POST'])
@@ -64,4 +66,9 @@ def edit_post(post_id):
         post = PostDTO(user_id=user.id, title=request.form['title'], content=request.form['content'], id=post_id)
         post_id = update_post(post)
         return redirect(url_for('posts.view_post', post_id=post_id))
-    return render_template("posts/edit_post.html", post=post, post_id=post_id)
+    return render_template(
+        "posts/edit_post.html"
+        , post=post
+        , post_id=post_id
+        , version=int(time.time())
+    )

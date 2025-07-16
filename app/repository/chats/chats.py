@@ -76,11 +76,11 @@ def chats_to_line_list(chat_list):
     return line_list
 
 @db_transaction
-def find_chat_url_preview(chat_id: str, conn=None) -> List["ChatPreviewDTO"]:
+def find_chat_url_preview(url: str, conn=None) -> List["ChatPreviewDTO"]:
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
-            "SELECT * FROM chats_preview WHERE chat_id = %s;",
-            (chat_id,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
+            "SELECT * FROM chats_preview WHERE origin_url = %s fetch first 1 rows only;",
+            (url,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
         )
         row = cur.fetchone()
         if row:
