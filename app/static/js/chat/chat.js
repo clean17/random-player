@@ -256,9 +256,8 @@ function startPolling() {
             const now = new Date();
             now.setHours(now.getHours() + 9);
             const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
-            // socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp })
-            // console.log('015', timestamp)
-        }, 100);
+            socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp })
+        }, 500);
     }
 }
 function stopPolling() {
@@ -355,9 +354,6 @@ document.addEventListener('visibilitychange', async () => {
             })
             .finally(() => {
                 socket.emit("enter_room", { username: username, room: roomName });
-                /*setInterval(()=>{
-                    socket.emit("polling_chat_user", { username: username, room: roomName })
-                }, 200);*/
                 sendReadDataLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
             });
 
@@ -419,6 +415,7 @@ function updateUserReadChatId(option = false) {
         })
             .then(response => {
                 if (response.redirected) {
+                    console.warn('리다이렉트')
                     window.location.href = response.url; // 302 응답 처리 - 미들웨어가 보내버린다면
                     return;
                 }
@@ -578,13 +575,13 @@ function sendMessage() {
 function renderPreviewCard(data) {
     const copyLinkPreview = document.querySelector('.link-preview').cloneNode(true);
     copyLinkPreview.style.display = '';
-    copyLinkPreview.querySelector('a').href = data.url;
+    copyLinkPreview.querySelector('a').href = data.origin_url;
     copyLinkPreview.querySelector('a').classList.add('bg-white');
     copyLinkPreview.querySelector('img').src = data.thumbnail_url;
     copyLinkPreview.querySelector('.message').textContent = data.origin_url;
     copyLinkPreview.querySelector('.preview-title').textContent = data.title;
     copyLinkPreview.querySelector('.preview-description').textContent = data.description;
-    copyLinkPreview.querySelector('.preview-url').textContent = extractDomain(data.url);
+    copyLinkPreview.querySelector('.preview-url').textContent = extractDomain(data.origin_url);
     return copyLinkPreview;
 }
 
@@ -879,7 +876,8 @@ function createDateDivider(dateStr) {
 
 // 참여중 인원 수 표기 변경
 function updateUserCount(number) {
-    roomUserCount.textContent = number < 0 ? 1 : number;
+    // roomUserCount.textContent = number < 0 ? 1 : number;
+    roomUserCount.textContent = number;
     if (number === 1) {
         videoCallBtn.style.backgroundColor = "";
     }
@@ -1116,6 +1114,7 @@ function handleChatScroll() {
     sendReadDataLastChat();
 }
 
+// 채팅중 ... 을 제일 아래로 이동시킨다; appendChild로 재할당 (이동)
 function moveMinusOneToEnd() {
     const chatContainer = document.getElementById('chat-container');
     if (!chatContainer) return;
@@ -1231,11 +1230,20 @@ async function initPage() {
     }, 250)
 
     setInterval(() => {
-        moveMinusOneToEnd();
-        socket.emit("polling_chat_user", { username: username, room: roomName })
-        getPeerLastReadChatId();
-        setCheckIconsGreenUpTo();
-    }, 100)
+        moveMinusOneToEnd(); // 채팅중을 가장 아래로 이동
+    }, 50)
+
+    setInterval(() => {
+        getPeerLastReadChatId(); // 상대가 읽었는지 확인
+        setCheckIconsGreenUpTo(); // 있었으면 읽음 표시
+    }, 200)
+
+    m_intervalId = setInterval(() => {
+        const now = new Date();
+        now.setHours(now.getHours() + 9);
+        const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
+        socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp })
+    }, 500);
 
     chatInput.textContent = localStorage.getItem("#tempChat-250706");
 
