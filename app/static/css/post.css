@@ -18,6 +18,7 @@ body, html {
     /*text-align: center;*/
     box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
     margin: 0 auto 0 auto;
+    height: 80vh;
 }
 
 
@@ -34,6 +35,7 @@ body, html {
     font-size: 1.35em;
     /*color: #1458c1;*/
 }
+
 .post-top-bar .new-post-btn {
     background: linear-gradient(90deg, #1565c0, #2492ff 90%);
     color: #fff;
@@ -50,6 +52,18 @@ body, html {
     box-shadow: 0 0px 14px #2492ff22;
 }
 
+.post-title {
+    font-size: 1.7em;
+    margin-bottom: 6px;
+    font-weight: 600;
+    /*color: #134aa9;*/
+    letter-spacing: -1px;
+}
+.post-meta {
+    color: #7b7b7b;
+    font-size: 0.96em;
+    margin-bottom: 10px;
+}
 
 .post-box {
     background: #fff;
@@ -116,16 +130,6 @@ body, html {
     font-size: 0.95em;
 }
 
-@media (max-width: 700px) {
-    .post-list {
-        max-width: 98vw;
-        margin: 1vw;
-    }
-    .post-box {
-        padding: 1vw;
-    }
-}
-
 
 /* 최하단 페이징 버튼 */
 .pagination {
@@ -153,4 +157,108 @@ body, html {
 }
 .pagination a.active {
     background-color: #007BFF;
+}
+
+
+/*  view  */
+hr {
+    border: none;
+    border-top: 1px solid #ebebeb;
+    margin: 20px 0 18px 0;
+}
+.post-content {
+    font-size: 1.12em;
+    color: #222;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.post-actions {
+    margin-top: 36px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+.post-title-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /*margin-bottom: 24px;*/
+}
+
+.btn-main {
+    background: linear-gradient(90deg, #1565c0, #2492ff 90%);
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 10px 26px;
+    font-size: 1em;
+    font-weight: 500;
+    box-shadow: 0 1px 6px #0001;
+    cursor: pointer;
+    transition: background 0.18s, box-shadow 0.18s, transform 0.13s;
+}
+.btn-main:hover {
+    background: #134aa9;
+    box-shadow: 0 2px 12px #2492ff22;
+    transform: translateY(-2px) scale(1.04);
+}
+.btn-secondary {
+    background: #f1f3f7;
+    color: #134aa9;
+    border: 1px solid #dbe7fa;
+    border-radius: 7px;
+    padding: 10px 24px;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, border 0.15s, color 0.15s;
+}
+.btn-secondary:hover {
+    background: #eaf1fb;
+    color: #1565c0;
+    border-color: #b7d5f7;
+}
+
+/*  edit  */
+
+.form-group {
+    /*margin-bottom: 22px;*/
+}
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    /*color: #1254af;*/
+    font-size: 1.05em;
+}
+.form-group input,
+.form-group textarea {
+    width: 94%;
+    padding: 11px 12px;
+    border: 1px solid #d3d6e1;
+    border-radius: 6px;
+    font-size: 1.07em;
+    background: #f9fbfe;
+    transition: border 0.2s, box-shadow 0.2s;
+    margin-bottom: 10px;
+}
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border: 1.5px solid #3494ff;
+    background: #f4faff;
+    box-shadow: 0 2px 8px #2492ff15;
+}
+.form-group textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+.form-actions {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    align-items: center;
 }
