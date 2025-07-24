@@ -393,6 +393,7 @@ def start_lotto_scheduler():
         print("스케줄러 종료됨")
 
 def run_crawl_ai_image():
+    print('    ############################### run_crawl_ai_image ###############################')
     # 명령어 조합
     # Windows에서는 여러 명령을 &&로 연결하여 한 줄에 실행 가능
     # venv 활성화 후 바로 실행
@@ -422,6 +423,7 @@ venv\Scripts\activate
 python multi_kor_stocks.py
 '''
 def predict_stock_graph(stock):
+    print(f'    ############################### predict_stock_graph : {stock} ###############################')
     script_dir = r'C:\my-project\AutoSales.py'
     venv_activate = r'venv\Scripts\activate'
     if stock == 'kospi':

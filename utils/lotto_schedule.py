@@ -137,6 +137,7 @@ async def run(playwright):
     await browser.close()
 
 async def async_buy_lotto():
+    print('    ############################### async_buy_lotto ###############################')
 #     print('async_buy_lotto')
 #     await asyncio.sleep(2)
     async with async_playwright() as playwright:
