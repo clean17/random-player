@@ -7,6 +7,13 @@ video::-webkit-media-controls {
     z-index: 5; /* video.js 컨트롤러의 z-index 설정 */
 }
 
+#videoPlayer_html5_api {
+    width: 100vw !important;
+    height: 100vh !important;
+    left: 0 !important;
+    top: 0 !important;
+    position: fixed !important;
+}
 
 .prev {
     position: absolute;

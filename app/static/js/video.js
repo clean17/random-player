@@ -177,11 +177,12 @@ function selectVideoFromArr(videos, randomIndex) {
     }
 
     const videoUrl = makeGetUrl(currentVideo);
-    console.log('videoUrl', videoUrl)
+    // console.log('videoUrl', videoUrl)
     playVideo(videoUrl)
 }
 
 function getVideo() {
+    document.querySelectorAll('canvas').forEach(elem => elem.remove());
     resetLoop();
     if (fetchVideoArr.length === 0) {
         axios.get(`/video/videos?dir=${dir}`)
@@ -398,7 +399,7 @@ function changeVideo() {
 function delVideo() {
     if (currentVideo) {
         if (confirm(`Delete \r\n ${currentVideo} ?`)) {
-            initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다
+            // initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다
             axios.post(`/video/delete/${encodeURIComponent(currentVideo)}?dir=${dir}`)
                 .then(response => {
                     if (response.status === 204) {
@@ -971,7 +972,7 @@ function delayAudio() {
         } else {
             if (video instanceof HTMLMediaElement) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                console.log('audioContext',audioContext)
+                // console.log('audioContext',audioContext)
                 source = audioContext.createMediaElementSource(video);
                 delayNode = audioContext.createDelay();
 
