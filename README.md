@@ -164,6 +164,11 @@ wacs.exe --target manual --host "chickchick.shop, www.chickchick.shop" --webroot
 아래 파일이 생성된다<br>
 ![img_13.png](app/static/readme/img_13.png)
 
+- fullchain 인증서를 생성한다
+```bash
+copy chickchick.shop-crt.pem + chickchick.shop-chain.pem chickchick.shop-fullchain.pem
+```
+
 무료 인증서 기한 3개월이 지나면 인증서가 만료된다 > 갱신 필요
 
 bash창에서 서버가 보내는 인증서로 만료기한 확인
