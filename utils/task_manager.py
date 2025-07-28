@@ -370,6 +370,7 @@ async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
     schedule.every().day.at("06:00").do(run_crawl_ai_image)
+    schedule.every().day.at("07:00").do(renew_kiwoom_token)
     schedule.every().day.at("20:00").do(predict_stock_graph_scheduled, 'kospi')
     schedule.every().day.at("10:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
@@ -394,6 +395,31 @@ def start_lotto_scheduler():
 
 def run_crawl_ai_image():
     print('    ############################### run_crawl_ai_image ###############################')
+    # 명령어 조합
+    # Windows에서는 여러 명령을 &&로 연결하여 한 줄에 실행 가능
+    # venv 활성화 후 바로 실행
+    script_dir = r'C:\my-project\random-player'
+    venv_activate = r'venv\Scripts\activate'
+    py_script = r'python utils\renew_kiwoom_token.py'
+
+    # 전체 명령어 (venv 활성화 → 스크립트 실행)
+    # 주의: activate.bat는 cmd에서만 인식, powershell은 다름
+    cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
+
+    # subprocess 실행
+    process = subprocess.Popen(
+        cmd,
+        # creationflags=subprocess.CREATE_NEW_CONSOLE,  # ⭐️ 새 콘솔창에서 실행!
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        shell=True,
+        encoding='utf-8'
+    )
+    stdout, stderr = process.communicate()
+
+def renew_kiwoom_token():
+    print('    ############################### renew_kiwoom_token ###############################')
     # 명령어 조합
     # Windows에서는 여러 명령을 &&로 연결하여 한 줄에 실행 가능
     # venv 활성화 후 바로 실행
