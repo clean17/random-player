@@ -580,7 +580,7 @@ function renderPreviewCard(data) {
     copyLinkPreview.querySelector('img').src = data.thumbnail_url;
     copyLinkPreview.querySelector('.message').textContent = data.origin_url;
     copyLinkPreview.querySelector('.preview-title').textContent = data.title;
-    copyLinkPreview.querySelector('.preview-description').textContent = data.description;
+    // copyLinkPreview.querySelector('.preview-description').textContent = data.description;
     copyLinkPreview.querySelector('.preview-url').textContent = extractDomain(data.origin_url);
     return copyLinkPreview;
 }
@@ -876,8 +876,7 @@ function createDateDivider(dateStr) {
 
 // 참여중 인원 수 표기 변경
 function updateUserCount(number) {
-    // roomUserCount.textContent = number < 0 ? 1 : number;
-    roomUserCount.textContent = number;
+    roomUserCount.textContent = number < 0 ? 1 : number;
     if (number === 1) {
         videoCallBtn.style.backgroundColor = "";
     }
