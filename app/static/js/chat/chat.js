@@ -578,7 +578,8 @@ function renderPreviewCard(data) {
     copyLinkPreview.querySelector('a').href = data.origin_url;
     copyLinkPreview.querySelector('a').classList.add('bg-white');
     copyLinkPreview.querySelector('img').src = data.thumbnail_url;
-    copyLinkPreview.querySelector('.message').textContent = data.origin_url;
+    // copyLinkPreview.querySelector('.message').textContent = data.origin_url;
+    copyLinkPreview.querySelector('.message').innerHTML  = data.msg;
     copyLinkPreview.querySelector('.preview-title').textContent = data.title;
     // copyLinkPreview.querySelector('.preview-description').textContent = data.description;
     copyLinkPreview.querySelector('.preview-url').textContent = extractDomain(data.origin_url);
@@ -682,6 +683,7 @@ function addMessage(data, load = false) {
                     .then(res => res.json())
                     .then(preview => {
                         if (preview) {
+                            preview.msg = data.msg;
                             const previewEl = renderPreviewCard(preview, isMine);
                             messageDiv.innerHTML = '';
                             messageDiv.appendChild(previewEl);
@@ -792,6 +794,8 @@ function renderMessageDiv() {
         "block",        // 내용에 맞게 크기 조정
         "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
         "messageDiv",
+        "overflow-hidden", // 내부 이미지를 div의 border-radius 내부로 들어가도록
+        "border-gray-500", // 어두운 회색 border색
     );
     return messageDiv;
 }
