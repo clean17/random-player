@@ -423,98 +423,6 @@ function pushVideoArr(url) {
     previousVideos.push(url)
 }
 
-// 싱크 안맞음.. 네트워크 3번 요청..
-function threeSplitLayout() {
-    let videoRatio = videoPlayer.videoHeight / videoPlayer.videoWidth;
-    if (videoRatio > 1 && window.innerWidth > window.innerHeight) {
-        // let videoWidth = window.screen.width * 0.3333;
-        // videoPlayer.style.minWidth = `${videoWidth}px`;
-
-        // 왼쪽 비디오 추가
-        videoLeft = document.createElement('video');
-        videoLeft.id = 'videoLeft';
-        videoLeft.className = 'video-mirror';
-        videoLeft.muted = true;
-        let videoLeftSource = document.createElement('source')
-        videoLeftSource.type = 'video/mp4'
-        videoLeft.appendChild(videoLeftSource)
-        if (videoContainer && videoPlayer && videoContainer.contains(videoPlayer)) {
-            videoContainer.insertBefore(videoLeft, videoPlayer);
-        }
-        // videoContainer?.insertBefore(videoLeft, videoPlayer);
-
-        // 오른쪽 비디오 추가
-        videoRight = document.createElement('video');
-        videoRight.id = 'videoRight';
-        videoRight.className = 'video-mirror';
-        videoRight.muted = true;
-        let videoRightSource = document.createElement('source')
-        videoRightSource.type = 'video/mp4'
-        videoRight.appendChild(videoRightSource)
-        videoContainer?.appendChild(videoRight);
-
-        let mainSrc = videoSource.src;
-
-        videoLeftSource.src = mainSrc;
-        videoRightSource.src = mainSrc;
-        videoLeft.load();
-        videoRight.load();
-
-        let videoLeftLoaded = false;
-        let videoRightLoaded = false;
-        let videoPlayerLoaded = false;
-
-        function checkBothVideosLoaded() {
-            if (videoLeftLoaded && videoRightLoaded && videoPlayerLoaded) {
-                playTripleVideo();
-            }
-        }
-
-        videoPlayer.onloadedmetadata = () => {
-            videoPlayerLoaded = true;
-            checkBothVideosLoaded();
-        };
-
-        videoLeft.onloadedmetadata = () => {
-            videoLeftLoaded = true;
-            checkBothVideosLoaded();
-        };
-
-        videoRight.onloadedmetadata = () => {
-            videoRightLoaded = true;
-            checkBothVideosLoaded();
-        };
-
-        videoPlayer.play().then(_ => {
-            playTripleVideo();
-        }).catch(error => {});
-
-        videoPlayer.addEventListener('play', function() {
-            videoLeft.play().catch(error => {});
-            videoRight.play().catch(error => {});
-        });
-
-        videoPlayer.addEventListener('pause', function() {
-            videoLeft.pause();
-            videoRight.pause();
-        });
-
-        videoPlayer.addEventListener('seeked', function() {
-            initTriple()
-        });
-        initTriple()
-
-        if (document.fullscreenElement) {
-            setLeftPositionForFullscreen();
-        } else {
-            setLeftPositionForNormal();
-        }
-
-        return true;
-    } else {
-        return false;
-    }
-}
 
 function playTripleVideo() {
     videoPlayer.play().catch(error => {});
@@ -522,23 +430,6 @@ function playTripleVideo() {
     if (videoRight) videoRight.play().catch(error => {});
 }
 
-function initTriple() {
-    const currentTime = videoPlayer.currentTime;
-    videoPlayer.pause();
-    if (videoLeft) {
-        videoLeft.pause();
-        videoLeft.currentTime = currentTime;
-    }
-    if (videoRight) {
-        videoRight.pause();
-        videoRight.currentTime = currentTime;
-    }
-
-    setTimeout(() => {
-        playTripleVideo()
-        // checkDuration()
-    }, 630)
-}
 
 function checkDuration() {
     if (videoLeft && videoRight) {
@@ -1072,11 +963,7 @@ function removeWidthFromVideoMirror() {
 /***************************   init  ************************************/
 /************************************************************************/
 
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-        // initTriple();
-    }
-});
+
 function initPage() {
     previousVideos.push(undefined)
     // player = videojs('videoPlayer');

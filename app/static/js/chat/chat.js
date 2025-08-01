@@ -142,7 +142,8 @@ function connectSocket() {
     socket.on("bye", function(data) {
         // console.log('현재 접속 중인 유저 목록:', userList);
         // addMessage(data); // '나갔습니다.' 문구
-        updateUserCount(Number(roomUserCount.textContent)-1); // 인원 표시 기능의 고찰이 필요
+        const userCount = (Number(roomUserCount.textContent)-1 === 0) ? 1 : Number(roomUserCount.textContent)-1
+        updateUserCount(userCount);
 
         // 떠났는데 남아 있는 경우 처리
         if (data.username !== username) {
