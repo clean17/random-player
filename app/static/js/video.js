@@ -423,22 +423,6 @@ function pushVideoArr(url) {
     previousVideos.push(url)
 }
 
-
-function playTripleVideo() {
-    videoPlayer.play().catch(error => {});
-    if (videoLeft) videoLeft.play().catch(error => {});
-    if (videoRight) videoRight.play().catch(error => {});
-}
-
-
-function checkDuration() {
-    if (videoLeft && videoRight) {
-        const currentTime = videoPlayer.currentTime;
-        videoLeft.currentTime = currentTime
-        videoRight.currentTime = currentTime
-    }
-}
-
 /************************************************************************/
 /***************************   Key Event   ******************************/
 /************************************************************************/
@@ -782,7 +766,7 @@ function videoKeyEvent(event) {
         case 'Escape':
             exitFullscreen();
             break;
-        case 'Enter':
+        case 'Enter': case 'f' :
             event.preventDefault()
             toggleFullscreen();
             break;
@@ -806,6 +790,7 @@ function videoKeyEvent(event) {
 }
 
 
+// 개선이 필요
 function delayAudio() {
     // console.log('delayAudio')
     let video = document.querySelector('#videoPlayer')
@@ -890,73 +875,6 @@ function delayAudio() {
             }
         }
     }
-}
-
-/************************************************************************/
-/***************************   CSS   ************************************/
-/************************************************************************/
-
-// window.onload = setLeftPosition;
-window.onresize = () => {
-    if (videoLeft && videoRight) {
-        if (document.fullscreenElement) {
-            setLeftPositionForFullscreen();
-        } else {
-            setLeftPositionForNormal();
-        }
-    }
-};
-// document.removeEventListener('fullscreenchange', setLeftPosition);
-// document.addEventListener('fullscreenchange', setLeftPosition);
-
-
-function setLeftPositionForNormal() {
-    event.preventDefault()
-    let windowWidth = window.innerWidth;
-    let videoWidth = videoPlayer.videoWidth;
-    let videoHeight = videoPlayer.videoHeight;
-    let videoAspectRatio = videoWidth / videoHeight; // 원본 비율
-    let displayedHeight = videoPlayer.offsetHeight;
-    let displayedWidth = displayedHeight * videoAspectRatio; // 내부 영상 가로길이
-    let position = (windowWidth - displayedWidth * 3) / 2
-
-    videoLeft.style.left = position + 'px';
-    videoRight.style.right = position + 'px';
-    removeWidthFromVideoMirror()
-}
-
-function setLeftPositionForFullscreen() {
-    event.preventDefault()
-    let windowHeight = window.innerHeight;
-    let windowWidth = window.innerWidth;
-    let aspectRatio = windowWidth / windowHeight;
-    let position;
-
-    if (aspectRatio === 16 / 9) {
-        position = windowHeight * 0.0453;
-    } else if (aspectRatio === 16 / 10) {
-        addWidthToVideoMirror();
-        position = windowHeight * 0.0;
-    } else {
-        position = windowHeight * 0.03;
-    }
-
-    videoLeft.style.left = position + 'px';
-    videoRight.style.right = position + 'px';
-}
-
-function addWidthToVideoMirror() {
-    const elements = document.querySelectorAll('.video-mirror');
-    elements.forEach(element => {
-        element.style.width = '33.33%';
-    });
-}
-
-function removeWidthFromVideoMirror() {
-    const elements = document.querySelectorAll('.video-mirror');
-    elements.forEach(element => {
-        element.style.width = '';
-    });
 }
 
 /************************************************************************/
