@@ -432,7 +432,8 @@ const hideControls = () => {
     hideControlsTimeout = setTimeout(() => {
         controls.style.display = 'none';
         topDiv.style.display = 'none';
-        filenameDisplay.style.display = 'none';
+        // filenameDisplay.style.display = 'none';
+        // filenameDisplay.style.opacity = "0";
         videoContainer.style.cursor = 'none';
     }, 2000);
 };
@@ -440,7 +441,8 @@ const hideControls = () => {
 const showControls = () => {
     controls.style.display = 'block';
     topDiv.style.display = 'block';
-    filenameDisplay.style.display = 'block';
+    // filenameDisplay.style.display = 'block';
+    // filenameDisplay.style.opacity = "1";
     videoContainer.style.cursor = 'default';
     hideControls();
 };
@@ -498,12 +500,14 @@ prevButton.addEventListener('click', function () {
     }
 });
 
-loopButton.addEventListener('click', function() {
+loopButton.removeEventListener('click', toggleLoop);
+loopButton.addEventListener('click', toggleLoop);
+function toggleLoop() {
     isLooping = !isLooping;
-    if (player) player.loop(isLooping);
     if (videoPlayer) videoPlayer.loop = isLooping;
+    else if (player) player.loop(isLooping);
     loopButton.classList.toggle('active', isLooping);
-});
+}
 
 aBtn.addEventListener('click', function() {
     isClickAbtn = !isClickAbtn;
