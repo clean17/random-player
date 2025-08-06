@@ -356,6 +356,7 @@ def periodic_compression_task():
 
 def should_predict(market):
     today = datetime.today().weekday()
+    print(f'    ############################### should_predict : {today} ###############################')
     if market == 'kospi':
         return today not in (4, 5)    # 금, 토 제외
     elif market == 'nasdaq':

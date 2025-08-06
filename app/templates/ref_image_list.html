@@ -55,6 +55,7 @@
                 <!--<button class="play-btn" onclick="event.preventDefault();">▶</button>-->
                 {% elif file_extension in image_extensions %}
                 <!-- 이미지 파일인 경우 -->
+                <button class="delete-btn" type="button">×</button>
                 <img class="thumbnail"
                      src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
                      data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
