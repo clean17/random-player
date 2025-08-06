@@ -14,6 +14,7 @@ import shutil
 image_bp = Blueprint('image', __name__)
 LIMIT_PAGE_NUM = 50
 shuffled_images = None
+image2_arr = []
 
 # 설정
 IMAGE_DIR = settings['IMAGE_DIR']
@@ -109,8 +110,11 @@ def get_subdir_images(start, count, dirs):
 
 
 def get_subdir_and_reels_images(start, count, parent_dir):
+    global image2_arr
     images = []
+    # subdir: 각 인스타그램 계정 폴더
     for subdir in os.listdir(parent_dir):
+        # print('subdir ', subdir )
         subdir_path = os.path.join(parent_dir, subdir)
         if os.path.isdir(subdir_path):
             # 1. dirA, dirB 바로 아래 파일
@@ -126,6 +130,7 @@ def get_subdir_and_reels_images(start, count, parent_dir):
                     if os.path.isfile(reels_file_path) and not f.lower().endswith(('.zip', '.ini')):
                         images.append(f"{subdir}/reels/{f}")
     images.sort()
+    image2_arr = images
     return images[start:start + count]
 
 
@@ -369,13 +374,25 @@ def delete_images():
 
 
     page = int(request.form.get('page', 1))
-    return redirect(url_for('image.image_list', page=page, dir=dir))
+    # return redirect(url_for('image.image_list', page=page, dir=dir))
+
+
+
+    global image2_arr
+    image2_arr = image2_arr[LIMIT_PAGE_NUM:]
+    total_pages = (len(image2_arr) + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+
+    return render_template('image_list.html', images=image2_arr[:LIMIT_PAGE_NUM], page=page, title=None,
+                           total_pages=total_pages, images_length=len(image2_arr), dir=dir,
+                           selected_dir=None, title_list=[], version=int(time.time()))
+
 
 
 @image_bp.route('/images')
 @login_required
 def get_image():
     filename = request.args.get('filename')
+    filename = urllib.parse.unquote_plus(filename)
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir', '')
 

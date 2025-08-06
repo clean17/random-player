@@ -48,7 +48,7 @@
                 <video class="thumbnail"
                        muted playsinline preload="auto" autoplay controls loop
                        data-index="{{ loop.index }}"
-                       alt="{{ image }}"
+                       alt="{{ image|urlencode }}"
                        >
                     <source src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
                             type="video/mp4"
@@ -59,9 +59,9 @@
                 <!-- 이미지 파일인 경우 -->
                 <img class="thumbnail"
                      src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                     data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
-                     alt="{{ image }}"
-                     onclick="moveImage('{{ image }}', {{ loop.index }})"
+                     data-src="{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}"
+                     alt="{{ image|urlencode }}"
+                     onclick="moveImage('{{ image|urlencode }}', {{ loop.index }})"
                      data-index="{{ loop.index }}">
                 {% endif %}
             </div>
