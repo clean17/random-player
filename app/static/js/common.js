@@ -29,16 +29,29 @@ function debounce(func, delay) {
 }
 
 // throttle 적용 (의도적으로 성능을 낮춤, 주어진 시간 간격 내에 특정 함수가 최대 한 번만 실행되도록 제한하는 기술)
-function throttle(func, delay) {
-    let throttleTimer = null;
-    return function (...args) {
-        if (throttleTimer) return;  // 타이머가 돌아가는 중이면 아무 것도 하지 않음
-        throttleTimer = setTimeout(() => {
-            func.apply(this, args);
-            throttleTimer = null;   // 타이머 초기화 > 다음 실행 허용
-        }, delay);
+function throttle(fn, limit) {
+    let inThrottle;
+    return function(...args) {
+        if (!inThrottle) {
+            fn.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
     };
 }
+
+/*
+    // 함수를 리턴하는 함수, 고차 함수(Higher-Order Function, HOF)
+    function makeMultiplier(x) {
+       return function(y) {
+           return x * y;
+       }
+    }
+
+const double = makeMultiplier(2);
+console.log(double(5)); // 10
+*/
+
 
 // 현재 시간 19:52 반환
 function getCurrentTimeStr() {
