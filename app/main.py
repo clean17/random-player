@@ -22,6 +22,7 @@ def home():
     return render_template('index.html'
                            , IMAGE_DIR=IMAGE_DIR
                            , IMAGE_DIR2=IMAGE_DIR2
+                           , MOVE_DIR=MOVE_DIR
                            , REF_IMAGE_DIR=REF_IMAGE_DIR
                            , TRIP_IMAGE_DIR=TRIP_IMAGE_DIR
                            , TEMP_IMAGE_DIR=TEMP_IMAGE_DIR

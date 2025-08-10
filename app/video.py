@@ -16,6 +16,7 @@ video = Blueprint('video', __name__)
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 IMAGE_DIR = settings['IMAGE_DIR']
 IMAGE_DIR2 = settings['IMAGE_DIR2']
+MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
 
 @video.route('/select-directory', methods=['POST'], endpoint='select-directory')
@@ -71,6 +72,8 @@ def get_temp_video(filename):
         dir = IMAGE_DIR2
     elif dir == 'image':
         dir = IMAGE_DIR
+    elif dir == 'move':
+        dir = MOVE_DIR
     elif dir == 'refine':
         dir = REF_IMAGE_DIR
 

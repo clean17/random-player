@@ -12,7 +12,7 @@ import urllib.parse
 import shutil
 
 image_bp = Blueprint('image', __name__)
-LIMIT_PAGE_NUM = 50
+LIMIT_PAGE_NUM = 100
 shuffled_images = None
 image2_arr = []
 
@@ -287,6 +287,10 @@ def image_list():
     #     images = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
     #     images_length = count_non_zip_files(TRIP_IMAGE_DIR)
     #     template_html = 'trip_image_list.html'
+    elif dir == 'move':
+        images = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR)
+        images_length = count_non_zip_files(MOVE_DIR)
+        template_html = 'image_list.html'
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
@@ -309,6 +313,9 @@ def move_image():
     dest_path = os.path.join(MOVE_DIR,
                              clean_filename(os.path.basename(filename)))
 
+    ref_dest_path = os.path.join(REF_IMAGE_DIR,
+                             clean_filename(os.path.basename(filename)))
+
     name_without_ext = os.path.splitext(filename)[0]
 
 
@@ -320,6 +327,10 @@ def move_image():
     elif imagepath == "image2":
         src_path = os.path.join(IMAGE_DIR2, filename)
         thumb_dir = os.path.join(IMAGE_DIR2, "thumb")
+    elif imagepath == "move":
+        src_path = os.path.join(MOVE_DIR, filename)
+        thumb_dir = os.path.join(MOVE_DIR, "thumb")
+        dest_path = ref_dest_path
     elif imagepath == "ref_image":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
         thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
@@ -357,7 +368,13 @@ def delete_images():
     moved_images = os.listdir(MOVE_DIR)
     dir = request.args.get('dir')
 
+
+
     for image in images_to_delete:
+        if dir == 'move':
+            raw_path = os.path.join(MOVE_DIR, image)
+            safe_path = os.path.normpath(raw_path)
+            send2trash(safe_path) # 휴지통으로 보낸다
         if image not in moved_images:
             if dir == 'image':
                 raw_path = os.path.join(IMAGE_DIR, image)
@@ -374,17 +391,19 @@ def delete_images():
 
 
     page = int(request.form.get('page', 1))
-    # return redirect(url_for('image.image_list', page=page, dir=dir))
+    if dir == 'image2':
+        global image2_arr
+        image2_arr = image2_arr[LIMIT_PAGE_NUM:]
+        total_pages = (len(image2_arr) + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+
+        return render_template('image_list.html', images=image2_arr[:LIMIT_PAGE_NUM], page=page, title=None,
+                               total_pages=total_pages, images_length=len(image2_arr), dir=dir,
+                               selected_dir=None, title_list=[], version=int(time.time()))
+    else:
+        return redirect(url_for('image.image_list', page=page, dir=dir))
 
 
 
-    global image2_arr
-    image2_arr = image2_arr[LIMIT_PAGE_NUM:]
-    total_pages = (len(image2_arr) + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
-
-    return render_template('image_list.html', images=image2_arr[:LIMIT_PAGE_NUM], page=page, title=None,
-                           total_pages=total_pages, images_length=len(image2_arr), dir=dir,
-                           selected_dir=None, title_list=[], version=int(time.time()))
 
 
 
@@ -404,6 +423,8 @@ def get_image():
         base_dir = REF_IMAGE_DIR
     elif dir == 'trip':
         base_dir = TRIP_IMAGE_DIR
+    elif dir == 'move':
+        base_dir = MOVE_DIR
     elif dir == 'temp':
         base_dir = TEMP_IMAGE_DIR
         if selected_dir:
