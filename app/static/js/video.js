@@ -155,9 +155,9 @@ function resetLoop() {
     isClickAbtn = false;
     isClickBbtn = false;
     isClickGain = false;
-    aBtn.classList.remove('active');
-    bBtn.classList.remove('active');
-    toggleGainBtn.classList.remove('active');
+    aBtn?.classList.remove('active');
+    bBtn?.classList.remove('active');
+    toggleGainBtn?.classList.remove('active');
     isSectionLooping = false;
     // loopButton.classList.remove('active');
 }
@@ -447,12 +447,12 @@ const showControls = () => {
     hideControls();
 };
 
-document.getElementById('nextButton').removeEventListener('click', getVideo);
-document.getElementById('nextButton').addEventListener('click', getVideo);
-document.getElementById('deleteButton').removeEventListener('click', delVideo);
-document.getElementById('deleteButton').addEventListener('click', delVideo);
-document.getElementById('fullScreen').removeEventListener('click', toggleFullscreen);
-document.getElementById('fullScreen').addEventListener('click', toggleFullscreen);
+document.getElementById('nextButton')?.removeEventListener('click', getVideo);
+document.getElementById('nextButton')?.addEventListener('click', getVideo);
+document.getElementById('deleteButton')?.removeEventListener('click', delVideo);
+document.getElementById('deleteButton')?.addEventListener('click', delVideo);
+document.getElementById('fullScreen')?.removeEventListener('click', toggleFullscreen);
+document.getElementById('fullScreen')?.addEventListener('click', toggleFullscreen);
 document.addEventListener('mousemove', showControls);
 
 function addVideoEvent() {
@@ -486,7 +486,7 @@ function addVideoEvent() {
     }
 }
 
-prevButton.addEventListener('click', function () {
+prevButton?.addEventListener('click', function () {
     let prevVideo = previousVideos.shift();
 
     if (prevVideo) {
@@ -500,8 +500,8 @@ prevButton.addEventListener('click', function () {
     }
 });
 
-loopButton.removeEventListener('click', toggleLoop);
-loopButton.addEventListener('click', toggleLoop);
+loopButton?.removeEventListener('click', toggleLoop);
+loopButton?.addEventListener('click', toggleLoop);
 function toggleLoop() {
     isLooping = !isLooping;
     if (videoPlayer) videoPlayer.loop = isLooping;
@@ -509,7 +509,7 @@ function toggleLoop() {
     loopButton.classList.toggle('active', isLooping);
 }
 
-aBtn.addEventListener('click', function() {
+aBtn?.addEventListener('click', function() {
     isClickAbtn = !isClickAbtn;
     if (player) startTime = player.currentTime();
     if (videoPlayer) startTime = videoPlayer.currentTime;
@@ -522,7 +522,7 @@ aBtn.addEventListener('click', function() {
     }
 });
 
-bBtn.addEventListener('click', function() {
+bBtn?.addEventListener('click', function() {
     isClickBbtn = !isClickBbtn;
     if (player) endTime = player.currentTime();
     if (videoPlayer) endTime = videoPlayer.currentTime;
@@ -535,7 +535,7 @@ bBtn.addEventListener('click', function() {
     }
 });
 
-toggleGainBtn.addEventListener('click', function() {
+toggleGainBtn?.addEventListener('click', function() {
     isClickGain = !isClickGain;
     toggleGainBtn.classList.toggle('active', isClickGain);
 });
@@ -664,10 +664,10 @@ function addKeyboardControls() {
     document.addEventListener('wheel', wheelEvent)
     delayAudio();
 
-    document.getElementById('minusTenSec').removeEventListener('click', minusTenSec);
-    document.getElementById('minusTenSec').addEventListener('click', minusTenSec);
-    document.getElementById('plusTenSec').removeEventListener('click', plusTenSec);
-    document.getElementById('plusTenSec').addEventListener('click', plusTenSec);
+    document.getElementById('minusTenSec')?.removeEventListener('click', minusTenSec);
+    document.getElementById('minusTenSec')?.addEventListener('click', minusTenSec);
+    document.getElementById('plusTenSec')?.removeEventListener('click', plusTenSec);
+    document.getElementById('plusTenSec')?.addEventListener('click', plusTenSec);
 }
 
 function wheelEvent(evnet) {
@@ -817,7 +817,7 @@ function delayAudio() {
                 source.connect(gainNode);
                 gainNode.connect(audioContext.destination);
 
-                toggleGainBtn.addEventListener('click', function() {
+                toggleGainBtn?.addEventListener('click', function() {
                     if (isClickGain) {
                         gainNode.gain.value = 2.0;
                     } else {

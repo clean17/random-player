@@ -15,8 +15,10 @@
         <div class="back">
             <a href="{{ url_for('main.home') }}">Back</a>
         </div>
+        {% if directory != "10" %}
         <div class="prev"><a href="#" id="prevButton">Prev</a></div>
         <div class="loop"><a href="#" id="loopbutton">Loop</a></div>
+        {% endif %}
         {#<div class="logout">
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('auth.logout') }}">Logout</a>
@@ -34,6 +36,7 @@
 
 
         <div id="controls">
+            {% if directory != "10" %}
             <div id="controls-top">
                 <button id="minusTenSec">-30</button>
                 <button id="plusTenSec">+30</button>
@@ -42,8 +45,9 @@
             </div>
             <button id="aButton">A</button>
             <button id="bButton">B</button>
+            {% endif %}
             <button id="deleteButton">Delete</button>
-            <button id="nextButton">Next</button>
+                <button id="nextButton">Next</button>
         </div>
 
         {#<video id="videoPlayer" controls autoplay preload="auto">
