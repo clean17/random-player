@@ -14,6 +14,7 @@ def load_config():
         'VIDEO_DIRECTORY3': config['directories']['video_directory3'],
         'VIDEO_DIRECTORY4': config['directories']['video_directory4'],
         'VIDEO_DIRECTORY5': config['directories']['video_directory5'],
+        'VIDEO_DIRECTORY10': config['directories']['video_directory10'],
         'IMAGE_DIR': config['directories']['images_directory'],
         'IMAGE_DIR2': config['directories']['images_directory2'],
         'MOVE_DIR': config['directories']['move_images_directory'],

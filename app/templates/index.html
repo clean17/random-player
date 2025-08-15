@@ -45,6 +45,12 @@
         <!--<a href="{{ url_for('image.image_list', dir=IMAGE_DIR) }}"><button type="button" id="btn7">View Images</button></a>
         <a href="{{ url_for('image.image_list', dir=REF_IMAGE_DIR) }}"><button type="button" id="btn8">REF Images</button></a>
         <a href="/image/stock-graph-list/kospi"><button type="button" id="btn9">Stocks_Graph</button></a>-->
+    <form action="/video/select-directory" method="post">
+        <select name="directory" class="select-dropdown" onchange="this.form.submit()">
+            <option value="">Video Directory</option>
+            <option value="10" >HAPPY</option>
+        </select>
+    </form>
         <form id="image-select-form">
             <select id="image-select" class="select-dropdown">
                 <option value="">Select Image Dir</option>
