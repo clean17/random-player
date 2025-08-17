@@ -4,7 +4,8 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError, ImageOps
 
 # 변환할 이미지가 들어있는 디렉토리 경로
-root_directory = r'F:\merci_server_file_dir'
+# root_directory = r'C:\Users\user\Downloads\파일업로드 테스트 데이터\webptest'
+root_directory = r'E:\LARIS_DATA\FILE\ARCHIVES_REP\2025\07\30\912670\ORIGIN'
 # root_directory = r'F:\test'
 
 # 허용할 확장자
@@ -111,18 +112,24 @@ def convert_image_file(file_path):
 
 def batch_convert_from_root(root_dir):
     # 루트 디렉토리 기준으로 하위 폴더들을 가져옴
-    for sub_dir in os.listdir(root_dir):
-        sub_dir_path = os.path.join(root_dir, sub_dir)
-        if os.path.isdir(sub_dir_path):
-            thumb_dir = os.path.join(sub_dir_path, 'thumb')
-            os.makedirs(thumb_dir, exist_ok=True)
-            for filename in os.listdir(sub_dir_path):
-                file_path = os.path.join(sub_dir_path, filename)
-                if os.path.isfile(file_path):
-                    file_lower = str(file_path).lower()
-                    if file_lower.endswith(VALID_VIDEO_EXTENSIONS):
-                        convert_video_file(file_path)
-                    # convert_file(file_path)
+    for name in os.listdir(root_dir):
+        full_path = os.path.join(root_dir, name)
+        if os.path.isdir(full_path):   # ← 디렉토리인지 확인
+            sub_dir_path = os.path.join(root_dir, name)
+            if os.path.isdir(sub_dir_path):
+                thumb_dir = os.path.join(sub_dir_path, 'thumb')
+                os.makedirs(thumb_dir, exist_ok=True)
+                print(sub_dir_path)
+                for filename in os.listdir(sub_dir_path):
+                    print(filename)
+                    file_path = os.path.join(sub_dir_path, filename)
+                    if os.path.isfile(file_path):
+                        file_lower = str(file_path).lower()
+                        if file_lower.endswith(VALID_VIDEO_EXTENSIONS):
+                            convert_video_file(file_path)
+                        # convert_file(file_path)
+        else:
+            convert_file(full_path)
 
 # 코드 만들고 최초에 실행했음
-# batch_convert_from_root(root_directory)
+batch_convert_from_root(root_directory)
