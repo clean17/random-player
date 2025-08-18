@@ -106,7 +106,7 @@ function isWithin1Min(openTimestamp, dataTimestamp) {
     const openDt = parseTimestamp(openTimestamp);
     const dataDt = parseTimestamp(dataTimestamp);
     const diff = (dataDt - openDt) / 1000; // ms → 초
-    return isMobile || diff > 0 && diff <= 60;
+    return isMobile && diff > 0 && diff <= 60;
 }
 
 
@@ -257,7 +257,7 @@ function startPolling() {
             const now = new Date();
             now.setHours(now.getHours() + 9);
             const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
-            socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp })
+            socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp }) // 채팅방 참여자 요청
         }, 500);
     }
 }
@@ -268,28 +268,20 @@ function stopPolling() {
     }
 }
 
-document.addEventListener("visibilitychange", () => {
+
+// 3. 관찰 시작
+document.addEventListener('visibilitychange', async () => {
+    /**
+     * document.visibilityState는 세밀한 제어가 가능하다
+     * [document.visibilityState === "visible"] == [!document.hidden]
+     */
     if (document.visibilityState === "visible") {
         startPolling();
     } else {
         stopPolling();
     }
-});
 
-// 3. 관찰 시작
-document.addEventListener('visibilitychange', async () => {
     if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
-        // 최후의 보루 아래 코드가 안되면 새로고침 할 수 밖에
-        /*fetch("/func/chat", { method: "GET" })
-            .then(res => {
-                if (res.redirected) {
-                    window.location.href = res.url;
-                }
-            })
-            .catch(err => {
-                console.error("요청 실패:", err);
-            });*/
-
         await forceBlurInput();
         chatInput.focus();
 
@@ -1246,7 +1238,7 @@ async function initPage() {
         const now = new Date();
         now.setHours(now.getHours() + 9);
         const timestamp = now.toISOString().slice(2, 19).replace(/[-T:]/g, "");
-        socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp })
+        socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp }) // 채팅방 참여자 요청
     }, 500);
 
     chatInput.textContent = localStorage.getItem("#tempChat-250706");
