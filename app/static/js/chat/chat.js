@@ -147,9 +147,7 @@ function connectSocket() {
 
         // 떠났는데 남아 있는 경우 처리
         if (data.username !== username) {
-            // typingIndicator.style.display = 'none';
-            document.querySelector('.messageRow[data-chat-id="-1"]')?.remove();
-            isTyping = false;
+            removeTypingBox();
         }
     });
 
@@ -158,7 +156,7 @@ function connectSocket() {
             await addMessage(data);
         }
 
-        // 채팅 읽음 요청은 스크롤 이벤트에 일임한다
+        // 채팅 읽음 요청은 스크롤 이벤트에 일임한다 >> sendReadDataLastChat
         if (data.username !== username && isNotificationOn) {
             if (!isMobile) {
                 sendNotification(data);
@@ -199,11 +197,8 @@ function connectSocket() {
 
     socket.on("typing", (data) => {
         if ( data.username !== username ) {
-            // typingIndicator.style.display = 'block';
-
             setTimeout(()=>{
                 addTypingBox(typingIndicator);
-
                 if (isScrollAtTheBottom() && !isTyping) {
                     moveBottonScroll();
                     isTyping = true;
@@ -214,9 +209,7 @@ function connectSocket() {
 
     socket.on("stop_typing", (data) => {
         if (data.username !== username) {
-            // typingIndicator.style.display = 'none';
-            document.querySelector('.messageRow[data-chat-id="-1"]')?.remove();
-            isTyping = false;
+            removeTypingBox();
         }
     });
 
@@ -271,23 +264,21 @@ function stopPolling() {
 
 // 3. 관찰 시작
 document.addEventListener('visibilitychange', async () => {
+    removeTypingBox();
+    await forceBlurInput();
+
+
     /**
      * document.visibilityState는 세밀한 제어가 가능하다
      * [document.visibilityState === "visible"] == [!document.hidden]
      */
-    if (document.visibilityState === "visible") {
-        startPolling();
-    } else {
-        stopPolling();
-    }
-
     if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
-        await forceBlurInput();
+        startPolling();
         chatInput.focus();
 
         const isValidSession = await checkVerified();
         if (!isValidSession) {
-            console.log('return false')
+            console.log('return false');
             return false; // 세션 유효 시간이 끝났으면 요청 종료
         }
         await getPeerLastReadChatId(); // 상대가 마지막으로 읽은 채팅 ID 조회
@@ -351,14 +342,10 @@ document.addEventListener('visibilitychange', async () => {
             });
 
     } else {
-        await forceBlurInput();
+        stopPolling();
         socket.emit("exit_room", { username: username, room: roomName });
         // 소켓을 끊어버리면 알림이 안온다..
         // if (typeof socket !== "undefined") socket.disconnect();
-
-        // typingIndicator.style.display = 'none';
-        document.querySelector('.messageRow[data-chat-id="-1"]')?.remove();
-        isTyping = false;
     }
 });
 
@@ -610,31 +597,41 @@ function addMessage(data, load = false) {
         messageDiv.style.color = 'lightgray'; // 글자색 (카톡 다크모드)
     }
 
+    function imageRenderer() {
+        // 이미지 첨부
+        const img = document.createElement('img');
+        // img.src = data.msg;
+        img.src = '/static/no-image.png';
+        img.dataset.src = data.msg; // preloadImage()가 지연 로딩 (태그가 뷰박스에 들어오면)
+        img.alt = 'Image Url';
+        img.style.width = '100%';
+        img.style.height = 'auto'; // 비율 유지 (이미지가 찌그러지지 않게)
+        img.onerror = () => {
+            img.onerror = null;
+            img.src = '/static/no-image.png';
+            img.style.width = '200px';
+        };
+        messageDiv.appendChild(img);
+        messageDiv.classList.remove('p-2');
+        messageDiv.classList.add('border');
+    }
+
     if (data.underline) { // 출입 알림
         if (!isMine) {
             renderEnterOrExit(data.msg);
         }
     } else { // 메세지 생성
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-        const matches = data.msg.match(urlRegex);
+        // 경로/쿼리 포함 문자열에서 파일명과 확장자 추출
+        const imageExtRegex = /(?:^|\/)([^\/?#]+)\.(jpg|jpeg|png|gif|bmp|webp|tiff|jfif)(?=$|[?#])/i;
+
+        function isImagePathUrl(text) {
+            if (!text) return;
+            const s = String(text).trim();
+             return s.match(imageExtRegex);
+        }
 
         if (data.msg.trim().startsWith('https://chickchick.shop/image/images')) {
-            // 이미지 첨부
-            const img = document.createElement('img');
-            // img.src = data.msg;
-            img.src = '/static/no-image.png';
-            img.dataset.src = data.msg;
-            // img.className = 'w-40 h-40 object-cover rounded'; // Tailwind 예시
-            img.alt = 'Uploaded Image';
-            img.style.width = '100%';
-            img.style.height = 'auto'; // 비율 유지 (이미지가 찌그러지지 않게)
-            img.onerror = () => {
-                img.onerror = null; img.src = '/static/no-image.png';
-                img.style.width = '200px';
-            };
-            messageDiv.appendChild(img);
-            messageDiv.classList.remove('p-2');
-            messageDiv.classList.add('border');
+            imageRenderer();
         } else if (data.msg.trim().startsWith('https://chickchick.shop/video/temp-video/')) {
             // 비디오 첨부
             const video = document.createElement('video');
@@ -660,12 +657,17 @@ function addMessage(data, load = false) {
             link.style.color = 'blue';
             messageDiv.innerHTML = '';
             messageDiv.appendChild(link);
+        } else if (isImagePathUrl(data.msg.trim())) {
+            imageRenderer();
         } else {
             const messageSpan = document.createElement("span");
             // const safeText = data.msg.replace(/ /g, "&nbsp;");
             const safeText = replaceSpacesOutsideTags(data.msg);
             messageSpan.innerHTML = safeText;
             messageDiv.appendChild(messageSpan);
+
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const matches = data.msg.match(urlRegex);
 
             if (matches) {
                 fetch('/func/api/url-preview', {
@@ -677,7 +679,7 @@ function addMessage(data, load = false) {
                     .then(preview => {
                         if (preview) {
                             preview.msg = data.msg;
-                            const previewEl = renderPreviewCard(preview, isMine);
+                            const previewEl = renderPreviewCard(preview);
                             messageDiv.innerHTML = '';
                             messageDiv.appendChild(previewEl);
                             messageDiv.classList.remove('p-2');
@@ -740,6 +742,8 @@ function addMessage(data, load = false) {
 }
 
 function addTypingBox(typingIndicator) {
+    // typingIndicator.style.display = 'block';
+
     const messageRow = renderMessageRow(false, -1);
     const messageDiv = renderMessageDiv();
     // messageDiv.classList.add("bg-gray-200", "text-left");
@@ -760,6 +764,12 @@ function addTypingBox(typingIndicator) {
     }
 
     messageRow.appendChild(messageDiv);
+}
+
+function removeTypingBox() {
+    // typingIndicator.style.display = 'none';
+    document.querySelector('.messageRow[data-chat-id="-1"]')?.remove();
+    isTyping = false;
 }
 
 
@@ -1137,7 +1147,7 @@ function moveMinusOneToEnd() {
 async function initPage() {
     const isValidSession = await checkVerified();
     if (!isValidSession) {
-        console.log('return false')
+        console.log('return false');
         return false; // 세션 유효 시간이 끝났으면 요청 종료
     }
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
