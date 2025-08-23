@@ -88,7 +88,7 @@
                             type="video/mp4"
                     data-filename="{{ image|urlencode }}">
                 </video>
-                <button class="play-btn" onclick="event.preventDefault();">▶</button>
+                <!--<button class="play-btn" onclick="event.preventDefault();">▶</button>-->
 
                 {% elif file_extension in image_extensions %}
                 <button class="delete-btn" type="button">×</button>
@@ -132,93 +132,14 @@
 <button id="previous-image-button" class="floating-button-left">Previous</button>
 <button id="next-image-button" class="floating-button-right">Next</button>
 
+<script src="/static/js/image.js?v={{ version }}"></script>
 <script>
-    let nextImageElement = null,
-        loading_size = 8,
-        selectedIndex, selectedOption, titleText = undefined,
-        pressTimer;
+    let selectedIndex, selectedOption, titleText = undefined;
 
-    const nextBtn = document.getElementById('next-image-button'),
-          previousBtn = document.getElementById('previous-image-button'),
-          dir = '{{ dir }}',
-          page = '{{ page }}',
-          currentUserName = '{{ current_user.get_id() }}',
-          guestName = '{{ config.GUEST_USERNAME }}',
+    const dir = '{{ dir }}',
           zipBtn = document.getElementById('download-zip-btn'),
           dropdownMenu = document.getElementById('dropdown-menu'),
-          $title = document.getElementById('title-select'),
-          longPressDuration = 1000;
-
-    let lastScrollTop = 0;
-    let lastScrollTime = Date.now();
-    const SCROLL_DELAY = 400;
-    const SCROLL_THRESHOLD = 50000;  // px per second
-    const lazyImages = document.querySelectorAll("img[data-src]");
-    let initialLoadComplete = false;
-    let startX, startY;
-    let mouseStartX, mouseStartY;
-    const TAP_THRESHOLD = 10; // 픽셀, 이 이하 이동이면 '탭'으로 간주
-
-    function preloadImage(img) {
-        const src = img.getAttribute('data-src');
-        if (src && img.src !== src) {
-            img.src = src;
-            img.removeAttribute('data-src'); // 이미 로드된 이미지는 data-src 속성 제거
-        }
-    }
-
-    // 주어진 인덱스 기준으로 위 아래 이미지 로드
-    function loadImagesAroundIndex(index) {
-        let minIndex = Math.max(index - loading_size, 0);
-        let maxIndex = Math.min(index + loading_size, lazyImages.length - 1);
-        for (let i = minIndex; i <= maxIndex; i++) {
-            if (lazyImages[i] && lazyImages[i].hasAttribute('data-src')) {
-                preloadImage(lazyImages[i]);
-            }
-        }
-    }
-
-    // 화면 중앙의 이미지 인덱스 찾기
-    function getCenterImageIndex() {
-        let centerPosition = window.innerHeight / 2 + window.scrollY;
-        let closestIndex = 0;
-        let minDistance = Infinity;
-        lazyImages.forEach((img, index) => {
-            let imgPosition = img.getBoundingClientRect().top + window.scrollY + img.getBoundingClientRect().height / 2;
-            let distance = Math.abs(centerPosition - imgPosition);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestIndex = index;
-            }
-        });
-        return closestIndex;
-    }
-
-    function handleScroll() {
-        const currentScrollTop = window.scrollY;
-        const currentTime = Date.now();
-        const scrollDelta = Math.abs(currentScrollTop - lastScrollTop);
-        const timeDelta = currentTime - lastScrollTime;
-        const scrollSpeed = scrollDelta / (timeDelta / 1000);
-        /*if (scrollSpeed> 10000) {
-            console.log('scrollSpeed', scrollSpeed);
-        }*/
-
-        if (scrollSpeed < SCROLL_THRESHOLD) {
-            let centerImageIndex = getCenterImageIndex();
-            loadImagesAroundIndex(centerImageIndex);
-        }
-
-        lastScrollTop = currentScrollTop;
-        lastScrollTime = currentTime;
-    }
-
-    const debouncedHandelScroll = debounce(() => {
-        handleScroll()
-    }, SCROLL_DELAY);
-    const trottledHandelScroll = throttle(() => {
-        debouncedHandelScroll();
-    }, 100);
+          $title = document.getElementById('title-select');
 
     if ($title) {
         selectedOption = $title.options[$title.selectedIndex];
@@ -227,24 +148,6 @@
 
 
     /*******************************************************************/
-
-    function setNextImage(element) {
-        nextImageElement = element.nextElementSibling;
-    }
-
-    // 영역을 몇 초간 클릭하고 있을 때 호출시킬 함수
-    const startPress = (event) => {
-        pressTimer = setTimeout(() => {
-            // 파일 삭제
-            /*if (confirm('Delete the file ?')) {
-                moveImage(event)
-            }*/
-        }, longPressDuration);
-    };
-
-    const cancelPress = () => {
-        clearTimeout(pressTimer);
-    };
 
     // 화면 중심 좌표의 Element를 반환
     function findCenterImageByCoordinates() {
@@ -261,25 +164,9 @@
         return 'No image with alt attribute found at the center of the viewport.';
     }
 
-    // video태그 중 마지막으로 재생한 video만 재생되도록 함
-    function playSingleVideo(targetVideo) {
-        const videos = document.querySelectorAll('video');
-
-        videos.forEach(video => {
-            if (video !== targetVideo) {
-                video.pause();
-                // video.currentTime = 0;
-            }
-        });
-
-        if (targetVideo.paused) {
-            targetVideo.play();
-        }
-    }
-
 
     function moveImage(event, name, index) {
-        const centerImage = findCenterImageByCoordinates();
+        const centerImage = getCenterImage(); // 영상 삭제 시 문제 발생하면 findCenterImageByCoordinates 변경 테스트
         let filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
         if (name) {
             filename = name
@@ -306,6 +193,7 @@
                         imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
                     }
                     if (imageElement) {
+                        setNextImage(imageElement);
                         imageElement.remove();
                         if (nextImageElement) {
                             nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -386,22 +274,14 @@
 
     function initPage() {
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
-        const imageItems = document.querySelectorAll('.image-item');
+        imageItems = document.querySelectorAll('.image-item');
+        lazyImages = document.querySelectorAll("img[data-src]");
+
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             if (img) {
                 img.addEventListener('click', () => setNextImage(item));
             }
-
-            // 마우스 이벤트
-            item.addEventListener('mousedown', startPress);
-            item.addEventListener('mouseup', cancelPress);
-            item.addEventListener('mouseleave', cancelPress);
-
-            // 터치 이벤트
-            item.addEventListener('touchstart', startPress);
-            item.addEventListener('touchend', cancelPress);
-            item.addEventListener('touchcancel', cancelPress);
         });
 
         document.addEventListener('keydown', function (event) {
@@ -421,7 +301,6 @@
                 case ' ':
                 case 'Enter':
                     event.preventDefault();
-                    // clickCenterImage();
                     playCenterVideo();
                     break;
                 case 'Delete':
@@ -442,107 +321,13 @@
             }
         });
 
-        nextBtn.addEventListener('click', nextImage);
-        previousBtn.addEventListener('click', previousImage);
+        nextBtn?.addEventListener('click', nextImage);
+        previousBtn?.addEventListener('click', previousImage);
 
-        // 현재 화면의 세로 중심에 가장 가까운 이미지 요소를 찾는 함수
-        function findCenterImageElement() {
-            const centerY = window.innerHeight / 2;
-            let closestImage = null;
-            let minDistance = Infinity;
-            imageItems.forEach(item => {
-                const rect = item.getBoundingClientRect();
-                const itemCenterY = rect.top + rect.height / 2;
-                const distance = Math.abs(centerY - itemCenterY);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestImage = item;
-                }
-            });
-            return closestImage;
-        }
-
-
-        function nextImage() {
-            const centerImage = findCenterImageElement();
-            if (centerImage) {
-                const nextImage = centerImage.nextElementSibling;
-                if (nextImage && nextImage.classList.contains('image-item')) {
-                    nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
-                }
-            }
-        }
-
-        function previousImage() {
-            const centerImage = findCenterImageElement();
-            if (centerImage) {
-                const previousImage = centerImage.previousElementSibling;
-                if (previousImage && previousImage.classList.contains('image-item')) {
-                    previousImage.scrollIntoView({ behavior: 'auto', block: 'center' });
-                }
-            }
-        }
-
-        function clickCenterImage() {
-            const centerImage = findCenterImageElement();
-            if (centerImage) {
-                let filename = centerImage.querySelector('img')?.getAttribute('alt');
-                const index = centerImage.querySelector('img')?.getAttribute('data-index');
-                if (!filename) {
-                    filename = centerImage.querySelector('source').dataset.filename;
-                }
-                if (confirm('Delete the file ?')) {
-                    moveImage(null, filename, index);
-                }
-            }
-        }
-
-        function playCenterVideo() {
-            const centerImage = findCenterImageElement();
-            const video = centerImage.querySelector('video');
-            if (video) {
-                if (video.paused) {
-                    video.play();
-                } else {
-                    video.pause();
-                }
-                video.blur();
-            }
-        }
-
-
-        // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
-        function initialImageLoad() {
-            if (!initialLoadComplete) {
-                let centerIndex = getCenterImageIndex();
-                loadImagesAroundIndex(centerIndex);
-                initialLoadComplete = true;
-            }
-        }
 
 
         /*****************************************************************/
 
-        window.addEventListener('scroll', () => {
-            // if (!initialLoadComplete) return; // 초기 로드가 완료되지 않았으면 실행하지 않음
-
-            debouncedHandelScroll();
-        });
-
-        document.getElementById("prevButton").addEventListener("click", () => {
-            if (page > 1) {
-                const previousBtn = document.querySelector('.pagination').children[1]
-                previousBtn.click();
-            }
-        });
-
-        document.getElementById("nextButton").addEventListener("click", () => {
-            const btnCount = document.querySelector('.pagination').childElementCount
-            const nextBtn = document.querySelector('.pagination').children[btnCount - 2];
-            if (nextBtn.textContent === '>') {
-                nextBtn.click();
-            }
-        });
 
         zipBtn.addEventListener('click', () => {
             const rect = zipBtn.getBoundingClientRect();
@@ -574,7 +359,6 @@
         });
 
         lazyLoadVideos();
-        initialImageLoad();
     }
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -602,84 +386,26 @@
 
         const observer = new IntersectionObserver((entries, observer) => {
             entries.forEach(entry => {
-                if (entry.isIntersecting) { // 화면에 보이면
-                    const video = entry.target;
-                    const source = video.querySelector("source");
-                    const playButton = video.nextElementSibling;
+                const video = entry.target;
+                const source = video.querySelector("source");
 
+                if (entry.isIntersecting) { // 화면에 보이면 실행
                     if (source && source.dataset.src && !source.src) {
-                        source.src = source.dataset.src;
-                        video.poster = video.dataset.poster;
-
-                        // video.load();  // 실제 로드 시작
-
-                        function onVideoInteraction() {
-                            if (video.readyState === 0) { // 0: 로드 전, 1: 메타데이터까지만 로드..
-                                video.controls = 'true'
-                                video.load();
-                                video.play();
-                                if (playButton) {
-                                    playButton.remove();
-                                }
-                            }
-                        }
-                        function clickPlayButton() {
-                            if (playButton) {
-                                playButton.remove();
-                            }
-                            onVideoInteraction();
-                        }
-
-                        // playButton.addEventListener('touchstart', clickPlayButton)
-                        video.addEventListener('touchstart', function (e) {
-                            if (e.touches.length === 1) {
-                                startX = e.touches[0].clientX;
-                                startY = e.touches[0].clientY;
-                            }
-                        });
-
-                        video.addEventListener('touchend', function (e) {
-                            if (e.changedTouches.length === 1) {
-                                const endX = e.changedTouches[0].clientX;
-                                const endY = e.changedTouches[0].clientY;
-                                const dx = Math.abs(endX - startX);
-                                const dy = Math.abs(endY - startY);
-                                if (dx < TAP_THRESHOLD && dy < TAP_THRESHOLD) {
-                                    clickPlayButton(e);
-                                }
-                            }
-                        });
-
-                        playButton.addEventListener('click', clickPlayButton)
-                        video.addEventListener('mousedown', function (e) {
-                            mouseStartX = e.clientX;
-                            mouseStartY = e.clientY;
-                        });
-
-                        video.addEventListener('mouseup', function (e) {
-                            const dx = Math.abs(e.clientX - mouseStartX);
-                            const dy = Math.abs(e.clientY - mouseStartY);
-                            if (dx < TAP_THRESHOLD && dy < TAP_THRESHOLD) {
-                                onVideoInteraction(e);
-                            }
-                        });
-
-                        /*video.addEventListener('play', function () {
-                            playSingleVideo(this);
-                        })*/
-                        /*video.addEventListener('play', (event) => {
-                            playSingleVideo(event.currentTarget);
-                        });*/
-                        video.addEventListener('play', playSingleVideo.bind(null, video));
-
+                        source.src = source.dataset.src;     // 실제 src 할당
+                        source.removeAttribute('data-src');
+                        if (video.dataset.poster) video.poster = video.dataset.poster; // 썸네일 이미지 세팅
+                        attachTapOnly(video, { autoPlay: true });
                     }
+                    safePlay(video, { autoPlay: true, fromStart: true });
 
-                    observer.unobserve(video); // 한 번 로딩되면 더 이상 감시 안 함
+                    // observer.unobserve(video); // 한 번 로딩되면 더 이상 감시 안 함, 주석 처리하여 다시 뷰포트로 들어오면 이벤트 동작하도록 함
+                } else { // 화면 이탈
+                    safePause(video);
                 }
             });
         }, {
-            rootMargin: "0px 0px 300px 0px",  // 약간 미리 로드
-            threshold: 0.1
+            rootMargin: "0px 0px 0px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 300px 전에 미리 감지 → 미리 로드 가능)
+            threshold: 0.1 // 요소가 10% 보일 때 트리거
         });
 
         videos.forEach(video => observer.observe(video));

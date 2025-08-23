@@ -133,6 +133,7 @@
                 if (data.status === 'success') {
                     const imageElement = document.getElementById(`image-${index}`);
                     if (imageElement) {
+                        setNextImage(imageElement);
                         imageElement.remove();
                         if (nextImageElement) {
                             nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });

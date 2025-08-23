@@ -7,6 +7,7 @@ let nextImageElement = null,
     lazyImages;
 
 const nextBtn = document.getElementById('next-image-button'),
+      previousBtn = document.getElementById('previous-image-button'),
       shuffleBtn = document.getElementById('shuffle-button'),
       delBtn = document.querySelector('.delete-button'),
       form = document.getElementById('delete-form'),
