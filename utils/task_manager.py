@@ -356,7 +356,7 @@ def periodic_compression_task():
 
 def should_predict(market):
     today = datetime.today().weekday()
-    print(f'    ############################### should_predict : {today} ###############################')
+    print(f'    ############################### should_predict : {today}, {market} ###############################')
     if market == 'kospi':
         return today not in (4, 5)    # 금, 토 제외
     elif market == 'nasdaq':
@@ -415,7 +415,8 @@ def run_crawl_ai_image():
         stderr=subprocess.PIPE,
         text=True,
         shell=True,
-        encoding='utf-8'
+        encoding='utf-8',
+        errors="ignore" # 디코딩 안되는 문자 무시
     )
     stdout, stderr = process.communicate()
 
@@ -440,7 +441,8 @@ def renew_kiwoom_token():
         stderr=subprocess.PIPE,
         text=True,
         shell=True,
-        encoding='utf-8'
+        encoding="cp949",
+        errors="ignore" # 디코딩 안되는 문자 무시
     )
     stdout, stderr = process.communicate()
 
@@ -470,7 +472,8 @@ def predict_stock_graph(stock):
         # stderr=subprocess.PIPE,
         text=True,
         shell=True,
-        encoding='utf-8'
+        encoding='utf-8',
+        errors="ignore" # 디코딩 안되는 문자 무시
     )
     # stdout, stderr = process.communicate() # 버퍼를 읽어줘야 죽지 않는다
     # print("STDOUT:", stdout)
