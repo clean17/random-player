@@ -86,3 +86,36 @@ function parseTimestamp(ts) {
     const sec = parseInt(ts.slice(10, 12), 10);
     return new Date(year, month, day, hour, min, sec);
 }
+
+function renderOverlay() {
+    if (!document.getElementById('overlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'overlay';
+        overlay.style.display = 'none';
+        overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+        document.body.appendChild(overlay);
+    }
+}
+
+// 휴지통 비우기 요청
+async function emptyTrash() {
+    const userConfirmed = confirm("휴지통을 비우시겠습니까?");
+    if (!userConfirmed) return;
+
+    try {
+        renderOverlay();
+        document.getElementById('overlay').style.display = 'block';
+        document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+
+        const response = await fetch("/func/empty-trash-bin", { method: "POST" });
+        const result = await response.json();
+
+        alert(result.message);
+        document.getElementById('overlay').style.display = 'none';
+        document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+    } catch (error) {
+        alert("오류가 발생했습니다: " + error);
+        document.getElementById('overlay').style.display = 'none';
+        document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+    }
+}
