@@ -470,7 +470,7 @@ def stock_graph_list(market):
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
     # print(market, directory, total_pages, images)
-    return render_template('stock_graph_list.html', images=images, page=page, total_pages=total_pages, market=market)
+    return render_template('stock_graph_list.html', images=images, page=page, total_pages=total_pages, market=market, version=int(time.time()))
 
 @image_bp.route('/stock-graphs/<market>/<filename>', endpoint='stock-graphs')
 @login_required

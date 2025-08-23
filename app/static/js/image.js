@@ -7,6 +7,7 @@ let nextImageElement = null,
     lazyImages;
 
 const nextBtn = document.getElementById('next-image-button'),
+      shuffleBtn = document.getElementById('shuffle-button'),
       delBtn = document.querySelector('.delete-button'),
       form = document.getElementById('delete-form'),
       page = "{{ page }}",
@@ -21,6 +22,10 @@ let lastScrollTime = Date.now();
 const SCROLL_DELAY = 100;
 const SCROLL_THRESHOLD = 50000;  // px per second
 
+// slideShow
+let slideShowTimer = null;
+let slideShowImgs = [];
+let slideShowIdx = 0;
 
 
 // 다음 이미지 함수 스로틀링
@@ -102,7 +107,6 @@ function loadImagesAroundIndex(index) {
 
 // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
 function initialImageLoad() {
-    console.log('initialImageLoad');
     if (!initialLoadComplete) {
         let centerIndex = getCenterImage('index');
         loadImagesAroundIndex(centerIndex);
