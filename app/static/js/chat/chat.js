@@ -419,6 +419,11 @@ function isScrollAtTheBottom() {
     return chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight <= threshold;
 }
 
+function isScrollAtTheBottom2() {
+    const threshold = 300; // 허용 오차 (픽셀)
+    return chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight <= threshold;
+}
+
 const readDebounce = debounce(() => {
     socket.emit("message_read", { chatId: lastChatId, room: roomName, username: username });
     if (lastReadChatId !== lastChatId) {
@@ -683,6 +688,9 @@ function addMessage(data, load = false) {
                             messageDiv.innerHTML = '';
                             messageDiv.appendChild(previewEl);
                             messageDiv.classList.remove('p-2');
+                            if (isScrollAtTheBottom2()) {
+                                moveBottonScroll();
+                            }
                             // messageDiv.classList.remove('bg-gray-200')
                             // messageDiv.classList.remove('bg-blue-200')
                         }
