@@ -132,4 +132,4 @@ def batch_convert_from_root(root_dir):
             convert_file(full_path)
 
 # 코드 만들고 최초에 실행했음
-batch_convert_from_root(root_directory)
+# batch_convert_from_root(root_directory)

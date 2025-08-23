@@ -149,7 +149,7 @@ body .container {
 
 .icon-buttons {
     position: absolute;
-    top: 15%;
+    top: 20%;
     right: 10px;
     transform: translateY(-50%);
     display: flex;

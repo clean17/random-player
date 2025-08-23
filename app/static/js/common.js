@@ -63,6 +63,18 @@ function getCurrentTimeStr() {
     return `${hour}:${minute}`;
 }
 
+function getNowTimestamp() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    return `${yyyy}-${mm}-${dd}_${hh}${mi}${ss}`;
+}
+
 // "250622194841" → "2025-06-22 19:48:41"
 // YYMMDDHHmmss
 function parseTimestamp(ts) {
