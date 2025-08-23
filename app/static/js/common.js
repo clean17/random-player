@@ -119,3 +119,8 @@ async function emptyTrash() {
         document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
     }
 }
+
+// 헬퍼: 한 번만 듣는 리스너
+function once(el, type, fn) {
+    el.addEventListener(type, fn, { once: true });
+}

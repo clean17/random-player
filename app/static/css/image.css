@@ -108,7 +108,10 @@ button.delete-button:hover {
     z-index: 2;
     width: 64px;
     height: 64px;
-    font-size: 2em;
+    display: flex;     /* flex로 정렬 */
+    align-items: center; /* 세로 가운데 */
+    justify-content: center; /* 가로 가운데 */
+    font-size: 25px;
     background: rgba(0, 0, 0, 0.5);
     border: none;
     border-radius: 50%;

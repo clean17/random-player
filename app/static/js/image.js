@@ -121,7 +121,7 @@ window.onload = initialImageLoad;
 /******************************************  Video  ****************************************/
 
 function playCenterVideo() {
-    const centerImage = findCenterImageElement();
+    const centerImage = getCenterImage();
     const video = centerImage.querySelector('video');
     if (video) {
         if (video.paused) {
@@ -134,20 +134,116 @@ function playCenterVideo() {
 }
 
 // video태그 중 마지막으로 재생한 video만 재생되도록 함
-function playSingleVideo(targetVideo) {
+function playSingleVideo(targetVideo, init= '') {
     const videos = document.querySelectorAll('video');
 
     videos.forEach(video => {
         if (video !== targetVideo) {
-            video.pause();
-            // video.currentTime = 0;
+            safePause(video);
         }
     });
 
     if (targetVideo.paused) {
-        targetVideo.play();
+        if (init === 'init') targetVideo.currentTime = 0;
+        targetVideo.play().catch(() => {/* 무시 */});
     }
 }
+
+function preventAll(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+// 탭/클릭 vs 드래그 구분
+function attachTapOnly(video, options = {}) {
+    let startX, startY, mouseStartX, mouseStartY;
+
+    video.addEventListener('click', preventAll, true); // capture=true
+
+    video.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }
+    });
+    video.addEventListener('touchend', e => {
+        if (e.changedTouches.length === 1) {
+            const dx = Math.abs(e.changedTouches[0].clientX - startX);
+            const dy = Math.abs(e.changedTouches[0].clientY - startY);
+            if (dx < TAP_THRESHOLD && dy < TAP_THRESHOLD) {
+                togglePlayPauseVideo(video, options);
+            }
+        }
+    });
+
+    video.addEventListener('mousedown', e => {
+        mouseStartX = e.clientX; mouseStartY = e.clientY;
+    });
+    video.addEventListener('mouseup', e => {
+        const dx = Math.abs(e.clientX - mouseStartX);
+        const dy = Math.abs(e.clientY - mouseStartY);
+        if (dx < TAP_THRESHOLD && dy < TAP_THRESHOLD) {
+            togglePlayPauseVideo(video, options);
+        }
+    });
+}
+
+// 토글: 현재 상태에 따라 재생/일시정지
+function togglePlayPauseVideo(video, options = {}) {
+    if (!video) return;
+
+    if (video.paused || video.ended) {
+        safePlay(video, options);
+    } else {
+        safePause(video);
+    }
+}
+
+function safePause(video) {
+    if (video instanceof HTMLMediaElement && typeof video.pause === 'function' && !video.paused) {
+        video.pause();
+    }
+}
+
+// 사용자 상호작용
+function safePlay(video, { autoPlay = false, fromStart= false } = {}) {
+    if (!(video instanceof HTMLMediaElement)) return;
+
+    video.controls = true;
+    // 자동재생 안정화(모바일)
+    video.muted = true;
+    video.playsInline = true;
+
+    // 소스가 없으면 종료
+    const hasSrc = video.src || video.querySelector('source[src]') || video.querySelector('source[data-src]');
+    if (!hasSrc) return;
+
+    // 중복 호출/경합 방지 플래그
+    if (video._pendingPlay) return;
+    video._pendingPlay = true;
+
+    const start = () => {
+        video._pendingPlay = false;
+        if (autoPlay) {
+            // 0초부터 원하면 활성화
+            if (fromStart) video.currentTime = 0;
+            video.play().catch(() => { /* 정책/경합 실패는 조용히 무시 */ });
+        }
+    };
+
+    if (video.readyState >= 2) {
+        start();
+    } else {
+        // canplay/loadeddata 중 먼저 오는 쪽에서 1회만 재생 시도
+        once(video, 'loadeddata', start);
+        once(video, 'canplay', start);
+
+        // load()는 요소 상태를 리셋하며 내부적으로 pause를 유발할 수 있으므로
+        // '대기 이벤트를 건 다음' 호출해야 경합을 줄임
+        video.load();
+    }
+}
+
 
 
 /******************************************  Video  ****************************************/
