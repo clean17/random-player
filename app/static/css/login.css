@@ -1,7 +1,8 @@
-body, html {
+body {
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column;   /* 세로 흐름 */
+    justify-content: center;  /* 세로 가운데 */
+    align-items: center;      /* 가로 가운데 */
     background-color: #f4f4f4;
 }
 
