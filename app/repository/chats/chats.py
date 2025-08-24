@@ -1,5 +1,5 @@
 import psycopg
-
+from psycopg.rows import namedtuple_row
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.ChatRoomDTO import ChatRoomDTO
 from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
@@ -113,3 +113,49 @@ def insert_chat_url_preview(chat: "ChatPreviewDTO", conn=None) -> int:
 # @db_transaction
 # def update_temp_chat():
 #     pass
+
+# 검색 키워드의 id(pk) 리스트를 반환
+@db_transaction
+def find_chat_indices_by_keyword(q: str, conn=None) -> List[int]:
+    sql = "SELECT id FROM chats WHERE message ILIKE %s ORDER BY id;"
+    pattern = f"%{q}%"
+    with conn.cursor() as cur:
+        cur.execute(sql, (pattern,))  # (q,)가 아니라 (pattern,)
+        rows = cur.fetchall()
+    return [r[0] for r in rows]
+
+# 키워드 id 기준으로 위 25, 아래 25 채팅을 반환 (총 51 로우)
+@db_transaction
+def fetch_context_by_center(center_id: int, before=25, after=25, conn=None):
+    sql = """
+    (
+      SELECT c.*, u.username
+      FROM chats c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.id < %s
+      ORDER BY c.id DESC
+      LIMIT %s
+    )
+    UNION ALL
+    (
+      SELECT c.*, u.username
+      FROM chats c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.id = %s
+      LIMIT 1
+    )
+    UNION ALL
+    (
+      SELECT c.*, u.username
+      FROM chats c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.id > %s
+      ORDER BY c.id ASC
+      LIMIT %s
+    )
+    ORDER BY id ASC;
+    """
+    with conn.cursor(row_factory=namedtuple_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
+        cur.execute(sql, (center_id, before, center_id, center_id, after))
+        rows = cur.fetchall()
+    return rows

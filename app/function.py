@@ -10,7 +10,8 @@ from app.image import LIMIT_PAGE_NUM
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
-    find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview
+    find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
+    find_chat_indices_by_keyword, fetch_context_by_center
 from app.repository.users.users import find_user_by_username
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
@@ -407,6 +408,52 @@ def load_more_logs():
     chat_list = find_chats_by_offset(sql_offset, MAX_FETCH_MESSAGE_SIZE)
     # return jsonify({"logs": all_lines[start:end]})
     return jsonify({"logs": chats_to_line_list(chat_list)})
+
+# 검색 인덱스 구하기 (전역/전체 검색)
+@func.route("/chat/search", methods=["POST"])
+@login_required
+def search_chat():
+    q = (request.json.get("q") or "").strip()
+    if not q:
+        return jsonify({"count": 0, "hits": []})
+
+    # 구현 방식 예시:
+    # - DB에 fulltext/like로 전체에서 매칭되는 "행 인덱스" 리스트를 반환
+    hits = find_chat_indices_by_keyword(q)  # 오름차순 인덱스
+    return jsonify({"count": len(hits), "hits": hits})
+
+
+# 중심 인덱스를 기준으로 위/아래 컨텍스트 슬라이스 가져오기
+@func.route("/chat/fetch-context", methods=["POST"])
+@login_required
+def fetch_context():
+    payload = request.get_json(force=True) or {}
+    # center 또는 center_id 둘 다 지원
+    center_id = payload.get("center")
+    if center_id is None:
+        center_id = payload.get("center_id")
+    try:
+        center_id = int(center_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "center (id) is required"}), 400
+
+    before = int(payload.get("before", 25))
+    after  = int(payload.get("after", 25))
+
+    rows = fetch_context_by_center(center_id, before, after)
+
+    # id 범위(클라이언트가 스크롤 이어붙일 때 참고용)
+    start_id = rows[0][0] if rows else None   # c.*의 첫 컬럼이 id라고 가정
+    end_id   = rows[-1][0] if rows else None
+
+    return jsonify({
+        "logs": chats_to_line_list(rows),  # "chatId|timestamp|username|msg" 형태
+        "start_id": start_id,
+        "end_id": end_id,
+        "center_id": center_id,
+        "count": len(rows)
+    })
+
 
 
 def fetch_url_preview(url):

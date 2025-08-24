@@ -76,7 +76,7 @@ body .container {
     opacity: 0.4;
 }
 
-#userCountIndicator {
+#user-count-indicator {
     position: fixed;
     top: 10px;
     left: 50%;
