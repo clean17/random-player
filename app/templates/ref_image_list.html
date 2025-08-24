@@ -128,20 +128,29 @@
             });
     }
 
+    function deleteItem(imageItem) {
+        let filename = imageItem.querySelector('.thumbnail')?.alt;
+        if (imageItem) {
+            if (!filename) {
+                filename = imageItem.querySelector('source').dataset.filename;
+            }
+            let idx = 0;
+            if (imageItem.hasAttribute("id")) {
+                idx = imageItem.id.split('-')[1]
+            }
+            moveImage(null, filename, idx);
+        }
+    }
+
+    function handelDelBtn() {
+        const imageItem = getCenterImage();
+        deleteItem(imageItem);
+    }
+
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', e => {
             const imageItem = e.target.closest('.image-item');
-            let filename = imageItem.querySelector('.thumbnail')?.alt;
-            if (imageItem) {
-                if (!filename) {
-                    filename = imageItem.querySelector('source').dataset.filename;
-                }
-                let idx = 0;
-                if (imageItem.hasAttribute("id")) {
-                    idx = imageItem.id.split('-')[1]
-                }
-                moveImage(null, filename, idx);
-            }
+            deleteItem(imageItem);
         });
     });
 
@@ -242,10 +251,7 @@
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    // if (confirm('Delete the file ?')) {
-                        moveImage(event);
-                        // document.querySelector('.delete-button')?.click()
-                    // }
+                    handelDelBtn();
                 default: break;
             }
         });
