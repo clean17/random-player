@@ -1,23 +1,35 @@
+from typing import Dict, Any
+
 import psycopg
 import psycopg_pool
-from config.config import settings
+import os
+
+def dict_from_env() -> Dict[str, Dict[str, str]]:
+    db = {}
+    for k in ("DB_NAME", "DB_USERNAME", "DB_PASSWORD", "DB_HOST", "DB_PORT"):
+        v = os.getenv(k)
+        if v:
+            db[k] = v
+    return {"db": db} if db else {}
+
+db_settings: Dict[str, Any] = dict_from_env()  # 타입 힌트(변수 주석, variable annotation) 문법 > IDE/검사 도구용
 
 conn = psycopg.connect(
-    dbname=settings['DB_NAME'],
-    user=settings['DB_ID'],
-    password=settings['DB_PASSWORD'],
-    host=settings['DB_HOST'],
-    port=settings['DB_PORT']
+    dbname=db_settings['db']['DB_NAME'],
+    user=db_settings['db']['DB_USERNAME'],
+    password=db_settings['db']['DB_PASSWORD'],
+    host=db_settings['db']['DB_HOST'],
+    port=db_settings['db']['DB_PORT']
 )
 
 # 풀 객체 생성
 db_pool = psycopg_pool.ConnectionPool(
     conninfo=(
-        f"dbname={settings['DB_NAME']} "
-        f"user={settings['DB_ID']} "
-        f"password={settings['DB_PASSWORD']} "
-        f"host={settings['DB_HOST']} "
-        f"port={settings['DB_PORT']}"
+        f"dbname={db_settings['db']['DB_NAME']} "
+        f"user={db_settings['db']['DB_USERNAME']} "
+        f"password={db_settings['db']['DB_PASSWORD']} "
+        f"host={db_settings['db']['DB_HOST']} "
+        f"port={db_settings['db']['DB_PORT']}"
     ),
     min_size=1,  # 최소 커넥션
     max_size=10, # 최대 커넥션

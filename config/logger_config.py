@@ -32,6 +32,7 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "Client disconnected while serving", "Invalid HTTP version", "Bad request version",
                 "/func/stocks",
                 "/func/last-read-chat-id?username",
+                "/image/move-image",
                 ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 

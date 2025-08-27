@@ -34,9 +34,11 @@ DIRECTORY_MAP = {
 }
 
 # MOVE_DIR = os.path.join(os.getcwd(), 'move')
-os.makedirs(IMAGE_DIR, exist_ok=True)
-os.makedirs(MOVE_DIR, exist_ok=True)
+def initialize_image_directories():
+    os.makedirs(IMAGE_DIR, exist_ok=True)
+    os.makedirs(MOVE_DIR, exist_ok=True)
 
+initialize_image_directories()
 
 
 
