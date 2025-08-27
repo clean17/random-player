@@ -67,7 +67,7 @@
         </div>
         <div>
             Image Crawling
-            total_count : {{ images_length }}
+            total_count : <span id="total_count">{{ images_length }}</span>
         </div>
         <div class="pagination">
             {% if page > 1 %}
@@ -139,6 +139,8 @@
                             nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }
                     }
+                    const total = document.getElementById('total_count').textContent
+                    document.getElementById('total_count').textContent = Number(total) - 1;
                 }
             })
             .catch(error => {

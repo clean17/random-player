@@ -4,6 +4,7 @@ data = """
 
 """
 
+
 usernames = set()
 for line in data.strip().splitlines():
     url = line.strip()
@@ -17,4 +18,3 @@ for line in data.strip().splitlines():
 
 print(usernames)
 # ['aaaaaaaaaaa', 'bbbbbbbbbbb']
-

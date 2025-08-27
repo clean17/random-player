@@ -18,6 +18,9 @@
 </head>
 <body>
 <div class="icon-buttons">
+    <button id="searchBtn btn-open-search" title="Search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+    </button>
     <button id="toggleNotification">
         <i class="fa-solid fa-bell"></i>
     </button>
@@ -42,6 +45,16 @@
 </div>
 
 <div class="container">
+    <div id="chat-search-wrap" style="position:sticky; top:50px; z-index:10; display: none">
+        <div id="chat-search-panel" hidden style="margin-top:8px; background:#fff; border:1px solid #ddd; border-radius:8px; padding:8px; display:flex; gap:8px; align-items:center;">
+            <input id="chat-search-input" type="text" placeholder="검색어" style="flex:1; padding:6px 8px;">
+            <button id="btn-run-search" type="button">검색</button>
+            <button id="btn-prev-hit" type="button" disabled>▲</button>
+            <span id="hit-counter" style="min-width:60px; text-align:center;">0/0</span>
+            <button id="btn-next-hit" type="button" disabled>▼</button>
+            <button id="btn-close-search" type="button">닫기</button>
+        </div>
+    </div>
     <!-- 채팅 메시지 목록 -->
     <div id="chat-container">
         {% for log in chat_logs %}
