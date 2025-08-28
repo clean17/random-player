@@ -146,9 +146,12 @@ button:hover {
 }
 
 
-/* 저장 완료 메시지 스타일 */
+/* 저장 완료 메시지 스타일, 사용안함 */
 .save-message {
     position: absolute;
+    top: 20%;
+    right: 10%;
+    transform: translateX(-50%);
     background: rgba(0, 128, 0, 0.8);
     color: white;
     padding: 8px 15px;

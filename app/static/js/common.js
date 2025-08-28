@@ -18,6 +18,20 @@ function showDebugToast(message, duration = 3000) {
     }, duration);
 }
 
+// 사용안함
+function showMessagePopup(text = '기본메세지', state = 'success') {
+    message.textContent = text;
+    message.style.display = "block";  // 메시지 표시
+    if (state === 'success') {
+        message.style.background = 'rgba(0, 128, 0, 0.5)';
+    } else if (state === 'fail') {
+        message.style.background = 'rgba(255, 0, 0, 0.6)';
+    }
+    setTimeout(() => {
+        message.style.display = "none";  // 2초 후 메시지 숨김
+    }, 2000);
+}
+
 
 // debounce 적용 (동일한 함수 호출이라면 마지막으로 호출한지 지정한 시간이 지났을 경우에만 실행, 중복으로 호출하면 시간은 계속 리셋)
 function debounce(func, delay) {

@@ -521,7 +521,7 @@ def memo():
                 content = f.read()
         else:
             content = ''
-    return render_template('memo.html', content=content)
+    return render_template('memo.html', content=content, version=int(time.time()))
 
 ################################# HLS ######################################
 
