@@ -114,13 +114,16 @@ def crawl_images_from_page(page_num):
 
                 data['current_ai_scheduler_uri'] = current_url
 
+                # 현재 url 저장
                 with open(file_path, "w", encoding="utf-8") as f: # 쓰기
                     json.dump(data, f, ensure_ascii=False, indent=2)
 
+                # 글로벌 변수
                 if is_first and page_num == 1:
                     save_url = current_url
                     is_first = False
 
+                # 어제 작업을 시작한 url에 도달하면 첫번째 url을 마지막 작업 url에 수정
                 if data.get('last_ai_scheduler_uri') == current_url:
                     print(f"동일함! for문 중단  {data.get('last_ai_scheduler_uri')}")
 
@@ -184,7 +187,7 @@ def crawl_images_from_page(page_num):
 #     print(f"##### Done: page {page_num} #####")
 
 def crawl_ai():
-    for page_num in range(1, 21):
+    for page_num in range(1, 11):
         print(f"##### Start: page {page_num} #####")
         crawl_images_from_page(page_num)
         print(f"##### Done: page {page_num} #####")

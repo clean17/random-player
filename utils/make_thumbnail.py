@@ -9,7 +9,7 @@ root_directory = r'E:\LARIS_DATA\FILE\ARCHIVES_REP\2025\07\30\912670\ORIGIN'
 # root_directory = r'F:\test'
 
 # 허용할 확장자
-VALID_IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.bmp', '.webp', 'tiff', 'jfif')
+VALID_IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', 'tiff', 'jfif')
 VALID_VIDEO_EXTENSIONS = ('.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm')
 
 # 최대 썸네일 가로 너비
@@ -109,27 +109,39 @@ def convert_image_file(file_path):
     except Exception as e:
         print(f"⚠️ 오류 발생 ({filename}): {e}")
 
+def generate_thumbnails(root_dir):
+    thumb_dir = os.path.join(root_dir, 'thumb')
+    os.makedirs(thumb_dir, exist_ok=True)
+
+    # 루트 디렉토리 기준으로 하위 폴더들을 가져옴
+    for name in os.listdir(root_dir):
+        sub_dir_path = os.path.join(root_dir, name)
+        if os.path.isfile(sub_dir_path):
+            convert_file(sub_dir_path)
+
 
 def batch_convert_from_root(root_dir):
     # 루트 디렉토리 기준으로 하위 폴더들을 가져옴
     for name in os.listdir(root_dir):
-        full_path = os.path.join(root_dir, name)
-        if os.path.isdir(full_path):   # ← 디렉토리인지 확인
-            sub_dir_path = os.path.join(root_dir, name)
-            if os.path.isdir(sub_dir_path):
-                thumb_dir = os.path.join(sub_dir_path, 'thumb')
-                os.makedirs(thumb_dir, exist_ok=True)
-                print(sub_dir_path)
-                for filename in os.listdir(sub_dir_path):
-                    print(filename)
-                    file_path = os.path.join(sub_dir_path, filename)
-                    if os.path.isfile(file_path):
-                        file_lower = str(file_path).lower()
-                        if file_lower.endswith(VALID_VIDEO_EXTENSIONS):
-                            convert_video_file(file_path)
-                        # convert_file(file_path)
+        sub_dir_path = os.path.join(root_dir, name)
+        if os.path.isdir(sub_dir_path):
+            thumb_dir = os.path.join(sub_dir_path, 'thumb')
+            os.makedirs(thumb_dir, exist_ok=True)
+            print(sub_dir_path)
+            # 루트 하위 디렉토리의 파일 순회
+            for filename in os.listdir(sub_dir_path):
+                print(filename)
+                file_path = os.path.join(sub_dir_path, filename)
+                if os.path.isfile(file_path):
+                    file_lower = str(file_path).lower()
+                    if file_lower.endswith(VALID_VIDEO_EXTENSIONS):
+                        convert_video_file(file_path)
+                    # convert_file(file_path)
         else:
-            convert_file(full_path)
+            convert_file(sub_dir_path)
 
 # 코드 만들고 최초에 실행했음
 # batch_convert_from_root(root_directory)
+
+# 하루에 한 번 썸네일 생성
+# generate_thumbnails(r'')

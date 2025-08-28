@@ -370,10 +370,10 @@ def predict_stock_graph_scheduled(market):
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
-    schedule.every().day.at("06:00").do(run_crawl_ai_image)
+    # schedule.every().day.at("06:00").do(run_crawl_ai_image)
     schedule.every().day.at("07:00").do(renew_kiwoom_token)
     schedule.every().day.at("20:00").do(predict_stock_graph_scheduled, 'kospi')
-    schedule.every().day.at("10:00").do(predict_stock_graph_scheduled, 'nasdaq')
+    schedule.every().day.at("11:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
     while True:
         # print("[Scheduler] 현재시간:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -401,7 +401,7 @@ def run_crawl_ai_image():
     # venv 활성화 후 바로 실행
     script_dir = r'C:\my-project\random-player'
     venv_activate = r'venv\Scripts\activate'
-    py_script = r'python utils\renew_kiwoom_token.py'
+    py_script = r'python utils\crawl_image_by_playwright.py'
 
     # 전체 명령어 (venv 활성화 → 스크립트 실행)
     # 주의: activate.bat는 cmd에서만 인식, powershell은 다름
@@ -415,7 +415,8 @@ def run_crawl_ai_image():
         stderr=subprocess.PIPE,
         text=True,
         shell=True,
-        encoding='utf-8',
+        # encoding='utf-8',
+        encoding="cp949",
         errors="ignore" # 디코딩 안되는 문자 무시
     )
     stdout, stderr = process.communicate()
@@ -427,7 +428,7 @@ def renew_kiwoom_token():
     # venv 활성화 후 바로 실행
     script_dir = r'C:\my-project\random-player'
     venv_activate = r'venv\Scripts\activate'
-    py_script = r'python utils\crawl_image_by_playwright.py'
+    py_script = r'python utils\renew_kiwoom_token.py'
 
     # 전체 명령어 (venv 활성화 → 스크립트 실행)
     # 주의: activate.bat는 cmd에서만 인식, powershell은 다름
