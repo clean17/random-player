@@ -102,9 +102,13 @@ function initVideoSrc() {
     const currentVideoPlayer = document.querySelector('#videoPlayer')
     if (currentVideoPlayer) {
         if (isVideoJs()) {
-            player.pause();
+            /*player.pause();
             player.src({ src: '', type: 'video/mp4' });
-            player.load();
+            player.load();*/
+            try { player.pause(); } catch {}
+            const cur = player.currentSrc && player.currentSrc();
+            if (cur && cur.startsWith('blob:')) URL.revokeObjectURL(cur);
+            player.reset(); // 필요 시 dispose()
         } else if (currentVideoPlayer) {
             currentVideoPlayer.pause();
             currentVideoPlayer.onloadedmetadata = null;
@@ -399,7 +403,7 @@ function changeVideo() {
 function delVideo() {
     if (currentVideo) {
         if (confirm(`Delete \r\n ${currentVideo} ?`)) {
-            // initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다
+            initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다 (서버에서 스트림 중이므로 삭제가 안된다)
             axios.post(`/video/delete/${encodeURIComponent(currentVideo)}?dir=${dir}`)
                 .then(response => {
                     if (response.status === 204) {

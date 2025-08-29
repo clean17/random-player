@@ -1,7 +1,7 @@
 import os
 import random
 import subprocess
-import time
+import time, gc
 import cv2
 import re
 from send2trash import send2trash, TrashPermissionError
@@ -18,6 +18,8 @@ IMAGE_DIR = settings['IMAGE_DIR']
 IMAGE_DIR2 = settings['IMAGE_DIR2']
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
+
+WIN_SHARING_VIOLATION = -2144927705  # 0x80270027
 
 @video.route('/select-directory', methods=['POST'], endpoint='select-directory')
 @login_required
@@ -80,6 +82,20 @@ def get_temp_video(filename):
 
     return send_file(os.path.join(dir, filename))
 
+
+def try_trash_with_backoff(path, attempts=5, base=0.2):
+    for i in range(attempts):
+        try:
+            send2trash(path)
+            return True
+        except OSError as e:
+            if getattr(e, "winerror", None) == WIN_SHARING_VIOLATION:
+                gc.collect()
+                time.sleep(base * (2 ** i))
+                continue
+            raise
+    return False
+
 @video.route('/delete/<path:filename>', methods=['POST'])
 @login_required
 def delete_video(filename):
@@ -92,9 +108,10 @@ def delete_video(filename):
     if os.path.exists(file_path):
         normalized_path = os.path.normpath(file_path)
         try:
-            send2trash(normalized_path) # 휴지통
+            # send2trash(normalized_path) # 휴지통
+            try_trash_with_backoff(normalized_path)
         except OSError as e:
-            print(f"Error: {e}")
+            print(f"Error: {e}") # 0x80270027은 “그 파일/폴더 지금 누가 쓰는 중이라 휴지통 이동 못 함” 이라는 뜻
         except TrashPermissionError as e:
             print(f"Permission Error: {e}")
 
