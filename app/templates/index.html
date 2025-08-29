@@ -69,7 +69,7 @@
         <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload File</button></a>
     <a href="/posts"><button type="button" id="btn913" class="btn-w100">Posts</button></a>
     {% if current_user.get_id() != config.GUEST_USERNAME %}
-        <a href="{{ url_for('func.get_log_viewer') }}"><button type="button" id="btn923" class="btn-w100">View Log</button></a>
+        <a href="{{ url_for('func.get_log_viewer') }}"><button type="button" id="btn923" class="btn-w100">Log Viewer</button></a>
     {% endif %}
 <!--        <a href="{{ url_for('func.get_video_call') }}"><button type="button" id="btn9224" class="btn-w100">Video Call</button></a>-->
         <a href="{{ url_for('func.get_chat_ui') }}" class="chat-btn-wrapper"><button type="button" id="btn924" class="btn-w100">Chat</button><span class="unread-badge" style="display: none">5</span>

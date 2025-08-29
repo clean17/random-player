@@ -86,9 +86,9 @@ def get_images(start, count, dir):
         # 전체 경로로 변환
         full_paths = [os.path.join(dir, f) for f in files]
         # 생성시간(ctime) 기준으로 정렬
-        full_paths.sort(key=lambda x: os.path.getctime(x)) # 생성시간 오름차순
+        # full_paths.sort(key=lambda x: os.path.getctime(x)) # 생성시간 오름차순
         # full_paths.sort(key=lambda x: os.path.getmtime(x), reverse=True) # 수정시간 내림차순
-        # full_paths.sort(key=lambda x: os.path.getmtime(x)) # 수정시간 오름차순
+        full_paths.sort(key=lambda x: os.path.getmtime(x)) # 수정시간 오름차순
         # 파일명만 추출
         images = [os.path.basename(f) for f in full_paths]
     return images[start:start + count]

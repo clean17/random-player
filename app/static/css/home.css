@@ -8,9 +8,9 @@ body {
 }
 
 .container {
-    min-width: 400px;
-    max-width: 30vw;
-    /*max-height: 90vh;*/
+    min-width: 400px; /* 모바일에서 보기 좋게 나온다 */
+    max-width: 50vw;
+    max-height: 100vh;
     background: white;
     padding: 10px;
     border-radius: 10px;

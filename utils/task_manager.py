@@ -370,7 +370,7 @@ def predict_stock_graph_scheduled(market):
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
-    # schedule.every().day.at("06:00").do(run_crawl_ai_image)
+    schedule.every().day.at("06:00").do(run_crawl_ai_image)
     schedule.every().day.at("07:00").do(renew_kiwoom_token)
     schedule.every().day.at("20:00").do(predict_stock_graph_scheduled, 'kospi')
     schedule.every().day.at("11:00").do(predict_stock_graph_scheduled, 'nasdaq')
