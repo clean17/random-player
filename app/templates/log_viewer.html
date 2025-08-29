@@ -10,35 +10,40 @@
     <style>
         body, html {
             background-color: #f4f4f4;
-            /* 가운데 정렬 */
-            display: flex;
-            justify-content: center;
-            align-items: center;
             height: 100%;
+            overflow: hidden;   /* 페이지 자체 스크롤 막기 */
         }
         .container {
-            min-width: 400px;
-            max-width: 70vw;
-            height: 80%;
-            min-height: 750px;
+            min-width: 400px; /* 모바일에서 보기 좋게 나온다 */
+            max-width: 80vw;
             background: white;
             padding: 10px;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             text-align: center;
             box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
+
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* 플렉스 컨테이너에서 내부 스크롤 허용 */
         }
         #log-container {
-            background: #fff;
             font-family: monospace;
-            height: 80%;
-            white-space: pre;
-            overflow-y: scroll;
-            border-radius: 7px;
+            white-space: pre;   /* pre: 가로스크롤, pre-wrap: 줄바꿈; */
             border: 1px solid #ccc;
             box-shadow: 0 1px 6px #0001;
-            padding: 10px;
-            text-align: left
+            padding: 12px;
+            text-align: left;
+            box-sizing: border-box;
+
+            /* 부모 높이의 정확히 80% 사용 */
+            /* flex-grow: 0; 남는 공간이 있어도 더 이상 커지지 않음
+               flex-shrink: 0; 공간이 부족해도 절대 줄어들지 않음.
+               flex-basis: 85%; flex 방향 기준으로 85% 차지. */
+            /*flex: 0 0 84%;*/
+            flex: 1; /* 남는 높이 모두 차지 */
+            min-height: 0; /*  오버플로 방지, 내부 overflow 동작 */
+            overflow: auto; /* 내용이 넘치면 스크롤만 생김 */
         }
         #date-picker { margin: 3px 10px 10px 10px}
         .datepicker-block { display: flex; justify-content: center}
@@ -55,6 +60,7 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+
 <div class="container">
     <h2>로그 뷰어</h2>
     <div class="datepicker-block">
