@@ -90,10 +90,10 @@ def try_trash_with_backoff(path, attempts=5, base=0.2):
             return True
         except OSError as e:
             if getattr(e, "winerror", None) == WIN_SHARING_VIOLATION:
-                gc.collect()
-                time.sleep(base * (2 ** i))
-                continue
-            raise
+                gc.collect()                # 참조 정리(잠재적 핸들 해제 유도)
+                time.sleep(base * (2 ** i)) # 지수 백오프: 0.2s, 0.4s, 0.8s, ...
+                continue                    # 다음 반복에서 재시도
+            raise                           # 다른 오류면 즉시 전파
     return False
 
 @video.route('/delete/<path:filename>', methods=['POST'])
