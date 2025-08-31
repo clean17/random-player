@@ -1,27 +1,39 @@
 body, html {
+    height: 100%;
+}
+
+body {
     font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     background-color: #f4f4f4;
+
     display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 0;
-    padding: 0;
-    height: auto;
+    flex-direction: column;   /* 세로 흐름 */
+    justify-content: center;  /* 세로 가운데 */
+    align-items: center;      /* 가로 가운데 */
+
+    /* 최신 브라우저에선 동적 뷰포트 단위 권장 */
+    min-height: 100dvh;       /* 또는 100vh (iOS 주소창 이슈 있으면 100dvh 권장) */
 }
 
 .container {
-    width: 700px;
+    min-width: 400px; /* 모바일에서 보기 좋게 나온다 */
+    max-width: 50vw;
+    width: 1000px;
+    height: 100%;
     background: white;
-    padding: 10px;
+    padding: 30px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     /*text-align: center;*/
     box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
-    margin: 0 auto 0 auto;
-    height: 80vh;
+
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* 플렉스 컨테이너에서 내부 스크롤 허용 */
 }
 
 
+/* 메인화면 */
 .post-top-bar {
     margin-top: 10px;
     display: flex;
@@ -35,7 +47,6 @@ body, html {
     font-size: 1.35em;
     /*color: #1458c1;*/
 }
-
 .post-top-bar .new-post-btn {
     background: linear-gradient(90deg, #1565c0, #2492ff 90%);
     color: #fff;
@@ -52,12 +63,16 @@ body, html {
     box-shadow: 0 0px 14px #2492ff22;
 }
 
+
+
+
 .post-title {
-    font-size: 1.7em;
+    font-size: 1.4em;
+    font-weight: bold;
     margin-bottom: 6px;
-    font-weight: 600;
-    /*color: #134aa9;*/
-    letter-spacing: -1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .post-meta {
     color: #7b7b7b;
@@ -116,48 +131,8 @@ body, html {
 /*    min-width: 0;*/
 /*}*/
 
-.post-title {
-    font-size: 1.15em;
-    font-weight: bold;
-    margin-bottom: 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.post-meta {
-    /*margin-bottom: 8px;*/
-    color: #888;
-    font-size: 0.95em;
-}
 
 
-/* 최하단 페이징 버튼 */
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 20px;
-}
-.pagination a {
-    margin: 0 3px;
-    margin-bottom: 10px;
-    padding: 20px 14px;
-    border-radius: 5px;
-    /*background-color: #0056b3;*/
-    background: #d2d2d7;
-    color: white;
-    text-decoration: none;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 1.2em;
-}
-.pagination a:hover {
-    background-color: #6fb5ff;
-}
-.pagination a.active {
-    background-color: #007BFF;
-}
 
 
 /*  view  */
@@ -167,10 +142,9 @@ hr {
     margin: 20px 0 18px 0;
 }
 .post-content {
-    font-size: 1.12em;
+    font-size: 12pt;
     color: #222;
     line-height: 1.8;
-    white-space: pre-wrap;
     word-break: break-all;
 }
 .post-actions {
@@ -183,7 +157,7 @@ hr {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    /*margin-bottom: 24px;*/
+    margin-bottom: 24px;
 }
 
 .btn-main {
@@ -221,10 +195,11 @@ hr {
     border-color: #b7d5f7;
 }
 
-/*  edit  */
 
+
+/*  edit  */
 .form-group {
-    /*margin-bottom: 22px;*/
+    margin-bottom: 22px;
 }
 .form-group label {
     display: block;
@@ -255,10 +230,36 @@ hr {
     min-height: 120px;
     resize: vertical;
 }
-.form-actions {
-    margin-top: 18px;
+
+
+
+
+
+/*************** Pagination *************/
+.pagination {
     display: flex;
-    gap: 10px;
-    justify-content: flex-end;
+    justify-content: center;
     align-items: center;
+    margin-top: 20px;
 }
+.pagination a {
+    margin: 0 3px;
+    margin-bottom: 10px;
+    padding: 20px 14px;
+    border-radius: 5px;
+    /*background-color: #0056b3;*/
+    background: #d2d2d7;
+    color: white;
+    text-decoration: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2em;
+}
+.pagination a:hover {
+    background-color: #6fb5ff;
+}
+.pagination a.active {
+    background-color: #007BFF;
+}
+/*************** Pagination *************/

@@ -7,39 +7,14 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
     <style>
-        .post-container, .post-form {
-            margin: 60px auto 0 auto;
-            background: #fff;
-            border-radius: 14px;
-            box-shadow: 0 4px 20px #0001;
-            padding: 32px 28px 24px 28px;
-        }
-        .post-form h2 {
-            margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-            /*color: #1458c1;*/
-            letter-spacing: -1px;
-        }
-
-
-        @media (max-width: 640px) {
-            .post-container, .post-form {
-                max-width: 98vw;
-                margin: 16px 1vw 0 1vw;
-                padding: 20px 5vw 18px 5vw;
-            }
-            .post-form h2 {
-                font-size: 1.19em;
-            }
-        }
     </style>
 </head>
 <body>
     <form class="container post-form" action="/posts/{{ post_id }}/edit" method="post">
         <div class="post-title-bar">
-            <h2>게시글 수정</h2>
-            <div class="form-actions">
+<!--            <h2>게시글 수정</h2>-->
+            <div>&nbsp;</div>
+            <div class="post-actions">
                 <button type="submit" class="btn-main">수정완료</button>
                 <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
 <!--                <a href="/posts" class="btn-secondary">목록으로</a>-->

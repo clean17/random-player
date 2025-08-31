@@ -10,15 +10,6 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
     <style>
-        @media (max-width: 700px) {
-            .post-list {
-                max-width: 98vw;
-                margin: 1vw;
-            }
-            .post-box {
-                padding: 1vw;
-            }
-        }
     </style>
 </head>
 <body>
@@ -32,6 +23,7 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+
 <div class="container">
     <div class="post-top-bar">
 <!--        <h2>글 목록</h2>-->

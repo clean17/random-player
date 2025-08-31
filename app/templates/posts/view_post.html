@@ -7,22 +7,19 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
     <style>
-        @media (max-width: 700px) {
-            .container {
-                max-width: 98vw;
-                margin: 16px 1vw 0 1vw;
-                padding: 20px 5vw 18px 5vw;
-            }
-            .post-title {
-                font-size: 1.27em;
-            }
+        #log-container {
+            font-family: Arial, sans-serif;
+            white-space: pre-wrap;
+
+            border: 0px solid white;
+            box-shadow: 0 0px 0px white;
         }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="post-title-bar">
-        <h2 class="post-title">{{ post.title }}</h2>
+        <span class="post-title">{{ post.title }}</span>
         <div class="post-actions">
             {% if user.id == post.user_id %}
             <a href="/posts/{{ post.id }}/edit"><button class="btn-main">수정</button></a>
@@ -32,7 +29,8 @@
     </div>
     <div class="post-meta">{{ post.realname }} &nbsp;|&nbsp; {{ post.updated_at }}</div>
     <hr>
-    <div class="post-content">{{ post.content }}</div>
+    <div id="log-container" class="post-content">{{ post.content }}</div><br>
+<!--    <div class="post-content">{{ post.content }}</div>-->
 </div>
 </body>
 </html>
