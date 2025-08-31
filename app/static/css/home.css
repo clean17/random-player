@@ -10,6 +10,7 @@ body {
 .container {
     min-width: 400px; /* 모바일에서 보기 좋게 나온다 */
     max-width: 50vw;
+    width: 20%;
     max-height: 100vh;
     background: white;
     padding: 10px;

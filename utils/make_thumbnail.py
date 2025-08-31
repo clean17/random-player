@@ -102,7 +102,8 @@ def convert_image_file(file_path):
             save_path = os.path.join(thumb_dir, f"{base_name}.webp")
             img.convert("RGB").save(save_path, "webp", quality=80)
 
-            print(f"✅ 썸네일 생성: {save_path}")
+            # print(f"✅ 썸네일 생성: {save_path}")
+            print(f"✅ 썸네일 생성")
 
     except UnidentifiedImageError:
         print(f"❌ 이미지 열기 실패: {filename}")

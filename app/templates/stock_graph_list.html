@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image List</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/image.css') }}">
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
     <script src="/static/js/common.js?v={{ version }}"></script>
 </head>
 <style>
@@ -32,6 +32,7 @@
     <button onclick="window.scrollTo({ top: 0, behavior: 'auto' })">⬆</button>
     <button onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })">⬇</button>
 </div>
+
 <div class="container">
     <div id="progress-bar" style="width:100%; border:1px solid #ccc;">
         <div id="progress-fill" style="width:0; height:25px; background:#4caf50; color:#020202; text-align:center;">
