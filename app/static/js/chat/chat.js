@@ -1058,7 +1058,7 @@ function enterEvent(event) {
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {
             socket.emit("stop_typing", { room: roomName, username: username }); // 일정 시간 입력 없으면 중단 알림
-        }, 2000); // 2초간 입력 없으면 stop_typing
+        }, 3000); // 3초간 입력 없으면 stop_typing
 
         localStorage.setItem("#tempChat-250706", chatInput.value);
     }
