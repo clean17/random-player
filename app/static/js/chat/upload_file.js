@@ -103,3 +103,154 @@ function uploadFile(event) {
         xhr.send(formData);
     }
 }
+
+
+
+(() => {
+    const container = document.querySelector('.container');
+    const plusLabel = container.querySelector('label[for="file-input"]'); // 기존 ＋ 라벨
+    const fileInput = container.querySelector('#file-input');
+
+    // 팝오버 엘리먼트 동적 추가(원하는 버튼만 수정해서 사용)
+    const pop = document.createElement('div');
+    pop.id = 'plusPopover';
+    pop.setAttribute('role', 'menu');
+    pop.innerHTML = `
+    <div class="menu-scroll">
+      <button class="pp-btn" data-action="upload">📁 파일 업로드</button>
+      <button class="pp-btn" data-action="open-search">🔎 채팅 검색 열기</button>
+      <hr style="border:none;height:1px;background:#eee;margin:6px 0;">
+<!--      <button class="pp-btn" data-action="paste">📋 붙여넣기 업로드</button>-->
+    <div class="pp-btn-row">
+      <button class="pp-btn" data-action="good">👍</button>
+      <button class="pp-btn" data-action="ok">👌</button>
+      <button class="pp-btn" data-action="no">❌</button>
+      <button class="pp-btn" data-action="question">❓</button>
+    </div>
+    </div>
+  `;
+    container.appendChild(pop);
+    const menuScroll = pop.querySelector('.menu-scroll');
+
+    const GAP = 8;    // 버튼과 팝오버 사이 간격
+    let isOpen = false;
+
+    // 팝오버 위치/크기 보정: 컨테이너 경계 내
+    function placePopover() {
+        const cRect = container.getBoundingClientRect();
+        const bRect = plusLabel.getBoundingClientRect();
+
+        // 1) 기본 배치: 버튼(라벨) 왼쪽 정렬, 버튼 위에 뜨게
+        let left = bRect.left - cRect.left;
+        pop.style.left = left + 'px';
+        pop.style.top  = (bRect.top - cRect.top - GAP - pop.offsetHeight) + 'px';
+
+        // 2) 우측 넘침 보정
+        const pRect1 = pop.getBoundingClientRect();
+        let overflowRight = pRect1.right - cRect.right;
+        if (overflowRight > 0) {
+            left -= overflowRight;
+            if (left < 0) left = 0;
+            pop.style.left = left + 'px';
+        }
+        // 3) 좌측 넘침 보정
+        const pRect2 = pop.getBoundingClientRect();
+        const overflowLeft = cRect.left - pRect2.left;
+        if (overflowLeft > 0) {
+            left += overflowLeft;
+            pop.style.left = left + 'px';
+        }
+
+        // 4) 세로(위쪽 공간) 보정: 위 공간이 부족하면 내부 스크롤로 높이 제한
+        const spaceAbove = (bRect.top - cRect.top) - GAP;
+        const maxH = Math.max(80, Math.floor(spaceAbove - 12)); // 여유 조금
+        menuScroll.style.maxHeight = maxH + 'px';
+
+        // 높이 재계산 후 최종 top
+        const newH = pop.offsetHeight;
+        let top = (bRect.top - cRect.top) - GAP - newH;
+        if (top < 0) top = 0; // 컨테이너 위로 못 나가게
+        pop.style.top = top + 'px';
+    }
+
+    function openPopover() {
+        // 먼저 표시해 크기 측정
+        pop.classList.add('open');
+        placePopover();
+        isOpen = true;
+
+        document.addEventListener('click', onDocClick, true);
+        window.addEventListener('resize', placePopover);
+        // 내부 스크롤 변화를 반영(채팅 영역 스크롤 포함)
+        window.addEventListener('scroll', placePopover, true);
+    }
+
+    function closePopover() {
+        pop.classList.remove('open');
+        isOpen = false;
+
+        document.removeEventListener('click', onDocClick, true);
+        window.removeEventListener('resize', placePopover);
+        window.removeEventListener('scroll', placePopover, true);
+    }
+
+    function onDocClick(e) {
+        if (!isOpen) return;
+        if (!pop.contains(e.target) && e.target !== plusLabel) {
+            closePopover();
+        }
+    }
+
+    // ＋ 라벨 클릭 시: 기본 파일열기 막고 팝오버 토글
+    plusLabel.addEventListener('click', (e) => {
+        e.preventDefault();       // label → file-input 기본 클릭 방지
+        e.stopPropagation();
+        isOpen ? closePopover() : openPopover();
+    });
+
+    // 메뉴 액션 연결(예시)
+    pop.addEventListener('click', (e) => {
+        const btn = e.target.closest('.pp-btn');
+        if (!btn) return;
+        const action = btn.dataset.action;
+
+        if (action === 'upload') {
+            fileInput?.click(); // 이때만 실제 파일 선택창 열기
+        } else if (action === 'open-search') {
+            const wrap = document.getElementById('chat-search-wrap');
+            const panel = document.getElementById('chat-search-panel');
+            if (wrap) wrap.style.display = 'block';
+            if (panel) panel.hidden = false;
+            document.getElementById('chat-search-input')?.focus();
+        } else if (action === 'paste') {
+            console.log('붙여넣기 업로드 트리거'); // 필요 시 구현
+        } else if (action === 'good') {
+            const msg = '<span style="color:green;">👍</span>';
+            socket.emit("new_msg", { username, msg, room: roomName });
+            socket.emit("stop_typing", {room: roomName, username });
+        } else if (action === 'ok') {
+            const msg = '<span style="color:blue;">👌</span>';
+            socket.emit("new_msg", { username, msg, room: roomName });
+            socket.emit("stop_typing", {room: roomName, username });
+        } else if (action === 'no') {
+            const msg = '<span style="color:red;">❌</span>';
+            socket.emit("new_msg", { username, msg, room: roomName });
+            socket.emit("stop_typing", {room: roomName, username });
+        } else if (action === 'question') {
+            const msg = '<span style="color:orange;">❓</span>';
+            socket.emit("new_msg", { username, msg, room: roomName });
+            socket.emit("stop_typing", {room: roomName, username });
+        }
+
+        closePopover();
+    });
+
+    // 키보드 접근성: 라벨에서 Enter/Space로 열기
+    plusLabel.setAttribute('tabindex', '0');
+    plusLabel.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !isOpen) {
+            e.preventDefault();
+            openPopover();
+        }
+    });
+})();
