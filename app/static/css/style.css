@@ -78,6 +78,7 @@ button {
     background-color: #0056b3;
     color: white;
     font-size: 18px;
+    line-height: 1;
     cursor: pointer;
     box-sizing: border-box;
     margin-bottom: 10px;
@@ -179,4 +180,35 @@ button:hover {
     flex: 1; /* 남는 높이 모두 차지 */
     min-height: 0; /*  오버플로 방지, 내부 overflow 동작 */
     overflow: auto; /* 내용이 넘치면 스크롤만 생김 */
+}
+
+
+/* 최하단 페이징 버튼 */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+}
+.pagination a {
+    margin: 0 3px;
+    margin-bottom: 10px;
+    padding: 13px;
+    border-radius: 5px;
+    /*background-color: #0056b3;*/
+    /*background: #d2d2d7;*/
+    /*background: #6fb5ff;*/
+    background: RGB(215, 215, 220);
+    color: white;
+    text-decoration: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2em;
+}
+.pagination a:hover {
+    background-color: #007BFF;
+}
+.pagination a.active {
+    background-color: #007BFF;
 }

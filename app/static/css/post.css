@@ -21,7 +21,7 @@ body {
     width: 1000px;
     height: 100%;
     background: white;
-    padding: 30px;
+    padding: 10px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     /*text-align: center;*/
@@ -30,44 +30,39 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 0; /* 플렉스 컨테이너에서 내부 스크롤 허용 */
+    height: 100%;
+
+    position: relative;
+    overflow: auto;
 }
+
+hr {
+    border: none;
+    border-top: 1px solid #ebebeb;
+    margin: 10px 0;
+}
+
 
 
 /* 메인화면 */
 .post-top-bar {
     margin-top: 10px;
     display: flex;
-    /*justify-content: space-between;*/
-    justify-content: center;
+    justify-content: space-evenly;
+    /*justify-content: center;*/
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 10px;
 }
 .post-top-bar h2 {
     margin: 0;
     font-size: 1.35em;
-    /*color: #1458c1;*/
-}
-.post-top-bar .new-post-btn {
-    background: linear-gradient(90deg, #1565c0, #2492ff 90%);
-    color: #fff;
-    border: none;
-    border-radius: 7px;
-    padding: 8px 20px;
-    font-size: 1em;
-    font-weight: 500;
-    box-shadow: 0 1px 6px #1565c016;
-    cursor: pointer;
-}
-.post-top-bar .new-post-btn:hover {
-    background: #134aa9;
-    box-shadow: 0 0px 14px #2492ff22;
 }
 
 
 
 
 .post-title {
-    font-size: 1.4em;
+    font-size: 1.2em;
     font-weight: bold;
     margin-bottom: 6px;
     white-space: nowrap;
@@ -76,14 +71,14 @@ body {
 }
 .post-meta {
     color: #7b7b7b;
-    font-size: 0.96em;
+    font-size: 0.8em;
     margin-bottom: 10px;
 }
 
 .post-box {
     background: #fff;
     box-shadow: 0 4px 20px #0001;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     transition: box-shadow 0.18s;
 
     display: flex;
@@ -91,13 +86,12 @@ body {
     width: 100%;
     border: 1px solid #eee;
     border-radius: 8px;
-    padding: 10px;
+    padding: 5px;
     box-sizing: border-box;
 }
 .post-box:hover {
     box-shadow: 0px 0px 10px #2492ff;
 }
-
 
 .post-list a {
     color: inherit;
@@ -112,8 +106,8 @@ body {
     align-items: center;
     justify-content: center;
     border-radius: 6px;
-    min-width: 80px;
-    max-width: 80px; /* 원하면 조절 */
+    min-width: 60px;
+    max-width: 60px; /* 원하면 조절 */
     margin-right: 12px;
     font-weight: bold;
 }
@@ -123,143 +117,120 @@ body {
     object-fit: cover;     /* fill, contain, cover, scale-down 등 선택 가능 */
     display: block;
 }
-/*.post-info {*/
-/*    flex: 9;*/
-/*    display: flex;*/
-/*    flex-direction: column;*/
-/*    justify-content: center;*/
-/*    min-width: 0;*/
-/*}*/
-
-
-
-
-
-/*  view  */
-hr {
-    border: none;
-    border-top: 1px solid #ebebeb;
-    margin: 20px 0 18px 0;
-}
-.post-content {
-    font-size: 12pt;
-    color: #222;
-    line-height: 1.8;
-    word-break: break-all;
-}
-.post-actions {
-    margin-top: 36px;
+.post-info {
+    flex: 9;
     display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-.post-title-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
+    flex-direction: column;
+    /*justify-content: center;*/
+    justify-content: space-between; /* 세로 요소들을 위/아래로 최대한 벌림 */
+    min-width: 0;
+    padding: 5px;
 }
 
+
+
+
+
+
+
+/*************** Button *************/
 .btn-main {
     background: linear-gradient(90deg, #1565c0, #2492ff 90%);
     color: #fff;
     border: none;
-    border-radius: 7px;
     padding: 10px 26px;
-    font-size: 1em;
-    font-weight: 500;
     box-shadow: 0 1px 6px #0001;
-    cursor: pointer;
-    transition: background 0.18s, box-shadow 0.18s, transform 0.13s;
+    transition: background 0.18s;
 }
 .btn-main:hover {
-    background: #134aa9;
-    box-shadow: 0 2px 12px #2492ff22;
-    transform: translateY(-2px) scale(1.04);
+    filter: brightness(1.15); /* 톤이 밝아지게 */
 }
+
 .btn-secondary {
     background: #f1f3f7;
     color: #134aa9;
     border: 1px solid #dbe7fa;
-    border-radius: 7px;
     padding: 10px 24px;
-    font-size: 1em;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background 0.15s, border 0.15s, color 0.15s;
 }
 .btn-secondary:hover {
     background: #eaf1fb;
-    color: #1565c0;
-    border-color: #b7d5f7;
+    border-color: #2492ff;
 }
+/*************** Button *************/
 
 
 
-/*  edit  */
+
+/*************** edit *************/
 .form-group {
-    margin-bottom: 22px;
+    margin-bottom: 10px;
 }
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    font-weight: bold;
-    /*color: #1254af;*/
-    font-size: 1.05em;
+    font-weight: 500;
+    font-size: 1.2em;
 }
 .form-group input,
 .form-group textarea {
-    width: 94%;
-    padding: 11px 12px;
+    width: 100%;
+    box-sizing: border-box; /* padding, border 포함해서 100% 계산 */
+    padding: 10px;
     border: 1px solid #d3d6e1;
     border-radius: 6px;
     font-size: 1.07em;
-    background: #f9fbfe;
     transition: border 0.2s, box-shadow 0.2s;
     margin-bottom: 10px;
 }
 .form-group input:focus,
 .form-group textarea:focus {
-    outline: none;
+    outline: none;                 /* 기본 외곽선 해제 */
     border: 1.5px solid #3494ff;
-    background: #f4faff;
+    /*background: #f4faff;*/
+    background: #f9fbfe;
     box-shadow: 0 2px 8px #2492ff15;
 }
-.form-group textarea {
-    min-height: 120px;
-    resize: vertical;
-}
-
-
-
-
-
-/*************** Pagination *************/
-.pagination {
+.form-group.textarea-wrapper {
+    flex: 1;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 20px;
+    flex-direction: column;
+    padding-bottom: 50px; /* 버튼 자리 확보 */
+
+    min-height: 0;
 }
-.pagination a {
-    margin: 0 3px;
-    margin-bottom: 10px;
-    padding: 20px 14px;
-    border-radius: 5px;
-    /*background-color: #0056b3;*/
-    background: #d2d2d7;
-    color: white;
-    text-decoration: none;
+.form-group.textarea-wrapper textarea {
+    flex: 1;                      /* flex-grow flex-shrink flex-basis의 축약형; flex-grow:1; flex-shrink:1; flex-basis:0; 남는 공간이 있으면 균등하게 나눠서 차지하고, 공간이 부족하면 줄어들 수 있음. */
+    min-height: 0;                /* 자식 콘텐츠가 아무리 커도, 부모 높이를 넘지 말고 스크롤(overflow) 되도록 */
+}
+.form-group.textarea-wrapper pre {
+    width: 100%;
+    box-sizing: border-box;
+
+    /* 가로 스크롤 방지 + 줄바꿈 */
+    white-space: pre-wrap;        /* \n 유지 + 자동 줄바꿈 허용 */
+    word-break: break-word;       /* 긴 단어 줄바꿈 */
+    overflow-wrap: anywhere;      /* 아주 긴 토큰도 강제 줄바꿈 */
+    overflow-x: hidden;           /* 혹시 모를 가로 스크롤 숨김 */
+    padding: 10px;
+    border: 1px solid #d3d6e1;
+    border-radius: 6px;
+    font-size: 1.07em;
+
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;   /* 내용 많으면 세로 스크롤 */
+}
+
+.form-actions {
+    position: absolute;
+    bottom: 15px;
+    right: 20px;
     display: flex;
-    justify-content: center;
+    gap: 10px;
+    justify-content: flex-end;
     align-items: center;
-    font-size: 1.2em;
+
+    margin-top: auto;   /* 플렉스에서 자동으로 아래 밀림 */
+    padding-top: 10px;
 }
-.pagination a:hover {
-    background-color: #6fb5ff;
-}
-.pagination a.active {
-    background-color: #007BFF;
-}
-/*************** Pagination *************/
+/*************** edit *************/

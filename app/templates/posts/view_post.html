@@ -6,31 +6,44 @@
     <title>{{ post.title }}</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
-    <style>
-        #log-container {
-            font-family: Arial, sans-serif;
-            white-space: pre-wrap;
-
-            border: 0px solid white;
-            box-shadow: 0 0px 0px white;
-        }
-    </style>
 </head>
 <body>
 <div class="container">
-    <div class="post-title-bar">
-        <span class="post-title">{{ post.title }}</span>
-        <div class="post-actions">
-            {% if user.id == post.user_id %}
-            <a href="/posts/{{ post.id }}/edit"><button class="btn-main">수정</button></a>
-            {% endif %}
-            <a href="/posts"><button class="btn-secondary">목록</button></a>
+<!--    <div class="post-title-bar">-->
+<!--        <span class="post-title">{{ post.title }}</span>-->
+<!--        <div class="post-actions">-->
+<!--            {% if user.id == post.user_id %}-->
+<!--            <a href="/posts/{{ post.id }}/edit"><button class="btn-main">수정</button></a>-->
+<!--            {% endif %}-->
+<!--            <a href="/posts"><button class="btn-secondary">목록</button></a>-->
+<!--        </div>-->
+<!--    </div>-->
+<!--    <div class="post-meta">{{ post.realname }} &nbsp;|&nbsp; {{ post.updated_at }}</div>-->
+<!--    <hr>-->
+<!--    <div id="log-container" class="post-content">{{ post.content }}</div><br>-->
+    <!--<h2>게시글 수정</h2>-->
+    <div class="form-group">
+        <div class="post-info">
+            <div class="post-title">{{ post.title }}</div>
+            <div class="post-meta">{{ post.realname or '이름 없음' }} &nbsp;|&nbsp; {{ post.updated_at }}</div>
         </div>
     </div>
-    <div class="post-meta">{{ post.realname }} &nbsp;|&nbsp; {{ post.updated_at }}</div>
+    <div class="form-group" style="display: none">
+        <label for="author">작성자</label>
+        <input type="text" name="author" id="author" value="{{ post.realname or ''}}" disabled>
+    </div>
     <hr>
-    <div id="log-container" class="post-content">{{ post.content }}</div><br>
-<!--    <div class="post-content">{{ post.content }}</div>-->
+    <!--<div class="form-group">
+        <label for="content">첨부</label>
+        <input type="file" name="file" id="file"/>
+    </div>-->
+    <div class="form-group textarea-wrapper">
+        <pre name="content" id="content" readonly>{{ post.content or ''}}</pre>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-main" onclick="window.location.href='/posts/{{ post.id }}/edit'">수정</button>
+        <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
+    </div>
 </div>
 </body>
 </html>

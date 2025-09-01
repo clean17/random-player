@@ -2,38 +2,38 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-    <title>게시글 수정</title>
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <title>게시글 EDIT</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
-    <style>
-    </style>
 </head>
 <body>
-    <form class="container post-form" action="/posts/{{ post_id }}/edit" method="post">
-        <div class="post-title-bar">
-<!--            <h2>게시글 수정</h2>-->
-            <div>&nbsp;</div>
-            <div class="post-actions">
-                <button type="submit" class="btn-main">수정완료</button>
-                <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
-<!--                <a href="/posts" class="btn-secondary">목록으로</a>-->
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label for="title">제목</label>
-            <input type="text" name="title" id="title" value="{{ post.title }}" required>
-        </div>
-        <div class="form-group" style="display: none">
-            <label for="author">작성자</label>
-            <input type="text" name="author" id="author" value="{{ post.realname }}" disabled>
-        </div>
-        <div class="form-group">
-            <label for="content">내용</label>
-            <textarea name="content" id="content" required>{{ post.content }}</textarea>
-        </div>
-
-    </form>
+<form class="container" action="{% if type == 'C' %}/posts/create{% elif type == 'U' %}/posts/{{ post_id }}/edit{% endif %}"
+      method="post">
+    <!--<h2>게시글 수정</h2>-->
+    <div class="form-group">
+        <label for="title">제목</label>
+        <input type="text" name="title" id="title" value="{{ post.title or ''}}" required placeholder="Enter the title">
+    </div>
+    <div class="form-group" style="display: none">
+        <label for="author">작성자</label>
+        <input type="text" name="author" id="author" value="{{ realname or ''}}" disabled>
+    </div>
+    <!--<div class="form-group">
+        <label for="content">첨부</label>
+        <input type="file" name="file" id="file"/>
+    </div>-->
+    <div class="form-group textarea-wrapper">
+        <label for="content">내용</label>
+        <textarea name="content" id="content" required placeholder="Enter the contents">{{ post.content or ''}}</textarea>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-main">
+            {% if type == 'C' %}등록{% elif type == 'U' %}수정완료{% endif %}
+        </button>
+        <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
+    </div>
+</form>
 </body>
 </html>

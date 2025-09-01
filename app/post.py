@@ -50,8 +50,9 @@ def create_post():
         post_id = insert_post(post)
         return redirect(url_for('posts.post_list'))
     return render_template(
-        "posts/create_post.html"
+        "posts/edit_post.html"
         , realname=user.realname
+        , type='C'
         , version=int(time.time())
     )
 
@@ -69,6 +70,7 @@ def edit_post(post_id):
     return render_template(
         "posts/edit_post.html"
         , post=post
+        , type='U'
         , post_id=post_id
         , version=int(time.time())
     )
