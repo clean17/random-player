@@ -29,7 +29,7 @@ def post_list():
 @login_required
 def view_post(post_id):
     post = find_post(post_id)
-    user = find_user_by_username(current_user.get_id())
+    user = find_user_by_username(current_user.get_id()) # current_user.get_id(): 사용자 ID
 
     if not post:
         return "존재하지 않는 게시글", 404
@@ -51,7 +51,7 @@ def create_post():
         return redirect(url_for('posts.post_list'))
     return render_template(
         "posts/edit_post.html"
-        , realname=user.realname
+        , user=user
         , type='C'
         , version=int(time.time())
     )

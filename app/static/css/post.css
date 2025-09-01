@@ -3,7 +3,6 @@ body, html {
 }
 
 body {
-    font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     background-color: #f4f4f4;
 
     display: flex;
@@ -68,6 +67,11 @@ hr {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.view-post-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 6px;
 }
 .post-meta {
     color: #7b7b7b;

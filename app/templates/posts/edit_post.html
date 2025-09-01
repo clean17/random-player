@@ -14,11 +14,11 @@
     <!--<h2>게시글 수정</h2>-->
     <div class="form-group">
         <label for="title">제목</label>
-        <input type="text" name="title" id="title" value="{{ post.title or ''}}" required placeholder="Enter the title">
+        <input type="text" name="title" id="title" value="{{ post.title if post else ''}}" required placeholder="Enter the title">
     </div>
     <div class="form-group" style="display: none">
         <label for="author">작성자</label>
-        <input type="text" name="author" id="author" value="{{ realname or ''}}" disabled>
+        <input type="text" name="author" id="author" value="{{ user.realname if user else post.realname if post else '' }}" disabled>
     </div>
     <!--<div class="form-group">
         <label for="content">첨부</label>
@@ -26,7 +26,7 @@
     </div>-->
     <div class="form-group textarea-wrapper">
         <label for="content">내용</label>
-        <textarea name="content" id="content" required placeholder="Enter the contents">{{ post.content or ''}}</textarea>
+        <textarea name="content" id="content" required placeholder="Enter the contents">{{ post.content if post else ''}}</textarea>
     </div>
     <div class="form-actions">
         <button type="submit" class="btn btn-main">
