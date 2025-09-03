@@ -4,6 +4,8 @@ from bs4 import BeautifulSoup
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+import os, subprocess
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -285,16 +287,33 @@ def find_business1_src(driver, timeout=8):
 def fetch_url_preview_by_selenium(url):
     driver = None
     try:
-        final_url = resolve_url(url)  # ★ 리다이렉트 미리 풀기
-        print('final_url', final_url)
+        final_url = resolve_url(url)  # 리다이렉트 미리 풀기
+        # print('final_url', final_url)
+
+        os.environ["CHROME_LOG_FILE"] = os.devnull  # Windows는 "NUL"도 가능
+
         opts  = Options()
         # opts.add_argument("--headless=new")  # 창 없이 실행
         opts.add_argument("--disable-gpu")
         opts.add_argument("--no-sandbox")
-        opts.add_argument("--window-size=1280,800")  # headless에선 꼭 지정
+        # opts.add_argument("--window-size=1280,800")  # headless에선 꼭 지정
+        opts.add_argument("--disable-3d-apis")       # WebGL/3D API 비활성화
+
+        # 콘솔 로그 줄이기
         opts.add_argument("--log-level=3")  # 0=INFO… 3=ERROR;  크롬 자체 로그 레벨 하향
-        driver = webdriver.Chrome(options=opts)
-        driver.set_page_load_timeout(15)  # 완전 로드까지 쵀대 15초 대기
+        opts.add_experimental_option("excludeSwitches", ["enable-logging"])  # Windows 콘솔 잡소리 억제
+
+        opts.add_argument("--remote-debugging-pipe")
+
+        # 알림/푸시 관련 기능 최소화
+        opts.add_argument("--disable-notifications")
+        opts.add_argument("--disable-features=PushMessaging,BackgroundFetch,Notifications")
+
+        # 드라이버 로그 자체를 버리기
+        service = Service(log_output=subprocess.DEVNULL)
+        driver = webdriver.Chrome(options=opts, service=service)
+        # driver = webdriver.Chrome(options=opts)
+        driver.set_page_load_timeout(15)  # 완전 로드까지 최대 15초 대기
         driver.get(final_url)
 
         # DOM 최소 준비 대기 (interactive/complete); Explicit Wait (명시적 대기), 최대 8초 동안
@@ -350,8 +369,7 @@ def fetch_url_preview_by_selenium(url):
             driver.quit()
 
 go_url = 'https://m.fmkorea.com/best/8405944051'
-# go_url = 'https://link.coupang.com/a/cuXjoF'
-# go_url = 'https://naver.me/xCB70lbu'
+go_url = 'https://link.coupang.com/a/cuXjoF'
+# go_url = 'https://naver.me/GMmgjGmE'
 
-result = fetch_url_preview_by_selenium(go_url)
-print(result)
+# print(fetch_url_preview_by_selenium(go_url))
