@@ -91,11 +91,25 @@ def find_chat_url_preview(url: str, conn=None) -> List["ChatPreviewDTO"]:
 def insert_chat_url_preview(chat: "ChatPreviewDTO", conn=None) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO chats_preview (chat_id, origin_url, thumbnail_url, title, description, created_at) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;",
-            (chat.chat_id, chat.origin_url, chat.thumbnail_url, chat.title, chat.description, chat.created_at)
+            "INSERT INTO chats_preview (chat_id, origin_url, thumbnail_url, title, description, created_at) "
+            "SELECT %s, %s, %s, %s, %s, %s "
+            "WHERE NOT EXISTS ( "
+            "    SELECT 1 FROM chats_preview WHERE origin_url = %s "
+            ") "
+            # "ON CONFLICT (origin_url) DO NOTHING" # PostgreSQL 중복 막기
+            "RETURNING id;",
+            (chat.chat_id, chat.origin_url, chat.thumbnail_url, chat.title, chat.description, chat.created_at, chat.origin_url)
         )
-        chat_id = cur.fetchone()[0]
-        return chat_id
+        row = cur.fetchone()
+        if row:
+            return row[0]
+
+        # cur.execute("SELECT id FROM chats_preview WHERE origin_url = %s", (chat.origin_url,))
+        # row = cur.fetchone()
+        # return row[0] if row else None
+
+        else:
+            return None
 
 # @db_transaction
 # def find_temp_chat_by_username():
