@@ -13,6 +13,7 @@ from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_
     find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
     find_chat_indices_by_keyword, fetch_context_by_center
 from app.repository.users.users import find_user_by_username
+from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
@@ -456,52 +457,6 @@ def fetch_context():
 
 
 
-def fetch_url_preview(url):
-    try:
-        response = requests.get(url, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        def get_meta(property_name):
-            tag = soup.find('meta', attrs={'property': property_name}) or \
-                  soup.find('meta', attrs={'name': property_name})
-            return tag['content'] if tag and 'content' in tag.attrs else None
-
-        return {
-            'title': soup.title.string if soup.title else '',
-            'description': get_meta('og:description') or get_meta('description'),
-            'image': get_meta('og:image'),
-            'url': url
-        }
-    except Exception as e:
-        return None
-
-def fetch_url_preview_by_selenium(url):
-    try:
-        options = Options()
-        options.add_argument("--headless")  # 창 없이 실행
-        options.add_argument("--disable-gpu")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--window-size=1280,800")  # (필수는 아님)
-
-        driver = webdriver.Chrome(options=options)
-        driver.get(url)
-
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-
-        def get_meta(property_name):
-            tag = soup.find('meta', attrs={'property': property_name}) or \
-                  soup.find('meta', attrs={'name': property_name})
-            return tag['content'] if tag and 'content' in tag.attrs else None
-
-        return {
-            'title': soup.title.string if soup.title else '',
-            'description': get_meta('og:description') or get_meta('description'),
-            'thumbnail_url': get_meta('og:image'), # 이미지 url
-            'origin_url': url # 입력한 url
-        }
-    except Exception as e:
-        return None
-
 ################################# Memo ######################################
 @func.route('/memo', methods=['GET', 'POST'])
 @login_required
@@ -742,11 +697,12 @@ def render_preview():
             created_at=str(datetime.now()),
             chat_id=chat_id,
             origin_url=url,
-            thumbnail_url = result.get('thumbnail_url'),
+            thumbnail_url = result.get('image'),
             title = result.get('title'),
             description = result.get('description'),
         )
         insert_chat_url_preview(preview)
+        result = preview
 
     if not result:
         # result가 여전히 None이라면 안전하게 처리 (예: 로그/예외/기본값 등)

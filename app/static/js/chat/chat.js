@@ -602,6 +602,7 @@ function addMessage(data, load = false) {
         messageDiv.style.color = 'lightgray'; // 글자색 (카톡 다크모드)
     }
 
+    // 스켈레톤 이미지 박스
     function imageRenderer() {
         // 이미지 첨부
         const img = document.createElement('img');
@@ -626,8 +627,11 @@ function addMessage(data, load = false) {
             renderEnterOrExit(data.msg);
         }
     } else { // 메세지 생성
-        // 경로/쿼리 포함 문자열에서 파일명과 확장자 추출
-        const imageExtRegex = /(?:^|\/)([^\/?#]+)\.(jpg|jpeg|png|gif|bmp|webp|tiff|jfif)(?=$|[?#])/i;
+        /* 경로/쿼리 포함 문자열에서 파일명과 확장자 추출 (…/파일명.확장자 형태를 찾아 파일명과 확장자를 뽑아내는 정규식)
+           (?:^|\/) : 문자열 시작이거나 바로 앞이 슬래시여야 함. (경로의 “파일명”만 잡기 위한 경계)
+           ([^\/?#]+) : 슬래시(/), ?, #를 제외한 문자 1자 이상 → **파일명(확장자 제외)**를 그룹1로 캡처
+           (?=$|[?#&]) : 바로 뒤가 문자열 끝이거나 ?, #여야 함 → ?query=…나 #hash 앞까지만 매칭, 대소문자 무시 i */
+        const imageExtRegex = /(?:^|\/)([^\/?#]+)\.(jpg|jpeg|png|gif|bmp|webp|tiff|jfif)(?=$|[?#&])/i;
 
         function isImagePathUrl(text) {
             if (!text) return;
