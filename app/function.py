@@ -12,6 +12,8 @@ from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
     find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
     find_chat_indices_by_keyword, fetch_context_by_center
+from app.repository.stocks.StockDTO import StockDTO
+from app.repository.stocks.stocks import merge_daily_interest_stocks
 from app.repository.users.users import find_user_by_username
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from utils.compress_file import compress_directory, compress_directory_to_zip
@@ -568,6 +570,37 @@ def update_progress(stock):
         nasdaq_progress["stock_name"] = data.get("stock_name", "")
         return jsonify(nasdaq_progress)
 
+@func.route("/stocks/interest", methods=["POST"])
+def save_interesting_stocks():
+    data = request.json
+    nation = data.get("nation")
+    stock_code = data.get("stock_code")
+    stock_name = data.get("stock_name")
+    pred_price_change_3d_pct = data.get("pred_price_change_3d_pct")
+    yesterday_close = data.get("yesterday_close")
+    current_price = data.get("current_price")
+    today_price_change_pct = data.get("today_price_change_pct")
+    avg5d_trading_value = data.get("avg5d_trading_value")
+    current_trading_value = data.get("current_trading_value")
+    trading_value_change_pct = data.get("trading_value_change_pct")
+    image_url = data.get("image_url")
+
+    stock = StockDTO(
+        created_at=str(datetime.now()),
+        nation=nation,
+        stock_code=stock_code,
+        stock_name=stock_name,
+        pred_price_change_3d_pct=pred_price_change_3d_pct,
+        yesterday_close=yesterday_close,
+        current_price=current_price,
+        today_price_change_pct=today_price_change_pct,
+        avg5d_trading_value=avg5d_trading_value,
+        current_trading_value=current_trading_value,
+        trading_value_change_pct=trading_value_change_pct,
+        image_url=image_url
+    )
+    result = merge_daily_interest_stocks(stock)
+    return {"status": "success", "result": result}, 200
 
 ################################# STATE ####################################
 

@@ -344,6 +344,44 @@ pip install psycopg-binary
 `app/repository/users/users.py` 참고<br>
 (설치가 안되는 이슈가 있으면 윈도우에 PostgreSql을 설치하고 Path 에 bin 경로 추가 필요)
 
+## UNIQUE 인덱스 만들어서 ON CONFLICT 사용해보기 (MERGE)
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS stocks_code_daily
+ON stocks (stock_code, (created_at::date));
+```
+```sql
+INSERT INTO stocks (
+    created_at, nation, stock_code, stock_name, pred_price_change_3d_pct,
+    yesterday_close, current_price, today_price_change_pct,
+    avg5d_trading_value, current_trading_value, trading_value_change_pct,
+    image_url
+    -- , updated_at
+)
+VALUES (
+    now(), %s, %s, %s, %s,
+    %s, %s, %s,
+    %s, %s, %s,
+    %s
+    -- , now()
+)
+   -- ON CONFLICT ON CONSTRAINT stocks_code_daily
+ON CONFLICT (stock_code, (created_at::date))
+    DO UPDATE SET
+    nation                     = EXCLUDED.nation,
+    stock_code                 = EXCLUDED.stock_code,
+    stock_name                 = EXCLUDED.stock_name,
+    pred_price_change_3d_pct   = EXCLUDED.pred_price_change_3d_pct,
+    yesterday_close            = EXCLUDED.yesterday_close,
+    current_price              = EXCLUDED.current_price,
+    today_price_change_pct     = EXCLUDED.today_price_change_pct,
+    avg5d_trading_value        = EXCLUDED.avg5d_trading_value,
+    current_trading_value      = EXCLUDED.current_trading_value,
+    trading_value_change_pct   = EXCLUDED.trading_value_change_pct,
+    image_url                  = EXCLUDED.image_url
+    -- , updated_at            = now()
+RETURNING id;
+```
+
 
 ## gsutil 설치
 
