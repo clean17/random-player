@@ -30,7 +30,7 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "update-session-time", "apple-touch-icon",
                 "/delete-images",
                 "Client disconnected while serving", "Invalid HTTP version", "Bad request version",
-                "/func/stocks",
+                "/func/stocks/progress",
                 "/func/last-read-chat-id?username",
                 "/image/move-image",
                 ]

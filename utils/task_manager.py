@@ -375,6 +375,11 @@ async def run_schedule():
     schedule.every().day.at("20:00").do(predict_stock_graph_scheduled, 'kospi')
     schedule.every().day.at("11:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
+    # 10, 11, 12, 13, 14, 15 시 정각에 실행
+    for h in range(10, 16):  # 10 ~ 15
+        schedule.every().day.at(f"{h:02d}:00").do(find_stocks, '1')
+        schedule.every().day.at(f"{h:02d}:00").do(find_stocks, '2')
+
     while True:
         # print("[Scheduler] 현재시간:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         schedule.run_pending()
@@ -480,12 +485,30 @@ def predict_stock_graph(stock):
     # print("STDOUT:", stdout)
     # print("STDERR:", stderr)
 
+def find_stocks(num):
+    script_dir = r'C:\my-project\AutoSales.py'
+    venv_activate = r'venv\Scripts\activate'
+    if num == '1':
+        py_script = r'python 1_finding_stocks_with_increased_current_price.py'
+    if num == '2':
+        py_script = r'python 2_finding_stocks_with_increased_volume.py'
+
+    cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
+
+    # subprocess 실행
+    process = subprocess.Popen(
+        cmd,
+        text=True,
+        shell=True,
+        encoding='utf-8',
+        errors="ignore" # 디코딩 안되는 문자 무시
+    )
 
 # 주기적 작업을 위한 프로세스 시작 (두 개의 별도 프로세스를 데몬으로 실행, 앱이 또 생성됨)
 # asyncio 또는 threading.Thread를 사용하면, Waitress 앱 하나 안에서 주기작업, 스케줄러 등을 백그라운드에서 실행 가능
 # 압축, 스케줄러, 로그 체크 같은 작업이 I/O 중심이면 → threading 또는 asyncio로 충분
 # 진짜 병렬 CPU 계산이라면 → multiprocessing
-def start_periodic_task():
+def start_periodic_task(): # 주석 처리됨, 사용하지 않는중
     processes = []
     process = multiprocessing.Process(target=periodic_compression_task)
     process.daemon = True

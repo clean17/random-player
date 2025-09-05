@@ -67,6 +67,7 @@
             </select>
         </form>
         <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload File</button></a>
+    <a href="/func/stocks/interest/view"><button type="button" id="btn9233" class="btn-w100">Interest Stocks</button></a>
     <a href="/posts"><button type="button" id="btn913" class="btn-w100">Posts</button></a>
     {% if current_user.get_id() != config.GUEST_USERNAME %}
         <a href="{{ url_for('func.get_log_viewer') }}"><button type="button" id="btn923" class="btn-w100">Log Viewer</button></a>

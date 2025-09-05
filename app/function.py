@@ -13,7 +13,7 @@ from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_
     find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
     find_chat_indices_by_keyword, fetch_context_by_center
 from app.repository.stocks.StockDTO import StockDTO
-from app.repository.stocks.stocks import merge_daily_interest_stocks
+from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks
 from app.repository.users.users import find_user_by_username
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from utils.compress_file import compress_directory, compress_directory_to_zip
@@ -575,15 +575,15 @@ def save_interesting_stocks():
     data = request.json
     nation = data.get("nation")
     stock_code = data.get("stock_code")
-    stock_name = data.get("stock_name")
-    pred_price_change_3d_pct = data.get("pred_price_change_3d_pct")
-    yesterday_close = data.get("yesterday_close")
-    current_price = data.get("current_price")
-    today_price_change_pct = data.get("today_price_change_pct")
-    avg5d_trading_value = data.get("avg5d_trading_value")
-    current_trading_value = data.get("current_trading_value")
-    trading_value_change_pct = data.get("trading_value_change_pct")
-    image_url = data.get("image_url")
+    stock_name = data.get("stock_name") or None
+    pred_price_change_3d_pct = data.get("pred_price_change_3d_pct") or None
+    yesterday_close = data.get("yesterday_close") or None
+    current_price = data.get("current_price") or None
+    today_price_change_pct = data.get("today_price_change_pct") or None
+    avg5d_trading_value = data.get("avg5d_trading_value") or None
+    current_trading_value = data.get("current_trading_value") or None
+    trading_value_change_pct = data.get("trading_value_change_pct") or None
+    image_url = data.get("image_url") or None
 
     stock = StockDTO(
         created_at=str(datetime.now()),
@@ -601,6 +601,18 @@ def save_interesting_stocks():
     )
     result = merge_daily_interest_stocks(stock)
     return {"status": "success", "result": result}, 200
+
+@func.route("/stocks/interest/data", methods=["POST"])
+def get_interesting_stocks():
+    data = request.json
+    date = data.get("date")
+    stocks = get_interest_stocks(date)
+    return stocks
+
+@func.route("/stocks/interest/view", methods=["GET"])
+def get_view_of_interesting_stocks():
+    return render_template("interesting_stocks.html", version=int(time.time()))
+
 
 ################################# STATE ####################################
 
