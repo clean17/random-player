@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>관심 종목 테이블</title>
+    <script src="/static/js/common.js?v={{ version }}"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <style>
+        /* ====== 컨테이너: 데스크톱/모바일 반응형 ====== */
+        body {
+            background-color: #f4f4f4;
+            /* 가운데 정렬 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: auto;
+        }
+
+        .container {
+            /* 기존 페이지의 body가 중앙 정렬이라도, 컨테이너 자체로 폭/스크롤 관리 */
+            width: 100%;
+            max-width: 1100px;         /* 테이블이 보기 좋은 최대 폭 */
+            min-width: 320px;          /* 모바일 최소 폭 */
+            margin: 16px auto;         /* 화면 가운데 */
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 10px rgba(0,0,0,.08);
+            padding: 50px 12px 12px 12px;
+            box-sizing: border-box;
+
+            display: flex;
+            flex-direction: column;
+            min-height: 0;             /* 내부 스크롤 허용 */
+        }
+
+        /* ====== 탭 버튼 & 일반 버튼: 파란 템버튼 ====== */
+        .tab-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .tab-btn {
+            border: 1px solid #d1d5db;
+            background: #fff;
+            color: #111827;
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            line-height: 1;
+            transition: background .15s ease, border-color .15s ease, color .15s ease;
+        }
+        .tab-btn:hover { background: #eef2ff; border-color: #2563eb; color:#0f172a; }
+        .tab-btn:active { transform: translateY(1px); }
+        .tab-btn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+        .tab-btn.active {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
+        }
+
+        /* 기존 전역 button을 쓰더라도 탭과 구분 */
+        button.primary {
+            background-color: #2563eb;
+        }
+        button.primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        /* ====== 테이블 스크롤 래퍼(컨테이너 밖으로 넘치지 않게) ====== */
+        .table-scroller {
+            width: 100%;
+            overflow-x: auto;          /* 가로 스크롤 허용 */
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        /* ====== 테이블 공통(라이트) ====== */
+        .table {
+            width: 100%;
+            min-width: 720px;          /* 모바일에서도 열이 너무 좁아지지 않게 최소폭 */
+            border-collapse: collapse;
+        }
+        .table th, .table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+            vertical-align: top;
+            color: #111827;
+            white-space: nowrap;       /* 숫자/코드 줄바꿈 방지 */
+        }
+        .table th { background: #f8fafc; font-weight: 600; }
+        .table .right { text-align: right; }
+
+        tr.detail-row td { background: #fafafa; }
+        img.preview {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+        }
+
+        /* 이미지 토글 버튼(작게) */
+        .btn.img-toggle {
+            background:#fff; color:#111827;
+            border:1px solid #d1d5db; border-radius:6px;
+            padding:6px 10px; cursor:pointer;
+        }
+        .btn.img-toggle:hover { background:#eef2ff; border-color:#2563eb; }
+        .btn.img-toggle[disabled] { opacity:.5; cursor:not-allowed; }
+
+        /* 제목/배지(선택) */
+        .section-title { margin: 6px 0 10px; color:#111827; font-weight: 600; }
+        .badge {
+            display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px;
+            background:#eef2ff; color:#3730a3; font-size:12px;
+        }
+
+        /* 모바일: 너무 빽빽하면 일부 컬럼 감추기(원하면 조정) */
+        @media (max-width: 600px) {
+            /* 예: 거래대금(5일 평균) 컬럼 숨김 */
+            .table th.th-avg5, .table td.td-avg5 { display: none; }
+        }
+
+    </style>
+</head>
+<body>
+<div class="top-bar">
+    <div class="logout">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        {% endif %}
+    </div>
+    <div class="back">
+        <a href="{{ url_for('main.home') }}">Back</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="tab-bar">
+        <button class="tab-btn active" data-target="#tab-trading">거래대금 증감</button>
+        <button class="tab-btn" data-target="#tab-change">금일 등락</button>
+        <input id="dateInput" class="date" type="date" />
+    </div>
+
+    <!-- 탭 1: 거래대금 증감% -->
+    <section id="tab-trading" class="tab-panel" style="display:block;">
+        <h3 class="section-title">거래대금 증감
+            <span class="badge" id="count-trading">0건</span>
+        </h3>
+        <div class="table-scroller">
+            <table class="table" id="table-trading">
+                <thead>
+                <tr>
+                    <th>이미지</th>
+                    <th>종목코드</th>
+                    <th>종목명</th>
+                    <th class="right">거래대금(5일 평균)</th>
+                    <th class="right">거래대금(오늘)</th>
+                    <th class="right">거래대금 증감%</th>
+                </tr>
+                </thead>
+                <tbody><!-- JS 렌더링 --></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 탭 2: 금일 등락% -->
+    <section id="tab-change" class="tab-panel" style="display:none;">
+        <h3 class="section-title">금일 등락
+            <span class="badge" id="count-change">0건</span>
+        </h3>
+        <div class="table-scroller">
+            <table class="table" id="table-change">
+                <thead>
+                <tr>
+                    <th>이미지</th>
+                    <th>종목코드</th>
+                    <th>종목명</th>
+                    <th class="right">어제종가</th>
+                    <th class="right">현재가</th>
+                    <th class="right">금일 등락%</th>
+                </tr>
+                </thead>
+                <tbody><!-- JS 렌더링 --></tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+
+<script>
+    // 탭 전환
+    document.querySelectorAll('.tab-btn[data-target]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn[data-target]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+            const target = document.querySelector(btn.dataset.target);
+            if (target) target.style.display = 'block';
+        });
+    });
+
+    // 오늘 날짜 기본값
+    (function setDefaultDateToday(){
+        const input = document.getElementById('dateInput');
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth()+1).padStart(2,'0');
+        const dd = String(now.getDate()).padStart(2,'0');
+        input.value = `${yyyy}-${mm}-${dd}`;
+    })();
+
+    // 숫자 포맷
+    const fmtNum = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
+    function fmt2(val) {
+        if (val === null || val === undefined || val === '') return '';
+        const n = Number(val);
+        if (!isFinite(n)) return String(val);
+        return fmtNum.format(Math.round(n * 100) / 100);
+    }
+
+    function fmt_won(val) {
+        if (val === null || val === undefined || val === '') return '';
+        const n = Number(val);
+        if (!isFinite(n)) return String(val);
+
+        if (Math.abs(n) >= 1e12) {
+            // 1조 이상 → 소수점 1자리
+            return (n / 1e12).toFixed(1).replace(/\.0$/, '') + '조';
+        } else if (Math.abs(n) >= 1e8) {
+            // 1억 이상 → 소수점 1자리
+            return (n / 1e8).toFixed(1).replace(/\.0$/, '') + '억';
+        } else if (Math.abs(n) >= 1e4) {
+            // 1만 이상 → 천 단위 콤마 + 만원
+            return new Intl.NumberFormat('ko-KR').format(Math.round(n / 1e4)) + '만원';
+        } else {
+            // 1만 미만 그냥 숫자
+            return new Intl.NumberFormat('ko-KR').format(Math.round(n));
+        }
+    }
+
+
+
+
+    // 공통: 이미지 토글 버튼 연결
+    function bindImageToggles(scope) {
+        scope.querySelectorAll('.img-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-target');
+                const row = document.getElementById(id);
+                if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+                btn.textContent = (row && row.style.display !== 'none') ? '이미지 닫기' : '이미지 보기';
+            });
+        });
+    }
+
+    // 테이블 렌더: 거래대금 증감%
+    function renderTradingTable(rows) {
+        const tbody = document.querySelector('#table-trading tbody');
+        if (!rows || !rows.length) {
+            tbody.innerHTML = `<tr><td colspan="6" class="empty">데이터가 없습니다.</td></tr>`;
+            document.getElementById('count-trading').textContent = '0건';
+            return;
+        }
+        const html = rows.map(r => {
+            const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
+            const hasImg = !!r.image_url;
+            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>이미지 보기</button>`;
+            return `
+        <tr>
+          <td>${imgBtn}</td>
+          <td>${r.stock_code ?? ''}</td>
+          <td>${r.stock_name ?? ''}</td>
+          <td class="right">${fmt_won(r.avg5d_trading_value)}</td>
+          <td class="right">${fmt_won(r.current_trading_value)}</td>
+          <td class="right">${fmt2(r.trading_value_change_pct)}%</td>
+        </tr>
+        <tr id="${detailId}" class="detail-row" style="display:none;">
+          <td colspan="6">
+            ${hasImg ? `<img class="preview" src="${r.image_url}" alt="미리보기" />` : `<span class="hint">이미지 없음</span>`}
+          </td>
+        </tr>`;
+        }).join('');
+        tbody.innerHTML = html;
+        document.getElementById('count-trading').textContent = `${rows.length}건`;
+        bindImageToggles(document.getElementById('table-trading'));
+    }
+
+    // 테이블 렌더: 금일 등락%
+    function renderChangeTable(rows) {
+        const tbody = document.querySelector('#table-change tbody');
+        if (!rows || !rows.length) {
+            tbody.innerHTML = `<tr><td colspan="6" class="empty">데이터가 없습니다.</td></tr>`;
+            document.getElementById('count-change').textContent = '0건';
+            return;
+        }
+        const html = rows.map(r => {
+            const detailId = `detail-ch-${Math.random().toString(36).slice(2)}`;
+            const hasImg = !!r.image_url;
+            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>이미지 보기</button>`;
+            return `
+        <tr>
+          <td>${imgBtn}</td>
+          <td>${r.stock_code ?? ''}</td>
+          <td>${r.stock_name ?? ''}</td>
+          <td class="right">${fmt2(r.yesterday_close)}</td>
+          <td class="right">${fmt2(r.current_price)}</td>
+          <td class="right">${fmt2(r.today_price_change_pct)}%</td>
+        </tr>
+        <tr id="${detailId}" class="detail-row" style="display:none;">
+          <td colspan="6">
+            ${hasImg ? `<img class="preview" src="${r.image_url}" alt="미리보기" />` : `<span class="hint">이미지 없음</span>`}
+          </td>
+        </tr>`;
+        }).join('');
+        tbody.innerHTML = html;
+        document.getElementById('count-change').textContent = `${rows.length}건`;
+        bindImageToggles(document.getElementById('table-change'));
+    }
+
+    // 데이터 로드 (날짜 변경 시 자동 호출)
+    async function loadData() {
+        const input = document.getElementById('dateInput');
+        const yyyymmdd = input.value?.replace(/-/g, '');
+        if (!yyyymmdd) return;
+
+        const url = 'https://chickchick.shop/func/stocks/interest/data';
+        const payload = { date: yyyymmdd };
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            // 분리: 거래대금 증감% 있는 항목 / 금일 등락% 있는 항목
+            const tradingRows = (data || []).filter(r => r.trading_value_change_pct !== null && r.trading_value_change_pct !== undefined);
+            const changeRows   = (data || []).filter(r => r.today_price_change_pct   !== null && r.today_price_change_pct   !== undefined);
+
+            renderTradingTable(tradingRows);
+            renderChangeTable(changeRows);
+        } catch (e) {
+            console.error(e);
+            alert('데이터를 불러오지 못했습니다.');
+        }
+    }
+
+    // 날짜 변경 시 즉시 불러오기
+    document.getElementById('dateInput').addEventListener('change', loadData);
+
+    // 첫 진입 시 현재 날짜로 자동 로드
+    window.addEventListener('DOMContentLoaded', loadData);
+</script>
+
+</body>
+</html>
