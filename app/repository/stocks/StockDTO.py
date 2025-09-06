@@ -4,6 +4,7 @@ from dataclasses import dataclass
 class StockDTO:
     id: int = None
     created_at: str = None  # datetime 사용 가능
+    updated_at: str = None  # datetime 사용 가능
     nation: str = None
     stock_code: str = None
     stock_name: str = None
@@ -15,4 +16,7 @@ class StockDTO:
     current_trading_value: str = None
     trading_value_change_pct: str = None
     image_url: str = None
+    logo_image_url: str = None
+    sector_code: str = None
+    stock_market: str = None
 

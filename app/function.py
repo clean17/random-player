@@ -13,7 +13,7 @@ from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_
     find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
     find_chat_indices_by_keyword, fetch_context_by_center
 from app.repository.stocks.StockDTO import StockDTO
-from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks
+from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, update_stock_list, get_stock_list
 from app.repository.users.users import find_user_by_username
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from utils.compress_file import compress_directory, compress_directory_to_zip
@@ -584,9 +584,9 @@ def save_interesting_stocks():
     current_trading_value = data.get("current_trading_value") or None
     trading_value_change_pct = data.get("trading_value_change_pct") or None
     image_url = data.get("image_url") or None
+    logo_image_url = data.get("logo_image_url") or None
 
     stock = StockDTO(
-        created_at=str(datetime.now()),
         nation=nation,
         stock_code=stock_code,
         stock_name=stock_name,
@@ -597,7 +597,8 @@ def save_interesting_stocks():
         avg5d_trading_value=avg5d_trading_value,
         current_trading_value=current_trading_value,
         trading_value_change_pct=trading_value_change_pct,
-        image_url=image_url
+        image_url=image_url,
+        logo_image_url=logo_image_url,
     )
     result = merge_daily_interest_stocks(stock)
     return {"status": "success", "result": result}, 200
@@ -613,6 +614,43 @@ def get_interesting_stocks():
 def get_view_of_interesting_stocks():
     return render_template("interesting_stocks.html", version=int(time.time()))
 
+
+@func.route("/stocks/update", methods=["POST"])
+def update_stocks():
+    data_list = request.json
+    # print('len', len(data_list))
+
+    stocks = []
+    for data in data_list:
+        nation = data.get("nation") or None
+        stock_code = data.get("stock_code")
+        stock_name = data.get("stock_name") or None
+        sector_code = data.get("sector_code") or None
+        stock_market = data.get("stock_market") or None
+
+        stock = StockDTO(
+            nation=nation,
+            stock_code=stock_code,
+            stock_name=stock_name,
+            sector_code=sector_code,
+            stock_market=stock_market,
+        )
+        stocks.append(stock)
+
+    try:
+        update_stock_list(stocks)
+    except Exception as e:
+        # 오류 발생시 JSON 반환
+        return {
+            "status": "error",
+            "message": str(e)
+        }, 500
+
+    return {"status": "success", "result": "200"}, 200
+
+@func.route("/stocks/<nation>", methods=["GET"])
+def get_stocks(nation):
+    return get_stock_list(nation)
 
 ################################# STATE ####################################
 

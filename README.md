@@ -347,10 +347,10 @@ pip install psycopg-binary
 ## UNIQUE 인덱스 만들어서 ON CONFLICT 사용해보기 (MERGE)
 ```sql
 CREATE UNIQUE INDEX IF NOT EXISTS stocks_code_daily
-ON stocks (stock_code, (created_at::date));
+ON interest_stocks (stock_code, (created_at::date));
 ```
 ```sql
-INSERT INTO stocks (
+INSERT INTO interest_stocks (
     created_at, nation, stock_code, stock_name, pred_price_change_3d_pct,
     yesterday_close, current_price, today_price_change_pct,
     avg5d_trading_value, current_trading_value, trading_value_change_pct,
