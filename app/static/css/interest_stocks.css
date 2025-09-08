@@ -1,0 +1,130 @@
+body {
+    background-color: #f4f4f4;
+    /* 가운데 정렬 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: auto;
+}
+
+.container {
+    /* 기존 페이지의 body가 중앙 정렬이라도, 컨테이너 자체로 폭/스크롤 관리 */
+    width: 100%;
+    max-width: 1100px;         /* 테이블이 보기 좋은 최대 폭 */
+    min-width: 320px;          /* 모바일 최소 폭 */
+    margin: 16px auto;         /* 화면 가운데 */
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 10px rgba(0,0,0,.08);
+    padding: 50px 12px 12px 12px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    min-height: 0;             /* 내부 스크롤 허용 */
+}
+
+/* ====== 탭 버튼 & 일반 버튼: 파란 템버튼 ====== */
+.tab-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.tab-btn {
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #111827;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    line-height: 1;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.tab-btn:hover { background: #eef2ff; border-color: #2563eb; color:#0f172a; }
+.tab-btn:active { transform: translateY(1px); }
+.tab-btn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+.tab-btn.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+/* 기존 전역 button을 쓰더라도 탭과 구분 */
+button.primary {
+    background-color: #2563eb;
+}
+button.primary:hover {
+    background-color: #1d4ed8;
+}
+
+/* ====== 테이블 스크롤 래퍼(컨테이너 밖으로 넘치지 않게) ====== */
+.table-scroller {
+    width: 100%;
+    overflow-x: auto;          /* 가로 스크롤 허용 */
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+}
+
+/* ====== 테이블 공통(라이트) ====== */
+.table {
+    width: 100%;
+    min-width: 720px;          /* 모바일에서도 열이 너무 좁아지지 않게 최소폭 */
+    border-collapse: collapse;
+}
+.table th, .table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    vertical-align: top;
+    color: #111827;
+    white-space: nowrap;       /* 숫자/코드 줄바꿈 방지 */
+}
+.table th { background: #f8fafc; font-weight: 600; }
+.table .right { text-align: right; }
+
+tr.detail-row td { background: #fafafa; }
+img.preview {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+}
+
+/* 이미지 토글 버튼(작게) */
+.btn.img-toggle {
+    background:#fff; color:#111827;
+    border:1px solid #d1d5db; border-radius:6px;
+    padding:6px 10px; cursor:pointer;
+}
+.btn.img-toggle:hover { background:#eef2ff; border-color:#2563eb; }
+.btn.img-toggle[disabled] { opacity:.5; cursor:not-allowed; }
+
+/* 제목/배지(선택) */
+.section-title { margin: 6px 0 10px; color:#111827; font-weight: 600; }
+.badge {
+    display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px;
+    background:#eef2ff; color:#3730a3; font-size:12px;
+}
+
+/* 모바일: 너무 빽빽하면 일부 컬럼 감추기(원하면 조정) */
+@media (max-width: 600px) {
+    /* 예: 거래대금(5일 평균) 컬럼 숨김 */
+    .table th.th-avg5, .table td.td-avg5 { display: none; }
+}
+
+
+/* 값이 바뀔 때 highlight 효과 */
+@keyframes blink-highlight {
+    0%   { background-color: yellow; }
+    50%  { background-color: transparent; }
+    100% { background-color: transparent; }
+}
+
+.blink {
+    animation: blink-highlight 0.6s ease;
+}
