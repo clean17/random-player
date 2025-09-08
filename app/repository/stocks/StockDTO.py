@@ -19,4 +19,5 @@ class StockDTO:
     logo_image_url: str = None
     sector_code: str = None
     stock_market: str = None
+    market_value: str = None
 

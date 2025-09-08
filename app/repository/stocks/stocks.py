@@ -46,13 +46,13 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             created_at, updated_at, nation, stock_code, stock_name, 
             pred_price_change_3d_pct, yesterday_close, current_price, today_price_change_pct,
             avg5d_trading_value, current_trading_value, trading_value_change_pct,
-            image_url, logo_image_url
+            image_url, logo_image_url, market_value
         )
         VALUES (
             now(), now(), %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s, %s,
-            %s, %s
+            %s, %s, %s
         )
         -- ON CONFLICT ON CONSTRAINT stocks_code_daily
         ON CONFLICT (stock_code, (created_at::date))
@@ -70,6 +70,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             trading_value_change_pct = COALESCE(EXCLUDED.trading_value_change_pct, stocks.trading_value_change_pct),
             image_url                = COALESCE(EXCLUDED.image_url, stocks.image_url),
             logo_image_url           = COALESCE(EXCLUDED.image_url, stocks.logo_image_url)
+            market_value             = COALESCE(EXCLUDED.market_value, stocks.market_value)
         RETURNING id;
         """
         cur.execute(
@@ -78,7 +79,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
                 stock.nation, stock.stock_code, stock.stock_name, stock.pred_price_change_3d_pct,
                 stock.yesterday_close, stock.current_price, stock.today_price_change_pct,
                 stock.avg5d_trading_value, stock.current_trading_value,
-                stock.trading_value_change_pct, stock.image_url, stock.logo_image_url
+                stock.trading_value_change_pct, stock.image_url, stock.logo_image_url, stock.market_value
             )
         )
         row = cur.fetchone()

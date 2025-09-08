@@ -24,12 +24,10 @@ from datetime import datetime
 from utils.lotto_schedule import async_buy_lotto
 from config.config import settings
 import asyncio
+
+from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api
 from utils.wsgi_midleware import logger
 from filelock import FileLock, Timeout
-import requests
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 import random
 from utils.task_manager import run_crawl_ai_image, predict_stock_graph
 
@@ -509,7 +507,7 @@ def test_lotto():
     return {"status": "success", "message": "로또 구매 완료!!"}
 
 
-@func.route("/crawl-ai", methods=['POST'], endpoint='crawl-ai')
+@func.route("/crawl-ai", methods=['GET'], endpoint='crawl-ai')
 @login_required
 def crawl_ai():
     run_crawl_ai_image()
@@ -585,6 +583,8 @@ def save_interesting_stocks():
     trading_value_change_pct = data.get("trading_value_change_pct") or None
     image_url = data.get("image_url") or None
     logo_image_url = data.get("logo_image_url") or None
+    market_value = data.get("market_value") or None
+
 
     stock = StockDTO(
         nation=nation,
@@ -599,6 +599,7 @@ def save_interesting_stocks():
         trading_value_change_pct=trading_value_change_pct,
         image_url=image_url,
         logo_image_url=logo_image_url,
+        market_value=market_value,
     )
     result = merge_daily_interest_stocks(stock)
     return {"status": "success", "result": result}, 200
@@ -651,6 +652,20 @@ def update_stocks():
 @func.route("/stocks/<nation>", methods=["GET"])
 def get_stocks(nation):
     return get_stock_list(nation)
+
+@func.route("/stocks/info", methods=["POST"])
+def get_realtime_price():
+    data = request.json
+    stock_name = data.get('stock_name') or None
+    return request_stock_info_with_toss_api(stock_name)
+
+@func.route("/stocks/overview", methods=["POST"])
+def get_stock_overview():
+    data = request.json
+    product_code = data.get('product_code') or None
+    return request_stock_overview_with_toss_api(product_code)
+
+
 
 ################################# STATE ####################################
 
