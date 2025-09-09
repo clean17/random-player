@@ -25,7 +25,8 @@ from utils.lotto_schedule import async_buy_lotto
 from config.config import settings
 import asyncio
 
-from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api
+from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
+    request_stock_volume_and_amount
 from utils.wsgi_midleware import logger
 from filelock import FileLock, Timeout
 import random
@@ -575,12 +576,19 @@ def save_interesting_stocks():
     stock_code = data.get("stock_code")
     stock_name = data.get("stock_name") or None
     pred_price_change_3d_pct = data.get("pred_price_change_3d_pct") or None
+    # print('1', pred_price_change_3d_pct)
     yesterday_close = data.get("yesterday_close") or None
+    # print('2', yesterday_close)
     current_price = data.get("current_price") or None
+    # print('3', current_price)
     today_price_change_pct = data.get("today_price_change_pct") or None
+    # print('4', today_price_change_pct)
     avg5d_trading_value = data.get("avg5d_trading_value") or None
+    # print('5', avg5d_trading_value)
     current_trading_value = data.get("current_trading_value") or None
+    # print('6', current_trading_value)
     trading_value_change_pct = data.get("trading_value_change_pct") or None
+    # print('7', trading_value_change_pct)
     image_url = data.get("image_url") or None
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
@@ -601,6 +609,7 @@ def save_interesting_stocks():
         logo_image_url=logo_image_url,
         market_value=market_value,
     )
+    # print(stock)
     result = merge_daily_interest_stocks(stock)
     return {"status": "success", "result": result}, 200
 
@@ -665,7 +674,11 @@ def get_stock_overview():
     product_code = data.get('product_code') or None
     return request_stock_overview_with_toss_api(product_code)
 
-
+@func.route("/stocks/amount", methods=["POST"])
+def get_stock_amount():
+    data = request.json
+    product_code = data.get('product_code') or None
+    return request_stock_volume_and_amount(product_code)
 
 ################################# STATE ####################################
 

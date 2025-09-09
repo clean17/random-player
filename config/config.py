@@ -103,6 +103,7 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         'DEL_TEMP_IMAGE_DIR': directories.get('del_temp_images_directory'),
         'KOSPI_DIR': directories.get('kospi_stocks_directory'),
         'SP500_DIR': directories.get('sp500_stocks_directory'),
+        'INTEREST_DIR': directories.get('interest_stocks_directory'),
         'NODE_SERVER_PATH': directories.get('node_server_path'),
         'HTM_DIRECTORY': directories.get('htm_directory'),
 

@@ -35,6 +35,17 @@
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-trading">
+                <!--<colgroup>
+                    <col style="width:80px" />
+                    <col style="width:80px" />
+                    <col style="width:120px" />
+                    <col style="width:120px" />
+                    <col style="width:120px" />
+                    <col style="width:120px" />
+                    <col style="width:100px" />
+                    <col style="width:100px" />
+                    <col style="width:120px" />
+                </colgroup>-->
                 <thead>
                 <tr>
                     <th>이미지</th>
@@ -43,6 +54,9 @@
                     <th class="right">거래대금(5일 평균)</th>
                     <th class="right">거래대금(오늘)</th>
                     <th class="right">거래대금 증감%</th>
+                    <th class="right">어제종가</th>
+                    <th class="right">현재가</th>
+                    <th class="right">금일 등락%</th>
                 </tr>
                 </thead>
                 <tbody><!-- JS 렌더링 --></tbody>
@@ -57,6 +71,14 @@
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-change">
+                <!--<colgroup>
+                    <col style="width:80px" />
+                    <col style="width:80px" />
+                    <col style="width:120px" />
+                    <col style="width:100px" />
+                    <col style="width:100px" />
+                    <col style="width:120px" />
+                </colgroup>-->
                 <thead>
                 <tr>
                     <th>이미지</th>
@@ -74,6 +96,14 @@
 </div>
 
 <script>
+    const today = new Date();
+
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
+    const dd = String(today.getDate()).padStart(2, '0');
+
+    const today_yyyymmdd = `${yyyy}${mm}${dd}`;
+
     // 탭 전환
     document.querySelectorAll('.tab-btn[data-target]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -132,7 +162,7 @@
                 const id = btn.getAttribute('data-target');
                 const row = document.getElementById(id);
                 if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
-                btn.textContent = (row && row.style.display !== 'none') ? '이미지 닫기' : '이미지 보기';
+                btn.textContent = (row && row.style.display !== 'none') ? '그래프 닫기' : '그래프 보기';
             });
         });
     }
@@ -148,19 +178,23 @@
         const html = rows.map(r => {
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
             const hasImg = !!r.image_url;
-            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>이미지 보기</button>`;
+            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>그래프 보기</button>`;
             return `
         <tr>
           <td>${imgBtn}</td>
           <td>${r.stock_code ?? ''}</td>
-          <td>${r.stock_name ?? ''}</td>
-          <td class="right">${fmt_won(r.avg5d_trading_value)}</td>
-          <td class="right">${fmt_won(r.current_trading_value)}</td>
+          <input type="hidden" class="product-code" value="">
+          <td class="change_stock_name">${r.stock_name ?? ''}</td>
+          <td class="right" data-avg5d-amount="${r.avg5d_trading_value}">${fmt_won(r.avg5d_trading_value)}</td>
+          <td class="right" data-current-amount="${r.current_trading_value}">${fmt_won(r.current_trading_value)}</td>
           <td class="right">${fmt2(r.trading_value_change_pct)}%</td>
+          <td class="right">${fmt2(r.yesterday_close)}</td>
+          <td class="right">${fmt2(r.current_price)}</td>
+          <td class="right">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="6">
-            ${hasImg ? `<img class="preview" src="${r.image_url}" alt="미리보기" />` : `<span class="hint">이미지 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -180,19 +214,19 @@
         const html = rows.map(r => {
             const detailId = `detail-ch-${Math.random().toString(36).slice(2)}`;
             const hasImg = !!r.image_url;
-            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>이미지 보기</button>`;
+            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>그래프 보기</button>`;
             return `
         <tr>
           <td>${imgBtn}</td>
           <td>${r.stock_code ?? ''}</td>
-          <td class="change_stock_name">${r.stock_name ?? ''}</td>
+          <td class="change_stock_name2">${r.stock_name ?? ''}</td>
           <td class="right">${fmt2(r.yesterday_close)}</td>
           <td class="right">${fmt2(r.current_price)}</td>
           <td class="right">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="6">
-            ${hasImg ? `<img class="preview" src="${r.image_url}" alt="미리보기" />` : `<span class="hint">이미지 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -218,11 +252,13 @@
         }, { once: true });
     }
 
+    let timer;
+    let timer2;
+
     // 데이터 로드 (날짜 변경 시 자동 호출)
     async function loadData() {
         const input = document.getElementById('dateInput');
         const yyyymmdd = input.value?.replace(/-/g, '');
-        if (!yyyymmdd) return;
 
         const url = 'https://chickchick.shop/func/stocks/interest/data';
         const payload = { date: yyyymmdd };
@@ -247,26 +283,55 @@
             alert('데이터를 불러오지 못했습니다.');
         }
 
+        if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) {
+            clearInterval(timer);
+            clearInterval(timer2);
+            return;
+        }
+
+        const p = new Set();
+        const s = new Set();
+
         // 1초마다 현재가 갱신
-        setInterval(()=>{
-            stocks = []
-            const stock_names = document.querySelectorAll('.change_stock_name');
-            stock_names.forEach(i=>stocks.push(i.textContent));
+        timer = setInterval(()=>{
+            if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
+            const stock_names = document.querySelectorAll('.change_stock_name'); // 탭 1
+            const stock_names2 = document.querySelectorAll('.change_stock_name2'); // 탭 2
+            stock_names.forEach(i=>s.add((i.textContent)));
+            stock_names2.forEach(i=>s.add((i.textContent)));
+
+            const stocks = Array.from(s);
 
             stocks.forEach(stock_name=>{
                 data = {
                     stock_name: stock_name,
                 }
-                return axios.post("/func/stocks/info", data, {
+                axios.post("/func/stocks/info", data, {
                     headers: {"Content-Type": "application/json"},
                     timeout: 3000 // 3초 초과시 자동 reject
                 }).then(res => {
                     const stock_data = res.data.result[0].data.items[0];
                     const stock_name = stock_data.productName;
+                    const product_code = stock_data.productCode;
+                    p.add(product_code);
                     const logo_url = stock_data.logoImageUrl;
                     const realtime_price = stock_data.close.krw;
 
                     stock_names.forEach(i=> {
+                            if (i.textContent === stock_name) {
+                                i.previousElementSibling.value = product_code;
+                                const yesterday_close_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                                const current_price_el= i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                                const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                                const calc_change_pct = (current_price_el.textContent.replace(',','') - yesterday_close_el.textContent.replace(',',''))
+                                    /yesterday_close_el.textContent.replace(',','')*100;
+                                updateTdWithBlink(current_price_el, realtime_price);
+                                updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct)+'%');
+                            }
+                        }
+                    );
+
+                    stock_names2.forEach(i=> {
                             if (i.textContent === stock_name) {
                                 const yesterday_close_el = i.nextElementSibling;
                                 const current_price_el= i.nextElementSibling.nextElementSibling;
@@ -282,7 +347,38 @@
                     throw error; // 기타 에러는 그대로 던짐
                 });
             })
-        }, 1000)
+        }, 2000)
+
+        timer2 = setInterval(()=>{
+            console.log('거래대금 요청')
+            const productCodes = Array.from(p);
+            productCodes.forEach(productCode => {
+                const data = {
+                    product_code: productCode
+                }
+                axios.post("/func/stocks/amount", data, {
+                    headers: {"Content-Type": "application/json"},
+                    timeout: 3000 // 3초 초과시 자동 reject
+                }).then(res => {
+                    const amount = res.data.result.candles[0].amount;
+                    const product_codes = document.querySelectorAll('.product-code');
+
+                    product_codes.forEach((p)=>{
+                        if (p.value === productCode) {
+                            console.log('dfe')
+                            const yesterday_amount = p.nextElementSibling.nextElementSibling.dataset.avg5dAmount;
+                            const amount_change_pct = Number(amount)/Number(yesterday_amount.replace(/[^0-9.]/g, ""))*100
+                            const current_amount_el = p.nextElementSibling.nextElementSibling.nextElementSibling;
+                            const amount_change_pct_el = p.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                            updateTdWithBlink(current_amount_el, fmt_won(amount));
+                            updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct));
+                        }
+                    })
+                }).catch(error => {
+                    throw error; // 기타 에러는 그대로 던짐
+                });
+            })
+        }, 1000 * 10)
     }
 
     // 날짜 변경 시 즉시 불러오기
