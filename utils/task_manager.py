@@ -367,18 +367,27 @@ def predict_stock_graph_scheduled(market):
     if should_predict(market):
         predict_stock_graph(market)
 
+def run_weekdays_only(task, *args, **kwargs):
+    # 0=월, 1=화, ..., 6=일
+    if datetime.today().weekday() < 5:  # 월(0) ~ 금(4)만 실행
+        task(*args, **kwargs)
+
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
     schedule.every().day.at("06:00").do(run_crawl_ai_image)
     schedule.every().day.at("07:00").do(renew_kiwoom_token)
-    schedule.every().day.at("20:00").do(predict_stock_graph_scheduled, 'kospi')
+    schedule.every().day.at("18:00").do(predict_stock_graph_scheduled, 'kospi')
     schedule.every().day.at("11:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
-    # 10, 11, 12, 13, 14, 15 시 정각에 실행
+    # 10시부터 15시까지 30분마다 실행
     for h in range(10, 16):  # 10 ~ 15
-        schedule.every().day.at(f"{h:02d}:00").do(find_stocks, '1')
-        schedule.every().day.at(f"{h:02d}:00").do(find_stocks, '2')
+        # 정각 (:00)
+        schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks, '1')
+        schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks, '2')
+        # 30분 (:30)
+        schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks, '1')
+        schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks, '2')
 
     while True:
         # print("[Scheduler] 현재시간:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -400,7 +409,7 @@ def start_lotto_scheduler():
         print("스케줄러 종료됨")
 
 def run_crawl_ai_image():
-    print('    ############################### run_crawl_ai_image ###############################')
+    print('    ############################### run_crawl_image ###############################')
     # 명령어 조합
     # Windows에서는 여러 명령을 &&로 연결하여 한 줄에 실행 가능
     # venv 활성화 후 바로 실행
