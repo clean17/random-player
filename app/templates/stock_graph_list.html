@@ -9,14 +9,6 @@
     <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
     <script src="/static/js/common.js?v={{ version }}"></script>
 </head>
-<style>
-    #progress-fill {
-        white-space: nowrap;
-    }
-    #progress-text {
-        padding-left: 20px;
-    }
-</style>
 <body>
 <div class="top-bar">
     <div class="logout">
@@ -65,6 +57,7 @@
             </div>
             {% endfor %}
         </div>
+
         <div class="pagination">
             {% if page > 1 %}
             <a href="{{ url_for('image.stock-graph-list', market=market, page=1) }}">&laquo;</a>
@@ -84,10 +77,9 @@
 
 <script src="/static/js/image.js?v={{ version }}"></script>
 <script>
-    const stock_name = `{{market}}`
+    const stock_name = `{{ market }}`;
 
-
-    function moveImage(event) {
+    function moveStockImage(event) {
         const imgElement = event.target;
         const filename = imgElement.getAttribute('alt');
         const market = document.querySelector('#market-select');
@@ -115,30 +107,7 @@
             });
     }
 
-    function updateProgressBar(data) {
-        // console.log(data)
-        const fill = document.getElementById('progress-fill');
-        fill.style.width = data.percent + '%';
-        const fillText = document.getElementById('progress-text');
-        fillText.textContent = data.done ? data.percent + '%' : data.percent + '% ' + '(' + data.count + '/' + data.total_count + ')  ' + '[ '+ data.ticker + ' ] ' + data.stock_name;
-        document.getElementById('progress-status').textContent = data.done ? '완료' : '';
-    }
 
-    function pollProgress(stock) {
-        fetch('/func/stocks/progress/'+stock)
-            .then(resp => {
-                if (!resp.ok) throw new Error('네트워크 오류 또는 인증 필요');
-                return resp.json();
-            })
-            .then(data => {
-                updateProgressBar(data);
-                if (!data.done) setTimeout(()=> pollProgress(stock), 1000);
-                else document.getElementById('progress-status').textContent = '완료';
-            })
-            .catch(err => {
-                document.getElementById('progress-status').textContent = '에러 발생: ' + err.message;
-            });
-    }
 
     function initPage() {
         pollProgress(stock_name);
@@ -149,9 +118,9 @@
 
         imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
-            img.addEventListener('click', () => {
+            img.addEventListener('click', (event) => {
                 if (confirm('Delete the file ?')) {
-                    moveImage(event);
+                    moveStockImage(event);
                 }
             });
         });
@@ -179,7 +148,7 @@
                     if (confirm('Are you sure?')) {
                         const centerImage = getCenterImage();
                         if (centerImage) {
-                            moveImage({ target: centerImage.querySelector('img') }); // 키보드 이벤트로 삭제
+                            moveStockImage({ target: centerImage.querySelector('img') }); // 키보드 이벤트로 삭제
                         }
                     }
                     break;
