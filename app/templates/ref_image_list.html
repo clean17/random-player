@@ -61,7 +61,6 @@
                      src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
                      data-src="{{ url_for('image.get_image', filename=image, dir=dir) }}"
                      alt="{{ image }}"
-                     onclick="moveImage('{{ image }}', {{ loop.index }})"
                      data-index="{{ loop.index }}">
                 {% endif %}
             </div>
@@ -93,59 +92,8 @@
 
 <script src="/static/js/image.js?v={{ version }}"></script>
 <script>
-    function moveImage(event, name, idx) {
-        const centerImage = getCenterImage();
-        let filename = (event instanceof MouseEvent) ? event.target.alt : centerImage.alt;
-        if (name) {
-            filename = name;
-        }
-        fetch(`/image/move-image`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                imagepath: 'ref_image',
-                filename: `${decodeURIComponent(filename)}`
-            })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
-                    const nextImageElement = imageElement?.nextElementSibling;
-                    // const imageElement = document.getElementById(`image-${index}`);
-                    if (imageElement) {
-                        imageElement.remove();
-                        if (nextImageElement) {
-                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    }
 
-    function deleteItem(imageItem) {
-        let filename = imageItem.querySelector('.thumbnail')?.alt;
-        if (imageItem) {
-            if (!filename) {
-                filename = imageItem.querySelector('source').dataset.filename;
-            }
-            let idx = 0;
-            if (imageItem.hasAttribute("id")) {
-                idx = imageItem.id.split('-')[1]
-            }
-            moveImage(null, filename, idx);
-        }
-    }
 
-    function handelDelBtn() {
-        const imageItem = getCenterImage();
-        deleteItem(imageItem);
-    }
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', e => {
@@ -155,82 +103,16 @@
     });
 
 
-    function showSlideshowModal(imgList) {
-        // 모달이 이미 있으면 재활용, 없으면 새로 만듦
-        let modal = document.getElementById('slideshow-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = "slideshow-modal";
-            modal.style.display = "flex";
-            modal.innerHTML = `
-            <button class="close-modal" title="닫기" ><i class="fas fa-times" style="color:white"></i></button>
-            <img src="" alt="슬라이드" id="slideshow-img">
-        `;
-            document.body.appendChild(modal);
-
-            // 닫기 버튼 이벤트
-            modal.querySelector('.close-modal').onclick = () => {
-                clearInterval(slideShowTimer);
-                modal.style.display = "none";
-            };
-        }
-        modal.style.display = "flex";
-        const imgEl = modal.querySelector("#slideshow-img");
-
-        // 슬라이드 쇼 상태 초기화
-        slideShowIdx = 0;
-        slideShowImgs = imgList;
-        imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(imgList[0])+"&dir=refine";
-
-        // 기존 타이머 종료
-        if (slideShowTimer) clearInterval(slideShowTimer);
-
-        slideShowTimer = setInterval(() => {
-            slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
-            imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(slideShowImgs[slideShowIdx])+"&dir=refine";
-        }, 8000);
-    }
-
-
-    // 슬라이드쇼 버튼 클릭 이벤트
-    document.getElementById("slideshow-btn").onclick = async function() {
-        try {
-            const resp = await fetch("/image/pages?slide=y&dir=refine");
-            const imgList = await resp.json();  // 서버에서 JSON 배열로 이미지 URL 목록 반환한다고 가정
-
-            if (!Array.isArray(imgList['slide_show_images']) || imgList['slide_show_images'].length === 0) {
-                alert("이미지가 없습니다.");
-                return;
-            }
-            showSlideshowModal(imgList['slide_show_images']);
-        } catch(e) {
-            alert("이미지 목록을 가져오는 데 실패했습니다.");
-        }
-    };
-
-    function shuffleImage() {
-        fetch(`/image/shuffle/ref-images`, { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                console.log(data)
-                if (data.status === 'success') {
-                    window.location.href = "{{ url_for('image.image_list', dir=dir) }}";
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    }
 
     function initPage() {
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
         imageItems = document.querySelectorAll('.image-item');
         lazyImages = document.querySelectorAll("img[data-src]");
 
-        imageItems.forEach(item => {
+        /*imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             img?.addEventListener('click', () => setNextImage(item));
-        });
+        });*/
 
         document.addEventListener('keydown', function(event) {
             switch(event.key) {
@@ -256,8 +138,6 @@
             }
         });
 
-        shuffleBtn.removeEventListener('click', shuffleImage);
-        shuffleBtn.addEventListener('click', shuffleImage);
     }
 
     document.addEventListener("DOMContentLoaded", initPage)
