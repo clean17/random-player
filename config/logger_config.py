@@ -30,9 +30,9 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "update-session-time", "apple-touch-icon",
                 "/delete-images",
                 "Client disconnected while serving", "Invalid HTTP version", "Bad request version",
-                "/func/stocks/progress", "/func/stocks/info", "/func/stocks/overview",
+                "/func/stocks/progress", "/func/stocks/info", "/func/stocks/overview", "/func/stocks/amount",
                 "/func/last-read-chat-id?username",
-                "/image/move-image",
+                "/image/move-image", "/image/stock-graphs/interest",
                 ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 

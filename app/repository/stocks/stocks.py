@@ -69,7 +69,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             current_trading_value    = COALESCE(EXCLUDED.current_trading_value,    interest_stocks.current_trading_value),
             trading_value_change_pct = COALESCE(EXCLUDED.trading_value_change_pct, interest_stocks.trading_value_change_pct),
             image_url                = COALESCE(EXCLUDED.image_url,                interest_stocks.image_url),
-            logo_image_url           = COALESCE(EXCLUDED.image_url,                interest_stocks.logo_image_url),
+            logo_image_url           = COALESCE(EXCLUDED.logo_image_url,           interest_stocks.logo_image_url),
             market_value             = COALESCE(EXCLUDED.market_value,             interest_stocks.market_value)
         RETURNING id;
         """
@@ -92,6 +92,8 @@ def get_interest_stocks(date: str, conn=None):
     SELECT *
     FROM interest_stocks
     WHERE created_at::date = %s
+    AND today_price_change_pct::float > 5
+    AND current_trading_value::numeric > 5000000000 
     ORDER BY current_trading_value::numeric DESC, today_price_change_pct::numeric DESC;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다

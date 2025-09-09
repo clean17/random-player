@@ -171,7 +171,7 @@
     function renderTradingTable(rows) {
         const tbody = document.querySelector('#table-trading tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="6" class="empty">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" class="empty">데이터가 없습니다.</td></tr>`;
             document.getElementById('count-trading').textContent = '0건';
             return;
         }
@@ -193,7 +193,7 @@
           <td class="right">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
-          <td colspan="6">
+          <td colspan="9">
             ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
@@ -365,13 +365,12 @@
 
                     product_codes.forEach((p)=>{
                         if (p.value === productCode) {
-                            console.log('dfe')
                             const yesterday_amount = p.nextElementSibling.nextElementSibling.dataset.avg5dAmount;
                             const amount_change_pct = Number(amount)/Number(yesterday_amount.replace(/[^0-9.]/g, ""))*100
                             const current_amount_el = p.nextElementSibling.nextElementSibling.nextElementSibling;
                             const amount_change_pct_el = p.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
                             updateTdWithBlink(current_amount_el, fmt_won(amount));
-                            updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct));
+                            updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct)+'%');
                         }
                     })
                 }).catch(error => {

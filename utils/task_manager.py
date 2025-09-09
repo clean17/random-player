@@ -383,10 +383,10 @@ async def run_schedule():
     # 10시부터 15시까지 30분마다 실행
     for h in range(10, 16):  # 10 ~ 15
         # 정각 (:00)
-        schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks, '1')
+        # schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks, '1')
         schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks, '2')
         # 30분 (:30)
-        schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks, '1')
+        # schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks, '1')
         schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks, '2')
 
     while True:
