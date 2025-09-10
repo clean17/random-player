@@ -7,7 +7,7 @@ import glob
 import ffmpeg
 import psutil
 import subprocess
-from datetime import datetime, timedelta
+import datetime
 # from multiprocessing import Process, Manager
 import multiprocessing
 from moviepy.editor import VideoFileClip
@@ -53,12 +53,12 @@ class Task:
         self.pid = pid
         self.file_pattern = file_pattern
         self.work_directory = work_directory
-        self.last_modified_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.last_modified_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.last_checked_time = None
         self.file_name = None
         self.thumbnail_path = None
         self.thumbnail_update_time = None
-        self.creation_time = datetime.now()
+        self.creation_time = datetime.datetime.now()
         self.initial_thumbnail_created = False
         self.thumbnail_duration = 0
         self.url = url
@@ -70,9 +70,9 @@ class Task:
         if latest_file is not None:
             self.file_name = os.path.basename(latest_file)
             if not self.initial_thumbnail_created:
-                self.creation_time = datetime.fromtimestamp(os.path.getctime(latest_file))
+                self.creation_time = datetime.datetime.fromtimestamp(os.path.getctime(latest_file))
             if latest_file is not None:
-                last_modified_time = datetime.fromtimestamp(os.path.getmtime(latest_file))
+                last_modified_time = datetime.datetime.fromtimestamp(os.path.getmtime(latest_file))
                 if self.last_checked_time is None or last_modified_time != self.last_checked_time:
                     self.last_modified_time = last_modified_time.strftime('%Y-%m-%d %H:%M:%S')
                     self.last_checked_time = last_modified_time
@@ -137,15 +137,15 @@ class Task:
                 )
                 if os.path.exists(thumbnail_path):
                     initial_thumbnail_created = True
-                    thumbnail_update_time = datetime.now().isoformat()
+                    thumbnail_update_time = datetime.datetime.now().isoformat()
                 else:
                     print("Failed to create initial thumbnail.")
 
             elif thumbnail_update_time:
-                current_time = datetime.now()
-                last_update_time = datetime.fromisoformat(thumbnail_update_time)
+                current_time = datetime.datetime.now()
+                last_update_time = datetime.datetime.fromisoformat(thumbnail_update_time)
 
-                modification_time = datetime.strptime(last_modified_time, '%Y-%m-%d %H:%M:%S')
+                modification_time = datetime.datetime.strptime(last_modified_time, '%Y-%m-%d %H:%M:%S')
                 duration = modification_time - creation_time
                 thumb_duration = duration.total_seconds()
                 thumb_time_difference = (current_time - last_update_time).total_seconds()
@@ -166,7 +166,7 @@ class Task:
                         print('stderr:', e.stderr.decode('utf8'))
 
                     if os.path.exists(thumbnail_path):
-                        thumbnail_update_time = datetime.now().isoformat()
+                        thumbnail_update_time = datetime.datetime.now().isoformat()
                         # print(f"Created Thumbnail at {file_name} {thumb_duration} second mark.")
                     else:
                         print(f"Failed to create thumbnail at {thumb_duration} second mark.")
@@ -205,7 +205,7 @@ def is_process_running(pid):
 
 # 현재 날짜를 YYMMDD 형식으로 가져오기
 def current_date():
-    return datetime.now().strftime('%y%m%d')
+    return datetime.datetime.now().strftime('%y%m%d')
 
 
 image_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.webp')
@@ -217,13 +217,13 @@ def cleanup_tasks():
     if not tasks:
         return
 
-    current_time = datetime.now()
-    threshold_time = timedelta(minutes=15)  # 15분
+    current_time = datetime.datetime.now()
+    threshold_time = datetime.timedelta(minutes=15)  # 15분
     format_str = '%Y-%m-%d %H:%M:%S'
     new_tasks = []
 
     for task in tasks:
-        task_time = datetime.strptime(task.last_modified_time, format_str)
+        task_time = datetime.datetime.strptime(task.last_modified_time, format_str)
         time_difference = current_time - task_time
 
         if time_difference < threshold_time:
@@ -239,11 +239,11 @@ def cleanup_tasks():
 
     # 매 정각마다 실행
     if current_time.minute == 0:
-        threshold_time = timedelta(minutes=30)  # 30분
+        threshold_time = datetime.timedelta(minutes=30)  # 30분
         for filename in os.listdir(directory):
             if filename.lower().endswith(image_extensions):
                 file_path = os.path.join(directory, filename)
-                creation_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+                creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
                 time_difference = current_time - creation_time
                 if time_difference > threshold_time:
                     normalized_path = os.path.normpath(file_path)
@@ -345,8 +345,8 @@ def delete_short_videos():
 def periodic_compression_task():
     try:
         while True:
-            now = datetime.now()
-            next_hour = (now + timedelta(hours=6)).replace(minute=0, second=0, microsecond=0)
+            now = datetime.datetime.now()
+            next_hour = (now + datetime.timedelta(hours=6)).replace(minute=0, second=0, microsecond=0)
             sleep_duration = (next_hour - now).total_seconds()
             # sleep_duration = 60 # 1분 테스트
             time.sleep(sleep_duration)
@@ -355,7 +355,7 @@ def periodic_compression_task():
         print("압축 작업 중단됨")
 
 def should_predict(market):
-    today = datetime.today().weekday()
+    today = datetime.datetime.today().weekday()
     print(f'    ############################### should_predict : {today}, {market} ###############################')
     if market == 'kospi':
         return today not in (4, 5)    # 금, 토 제외
@@ -369,8 +369,16 @@ def predict_stock_graph_scheduled(market):
 
 def run_weekdays_only(task, *args, **kwargs):
     # 0=월, 1=화, ..., 6=일
-    if datetime.today().weekday() < 5:  # 월(0) ~ 금(4)만 실행
+    if datetime.datetime.today().weekday() < 5:  # 월(0) ~ 금(4)만 실행
         task(*args, **kwargs)
+
+def run_cumtom_time_only(task):
+    now = datetime.datetime.today().time()
+    start = datetime.time(9, 40)
+    end = datetime.time(20, 0)
+
+    if start <= now <= end:
+        task()
 
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
@@ -384,12 +392,15 @@ async def run_schedule():
     for h in range(10, 16):  # 10 ~ 15
         schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks)
 
-    # 9:30부터 14:30시까지 1시간마다 실행
-    for h in range(9, 15):  # 10 ~ 14
+    # 9:30부터 15:30시까지 1시간마다 실행
+    for h in range(9, 16):  # 9 ~ 15
         schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks)
 
+    # 5분마다 실행
+    schedule.every(5).minutes.do(run_cumtom_time_only, update_interest_stocks)
+
     while True:
-        # print("[Scheduler] 현재시간:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        # print("[Scheduler] 현재시간:", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         schedule.run_pending()
         await asyncio.sleep(60)  # 1분마다 체크
 
@@ -508,6 +519,23 @@ def find_stocks():
         encoding='utf-8',
         errors="ignore" # 디코딩 안되는 문자 무시
     )
+
+def update_interest_stocks():
+    script_dir = r'C:\my-project\AutoSales.py'
+    venv_activate = r'venv\Scripts\activate'
+    py_script = r'python 1_periodically_update_today_interest_stocks.py'
+
+    cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
+
+    # subprocess 실행
+    process = subprocess.Popen(
+        cmd,
+        text=True,
+        shell=True,
+        encoding='utf-8',
+        errors="ignore" # 디코딩 안되는 문자 무시
+    )
+
 
 # 주기적 작업을 위한 프로세스 시작 (두 개의 별도 프로세스를 데몬으로 실행, 앱이 또 생성됨)
 # asyncio 또는 threading.Thread를 사용하면, Waitress 앱 하나 안에서 주기작업, 스케줄러 등을 백그라운드에서 실행 가능

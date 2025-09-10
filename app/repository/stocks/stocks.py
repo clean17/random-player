@@ -94,7 +94,7 @@ def get_interest_stocks(date: str, conn=None):
     WHERE created_at::date = %s
     AND today_price_change_pct::float > 5
     AND current_trading_value::numeric > 5000000000 
-    ORDER BY current_trading_value::numeric DESC, today_price_change_pct::numeric DESC;
+    ORDER BY today_price_change_pct::numeric DESC, current_trading_value::numeric DESC;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
         cur.execute(sql, (date,))

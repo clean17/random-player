@@ -96,13 +96,19 @@
 </div>
 
 <script>
-    const today = new Date();
+    let timer;
+    let timer2;
 
+    const p = new Set();
+    const s = new Set();
+    const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
     const dd = String(today.getDate()).padStart(2, '0');
 
     const today_yyyymmdd = `${yyyy}${mm}${dd}`;
+
+
 
     // 탭 전환
     document.querySelectorAll('.tab-btn[data-target]').forEach(btn => {
@@ -169,9 +175,12 @@
 
     // 테이블 렌더: 거래대금 증감%
     function renderTradingTable(rows) {
-        const tbody = document.querySelector('#table-trading tbody');
+        const tradingTable = document.getElementById('table-trading');
+        const thCount = tradingTable.querySelectorAll("thead tr th").length;
+        const tbody =    tradingTable.querySelector('tbody');
+
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="9" class="empty">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
             document.getElementById('count-trading').textContent = '0건';
             return;
         }
@@ -193,7 +202,7 @@
           <td class="right">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
-          <td colspan="9">
+          <td colspan="${thCount}">
             ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
@@ -252,8 +261,6 @@
         }, { once: true });
     }
 
-    let timer;
-    let timer2;
 
     // 데이터 로드 (날짜 변경 시 자동 호출)
     async function loadData() {
@@ -283,17 +290,22 @@
             alert('데이터를 불러오지 못했습니다.');
         }
 
-        if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) {
+        /*if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) {
             clearInterval(timer);
             clearInterval(timer2);
             return;
-        }
+        }*/
 
-        const p = new Set();
-        const s = new Set();
+        startTimer();
+    }
 
-        // 1초마다 현재가 갱신
+    function startTimer() {
+        if (timer) clearInterval(timer);
+        if (timer2) clearInterval(timer2);
+
         timer = setInterval(()=>{
+            const input = document.getElementById('dateInput');
+            const yyyymmdd = input.value?.replace(/-/g, '');
             if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
             const stock_names = document.querySelectorAll('.change_stock_name'); // 탭 1
             const stock_names2 = document.querySelectorAll('.change_stock_name2'); // 탭 2
@@ -303,7 +315,7 @@
             const stocks = Array.from(s);
 
             stocks.forEach(stock_name=>{
-                data = {
+                const data = {
                     stock_name: stock_name,
                 }
                 axios.post("/func/stocks/info", data, {
@@ -323,8 +335,8 @@
                                 const yesterday_close_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
                                 const current_price_el= i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
                                 const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                                const calc_change_pct = (current_price_el.textContent.replace(',','') - yesterday_close_el.textContent.replace(',',''))
-                                    /yesterday_close_el.textContent.replace(',','')*100;
+                                const calc_change_pct = (current_price_el.textContent.replace(/,/g,'') - yesterday_close_el.textContent.replace(/,/g,''))
+                                    /yesterday_close_el.textContent.replace(/,/g,'')*100;
                                 updateTdWithBlink(current_price_el, fmt2(realtime_price));
                                 updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct)+'%');
                             }
@@ -336,8 +348,8 @@
                                 const yesterday_close_el = i.nextElementSibling;
                                 const current_price_el= i.nextElementSibling.nextElementSibling;
                                 const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling;
-                                const calc_change_pct = (current_price_el.textContent.replace(',','') - yesterday_close_el.textContent.replace(',',''))
-                                    /yesterday_close_el.textContent.replace(',','')*100;
+                                const calc_change_pct = (current_price_el.textContent.replace(/,/g,'') - yesterday_close_el.textContent.replace(/,/g,''))
+                                    /yesterday_close_el.textContent.replace(/,/g,'')*100;
                                 updateTdWithBlink(current_price_el, fmt2(realtime_price));
                                 updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct)+'%');
                             }
@@ -350,7 +362,6 @@
         }, 2000)
 
         timer2 = setInterval(()=>{
-            console.log('거래대금 요청')
             const productCodes = Array.from(p);
             productCodes.forEach(productCode => {
                 const data = {
@@ -379,6 +390,20 @@
             })
         }, 1000 * 10)
     }
+
+    function stopTimer(timer) {
+        clearInterval(timer);
+        timer = null;
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) { // 다시 브라우저를 방문하면 한 번만 실행된다
+            startTimer();
+        } else { // 창을 나가면
+            stopTimer(timer);
+            stopTimer(timer2);
+        }
+    })
 
     // 날짜 변경 시 즉시 불러오기
     document.getElementById('dateInput').addEventListener('change', loadData);
