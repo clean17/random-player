@@ -325,7 +325,7 @@
                                 const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
                                 const calc_change_pct = (current_price_el.textContent.replace(',','') - yesterday_close_el.textContent.replace(',',''))
                                     /yesterday_close_el.textContent.replace(',','')*100;
-                                updateTdWithBlink(current_price_el, realtime_price);
+                                updateTdWithBlink(current_price_el, fmt2(realtime_price));
                                 updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct)+'%');
                             }
                         }
@@ -338,7 +338,7 @@
                                 const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling;
                                 const calc_change_pct = (current_price_el.textContent.replace(',','') - yesterday_close_el.textContent.replace(',',''))
                                     /yesterday_close_el.textContent.replace(',','')*100;
-                                updateTdWithBlink(current_price_el, realtime_price);
+                                updateTdWithBlink(current_price_el, fmt2(realtime_price));
                                 updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct)+'%');
                             }
                         }

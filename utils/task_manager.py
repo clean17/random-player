@@ -380,14 +380,13 @@ async def run_schedule():
     schedule.every().day.at("18:00").do(predict_stock_graph_scheduled, 'kospi')
     schedule.every().day.at("11:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
-    # 10시부터 15시까지 30분마다 실행
+    # 10시부터 15시까지 1시간마다 실행
     for h in range(10, 16):  # 10 ~ 15
-        # 정각 (:00)
-        # schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks, '1')
-        schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks, '2')
-        # 30분 (:30)
-        # schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks, '1')
-        schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks, '2')
+        schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks)
+
+    # 9:30부터 14:30시까지 1시간마다 실행
+    for h in range(9, 15):  # 10 ~ 14
+        schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks)
 
     while True:
         # print("[Scheduler] 현재시간:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -494,13 +493,10 @@ def predict_stock_graph(stock):
     # print("STDOUT:", stdout)
     # print("STDERR:", stderr)
 
-def find_stocks(num):
+def find_stocks():
     script_dir = r'C:\my-project\AutoSales.py'
     venv_activate = r'venv\Scripts\activate'
-    if num == '1':
-        py_script = r'python 1_finding_stocks_with_increased_current_price.py'
-    if num == '2':
-        py_script = r'python 2_finding_stocks_with_increased_volume.py'
+    py_script = r'python 2_finding_stocks_with_increased_volume.py'
 
     cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
 
