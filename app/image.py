@@ -10,6 +10,7 @@ import random
 import time
 import urllib.parse
 import shutil
+from urllib.parse import unquote
 
 image_bp = Blueprint('image', __name__)
 LIMIT_PAGE_NUM = 100
@@ -26,11 +27,13 @@ TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 DEL_TEMP_IMAGE_DIR = settings['DEL_TEMP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 SP500_DIR = settings['SP500_DIR']
+INTEREST_DIR = settings['INTEREST_DIR']
 
 # 시장 디렉터리 매핑
 DIRECTORY_MAP = {
     'kospi': KOSPI_DIR,
-    'nasdaq': SP500_DIR
+    'nasdaq': SP500_DIR,
+    'interest': INTEREST_DIR
 }
 
 # MOVE_DIR = os.path.join(os.getcwd(), 'move')
@@ -238,19 +241,19 @@ def image_list():
     # ?title=video-call&dir=temp
     # if current_user.username == settings['GUEST_USERNAME']:
     dir = request.args.get('dir')
-    firstRequst = request.args.get('firstRequst')
     selected_dir = request.args.get('title')
-    isSlide = request.args.get('slide', '')
     title_list = []
     images = []
     images_length = 0
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
 
+
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
         # images = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
         # images_length = count_non_zip_files(TEMP_IMAGE_DIR)
-        template_html = 'trip_image_list.html'
+        # template_html = 'trip_image_list.html'
+        template_html = 'image_list.html'
         title_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
 
         # 선택된 title 값 가져오기 (없다면 첫 번째 값 자동 선택)
@@ -268,15 +271,19 @@ def image_list():
 
 
     elif dir == 'refine':
+        firstRequst = request.args.get('firstRequst')
         if firstRequst == 'True':
             initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
         images_length = count_non_zip_files(REF_IMAGE_DIR)
+
+        isSlide = request.args.get('slide', '')
         if isSlide == 'y':
             images = get_images(0, images_length, REF_IMAGE_DIR)
             return jsonify({"slide_show_images": images})
         else:
             images = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR)
-        template_html = 'ref_image_list.html'
+        # template_html = 'ref_image_list.html'
+        template_html = 'image_list.html'
     elif dir == 'image':
         images = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR)
         images_length = count_non_zip_files(IMAGE_DIR)
@@ -293,6 +300,9 @@ def image_list():
         images = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR)
         images_length = count_non_zip_files(MOVE_DIR)
         template_html = 'image_list.html'
+    elif dir == 'stock':
+        market = request.args.get('market') or ''
+        return redirect(url_for("image.stock-graph-list", market=market, page=page))
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
@@ -333,13 +343,13 @@ def move_image():
         src_path = os.path.join(MOVE_DIR, filename)
         thumb_dir = os.path.join(MOVE_DIR, "thumb")
         dest_path = ref_dest_path
-    elif imagepath == "ref_image":
+    elif imagepath == "ref":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
         thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
-    elif imagepath == "trip_image":
+    elif imagepath == "trip":
         src_path = os.path.join(TRIP_IMAGE_DIR, filename)
         thumb_dir = os.path.join(TRIP_IMAGE_DIR, "thumb")
-    elif imagepath == "temp_image":
+    elif imagepath == "temp":
         dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
         src_path = os.path.join(TEMP_IMAGE_DIR, subpath, filename)
         thumb_dir = os.path.join(TEMP_IMAGE_DIR, subpath, "thumb")
@@ -361,48 +371,73 @@ def move_image():
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
 
+def safe_path_join(base_dir, rel_path):
+    # URL 디코딩 + 트리밍
+    rel_path = unquote(rel_path).strip()
+    # 절대경로로 정규화
+    nor_path = os.path.normpath(os.path.join(base_dir, rel_path))
+    # 상위 디렉토리 탈출 방지
+    if not nor_path.startswith(base_dir + os.sep):
+        raise ValueError(f"path traversal detected (경로 탈출 감지됨) : {rel_path}")
+    return nor_path
+
+
+
 # @image_bp.route('/delete-images/<path:filename>', methods=['POST'], endpoint='delete-images')
 # 어디서 사용하는지 확인 필요
 @image_bp.route('/delete-images', methods=['POST'], endpoint='delete-images')
 @login_required
 def delete_images():
-    images_to_delete = request.form.getlist('images[]')
-    moved_images = os.listdir(MOVE_DIR)
+    # images_to_delete = request.form.getlist('images[]')
     dir = request.args.get('dir')
-
-
+    data = request.get_json()
+    images_to_delete = data.get("images", [])
 
     for image in images_to_delete:
-        if dir == 'move':
-            raw_path = os.path.join(MOVE_DIR, image)
-            safe_path = os.path.normpath(raw_path)
-            send2trash(safe_path) # 휴지통으로 보낸다
-        if image not in moved_images:
-            if dir == 'image':
-                raw_path = os.path.join(IMAGE_DIR, image)
-                safe_path = os.path.normpath(raw_path)
-                send2trash(safe_path) # 휴지통으로 보낸다
+        try:
+            if dir == 'move':
+                safe_path = safe_path_join(MOVE_DIR, image)
+            elif dir == 'image':
+                safe_path = safe_path_join(IMAGE_DIR, image)
             elif dir == 'image2':
-                # only_filename = os.path.basename(image)
-                dir_part = os.path.dirname(image)
+                dir_part  = os.path.dirname(image)
                 file_part = os.path.basename(image)
-                clean_file_part = clean_filename(file_part)
-                new_path = os.path.join(IMAGE_DIR2, dir_part, clean_file_part)
-                safe_path = os.path.normpath(new_path)
-                send2trash(safe_path) # 휴지통으로 보낸다
+                clean_file_part = clean_filename(unquote(file_part).strip())
+                safe_path = safe_path_join(IMAGE_DIR2, os.path.join(dir_part, clean_file_part))
+            else:
+                continue  # 알 수 없는 dir
+
+            if not os.path.exists(safe_path):
+                # 이미 지워졌거나 잘못된 이름
+                # print(f"[WARN] not found: {safe_path}")
+                continue
+
+            send2trash(safe_path)
+
+        except FileNotFoundError:
+            print(f"[WARN] not found (caught): {image}")
+        except Exception as e:
+            # 다른 문제(권한, path traversal 등)
+            print(f"[ERROR] delete failed: {image} -> {e}")
 
 
     page = int(request.form.get('page', 1))
-    if dir == 'image2':
-        global image2_arr
-        image2_arr = image2_arr[LIMIT_PAGE_NUM:]
-        total_pages = (len(image2_arr) + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+    # if dir == 'image2':
+    #     global image2_arr
+    #     image2_arr = image2_arr[LIMIT_PAGE_NUM:]
+    #     total_pages = (len(image2_arr) + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+    #
+    #     return render_template('image_list.html', images=image2_arr[:LIMIT_PAGE_NUM], page=page, title=None,
+    #                            total_pages=total_pages, images_length=len(image2_arr), dir=dir,
+    #                            selected_dir=None, title_list=[], version=int(time.time()))
+    # else:
+    #     return redirect(url_for('image.image_list', page=page, dir=dir))
 
-        return render_template('image_list.html', images=image2_arr[:LIMIT_PAGE_NUM], page=page, title=None,
-                               total_pages=total_pages, images_length=len(image2_arr), dir=dir,
-                               selected_dir=None, title_list=[], version=int(time.time()))
-    else:
-        return redirect(url_for('image.image_list', page=page, dir=dir))
+    # return redirect(url_for('image.image_list', page=page, dir=dir))
+    # return jsonify(redirect=url_for('image.image_list', page=page, dir=dir)), 200
+    return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir)}), 200 # 명시적 표기
+
+
 
 
 
@@ -416,6 +451,10 @@ def get_image():
     filename = urllib.parse.unquote_plus(filename)
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir', '')
+
+    market = request.args.get('market') or ''
+    directory = DIRECTORY_MAP.get(market.lower())
+
 
     if dir == 'image':
         base_dir = IMAGE_DIR
@@ -431,6 +470,11 @@ def get_image():
         base_dir = TEMP_IMAGE_DIR
         if selected_dir:
             base_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
+    elif dir == 'stock':
+        if directory is not None:
+            return send_from_directory(directory, filename)
+        else:
+            abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
     else:
         abort(400, 'Invalid dir')
 
@@ -450,8 +494,13 @@ def get_image():
 @image_bp.route('/shuffle/ref-images', methods=['POST'], endpoint='shuffle/ref-images')
 @login_required
 def shuffle_image():
+    dir = request.args.get('dir')
+    page = int(request.args.get('page', 1))
+
     initialize_shuffle_images()
-    return jsonify({'status': 'success'})
+
+    # return jsonify({'status': 'success'})
+    return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir)}), 200 # 명시적 표기
 
 
 ###################### stock ##########################
@@ -472,7 +521,13 @@ def stock_graph_list(market):
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
     # print(market, directory, total_pages, images)
-    return render_template('stock_graph_list.html', images=images, page=page, total_pages=total_pages, market=market, version=int(time.time()))
+    return render_template(
+        # 'stock_graph_list.html',
+        'image_list.html',
+        dir='stock', images=images, page=page, total_pages=total_pages, market=market,
+        images_length = images_length,
+        version=int(time.time())
+    )
 
 @image_bp.route('/stock-graphs/<market>/<filename>', endpoint='stock-graphs')
 @login_required
@@ -489,6 +544,7 @@ def get_stock_graph(market, filename):
 def move_stock_image(market, filename):
     # filename = unquote(filename)  # URL 디코딩 처리
     directory = DIRECTORY_MAP.get(market.lower())
+    filename = unquote(filename)
 
     if directory is None:
         return jsonify({'status': 'error', 'message': 'Invalid market specified'}), 400

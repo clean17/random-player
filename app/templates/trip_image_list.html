@@ -36,6 +36,7 @@
     <button onclick="window.scrollTo({ top: 0, behavior: 'auto' })">⬆</button>
     <button onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })">⬇</button>
 </div>
+
 <div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
     <!-- 드롭다운 리스트 추가 -->
     {% if selected_dir %}
@@ -134,20 +135,9 @@
 
 <script src="/static/js/image.js?v={{ version }}"></script>
 <script>
-    let selectedIndex, selectedOption, titleText = undefined;
-
-    const dir = '{{ dir }}',
-          zipBtn = document.getElementById('download-zip-btn'),
-          dropdownMenu = document.getElementById('dropdown-menu'),
-          $title = document.getElementById('title-select');
-
-    if ($title) {
-        selectedOption = $title.options[$title.selectedIndex];
-        titleText = selectedOption.text;
-    }
-
-
     /*******************************************************************/
+    const currentUserName = '{{ current_user.get_id() }}',
+        guestName = '{{ config.GUEST_USERNAME }}';
 
     // 화면 중심 좌표의 Element를 반환
     function findCenterImageByCoordinates() {
@@ -193,7 +183,6 @@
                         imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : centerImage.closest('.image-item')
                     }
                     if (imageElement) {
-                        setNextImage(imageElement);
                         imageElement.remove();
                         if (nextImageElement) {
                             nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -277,12 +266,12 @@
         imageItems = document.querySelectorAll('.image-item');
         lazyImages = document.querySelectorAll("img[data-src]");
 
-        imageItems.forEach(item => {
+        /*imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             if (img) {
                 img.addEventListener('click', () => setNextImage(item));
             }
-        });
+        });*/
 
         document.addEventListener('keydown', function (event) {
             switch (event.key) {

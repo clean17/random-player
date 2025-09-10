@@ -4,24 +4,37 @@ let nextImageElement = null,
     startX, startY,
     mouseStartX, mouseStartY,
     imageItems,
-    lazyImages;
+    lazyImages,
+    selectedIndex,
+    selectedOption,
+    titleText = undefined;
 
 const nextBtn = document.getElementById('next-image-button'),
       previousBtn = document.getElementById('previous-image-button'),
       shuffleBtn = document.getElementById('shuffle-button'),
       delBtn = document.querySelector('.delete-button'),
       form = document.getElementById('delete-form'),
-      page = "{{ page }}",
-      currentUserName = '{{ current_user.get_id() }}',
-      guestName = '{{ config.GUEST_USERNAME }}',
       emptyBinBtn = document.getElementById('empty-bin-button'),
-      TAP_THRESHOLD = 10; // 픽셀, 이 이하 이동이면 '탭'으로 간주
+      TAP_THRESHOLD = 10, // 픽셀, 이 이하 이동이면 '탭'으로 간주
+      delImages = [...document.querySelectorAll('input[name="images[]"]')].map(el => el.value),
+      slideShowBtn = document.getElementById("slideshow-btn"),
+      zipBtn = document.getElementById('download-zip-btn'),
+      dropdownMenu = document.getElementById('dropdown-menu'),
+      $title = document.getElementById('title-select'),
+      empty_variable = ''
+;
+
+
+if ($title) {
+    selectedOption = $title.options[$title.selectedIndex];
+    titleText = selectedOption.text;
+}
 
 // debounce
 let lastScrollTop = 0;
 let lastScrollTime = Date.now();
 const SCROLL_DELAY = 100;
-const SCROLL_THRESHOLD = 50000;  // px per second
+const SCROLL_THRESHOLD = 100000;  // px per second
 
 // slideShow
 let slideShowTimer = null;
@@ -33,13 +46,40 @@ let slideShowIdx = 0;
 const throttledNextImage = throttle(() => nextImage(), 180);
 const debouncedScrollEvent = debounce(handleScroll, SCROLL_DELAY);
 
+/******************************************  Procress  ****************************************/
+function updateProgressBar(data) {
+    // console.log(data)
+    const fill = document.getElementById('progress-fill');
+    fill.style.width = data.percent + '%';
+    const fillText = document.getElementById('progress-text');
+    fillText.textContent = data.done ? data.percent + '%' : data.percent + '% ' + '(' + data.count + '/' + data.total_count + ')  ' + '[ '+ data.ticker + ' ] ' + data.stock_name;
+    document.getElementById('progress-status').textContent = data.done ? '완료' : '';
+}
+
+function pollProgress(stock) {
+    fetch('/func/stocks/progress/'+stock)
+        .then(resp => {
+            if (!resp.ok) throw new Error('네트워크 오류 또는 인증 필요');
+            return resp.json();
+        })
+        .then(data => {
+            updateProgressBar(data);
+            if (!data.done) setTimeout(()=> pollProgress(stock), 1000);
+            else document.getElementById('progress-status').textContent = '완료';
+        })
+        .catch(err => {
+            document.getElementById('progress-status').textContent = '에러 발생: ' + err.message;
+        });
+}
+/******************************************  Procress  ****************************************/
 /******************************************  Image  ****************************************/
 nextBtn?.addEventListener('click', nextImage);
+delBtn?.addEventListener('click', deletePage)
 
 // 다음 Element를 세팅
-function setNextImage(element) {
+/*function setNextImage(element) {
     nextImageElement = element.nextElementSibling;
-}
+}*/
 
 // 화면 중앙의 이미지 Element, Index
 function getCenterImage(index= '') {
@@ -113,6 +153,81 @@ function initialImageLoad() {
         loadImagesAroundIndex(centerIndex);
         initialLoadComplete = true;
     }
+}
+
+function moveImageToPreviousStep(event, imageItem) {
+    let filename = (event instanceof MouseEvent) ? event.target.alt : imageItem.querySelector('.thumbnail')?.alt;
+    if (imageItem) {
+        if (!filename) {
+            filename = imageItem.querySelector('source').dataset.filename;
+        }
+        let idx = 0;
+        if (imageItem.hasAttribute("id")) {
+            idx = imageItem.id.split('-')[1]
+        }
+
+
+        fetch(`/image/move-image`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                imagepath: 'ref_image',
+                filename: `${decodeURIComponent(filename)}`
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : imageItem;
+                    const nextImageElement = imageElement?.nextElementSibling;
+                    // const imageElement = document.getElementById(`image-${index}`);
+                    if (imageElement) {
+                        imageElement.remove();
+                        if (nextImageElement) {
+                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+
+}
+
+function deleteItem(imageItem) {
+    moveImageToPreviousStep(null, imageItem);
+}
+
+function handelDelBtn() {
+    const imageItem = getCenterImage();
+    deleteItem(imageItem);
+}
+
+
+function deletePage(e) {
+    e?.preventDefault();
+
+    // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
+    renderOverlay();
+    document.getElementById('overlay').style.display = 'block';
+    document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+    delBtn.disabled = true;
+    delBtn.style.background = 'gray';
+
+    axios.post("/image/delete-images?dir="+dir, {
+        images: delImages
+    })
+        .then(res => {
+            // 응답 JSON의 redirect 사용 (절대 URL로 보장)
+            const url = new URL(res.data?.redirect, window.location.origin).href;
+            window.location.replace(url); // 또는 window.location.href = url
+        })
+        .catch(err => console.error("삭제 실패", err));
+
 }
 
 // 페이지 로드 직후 중앙 이미지 인덱스 찾기 및 해당 범위 이미지 로드
@@ -290,3 +405,182 @@ window.addEventListener('scroll', () => {
     if (!initialLoadComplete) return; // 초기 로드가 완료되지 않았으면 실행하지 않음
     debouncedScrollEvent();
 });
+
+
+
+function moveStockImage(event) {
+    const imgElement = event.target;
+    const filename = imgElement.getAttribute('alt');
+    const market = document.querySelector('#market-select');
+    const marketName = market.options[market.selectedIndex].text.toLowerCase();
+
+    fetch(`/image/move-stock-image/${encodeURIComponent(marketName)}/${encodeURIComponent(filename)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const imageElement = imgElement.closest('.image-item');
+                if (imageElement) {
+                    const nextImageElement = imageElement.nextElementSibling;
+                    imageElement.remove();
+                    if (nextImageElement) {
+                        nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+
+
+
+
+
+function downloadThisPage() {
+    const today = new Date();
+    const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+    const titleName = $title.options[$title.selectedIndex].textContent.trim();
+
+    if (!document.getElementById('overlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'overlay';
+        overlay.style.display = 'none';
+        overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+        document.body.appendChild(overlay);
+    }
+
+    document.getElementById('overlay').style.display = 'block';
+    document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+
+    // ZIP 파일 요청
+    // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
+    fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}&title=${encodeURIComponent(titleName)}`, {
+        method: 'GET'
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(response.status);
+            }
+
+            // 다운로드 처리
+            return response.blob();
+        })
+        .then(blob => {
+            document.getElementById('overlay').style.display = 'none';
+            document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `${formattedDate}_page-${page}_files.zip`; // 파일 이름: 오늘 날짜 + _files.zip
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            document.getElementById('overlay').style.display = 'none';
+            document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+            alert('다운로드 중 문제가 발생했습니다: ' + error.message);
+        });
+
+    dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+}
+
+function downloadAllFiles() {
+    const today = new Date();
+    const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+    const titleName = $title.options[$title.selectedIndex].textContent.trim();
+
+    const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}&title=${encodeURIComponent(titleName)}`;
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `${formattedDate}_all_files.zip`; // 파일 이름: 오늘 날짜 + _files.zip
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
+function showSlideshowModal(imgList) {
+    // 모달이 이미 있으면 재활용, 없으면 새로 만듦
+    let modal = document.getElementById('slideshow-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = "slideshow-modal";
+        modal.style.display = "flex";
+        modal.innerHTML = `
+            <button class="close-modal" title="닫기" ><i class="fas fa-times" style="color:white"></i></button>
+            <img src="" alt="슬라이드" id="slideshow-img">
+        `;
+        document.body.appendChild(modal);
+
+        // 닫기 버튼 이벤트
+        modal.querySelector('.close-modal').onclick = () => {
+            clearInterval(slideShowTimer);
+            modal.style.display = "none";
+        };
+    }
+    modal.style.display = "flex";
+    const imgEl = modal.querySelector("#slideshow-img");
+
+    // 슬라이드 쇼 상태 초기화
+    slideShowIdx = 0;
+    slideShowImgs = imgList;
+    imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(imgList[0])+"&dir=refine";
+
+    // 기존 타이머 종료
+    if (slideShowTimer) clearInterval(slideShowTimer);
+
+    slideShowTimer = setInterval(() => {
+        slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
+        imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(slideShowImgs[slideShowIdx])+"&dir=refine";
+    }, 8000);
+}
+
+async function slideShow() {
+    try {
+        const resp = await fetch("/image/pages?slide=y&dir=refine");
+        const imgList = await resp.json();  // 서버에서 JSON 배열로 이미지 URL 목록 반환한다고 가정
+
+        if (!Array.isArray(imgList['slide_show_images']) || imgList['slide_show_images'].length === 0) {
+            alert("이미지가 없습니다.");
+            return;
+        }
+        showSlideshowModal(imgList['slide_show_images']);
+    } catch (e) {
+        alert("이미지 목록을 가져오는 데 실패했습니다.");
+    }
+}
+
+// 슬라이드쇼 버튼 클릭 이벤트
+slideShowBtn?.removeEventListener('click', slideShow)
+slideShowBtn?.addEventListener('click', slideShow)
+
+
+function shuffleImage() {
+    fetch(`/image/shuffle/ref-images?dir=`+dir, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data)
+            /*if (data.status === 'success') {
+                window.location.href = "{{ url_for('image.image_list', dir=dir) }}";
+            }*/
+            // 응답 JSON의 redirect 사용 (절대 URL로 보장)
+            const url = new URL(data?.redirect, window.location.origin).href;
+            window.location.replace(url); // 또는 window.location.href = url
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+

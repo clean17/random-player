@@ -6,8 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="/static/js/common.js?v={{ version }}"></script>
 </head>
+
 <body>
 <div class="top-bar">
     <div class="logout">
@@ -19,7 +21,24 @@
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
 </div>
+
+{% if dir in ['image', 'image2', 'move'] %}
 <button id="empty-bin-button" class="floating-button2">Empty</button>
+{% elif dir == 'refine' %}
+<button id="shuffle-button" class="floating-button2">Shuffle</button>
+<button id="slideshow-btn" class="floating-button2" style="top: 120px">Slide show</button>
+{% elif dir in ['temp', 'trip'] %}
+<button id="download-zip-btn" class="floating-button2">
+    <span class="icon">📂</span> Download
+</button>
+<ul id="dropdown-menu" class="dropdown-menu">
+    <li onclick="downloadThisPage()">Download This Page</li>
+    <li onclick="downloadAllFiles()">Download All Files</li>
+    <!-- <li>Another Action</li> -->
+</ul>
+{% else %}
+{% endif %}
+
 <div class="pagination-buttons">
     <button class="pagination-button prev-button" id="prevButton">&lt;</button>
     <button class="pagination-button next-button" id="nextButton">&gt;</button>
@@ -28,8 +47,45 @@
     <button onclick="window.scrollTo({ top: 0, behavior: 'auto' })">⬆</button>
     <button onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })">⬇</button>
 </div>
-<div class="container">
-    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images', dir=dir) }}">
+
+<div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
+    {% if dir == 'stock' %}
+    <div id="progress-bar" style="width:100%; border:1px solid #ccc;">
+        <div id="progress-fill" style="width:0; height:25px; background:#4caf50; color:#020202; text-align:center;">
+            <span id="progress-text"></span>
+        </div>
+    </div>
+    <div id="progress-status"></div>
+    <!-- 드롭다운 리스트 추가 -->
+    <div class="dropdown-selector">
+        <form id="market-form">
+            <label for="market-select">Select Market:</label>
+            <select id="market-select" name="market" onchange="location = this.value;">
+                <option value="{{ url_for('image.stock-graph-list', market='kospi', page=1) }}" {% if market == 'kospi' %}selected{% endif %}>KOSPI</option>
+                <option value="{{ url_for('image.stock-graph-list', market='nasdaq', page=1) }}" {% if market == 'nasdaq' %}selected{% endif %}>NASDAQ</option>
+            </select>
+        </form>
+    </div>
+    {% else %}
+    {% endif %}
+    {% if selected_dir %}
+    <div class="dropdown-selector">
+        <form>
+            <label for="title-select">Select Title:</label>
+            <select id="title-select" name="title" onchange="location = this.value;">
+                {% for title in title_list %}
+                <option value="{{ url_for('image.image_list', title=title, dir=dir) }}"
+                        {% if title == selected_dir %}selected{% endif %}>
+                    {{ title }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    {% endif %}
+
+<!--    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images', dir=dir) }}">-->
+    <div id="delete-form">
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
@@ -46,6 +102,7 @@
                 <video class="thumbnail"
                        muted playsinline controls loop
                        data-index="{{ loop.index }}"
+                       data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
                        alt="{{ image|urlencode }}"
                        >
                     <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
@@ -54,47 +111,66 @@
                 </video>
                 <!--<button class="play-btn" onclick="event.preventDefault();">▶</button>-->
                 {% elif file_extension in image_extensions %}
+
                 <!-- 이미지 파일인 경우 -->
+                {% if dir in ['trip', 'temp', 'refine'] %}
+                <button class="delete-btn" type="button">×</button>
+                {% endif %}
                 <img class="thumbnail"
-                     src="{% if loop.index <= 5 %}{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}{% else %}{{ url_for('static', filename='no-image.png') }}{% endif %}"
-                     data-src="{{ url_for('image.get_image', filename=image|urlencode, dir=dir) }}"
+                     src="{% if loop.index <= 5 %}
+                            {{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}
+                          {% else %}
+                            {{ url_for('static', filename='no-image.png') }}
+                          {% endif %}"
+                     data-src="{{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
                      alt="{{ image|urlencode }}"
+                     {% if dir not in ['trip', 'temp', 'refine'] %}
                      onclick="moveImage('{{ image|urlencode }}', {{ loop.index }})"
+                     {% endif %}
                      data-index="{{ loop.index }}">
                 {% endif %}
             </div>
             {% endfor %}
         </div>
         <div>
-            Image Crawling
             total_count : <span id="total_count">{{ images_length }}</span>
         </div>
         <div class="pagination">
             {% if page > 1 %}
-                <a href="{{ url_for('image.image_list', page=1, dir=dir) }}">&laquo;</a>
-                <a href="{{ url_for('image.image_list', page=page-1, dir=dir) }}">&lt;</a>
+            <a href="{{ url_for('image.image_list', market=market, page=1, dir=dir) }}">&laquo;</a>
+            <a href="{{ url_for('image.image_list', market=market, page=page-1, dir=dir) }}">&lt;</a>
             {% endif %}
+
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-                <a href="{{ url_for('image.image_list', page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.image_list', market=market, page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
+
             {% if page < total_pages %}
-                <a href="{{ url_for('image.image_list', page=page+1, dir=dir) }}">&gt;</a>
-                <a href="{{ url_for('image.image_list', page=total_pages, dir=dir) }}">&raquo;</a>
+            <a href="{{ url_for('image.image_list', market=market, page=page+1, dir=dir) }}">&gt;</a>
+            <a href="{{ url_for('image.image_list', market=market, page=total_pages, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>
-        {% if images_length != 0 %}
-            <button type="submit" class="delete-button">Delete</button>
+        {% if images_length != 0 and dir in ['image', 'image2', 'move'] %}
+        <button type="button" class="delete-button">Delete</button>
         {% endif %}
-    </form>
+    </div>
 </div>
 
-
-{% if images_length != 0 %}
-    <button id="next-image-button" class="floating-button-right">Next</button>
+{% if images_length != 0 and dir in ['trip', 'temp']%}
+<button id="previous-image-button" class="floating-button-left">Previous</button>
 {% endif %}
+<button id="next-image-button" class="floating-button-right">Next</button>
 
 <script src="/static/js/image.js?v={{ version }}"></script>
 <script>
+    const dir = '{{ dir }}',
+          page = "{{ page }}",
+          currentUserName = '{{ current_user.get_id() }}',
+          guestName = '{{ config.GUEST_USERNAME }}',
+          stock_name = `{{ market }}`;
+
+
+
     function clickCenterImage() {
         const centerImage = getCenterImage();
         // console.log('center', centerImage)
@@ -117,6 +193,9 @@
     }
 
     function moveImage(filename, index) {
+        // console.log('filename', filename);
+        if (dir === 'stock') return;
+
         // console.log(filename, index)
         fetch(`/image/move-image`, {
             method: 'POST',
@@ -124,7 +203,8 @@
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                imagepath: `{{dir}}`,
+                imagepath: dir,
+                subpath: titleText,
                 filename: filename
             })
         })
@@ -132,8 +212,8 @@
             .then(data => {
                 if (data.status === 'success') {
                     const imageElement = document.getElementById(`image-${index}`);
+                    const nextImageElement = imageElement?.nextElementSibling;
                     if (imageElement) {
-                        setNextImage(imageElement);
                         imageElement.remove();
                         if (nextImageElement) {
                             nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -152,21 +232,25 @@
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', e => {
             const imageItem = e.target.closest('.image-item');
-            let filename = imageItem.querySelector('.thumbnail')?.alt;
-            if (imageItem) {
-                if (!filename) {
-                    filename = imageItem.querySelector('source').dataset.filename;
-                }
-                let idx = 0;
-                if (imageItem.hasAttribute("id")) {
-                    idx = imageItem.id.split('-')[1]
-                }
-                if (currentUserName === guestName) {
-                    if (confirm('Delete the file ?')) {
+            if (dir == 'refine') {
+                deleteItem(imageItem);
+            } else {
+                let filename = imageItem.querySelector('.thumbnail')?.alt;
+                if (imageItem) {
+                    if (!filename) {
+                        filename = imageItem.querySelector('source').dataset.filename;
+                    }
+                    let idx = 0;
+                    if (imageItem.hasAttribute("id")) {
+                        idx = imageItem.id.split('-')[1]
+                    }
+                    if (currentUserName === guestName) {
+                        if (confirm('Delete the file ?')) {
+                            moveImage(filename, idx);
+                        }
+                    } else {
                         moveImage(filename, idx);
                     }
-                } else {
-                    moveImage(filename, idx);
                 }
             }
         });
@@ -210,10 +294,23 @@
         imageItems = document.querySelectorAll('.image-item');
         lazyImages = document.querySelectorAll("img[data-src]");
 
-        imageItems.forEach(item => {
+        if (dir === 'stock') {
+            pollProgress(stock_name);
+
+            imageItems.forEach(item => {
+                const img = item.querySelector('.thumbnail');
+                img.addEventListener('click', (event) => {
+                    if (confirm('Delete the file ?')) {
+                        moveStockImage(event);
+                    }
+                });
+            });
+        }
+
+        /*imageItems.forEach(item => {
             const img = item.querySelector('.thumbnail');
             img?.addEventListener('click', () => setNextImage(item));
-        });
+        });*/
 
         document.addEventListener('keydown', function(event) {
             switch(event.key) {
@@ -232,33 +329,91 @@
                     break;
                 case ' ': case 'Enter':
                     event.preventDefault();
-                    clickCenterImage();
+                    if (dir === 'image' || dir === 'image2' || dir === 'move') clickCenterImage();
+                    if (dir === 'trip' || dir === 'temp')  playCenterVideo();
                     break;
                 case 'Delete':
                     event.preventDefault();
-                    if (confirm('Delete the file ?')) {
-                        document.querySelector('.delete-button')?.click()
+                    if (dir === 'refine') {
+                        handelDelBtn();
+                    } else if (dir === 'trip' || dir === 'temp') {
+                        if (currentUserName === guestName) {
+                            if (confirm('Delete the file ?')) {
+                                clickCenterImage();
+                            }
+                        } else {
+                            clickCenterImage();
+                        }
+                    } else {
+                        if (confirm('Delete the file ?')) {
+                            if (dir === 'stock') {
+                                const centerImage = getCenterImage();
+                                if (centerImage) {
+                                    moveStockImage({ target: centerImage.querySelector('img') }); // 키보드 이벤트로 삭제
+                                }
+                            } else {
+                                // document.querySelector('.delete-button')?.click()
+                                deletePage()
+                            }
+                        }
                     }
-                default: break;
+                    break;
+                default:
+                    break;
             }
         });
 
-        emptyBinBtn.removeEventListener('click', emptyTrash);
-        emptyBinBtn.addEventListener('click', emptyTrash);
+        emptyBinBtn?.removeEventListener('click', emptyTrash);
+        emptyBinBtn?.addEventListener('click', emptyTrash);
 
         /**************************************************************/
 
         // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
-        form.addEventListener('submit', (event) => {
+        /*form.addEventListener('submit', (event) => {
             renderOverlay();
             document.getElementById('overlay').style.display = 'block';
             document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
             delBtn.disabled = true;
             delBtn.style.background = 'gray';
+        });*/
+
+        /*****************************************************************/
+
+
+        zipBtn?.addEventListener('click', () => {
+            const rect = zipBtn.getBoundingClientRect();
+            dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+
+            if (dropdownMenu.style.display === 'block') {
+                // 기본 위치 설정 (버튼 아래에 표시)
+                let dropdownLeft = rect.left + window.scrollX;
+                let dropdownTop = rect.bottom + window.scrollY;
+
+                // 화면 너비를 기준으로 드롭다운 메뉴가 우측 화면 밖으로 나가지 않도록 조정
+                const viewportWidth = window.innerWidth; // 현재 화면 너비
+                const dropdownWidth = dropdownMenu.offsetWidth; // 드롭다운 메뉴의 너비
+                if (dropdownLeft + dropdownWidth > viewportWidth) {
+                    dropdownLeft = viewportWidth - dropdownWidth - 10;
+                }
+
+                // 위치 설정
+                dropdownMenu.style.left = `${dropdownLeft}px`;
+                dropdownMenu.style.top = `${dropdownTop}px`;
+            }
+        });
+
+        // 외부 클릭 시 드롭다운 숨기기
+        document.addEventListener('click', (event) => {
+            if (!zipBtn?.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.style.display = 'none';
+            }
         });
 
         // 뷰에 비디오가 보이면 로드
         lazyLoadVideos();
+
+        shuffleBtn?.removeEventListener('click', shuffleImage);
+        shuffleBtn?.addEventListener('click', shuffleImage);
     }
 
     document.addEventListener("DOMContentLoaded", initPage)
