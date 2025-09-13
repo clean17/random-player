@@ -26,7 +26,7 @@ from config.config import settings
 import asyncio
 
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
-    request_stock_volume_and_amount
+    request_stock_volume_and_amount, request_stock_category
 from utils.wsgi_midleware import logger
 from filelock import FileLock, Timeout
 import random
@@ -592,6 +592,7 @@ def save_interesting_stocks():
     image_url = data.get("image_url") or None
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
+    category = data.get("category") or None
 
 
     stock = StockDTO(
@@ -608,6 +609,7 @@ def save_interesting_stocks():
         image_url=image_url,
         logo_image_url=logo_image_url,
         market_value=market_value,
+        category=category,
     )
     # print(stock)
     result = merge_daily_interest_stocks(stock)
@@ -662,23 +664,33 @@ def update_stocks():
 def get_stocks(nation):
     return get_stock_list(nation)
 
+# 종목명 검색 > productCode
 @func.route("/stocks/info", methods=["POST"])
 def get_realtime_price():
     data = request.json
     stock_name = data.get('stock_name') or None
     return request_stock_info_with_toss_api(stock_name)
 
+# 요약 정보
 @func.route("/stocks/overview", methods=["POST"])
 def get_stock_overview():
     data = request.json
     product_code = data.get('product_code') or None
     return request_stock_overview_with_toss_api(product_code)
 
+# 시총 가져오기
 @func.route("/stocks/amount", methods=["POST"])
 def get_stock_amount():
     data = request.json
     product_code = data.get('product_code') or None
     return request_stock_volume_and_amount(product_code)
+
+# 회사 정보 가져오기
+@func.route("/stocks/company", methods=["POST"])
+def get_stock_company_info():
+    data = request.json
+    company_code = data.get('company_code') or None
+    return request_stock_category(company_code)
 
 ################################# STATE ####################################
 

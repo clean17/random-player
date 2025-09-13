@@ -374,7 +374,7 @@ def run_weekdays_only(task, *args, **kwargs):
 
 def run_cumtom_time_only(task):
     now = datetime.datetime.today().time()
-    start = datetime.time(9, 40)
+    start = datetime.time(9, 20)
     end = datetime.time(20, 0)
 
     if start <= now <= end:
@@ -387,6 +387,9 @@ async def run_schedule():
     schedule.every().day.at("07:00").do(renew_kiwoom_token)
     schedule.every().day.at("18:00").do(predict_stock_graph_scheduled, 'kospi')
     schedule.every().day.at("11:00").do(predict_stock_graph_scheduled, 'nasdaq')
+
+    # 국장 시작
+    schedule.every().day.at("09:05").do(run_weekdays_only, find_stocks)
 
     # 10시부터 15시까지 1시간마다 실행
     for h in range(10, 16):  # 10 ~ 15

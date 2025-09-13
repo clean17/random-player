@@ -4,6 +4,7 @@ import json
 INFO_URL = "https://wts-info-api.tossinvest.com/api/v3/search-all/wts-auto-complete"
 OVERVIEW_URL = "https://wts-info-api.tossinvest.com/api/v2/stock-infos/PRODUCTCODE/overview"
 AMOUNT_URL = "https://wts-info-api.tossinvest.com/api/v1/c-chart/kr-s/PRODUCTCODE/day:1"
+CATEGORY_URL = "https://wts-info-api.tossinvest.com/api/v2/companies/COMPANYCODE/tics"
 def request_stock_info_with_toss_api(stock_name):
     payload = {
         "query": stock_name,
@@ -25,5 +26,10 @@ def request_stock_overview_with_toss_api(product_code):
 
 def request_stock_volume_and_amount(product_code):
     REPLACE_URL = AMOUNT_URL.replace('PRODUCTCODE', product_code);
+    res = requests.get(REPLACE_URL)
+    return res.json()
+
+def request_stock_category(company_code):
+    REPLACE_URL = CATEGORY_URL.replace('COMPANYCODE', company_code);
     res = requests.get(REPLACE_URL)
     return res.json()

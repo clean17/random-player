@@ -20,4 +20,5 @@ class StockDTO:
     sector_code: str = None
     stock_market: str = None
     market_value: str = None
+    category: str = None
 
