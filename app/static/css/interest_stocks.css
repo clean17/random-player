@@ -12,16 +12,23 @@ body {
     width: 100%;
     max-width: 1100px;         /* 테이블이 보기 좋은 최대 폭 */
     min-width: 320px;          /* 모바일 최소 폭 */
-    margin: 16px auto;         /* 화면 가운데 */
+    margin: auto;         /* 화면 가운데 */
     background: #fff;
     border-radius: 10px;
     box-shadow: 0 1px 10px rgba(0,0,0,.08);
-    padding: 50px 12px 12px 12px;
+    padding: 60px 12px 12px 12px;
     box-sizing: border-box;
 
     display: flex;
     flex-direction: column;
     min-height: 0;             /* 내부 스크롤 허용 */
+}
+
+/* 뷰포트가 2000px 이상일 때 max-width: 1000px 적용 */
+@media (orientation: landscape) {
+    .container {
+        max-width: 1200px;
+    }
 }
 
 /* ====== 탭 버튼 & 일반 버튼: 파란 템버튼 ====== */
@@ -77,7 +84,7 @@ button.primary:hover {
     border-collapse: collapse;
 }
 .table th, .table td {
-    padding: 10px 12px;
+    padding: 10px 10px;
     border-bottom: 1px solid #e5e7eb;
     text-align: left;
     vertical-align: top;
@@ -119,12 +126,14 @@ img.preview {
 
 
 /* 값이 바뀔 때 highlight 효과 */
-@keyframes blink-highlight {
+@keyframes fade-highlight {
     0%   { background-color: yellow; }
-    50%  { background-color: transparent; }
     100% { background-color: transparent; }
 }
 
-.blink {
-    animation: blink-highlight 0.6s ease;
+.fade-highlight {
+    animation: fade-highlight 1s ease-out;
 }
+
+.fade { animation: fade-highlight 0.6s ease; }
+

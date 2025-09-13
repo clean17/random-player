@@ -48,8 +48,8 @@
                 </colgroup>-->
                 <thead>
                 <tr>
-                    <th>이미지</th>
-                    <th>종목코드</th>
+                    <th>그래프</th>
+                    <th>등록 시간</th>
                     <th>종목명</th>
                     <th class="right">거래대금(5일 평균)</th>
                     <th class="right">거래대금(오늘)</th>
@@ -81,7 +81,7 @@
                 </colgroup>-->
                 <thead>
                 <tr>
-                    <th>이미지</th>
+                    <th>그래프</th>
                     <th>종목코드</th>
                     <th>종목명</th>
                     <th class="right">어제종가</th>
@@ -161,7 +161,7 @@
     }
 
 
-    // 공통: 이미지 토글 버튼 연결
+    // 공통: 그래프 토글 버튼 연결
     function bindImageToggles(scope) {
         scope.querySelectorAll('.img-toggle').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -188,10 +188,29 @@
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
             const hasImg = !!r.image_url;
             const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>그래프 보기</button>`;
+            const date = new Date(`${r.created_at}`);
+            const fmt = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "UTC",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+            });
+
+            const parts = fmt.formatToParts(date);
+            const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+
+            // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
+            const formatted_date = `${obj.hour}:${obj.minute}`;
+            // console.log('formatted_date', formatted_date)
             return `
         <tr>
           <td>${imgBtn}</td>
-          <td>${r.stock_code ?? ''}</td>
+<!--          <td>${r.stock_code ?? ''}</td>-->
+          <td>`+formatted_date+`</td>
+          <input type="hidden" class="stock_code" value="${r.stock_code ?? ''}">
           <input type="hidden" class="product-code" value="">
           <td class="change_stock_name">${r.stock_name ?? ''}</td>
           <td class="right" data-avg5d-amount="${r.avg5d_trading_value}">${fmt_won(r.avg5d_trading_value)}</td>
@@ -253,11 +272,11 @@
         td.textContent = newValue;
 
         // 깜빡임 클래스 추가 → 애니메이션 실행
-        td.classList.add("blink");
+        td.classList.add("fade");
 
         // 애니메이션 끝나면 클래스 제거 (다음에도 실행되도록)
         td.addEventListener("animationend", () => {
-            td.classList.remove("blink");
+            td.classList.remove("fade");
         }, { once: true });
     }
 
@@ -306,7 +325,7 @@
         timer = setInterval(()=>{
             const input = document.getElementById('dateInput');
             const yyyymmdd = input.value?.replace(/-/g, '');
-            if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
+            // if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
             const stock_names = document.querySelectorAll('.change_stock_name'); // 탭 1
             const stock_names2 = document.querySelectorAll('.change_stock_name2'); // 탭 2
             stock_names.forEach(i=>s.add((i.textContent)));
@@ -321,40 +340,38 @@
                 axios.post("/func/stocks/info", data, {
                     headers: {"Content-Type": "application/json"},
                     timeout: 3000 // 3초 초과시 자동 reject
-                }).then(res => {
-                    const stock_data = res.data.result[0].data.items[0];
-                    const stock_name = stock_data.productName;
-                    const product_code = stock_data.productCode;
+                }).then(async res => {
+                    const stock_data = res.data.result[0]?.data.items[0];
+                    const stock_name = stock_data?.productName;
+                    const product_code = stock_data?.productCode;
                     p.add(product_code);
-                    const logo_url = stock_data.logoImageUrl;
-                    const realtime_price = stock_data.close.krw;
+                    const logo_url = stock_data?.logoImageUrl;
+                    const realtime_price = stock_data?.close.krw;
 
-                    stock_names.forEach(i=> {
-                            if (i.textContent === stock_name) {
-                                i.previousElementSibling.value = product_code;
-                                const yesterday_close_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                                const current_price_el= i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                                const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                                const calc_change_pct = (current_price_el.textContent.replace(/,/g,'') - yesterday_close_el.textContent.replace(/,/g,''))
-                                    /yesterday_close_el.textContent.replace(/,/g,'')*100;
-                                updateTdWithBlink(current_price_el, fmt2(realtime_price));
-                                updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct)+'%');
-                            }
+                    for (const i of stock_names) {
+                        if (i.textContent === stock_name) {
+                            i.previousElementSibling.value = product_code;
+                            const yesterday_close_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                            const current_price_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                            const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                            const calc_change_pct = (current_price_el.textContent.replace(/,/g, '') - yesterday_close_el.textContent.replace(/,/g, ''))
+                                / yesterday_close_el.textContent.replace(/,/g, '') * 100;
+                            await updateTdWithBlink(current_price_el, fmt2(realtime_price));
+                            await updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
                         }
-                    );
+                    }
 
-                    stock_names2.forEach(i=> {
-                            if (i.textContent === stock_name) {
-                                const yesterday_close_el = i.nextElementSibling;
-                                const current_price_el= i.nextElementSibling.nextElementSibling;
-                                const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling;
-                                const calc_change_pct = (current_price_el.textContent.replace(/,/g,'') - yesterday_close_el.textContent.replace(/,/g,''))
-                                    /yesterday_close_el.textContent.replace(/,/g,'')*100;
-                                updateTdWithBlink(current_price_el, fmt2(realtime_price));
-                                updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct)+'%');
-                            }
+                    for (const i of stock_names2) {
+                        if (i.textContent === stock_name) {
+                            const yesterday_close_el = i.nextElementSibling;
+                            const current_price_el = i.nextElementSibling.nextElementSibling;
+                            const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling;
+                            const calc_change_pct = (current_price_el.textContent.replace(/,/g, '') - yesterday_close_el.textContent.replace(/,/g, ''))
+                                / yesterday_close_el.textContent.replace(/,/g, '') * 100;
+                            await updateTdWithBlink(current_price_el, fmt2(realtime_price));
+                            await updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
                         }
-                    );
+                    }
                 }).catch(error => {
                     throw error; // 기타 에러는 그대로 던짐
                 });
@@ -370,20 +387,20 @@
                 axios.post("/func/stocks/amount", data, {
                     headers: {"Content-Type": "application/json"},
                     timeout: 3000 // 3초 초과시 자동 reject
-                }).then(res => {
+                }).then(async res => {
                     const amount = res.data.result.candles[0].amount;
                     const product_codes = document.querySelectorAll('.product-code');
 
-                    product_codes.forEach((p)=>{
-                        if (p.value === productCode) {
-                            const yesterday_amount = p.nextElementSibling.nextElementSibling.dataset.avg5dAmount;
-                            const amount_change_pct = Number(amount)/Number(yesterday_amount.replace(/[^0-9.]/g, ""))*100
-                            const current_amount_el = p.nextElementSibling.nextElementSibling.nextElementSibling;
-                            const amount_change_pct_el = p.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                            updateTdWithBlink(current_amount_el, fmt_won(amount));
-                            updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct)+'%');
+                    for (const p1 of product_codes) {
+                        if (p1.value === productCode) {
+                            const yesterday_amount = p1.nextElementSibling.nextElementSibling.dataset.avg5dAmount;
+                            const amount_change_pct = Number(amount) / Number(yesterday_amount.replace(/[^0-9.]/g, "")) * 100
+                            const current_amount_el = p1.nextElementSibling.nextElementSibling.nextElementSibling;
+                            const amount_change_pct_el = p1.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
+                            await updateTdWithBlink(current_amount_el, fmt_won(amount));
+                            await updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
                         }
-                    })
+                    }
                 }).catch(error => {
                     throw error; // 기타 에러는 그대로 던짐
                 });
