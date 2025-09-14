@@ -668,28 +668,28 @@ def get_stocks(nation):
 @func.route("/stocks/info", methods=["POST"])
 def get_realtime_price():
     data = request.json
-    stock_name = data.get('stock_name') or None
+    stock_name = data.get('stock_name') or ""
     return request_stock_info_with_toss_api(stock_name)
 
 # 요약 정보
 @func.route("/stocks/overview", methods=["POST"])
 def get_stock_overview():
     data = request.json
-    product_code = data.get('product_code') or None
+    product_code = data.get('product_code') or ""
     return request_stock_overview_with_toss_api(product_code)
 
 # 시총 가져오기
 @func.route("/stocks/amount", methods=["POST"])
 def get_stock_amount():
     data = request.json
-    product_code = data.get('product_code') or None
+    product_code = data.get('product_code') or ""
     return request_stock_volume_and_amount(product_code)
 
 # 회사 정보 가져오기
 @func.route("/stocks/company", methods=["POST"])
 def get_stock_company_info():
     data = request.json
-    company_code = data.get('company_code') or None
+    company_code = data.get('company_code') or ""
     return request_stock_category(company_code)
 
 ################################# STATE ####################################

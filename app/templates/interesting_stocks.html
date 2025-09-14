@@ -23,36 +23,26 @@
 
 <div class="container">
     <div class="tab-bar">
-        <button class="tab-btn active" data-target="#tab-trading">거래대금 증감</button>
+        <button class="tab-btn active" data-target="#tab-trading">실시간 등락</button>
         <button class="tab-btn" data-target="#tab-change">금일 등락</button>
         <input id="dateInput" class="date" type="date" />
     </div>
 
     <!-- 탭 1: 거래대금 증감% -->
     <section id="tab-trading" class="tab-panel" style="display:block;">
-        <h3 class="section-title">거래대금 증감
+        <h3 class="section-title">실시간 등락
             <span class="badge" id="count-trading">0건</span>
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-trading">
-                <!--<colgroup>
-                    <col style="width:80px" />
-                    <col style="width:80px" />
-                    <col style="width:120px" />
-                    <col style="width:120px" />
-                    <col style="width:120px" />
-                    <col style="width:120px" />
-                    <col style="width:100px" />
-                    <col style="width:100px" />
-                    <col style="width:120px" />
-                </colgroup>-->
                 <thead>
                 <tr>
                     <th>그래프</th>
-                    <th>등록 시간</th>
+                    <th>등록시간</th>
                     <th>종목명</th>
+                    <th>카테고리</th>
                     <th class="right">거래대금(5일 평균)</th>
-                    <th class="right">거래대금(오늘)</th>
+                    <th class="right">거래대금(실시간)</th>
                     <th class="right">거래대금 증감%</th>
                     <th class="right">어제종가</th>
                     <th class="right">현재가</th>
@@ -71,21 +61,17 @@
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-change">
-                <!--<colgroup>
-                    <col style="width:80px" />
-                    <col style="width:80px" />
-                    <col style="width:120px" />
-                    <col style="width:100px" />
-                    <col style="width:100px" />
-                    <col style="width:120px" />
-                </colgroup>-->
                 <thead>
                 <tr>
                     <th>그래프</th>
-                    <th>종목코드</th>
+                    <th>등록시간</th>
                     <th>종목명</th>
+                    <th>카테고리</th>
+                    <th class="right">거래대금(5일 평균)</th>
+                    <th class="right">거래대금(금일)</th>
+                    <th class="right">거래대금 증감%</th>
                     <th class="right">어제종가</th>
-                    <th class="right">현재가</th>
+                    <th class="right">금일종가</th>
                     <th class="right">금일 등락%</th>
                 </tr>
                 </thead>
@@ -211,14 +197,15 @@
 <!--          <td>${r.stock_code ?? ''}</td>-->
           <td>`+formatted_date+`</td>
           <input type="hidden" class="stock_code" value="${r.stock_code ?? ''}">
-          <input type="hidden" class="product-code" value="">
-          <td class="change_stock_name">${r.stock_name ?? ''}</td>
-          <td class="right" data-avg5d-amount="${r.avg5d_trading_value}">${fmt_won(r.avg5d_trading_value)}</td>
-          <td class="right" data-current-amount="${r.current_trading_value}">${fmt_won(r.current_trading_value)}</td>
-          <td class="right">${fmt2(r.trading_value_change_pct)}%</td>
-          <td class="right">${fmt2(r.yesterday_close)}</td>
-          <td class="right">${fmt2(r.current_price)}</td>
-          <td class="right">${fmt2(r.today_price_change_pct)}%</td>
+          <input type="hidden" class="product_code" value="">
+          <td class="stock_name">${r.stock_name ?? ''}</td>
+          <td class="right">${r.category ?? ''}</td>
+          <td class="right avg_amount" data-avg5d-amount="${r.avg5d_trading_value}">${fmt_won(r.avg5d_trading_value)}</td>
+          <td class="right cur_amount" data-current-amount="${r.current_trading_value}">${fmt_won(r.current_trading_value)}</td>
+          <td class="right tv_change">${fmt2(r.trading_value_change_pct)}%</td>
+          <td class="right yst_close">${fmt2(r.yesterday_close)}원</td>
+          <td class="right cur_close">${fmt2(r.current_price)}원</td>
+          <td class="right prc_change">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
@@ -233,27 +220,50 @@
 
     // 테이블 렌더: 금일 등락%
     function renderChangeTable(rows) {
-        const tbody = document.querySelector('#table-change tbody');
+        const changeTable = document.getElementById('table-change');
+        const thCount = changeTable.querySelectorAll("thead tr th").length;
+        const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="6" class="empty">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
             document.getElementById('count-change').textContent = '0건';
             return;
         }
         const html = rows.map(r => {
-            const detailId = `detail-ch-${Math.random().toString(36).slice(2)}`;
+            const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
             const hasImg = !!r.image_url;
             const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>그래프 보기</button>`;
+            const date = new Date(`${r.created_at}`);
+            const fmt = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "UTC",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+            });
+
+            const parts = fmt.formatToParts(date);
+            const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+
+            // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
+            const formatted_date = `${obj.hour}:${obj.minute}`;
+            // console.log('formatted_date', formatted_date)
             return `
         <tr>
           <td>${imgBtn}</td>
-          <td>${r.stock_code ?? ''}</td>
-          <td class="change_stock_name2">${r.stock_name ?? ''}</td>
-          <td class="right">${fmt2(r.yesterday_close)}</td>
-          <td class="right">${fmt2(r.current_price)}</td>
+          <td>`+formatted_date+`</td>
+          <td class="">${r.stock_name ?? ''}</td>
+          <td class="right">${r.category ?? ''}</td>
+          <td class="right">${fmt_won(r.avg5d_trading_value)}</td>
+          <td class="right">${fmt_won(r.current_trading_value)}</td>
+          <td class="right">${fmt2(r.trading_value_change_pct)}%</td>
+          <td class="right">${fmt2(r.yesterday_close)}원</td>
+          <td class="right">${fmt2(r.current_price)}원</td>
           <td class="right">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
-          <td colspan="6">
+          <td colspan="${thCount}">
             ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
@@ -326,14 +336,13 @@
             const input = document.getElementById('dateInput');
             const yyyymmdd = input.value?.replace(/-/g, '');
             // if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
-            const stock_names = document.querySelectorAll('.change_stock_name'); // 탭 1
-            const stock_names2 = document.querySelectorAll('.change_stock_name2'); // 탭 2
+            const stock_names = document.querySelectorAll('.stock_name'); // 탭 1
             stock_names.forEach(i=>s.add((i.textContent)));
-            stock_names2.forEach(i=>s.add((i.textContent)));
 
             const stocks = Array.from(s);
 
             stocks.forEach(stock_name=>{
+                // console.log('ss', stock_name)
                 const data = {
                     stock_name: stock_name,
                 }
@@ -350,28 +359,19 @@
 
                     for (const i of stock_names) {
                         if (i.textContent === stock_name) {
+                            const tr = i.closest('tr');
                             i.previousElementSibling.value = product_code;
-                            const yesterday_close_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                            const current_price_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                            const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                            const calc_change_pct = (current_price_el.textContent.replace(/,/g, '') - yesterday_close_el.textContent.replace(/,/g, ''))
-                                / yesterday_close_el.textContent.replace(/,/g, '') * 100;
-                            await updateTdWithBlink(current_price_el, fmt2(realtime_price));
+                            const yesterday_close_el = tr.querySelector('.yst_close');
+                            const current_price_el = tr.querySelector('.cur_close');
+                            const price_change_pct_el = tr.querySelector('.prc_change');
+                            const calc_change_pct = (current_price_el.textContent.replace(/[^0-9.]/g, '') - yesterday_close_el.textContent.replace(/[^0-9.]/g, ''))
+                                / yesterday_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
+                            await updateTdWithBlink(current_price_el, fmt2(realtime_price) + '원');
                             await updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
                         }
                     }
 
-                    for (const i of stock_names2) {
-                        if (i.textContent === stock_name) {
-                            const yesterday_close_el = i.nextElementSibling;
-                            const current_price_el = i.nextElementSibling.nextElementSibling;
-                            const price_change_pct_el = i.nextElementSibling.nextElementSibling.nextElementSibling;
-                            const calc_change_pct = (current_price_el.textContent.replace(/,/g, '') - yesterday_close_el.textContent.replace(/,/g, ''))
-                                / yesterday_close_el.textContent.replace(/,/g, '') * 100;
-                            await updateTdWithBlink(current_price_el, fmt2(realtime_price));
-                            await updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
-                        }
-                    }
+
                 }).catch(error => {
                     throw error; // 기타 에러는 그대로 던짐
                 });
@@ -381,29 +381,33 @@
         timer2 = setInterval(()=>{
             const productCodes = Array.from(p);
             productCodes.forEach(productCode => {
-                const data = {
-                    product_code: productCode
-                }
-                axios.post("/func/stocks/amount", data, {
-                    headers: {"Content-Type": "application/json"},
-                    timeout: 3000 // 3초 초과시 자동 reject
-                }).then(async res => {
-                    const amount = res.data.result.candles[0].amount;
-                    const product_codes = document.querySelectorAll('.product-code');
-
-                    for (const p1 of product_codes) {
-                        if (p1.value === productCode) {
-                            const yesterday_amount = p1.nextElementSibling.nextElementSibling.dataset.avg5dAmount;
-                            const amount_change_pct = Number(amount) / Number(yesterday_amount.replace(/[^0-9.]/g, "")) * 100
-                            const current_amount_el = p1.nextElementSibling.nextElementSibling.nextElementSibling;
-                            const amount_change_pct_el = p1.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling;
-                            await updateTdWithBlink(current_amount_el, fmt_won(amount));
-                            await updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
-                        }
+                // console.log('p', productCode)
+                if (productCode) {
+                    const data = {
+                        product_code: productCode
                     }
-                }).catch(error => {
-                    throw error; // 기타 에러는 그대로 던짐
-                });
+                    axios.post("/func/stocks/amount", data, {
+                        headers: {"Content-Type": "application/json"},
+                        timeout: 3000 // 3초 초과시 자동 reject
+                    }).then(async res => {
+                        const amount = res.data.result.candles[0].amount;
+                        const product_codes = document.querySelectorAll('.product_code');
+
+                        for (const p1 of product_codes) {
+                            if (p1.value === productCode) {
+                                const tr = p1.closest('tr');
+                                const yesterday_amount = tr.querySelector('.avg_amount').dataset.avg5dAmount;
+                                const amount_change_pct = Number(amount) / Number(yesterday_amount.replace(/[^0-9.]/g, "")) * 100
+                                const current_amount_el = tr.querySelector('.cur_amount');
+                                const amount_change_pct_el = tr.querySelector('.tv_change');
+                                await updateTdWithBlink(current_amount_el, fmt_won(amount));
+                                await updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
+                            }
+                        }
+                    }).catch(error => {
+                        throw error; // 기타 에러는 그대로 던짐
+                    });
+                }
             })
         }, 1000 * 10)
     }

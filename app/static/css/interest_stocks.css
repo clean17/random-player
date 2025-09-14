@@ -83,17 +83,29 @@ button.primary:hover {
     min-width: 720px;          /* 모바일에서도 열이 너무 좁아지지 않게 최소폭 */
     border-collapse: collapse;
 }
+/* 행 호버 하이라이트 */
+.table tbody tr:hover td {
+    background: #f1f5f9 !important;
+}
+
 .table th, .table td {
     padding: 10px 10px;
     border-bottom: 1px solid #e5e7eb;
     text-align: left;
     vertical-align: top;
-    color: #111827;
+    color: #111827;            /* 글자색 */
     white-space: nowrap;       /* 숫자/코드 줄바꿈 방지 */
 }
 .table th { background: #f8fafc; font-weight: 600; }
 .table .right { text-align: right; }
 
+/* ====== 칼럼 구분선(마지막 칼럼 제외) ====== */
+.table th:not(:last-child),
+.table td:not(:last-child) {
+    border-right: 1px solid #e5e7eb; /* 너무 진하면 #eef2f7 정도로 */
+}
+
+/* detail-row 전용 */
 tr.detail-row td { background: #fafafa; }
 img.preview {
     max-width: 100%;
