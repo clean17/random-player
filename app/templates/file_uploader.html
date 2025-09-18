@@ -281,7 +281,9 @@
                     // showMessagePopup('✔ 저장되었습니다', 'success');
                     showDebugToast('✔ 저장되었습니다');
                     setTimeout(() => {
-                        window.location.href = `/upload/?title=${encodeURIComponent(titleInput.value)}`;
+                        // window.location.href = `/upload/?title=${encodeURIComponent(titleInput.value)}`;
+                        let url = `/upload/?title=${encodeURIComponent(titleInput.value)}`;
+                        window.location.replace(url);
                     }, 1000);
                 } else {
                     submitted = false; // 다시 전송 가능하게

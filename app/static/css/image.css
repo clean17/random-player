@@ -60,6 +60,10 @@ body {
     object-fit: contain;
 }
 
+.stock-graph {
+    max-height: 100% !important;
+}
+
 /* 버튼 */
 button {
     padding: 0;

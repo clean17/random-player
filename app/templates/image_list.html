@@ -116,7 +116,7 @@
                 {% if dir in ['trip', 'temp', 'refine'] %}
                 <button class="delete-btn" type="button">×</button>
                 {% endif %}
-                <img class="thumbnail"
+                <img class="thumbnail {% if dir == 'stock' %}stock-graph{% endif %}"
                      src="{% if loop.index <= 5 %}
                             {{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}
                           {% else %}
