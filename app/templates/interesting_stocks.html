@@ -199,7 +199,7 @@
           <input type="hidden" class="stock_code" value="${r.stock_code ?? ''}">
           <input type="hidden" class="product_code" value="">
           <td class="stock_name">${r.stock_name ?? ''}</td>
-          <td class="right">${r.category ?? ''}</td>
+          <td class="">${r.category ?? ''}</td>
           <td class="right avg_amount" data-avg5d-amount="${r.avg5d_trading_value}">${fmt_won(r.avg5d_trading_value)}</td>
           <td class="right cur_amount" data-current-amount="${r.current_trading_value}">${fmt_won(r.current_trading_value)}</td>
           <td class="right tv_change">${fmt2(r.trading_value_change_pct)}%</td>
@@ -254,7 +254,7 @@
           <td>${imgBtn}</td>
           <td>`+formatted_date+`</td>
           <td class="">${r.stock_name ?? ''}</td>
-          <td class="right">${r.category ?? ''}</td>
+          <td class="">${r.category ?? ''}</td>
           <td class="right">${fmt_won(r.avg5d_trading_value)}</td>
           <td class="right">${fmt_won(r.current_trading_value)}</td>
           <td class="right">${fmt2(r.trading_value_change_pct)}%</td>

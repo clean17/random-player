@@ -373,12 +373,15 @@ def run_weekdays_only(task, *args, **kwargs):
         task(*args, **kwargs)
 
 def run_cumtom_time_only(task):
-    now = datetime.datetime.today().time()
-    start = datetime.time(9, 20)
-    end = datetime.time(20, 0)
+    # 0=월, 1=화, ..., 6=일
+    if datetime.datetime.today().weekday() < 5:  # 월(0) ~ 금(4)만 실행
+        now = datetime.datetime.today().time()
+        start = datetime.time(9, 20)
+        end = datetime.time(20, 0)
 
-    if start <= now <= end:
-        task()
+        if start <= now <= end:
+            task()
+
 
 async def run_schedule():
 #     schedule.every().wednesday.at("10:01").do(lambda: asyncio.create_task(async_buy_lotto()))
@@ -399,7 +402,7 @@ async def run_schedule():
     for h in range(9, 16):  # 9 ~ 15
         schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks)
 
-    # 5분마다 실행
+    # 월~금, 5분마다 실행
     schedule.every(5).minutes.do(run_cumtom_time_only, update_interest_stocks)
 
     while True:

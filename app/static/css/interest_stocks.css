@@ -27,7 +27,7 @@ body {
 /* 뷰포트가 2000px 이상일 때 max-width: 1000px 적용 */
 @media (orientation: landscape) {
     .container {
-        max-width: 1200px;
+        max-width: 1400px;
     }
 }
 
@@ -103,6 +103,11 @@ button.primary:hover {
 .table th:not(:last-child),
 .table td:not(:last-child) {
     border-right: 1px solid #e5e7eb; /* 너무 진하면 #eef2f7 정도로 */
+}
+
+td.empty {
+    text-align: center !important;
+    vertical-align: middle; /* 세로도 가운데 */
 }
 
 /* detail-row 전용 */
