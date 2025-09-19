@@ -1254,7 +1254,7 @@ async function initPage() {
     setInterval(() => {
         getPeerLastReadChatId(); // 상대가 읽었는지 확인
         setCheckIconsGreenUpTo(); // 있었으면 읽음 표시
-    }, 200)
+    }, 500)
 
     m_intervalId = setInterval(() => {
         const now = new Date();

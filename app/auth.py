@@ -124,7 +124,8 @@ def login():
                 key = f"user_session:{username}"
                 redis_client.setex(key, SESSION_EXPIRATION_TIME, "active")
 
-            logger.info(f"############################### login_username: {username} ###############################")
+            if username != 'piw1994':
+                logger.info(f"############################### login_username: {username} ###############################")
 
             session['principal'] = fetch_user
             resp = None
@@ -184,7 +185,8 @@ def lockout():
 @auth.route('/logout')
 def logout():
     if current_user.is_authenticated:
-        logger.info(f"############################### logout_username: {current_user.get_id()} ###############################")
+        if current_user.get_id() != 'piw1994':
+            logger.info(f"############################### logout_username: {current_user.get_id()} ###############################")
     session[SECOND_PASSWORD_SESSION_KEY] = False
     session.clear()
     logout_user()

@@ -352,6 +352,7 @@ def periodic_compression_task():
             time.sleep(sleep_duration)
             compress_directory_to_zip()
     except KeyboardInterrupt:
+        print("압축 작업 중단됨")
 
 def run_async_function(coroutine):
     """ 스케줄러에서 비동기 함수를 실행하는 래퍼 함수 """

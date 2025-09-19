@@ -30,6 +30,7 @@ def callback():
 
     response = requests.post(token_url, params=params)
     token_data = response.json()
+    print('token_data', token_data)
     access_token = token_data.get("access_token")
     user_id = token_data.get("user_id")
 
