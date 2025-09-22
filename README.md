@@ -148,6 +148,11 @@ server {
 $ openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
 ```
 
+인증서 확인 (인증서가 있는 디렉토리에서 git bash)
+```bash
+$ openssl x509 -in /c/nginx/nginx-1.26.2/ssl/chickchick.shop-fullchain.pem -noout -dates
+```
+
 
 ## Let’s Encrypt 계열 무료 SSL 인증서 발급
 무료 인증서로 만료기한은 3월이다<br>
@@ -164,7 +169,7 @@ wacs.exe --target manual --host "chickchick.shop, www.chickchick.shop" --webroot
 아래 파일이 생성된다<br>
 ![img_13.png](app/static/readme/img_13.png)
 
-- fullchain 인증서를 생성한다
+- fullchain 인증서를 생성한다(터미널)
 ```bash
 copy chickchick.shop-crt.pem + chickchick.shop-chain.pem chickchick.shop-fullchain.pem
 ```
