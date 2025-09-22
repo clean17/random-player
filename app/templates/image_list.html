@@ -137,17 +137,17 @@
         </div>
         <div class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('image.image_list', market=market, page=1, dir=dir) }}">&laquo;</a>
-            <a href="{{ url_for('image.image_list', market=market, page=page-1, dir=dir) }}">&lt;</a>
+            <a href="{{ url_for('image.image_list', market=market, title=title, page=1, dir=dir) }}">&laquo;</a>
+            <a href="{{ url_for('image.image_list', market=market, title=title, page=page-1, dir=dir) }}">&lt;</a>
             {% endif %}
 
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-            <a href="{{ url_for('image.image_list', market=market, page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.image_list', market=market, title=title, page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
 
             {% if page < total_pages %}
-            <a href="{{ url_for('image.image_list', market=market, page=page+1, dir=dir) }}">&gt;</a>
-            <a href="{{ url_for('image.image_list', market=market, page=total_pages, dir=dir) }}">&raquo;</a>
+            <a href="{{ url_for('image.image_list', market=market, title=title, page=page+1, dir=dir) }}">&gt;</a>
+            <a href="{{ url_for('image.image_list', market=market, title=title, page=total_pages, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>
         {% if images_length != 0 and dir in ['image', 'image2', 'move'] %}
