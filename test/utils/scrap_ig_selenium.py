@@ -7,9 +7,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 # --- 로그인 정보 ---
-USERNAME = "acount"
-PASSWORD = "password"
-TARGET_ACCOUNT = "target"  # 스크랩할 계정
+USERNAME = "fkaus015"   # 인스타 로그인 계정
+PASSWORD = ""   # 비밀번호
+TARGET_ACCOUNT = ""  # 스크랩할 계정
 
 # --- 크롬 옵션 설정 ---
 options = Options()
@@ -21,13 +21,13 @@ driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), opti
 
 # --- 인스타그램 로그인 ---
 driver.get("https://www.instagram.com/")
-time.sleep(3)
+time.sleep(2)
 
 # 아이디, 비밀번호 입력
 driver.find_element(By.NAME, "username").send_keys(USERNAME)
 driver.find_element(By.NAME, "password").send_keys(PASSWORD)
 driver.find_element(By.NAME, "password").send_keys(Keys.RETURN)
-time.sleep(7)
+time.sleep(5)
 
 # --- 계정 검색 ---
 search_url = f"https://www.instagram.com/{TARGET_ACCOUNT}/"
