@@ -12,6 +12,8 @@ from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
     find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
     find_chat_indices_by_keyword, fetch_context_by_center
+from app.repository.scrap_posts.ScrapPostDTO import ScrapPostDTO
+from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap_post
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, update_stock_list, get_stock_list
 from app.repository.users.users import find_user_by_username
@@ -832,6 +834,40 @@ def render_preview():
        raise Exception("미리보기 데이터가 존재하지 않습니다.")
 
     return jsonify(result)
+
+
+################################# SCRAP ####################################
+@func.route('/scrap-posts', methods=['POST'])
+def insert_scrap_posts():
+    data = request.get_json()
+    account = data.get('account')
+    post_urls = data.get('post_urls')
+    type = data.get('type')
+
+    scrap = ScrapPostDTO(
+        account=account,
+        post_urls=post_urls,
+        type=type,
+    )
+
+    try:
+        insert_scrap_post(scrap)
+    except Exception as e:
+        # 오류 발생시 JSON 반환
+        print(e)
+        return {
+            "status": "error",
+            "message": str(e)
+        }, 500
+
+    return {"status": "success", "result": "200"}, 200
+
+@func.route('/scrap-posts', methods=['GET'])
+def find_scrap_posts_func():
+    post_urls = request.args.get("urls")  # ?urls=... 값을 가져옴
+    return jsonify({"result": find_scrap_post(post_urls)})
+
+
 
 
 # test axios timeout
