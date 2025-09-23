@@ -11,13 +11,12 @@ def update_stock_list(stocks: List["StockDTO"], conn=None, batch_size: int = 500
         created_at, nation, stock_code, stock_name, sector_code, stock_market
     )
     VALUES (now(), %s, %s, %s, %s, %s)
-    ON CONFLICT (stock_code, (created_at::date))
+    ON CONFLICT (stock_code)
     DO UPDATE SET
-        nation       = COALESCE(EXCLUDED.nation,       interest_stocks.nation),
-        stock_code   = COALESCE(EXCLUDED.stock_code,   interest_stocks.stock_code),
-        stock_name   = COALESCE(EXCLUDED.stock_name,   interest_stocks.stock_name),
-        sector_code  = COALESCE(EXCLUDED.sector_code,  interest_stocks.sector_code);
-        stock_market = COALESCE(EXCLUDED.stock_market, interest_stocks.stock_market);
+        nation       = COALESCE(EXCLUDED.nation,       stocks.nation),
+        stock_name   = COALESCE(EXCLUDED.stock_name,   stocks.stock_name),
+        sector_code  = COALESCE(EXCLUDED.sector_code,  stocks.sector_code),
+        stock_market = COALESCE(EXCLUDED.stock_market, stocks.stock_market);
     """
 
     with conn.cursor() as cur:
@@ -59,7 +58,6 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
         DO UPDATE SET
             updated_at               = now(),
             nation                   = COALESCE(EXCLUDED.nation,                   interest_stocks.nation),
-            stock_code               = COALESCE(EXCLUDED.stock_code,               interest_stocks.stock_code),
             stock_name               = COALESCE(EXCLUDED.stock_name,               interest_stocks.stock_name),
             pred_price_change_3d_pct = COALESCE(EXCLUDED.pred_price_change_3d_pct, interest_stocks.pred_price_change_3d_pct),
             yesterday_close          = COALESCE(EXCLUDED.yesterday_close,          interest_stocks.yesterday_close),
