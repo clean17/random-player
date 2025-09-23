@@ -34,6 +34,7 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "/func/stocks/interest",
                 "/func/last-read-chat-id?username",
                 "/image/move-image", "/image/stock-graphs/interest",
+                "/func/scrap-posts",
                 ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 

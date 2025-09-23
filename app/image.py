@@ -134,6 +134,13 @@ def get_subdir_and_reels_images(start, count, parent_dir):
                     reels_file_path = os.path.join(reels_path, f)
                     if os.path.isfile(reels_file_path) and not f.lower().endswith(('.zip', '.ini')):
                         images.append(f"{subdir}/reels/{f}")
+            # 3. images 서브디렉토리의 파일
+            images_path = os.path.join(subdir_path, "images")
+            if os.path.isdir(images_path):
+                for f in os.listdir(images_path):
+                    img_file_path = os.path.join(images_path, f)
+                    if os.path.isfile(img_file_path) and not f.lower().endswith(('.zip', '.ini')):
+                        images.append(f"{subdir}/images/{f}")
     images.sort()
     image2_arr = images
     return images[start:start + count]
@@ -225,6 +232,13 @@ def count_non_zip_files_in_subfolders_and_reels(parent_dir):
                 for f in os.listdir(reels_path):
                     reels_file_path = os.path.join(reels_path, f)
                     if os.path.isfile(reels_file_path) and not f.lower().endswith('.zip'):
+                        count += 1
+            # 3. images 서브디렉토리의 파일
+            images_path = os.path.join(subdir_path, "images")
+            if os.path.isdir(images_path):
+                for f in os.listdir(images_path):
+                    img_file_path = os.path.join(images_path, f)
+                    if os.path.isfile(img_file_path) and not f.lower().endswith(('.zip', '.ini')):
                         count += 1
     return count
 
