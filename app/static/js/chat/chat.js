@@ -243,6 +243,8 @@ function connectSocket() {
 ////////////////////////// Focus on Browser  ///////////////////////////
 
 let m_intervalId = null;
+let m_intervalId2 = null;
+let m_intervalId3 = null;
 
 function startPolling() {
     if (!m_intervalId) {
@@ -253,11 +255,30 @@ function startPolling() {
             socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp }) // 채팅방 참여자 요청
         }, 500);
     }
+    if (!m_intervalId2) {
+        m_intervalId2 = setInterval(() => {
+            moveMinusOneToEnd(); // 채팅중을 가장 아래로 이동
+        }, 50);
+    }
+    if (!m_intervalId3) {
+        m_intervalId3 = setInterval(() => {
+            getPeerLastReadChatId(); // 상대가 읽었는지 확인
+            setCheckIconsGreenUpTo(); // 있었으면 읽음 표시
+        }, 500);
+    }
 }
 function stopPolling() {
     if (m_intervalId) {
         clearInterval(m_intervalId);
         m_intervalId = null;
+    }
+    if (m_intervalId2) {
+        clearInterval(m_intervalId2);
+        m_intervalId2 = null;
+    }
+    if (m_intervalId3) {
+        clearInterval(m_intervalId3);
+        m_intervalId3 = null;
     }
 }
 
@@ -1247,14 +1268,14 @@ async function initPage() {
         }, 20);
     }, 250)
 
-    setInterval(() => {
+    m_intervalId2 = setInterval(() => {
         moveMinusOneToEnd(); // 채팅중을 가장 아래로 이동
-    }, 50)
+    }, 50);
 
-    setInterval(() => {
+    m_intervalId3 = setInterval(() => {
         getPeerLastReadChatId(); // 상대가 읽었는지 확인
         setCheckIconsGreenUpTo(); // 있었으면 읽음 표시
-    }, 500)
+    }, 500);
 
     m_intervalId = setInterval(() => {
         const now = new Date();
