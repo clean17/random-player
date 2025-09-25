@@ -3,17 +3,16 @@ import os, sys
 import time
 import json
 from pathlib import Path
-from urllib.parse import urljoin, urlparse, parse_qs
+from urllib.parse import urljoin, urlparse, urlsplit
 from typing import List, Dict, Any, Optional, Set
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from playwright.async_api import async_playwright
 import subprocess
 import shutil
 from typing import Dict, Any, List, Set
-from urllib.parse import urlparse
 import asyncio
 import re
-from urllib.parse import urlsplit
 import requests
+import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config.config import settings
@@ -22,13 +21,13 @@ from config.config import settings
 USER_DATA_DIR = str(Path("./ig_profile").resolve())  # 세션 저장 (2회차부터 자동 로그인)
 HEADLESS = False
 
-USERNAME = "fkaus015"   # 인스타 로그인 계정
-PASSWORD = ""   # 비밀번호
+USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
+PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
 
 ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
 
 IMAGE_DIR2 = settings['IMAGE_DIR2']
-print(IMAGE_DIR2)
+# print(IMAGE_DIR2)
 # BASE_SAVE_DIR = r"D:\temp"
 BASE_SAVE_DIR = IMAGE_DIR2
 
@@ -591,7 +590,7 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
         return None
 
 
-async def download_media(images: List[str], videos: List[str], video_cdn: List[str], dirs: Dict[str, str]):
+async def download_media(images: List[str], videos: List[str], video_cdn: List[str], dirs: Dict[str, str], account: str):
     # 비디오는 video_cdn만 사용 (요구사항)
     video_sources = video_cdn if video_cdn else []
 
@@ -603,9 +602,9 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
     async with aiohttp.ClientSession(connector=conn) as session:
         tasks = []
         for i, url in enumerate(images, 1):
-            tasks.append(download_one(session, url, dirs["images"], prefix=f"img{i}"))
+            tasks.append(download_one(session, url, dirs["images"], prefix=f"{account}_img{i}"))
         for i, url in enumerate(video_sources, 1):
-            tasks.append(download_one(session, url, dirs["reels"], prefix=f"reel{i}"))
+            tasks.append(download_one(session, url, dirs["reels"], prefix=f"{account}_reel{i}"))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         ok_paths = [p for p in results if isinstance(p, str) and p]
@@ -645,7 +644,8 @@ async def handle_account(context, account: str):
 
     all_saved = []
     for idx, link in enumerate(links, 1):
-        print(f"[{account}] ({idx}/{len(links)}) {link}")
+        today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+        print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
 
         url = "https://chickchick.shop/func/scrap-posts?urls="+link
         res = requests.get(url)
@@ -661,7 +661,7 @@ async def handle_account(context, account: str):
                 # print('media', media)
                 # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
                 saved = await download_media(
-                    media["images"], media["videos"], media["video_cdn"], dirs
+                    media["images"], media["videos"], media["video_cdn"], dirs, account
                 )
                 all_saved.extend(saved or [])
 
@@ -705,14 +705,22 @@ async def main():
                 await handle_account(context, acc)
             except Exception as e:
                 print(f"[{acc}] 처리 중 에러: {e}")
+                pass
 
-            if len(ACCOUNTS) == i+1:
-                break
-
-            # 계정 간 쿨다운(선택): 과도한 접근 방지, 5분
-            await asyncio.sleep(60 * 5)
+            if i < len(ACCOUNTS) - 1:
+                await asyncio.sleep(300) # 계정 간 쿨다운(선택): 과도한 접근 방지, 5분
 
         await context.close()
+
+    import threading, traceback, sys
+
+    _old_start = threading.Thread.start
+    def _debug_start(self, *a, **k):
+        print(f"[Thread start] name={self.name}, target={getattr(self, '_target', None)}", file=sys.stderr)
+        traceback.print_stack(limit=6, file=sys.stderr)
+        return _old_start(self, *a, **k)
+
+    threading.Thread.start = _debug_start
 
 if __name__ == "__main__":
     asyncio.run(main())
