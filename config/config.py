@@ -85,6 +85,8 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         'GUEST_PASSWORD': generate_password_hash(settings.get('guest_password')),
         'SUPER_USERNAME': settings.get('super_username'),
         'SUPER_PASSWORD': generate_password_hash(settings.get('super_password')),
+        'SCRAP_USERNAME': settings.get('scrap_username'),
+        'SCRAP_PASSWORD': settings.get('scrap_password'),
 
         'VIDEO_DIRECTORY0': directories.get('ffmpeg_directory'),
         'VIDEO_DIRECTORY1': directories.get('video_directory1'),

@@ -154,7 +154,7 @@
                 const id = btn.getAttribute('data-target');
                 const row = document.getElementById(id);
                 if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
-                btn.textContent = (row && row.style.display !== 'none') ? '그래프 닫기' : '그래프 보기';
+                btn.textContent = (row && row.style.display !== 'none') ? '닫기' : '열기';
             });
         });
     }
@@ -173,7 +173,7 @@
         const html = rows.map(r => {
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
             const hasImg = !!r.image_url;
-            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>그래프 보기</button>`;
+            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
             const date = new Date(`${r.created_at}`);
             const fmt = new Intl.DateTimeFormat("ko-KR", {
                 timeZone: "UTC",
@@ -231,7 +231,7 @@
         const html = rows.map(r => {
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
             const hasImg = !!r.image_url;
-            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>그래프 보기</button>`;
+            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
             const date = new Date(`${r.created_at}`);
             const fmt = new Intl.DateTimeFormat("ko-KR", {
                 timeZone: "UTC",
