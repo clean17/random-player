@@ -1,6 +1,5 @@
 import aiohttp
-import os, sys
-import time
+import re, os, sys, time, itertools
 import json
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, urlsplit
@@ -10,7 +9,6 @@ import subprocess
 import shutil
 from typing import Dict, Any, List, Set
 import asyncio
-import re
 import requests
 import datetime
 
@@ -218,8 +216,11 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
         #     last_count = len(post_links)
 
     # return sorted(post_links)
-    links = links[::-1] # 역순으로
-    return sorted(links)
+    # links.reverse() # 역순으로 뒤집기
+    # return links
+
+    rev_links = links[::-1]   # slicing, 원본 보존
+    return rev_links
 
 # 컨테이너: section > main > div:first-child > div:first-child > div[role="presentation"] > ul > li > img
 UL_SEL   = "section main > div:nth-of-type(1) > div:nth-of-type(1) div[role='presentation'] ul"
@@ -572,6 +573,29 @@ async def extract_media_from_post(page, url: str):
 #     }
 
 
+_seq = itertools.count()
+_seq_lock = asyncio.Lock()
+
+def now_ms() -> int:
+    return int(time.time() * 1000)  # 사람 읽기 쉬운 벽시계 ms
+
+async def next_seq() -> int:
+    # 동일 ms 충돌 및 코루틴 동시성 대비
+    async with _seq_lock:
+        return next(_seq)
+
+def safe_open_exclusive(path: str):
+    # 존재 충돌 시 에러로 실패시키는 전용 오픈 (덮어쓰기 방지)
+    return open(path, "xb")
+
+def guess_ext_from_url_or_type(url, ct) -> str:
+    # ... 기존 함수 그대로 ...
+    return ".bin"
+
+def sanitize_filename(name: str) -> str:
+    # ... 기존 함수 그대로 ...
+    return name
+
 # ======== 다운로드 ========
 async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, prefix: str="media") -> Optional[str]:
     try:
@@ -580,12 +604,26 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
                 return None
             ct = resp.headers.get("Content-Type", "")
             ext = guess_ext_from_url_or_type(url, ct)
-            fname = sanitize_filename(f"{prefix}_{int(time.time()*1000)}{ext}")
+
+            ts = now_ms()
+            seq = await next_seq()  # 타이브레이커
+            fname = sanitize_filename(f"{prefix}_{ts:013d}_{seq:06d}{ext}")
+            # fname = sanitize_filename(f"{prefix}_{int(time.time()*1000)}{ext}")
             path = os.path.join(save_dir, fname)
             data = await resp.read()
-            with open(path, "wb") as f:
+            with safe_open_exclusive(path) as f:
                 f.write(data)
+            # with open(path, "wb") as f:
+            #     f.write(data)
             return path
+    except FileExistsError:
+        # 극히 드문 경합 대비 (다시 한 번 시퀀스 증가)
+        seq = await next_seq()
+        ts = now_ms()
+        alt = os.path.join(save_dir, sanitize_filename(f"{prefix}_{ts:013d}_{seq:06d}{ext}"))
+        with open(alt, "wb") as f:
+            f.write(data)
+        return alt
     except Exception:
         return None
 
@@ -602,9 +640,9 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
     async with aiohttp.ClientSession(connector=conn) as session:
         tasks = []
         for i, url in enumerate(images, 1):
-            tasks.append(download_one(session, url, dirs["images"], prefix=f"{account}_img{i}"))
+            tasks.append(download_one(session, url, dirs["images"], prefix=f"{account}_img"))
         for i, url in enumerate(video_sources, 1):
-            tasks.append(download_one(session, url, dirs["reels"], prefix=f"{account}_reel{i}"))
+            tasks.append(download_one(session, url, dirs["reels"], prefix=f"{account}_reel"))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         ok_paths = [p for p in results if isinstance(p, str) and p]
