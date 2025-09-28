@@ -16,11 +16,12 @@ def insert_scrap_post(post: "ScrapPostDTO", conn=None) -> int:
 
 @db_transaction
 def find_scrap_post(post_urls: str, conn=None) -> List["ScrapPostDTO"]:
+    pattern = f"%{post_urls}%"
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
             "SELECT * FROM scrap_posts "
-            "WHERE post_urls = %s ;",
-            (post_urls,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
+            "WHERE post_urls LIKE %s;",
+            (pattern,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
         )
         row = cur.fetchone()
         if row:

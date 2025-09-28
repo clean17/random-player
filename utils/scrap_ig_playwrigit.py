@@ -2,7 +2,7 @@ import aiohttp
 import re, os, sys, time, itertools
 import json
 from pathlib import Path
-from urllib.parse import urljoin, urlparse, urlsplit
+from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 from typing import List, Dict, Any, Optional, Set
 from playwright.async_api import async_playwright
 import subprocess
@@ -133,12 +133,15 @@ def extract_account_and_type(url):
     parts = [p for p in parsed.path.split("/") if p]  # 빈 문자열 제거
     # parts = ['fkaus014', 'p', 'DO27U_DDw63']
 
-    username = parts[0]  # fkaus014
-    post_type = parts[1] # p
-    post_id   = parts[2] # DO27U_DDw63
+    # username = parts[0]  # fkaus014
+    # post_type = parts[1] # p
+    # post_id   = parts[2] # DO27U_DDw63
+
+    post_type = parts[0] # p
+    post_id   = parts[1] # DO27U_DDw63
 
     return {
-        "account": username, "type": post_type
+        "type": post_type
     }
 
 # ======== 브라우저 조작 ========
@@ -166,6 +169,28 @@ async def go_to_profile(page, handle: str):
     await page.goto(url, wait_until="domcontentloaded")
     await page.wait_for_selector("main", timeout=15000)
 
+
+POST_PREFIXES = {"p", "reel", "tv", "stories"}  # IGTV 포함(필요 없으면 제거)
+
+def normalize_ig_post_url(url: str) -> str:
+    """
+    https://www.instagram.com/<user>/p/<code>  -> https://www.instagram.com/p/<code>
+    https://www.instagram.com/<user>/reel/<code> -> https://www.instagram.com/reel/<code>
+    이미 /p/, /reel/, /tv/ 로 시작하면 그대로 유지.
+    쿼리/프래그먼트 보존, 상대경로도 허용.
+    """
+    base = "https://www.instagram.com"
+    s = urlsplit(urljoin(base, url))  # 상대경로 대비
+    parts = [seg for seg in s.path.split("/") if seg]  # ["user","p","CODE"]
+
+    if len(parts) >= 2 and parts[0] not in POST_PREFIXES and parts[1] in POST_PREFIXES:
+        # 첫 세그먼트가 유저명이고, 그 다음이 p/reel/tv 인 전형적 패턴 → 유저명 제거
+        parts = parts[1:]
+
+    new_path = "/" + "/".join(parts) if parts else "/"
+    return urlunsplit((s.scheme, s.netloc, new_path, s.query, s.fragment))
+
+
 async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) -> List[str]:
     """프로필 페이지에서 스크롤하며 /p/, /reel/ 링크 수집 (상대경로 → 절대경로)"""
     links = []
@@ -183,8 +208,14 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
             href = await a.get_attribute("href")
             if not href:
                 continue
+
+            # 절대경로화
             if href.startswith("/"):
                 href = urljoin("https://www.instagram.com", href)
+
+            # acount 세그먼트 제거
+            href = normalize_ig_post_url(href)
+
             if is_post_or_reel(href):
                 if href not in post_links:
                     post_links.add(href)
@@ -434,6 +465,7 @@ async def force_play_video_if_possible(page):
     except:
         pass
 
+# https://scontent-ssn1-1.cdninstagram.com/v/t51
 async def extract_media_from_post(page, url: str):
     """
     어떤 URL이든(포스트/릴스) 이미지와 비디오를 동시에 수집.
@@ -588,14 +620,6 @@ def safe_open_exclusive(path: str):
     # 존재 충돌 시 에러로 실패시키는 전용 오픈 (덮어쓰기 방지)
     return open(path, "xb")
 
-def guess_ext_from_url_or_type(url, ct) -> str:
-    # ... 기존 함수 그대로 ...
-    return ".bin"
-
-def sanitize_filename(name: str) -> str:
-    # ... 기존 함수 그대로 ...
-    return name
-
 # ======== 다운로드 ========
 async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, prefix: str="media") -> Optional[str]:
     try:
@@ -685,7 +709,11 @@ async def handle_account(context, account: str):
         today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
 
-        url = "https://chickchick.shop/func/scrap-posts?urls="+link
+        parsed = urlparse(link)
+        # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
+        qs_link = parsed.path
+
+        url = "https://chickchick.shop/func/scrap-posts?urls="+qs_link
         res = requests.get(url)
         data = res.json()
         if not data["result"]: # 등록한적 없음
@@ -697,10 +725,12 @@ async def handle_account(context, account: str):
             try:
                 media = await extract_media_from_post(page, link)
                 # print('media', media)
+
                 # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
                 saved = await download_media(
                     media["images"], media["videos"], media["video_cdn"], dirs, account
                 )
+                # print('saved', saved)
                 all_saved.extend(saved or [])
 
                 link_segment = extract_account_and_type(link)
