@@ -3,11 +3,10 @@ import re, os, sys, time, itertools
 import json
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Tuple
 from playwright.async_api import async_playwright
 import subprocess
 import shutil
-from typing import Dict, Any, List, Set
 import asyncio
 import requests
 import datetime
@@ -264,61 +263,111 @@ NEXT_BTN_SEL  = (
     "button[aria-label*='Next'], :has(button:has-text('Next'))"
 )
 
-async def extract_imgs_src_only(page, post_url: str):
-    # await page.goto(post_url, wait_until="domcontentloaded")
+# 공통 루트
+ROOT_MAIN   = "section main > div:nth-of-type(1) > div:nth-of-type(1)"
+ROOT_DIALOG = "div[role='dialog']"
 
-    # ===== 1) 기본 컨테이너 대기 (없으면 fallback로 진입) =====
-    ul_found = False
+async def _resolve_root(page) -> Tuple[Optional[str], Optional[str]]:
+    """메인 루트 우선, 없으면 다이얼로그 루트 선택. (root_css, kind) 반환"""
     try:
-        await page.wait_for_selector(UL_SEL, timeout=5000) # 시간 조정
-        ul_found = True
+        await page.wait_for_selector(ROOT_MAIN, timeout=2500)
+        if await page.locator(ROOT_MAIN).count():
+            return ROOT_MAIN, "main"
     except Exception:
-        ul_found = False
+        pass
+    try:
+        await page.wait_for_selector(ROOT_DIALOG, timeout=4000)
+        if await page.locator(ROOT_DIALOG).count():
+            return ROOT_DIALOG, "dialog"
+    except Exception:
+        pass
+    return None, None
 
-    # ===== 공통: 이미지 한 번에 최대 해상도만 수집하는 헬퍼 =====
-    async def collect_max_images(selector: str):
-        # lazy-load 유도: 마지막 항목 스크롤 (가능할 때만)
+def _under(root: str, rel: str) -> str:
+    """루트 아래 상대 셀렉터를 절대 셀렉터로"""
+    if not rel:
+        return root
+    return f"{root} {rel}".strip()
+
+def _sel(root: str, kind: str, rel_main: str, rel_dialog: Optional[str] = None) -> str:
+    """루트 종류에 따라 알맞은 상대 셀렉터를 선택"""
+    rel = rel_main if kind == "main" else (rel_dialog if rel_dialog is not None else rel_main)
+    return _under(root, rel)
+
+async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
+    root, kind = await _resolve_root(page)
+
+    # 루트/종류에 맞춰 모든 셀렉터 구성
+    if root:
+        # 캐러셀 UL/LI/IMG
+        UL_SEL  = _sel(root, kind, "div[role='presentation'] ul")
+        IMG_SEL = _sel(root, kind, "div[role='presentation'] ul > li img")
+
+        # 다음 버튼 (버튼 "자체"만 선택)
+        NEXT_BTN_SEL = ", ".join([
+            _sel(root, kind, "button[aria-label*='다음']"),
+            _sel(root, kind, "button:has-text('다음')"),
+            _sel(root, kind, "button[aria-label*='Next']"),
+            _sel(root, kind, "button:has-text('Next')"),
+        ])
+
+        # fallback IMG (루트 기준)
+        FALLBACK_IMG = _sel(root, kind,
+                            rel_main="> div:nth-of-type(1) > div:nth-of-type(1) img",
+                            rel_dialog="img")
+    else:
+        UL_SEL = IMG_SEL = NEXT_BTN_SEL = None
+        # 루트를 못 찾으면 둘 다 커버
+        FALLBACK_IMG = (
+            "section main > div:nth-of-type(1) > div:nth-of-type(1) "
+            "> div:nth-of-type(1) > div:nth-of-type(1) img, "
+            "div[role='dialog'] img"
+        )
+
+    # 1) UL 대기 (있으면 캐러셀 모드, 없으면 fallback)
+    ul_found = False
+    if UL_SEL:
+        try:
+            await page.wait_for_selector(UL_SEL, timeout=5000)
+            ul_found = True
+        except Exception:
+            ul_found = False
+
+    # 공통: 이미지 한 번에 최대 해상도만 수집
+    async def collect_max_images(selector: str) -> List[str]:
         try:
             n = await page.locator(selector).count()
             if n > 0:
                 await page.locator(selector).nth(n - 1).scroll_into_view_if_needed()
-        except:
+        except Exception:
             pass
 
-        urls = await page.evaluate(
+        urls: List[str] = await page.evaluate(
             """
             (sel) => {
-              // srcset에서 가장 큰 width를 가진 URL 선택
               const pickLargestFromSrcset = (img) => {
                 const ss = img.getAttribute('srcset');
                 if (!ss) return null;
-                // "url 300w, url 600w ..." 파싱
-                const items = ss.split(',')
-                  .map(s => s.trim())
-                  .map(entry => {
-                    const [u, d] = entry.split(/\s+/);
-                    let w = 0;
-                    if (d && d.endsWith('w')) {
-                      const n = parseInt(d.slice(0, -1), 10);
-                      if (!isNaN(n)) w = n;
-                    }
-                    return { url: u, w };
-                  })
-                  .filter(it => it.url);
-
+                const items = ss.split(',').map(s => s.trim()).map(entry => {
+                  const [u, d] = entry.split(/\\s+/);
+                  let w = 0;
+                  if (d && d.endsWith('w')) {
+                    const n = parseInt(d.slice(0, -1), 10);
+                    if (!isNaN(n)) w = n;
+                  }
+                  return { url: u, w };
+                }).filter(it => it.url);
                 if (!items.length) return null;
-                // width 가장 큰 항목
-                items.sort((a, b) => b.w - a.w);
+                items.sort((a,b)=>b.w-a.w);
                 return items[0].url;
               };
 
               const preferAttrs = (img) => {
-                // 몇몇 사이트의 원본 속성들
-                const candAttrs = [
-                  'data-src-large', 'data-src-2x', 'data-large', 'data-original',
-                  'data-srcset', 'data-fullsrc', 'data-full', 'data-url'
+                const cand = [
+                  'data-src-large','data-src-2x','data-large','data-original',
+                  'data-srcset','data-fullsrc','data-full','data-url'
                 ];
-                for (const a of candAttrs) {
+                for (const a of cand) {
                   const v = img.getAttribute(a);
                   if (v) return v;
                 }
@@ -326,28 +375,24 @@ async def extract_imgs_src_only(page, post_url: str):
               };
 
               const imgs = Array.from(document.querySelectorAll(sel));
-              // 각 IMG마다 "가장 큰 것"만 1개 선택
-              return imgs.map(img => {
-                  return pickLargestFromSrcset(img)
-                      || preferAttrs(img)
-                      || img.currentSrc
-                      || img.getAttribute('src');
-              }).filter(Boolean);
+              return imgs.map(img =>
+                pickLargestFromSrcset(img) ||
+                preferAttrs(img) ||
+                img.currentSrc ||
+                img.getAttribute('src')
+              ).filter(Boolean);
             }
             """,
             selector
         )
         return urls
 
-    seen = set()
-
-    if ul_found:
-        # ===== 2) 기본 캐러셀 처리: 클릭 전-수집 누적 방식 =====
-        async def collect_from_main():
-            # 캐러셀 내부 IMG에서만 수집 (최대해상도 선택)
-            urls = await collect_max_images(IMG_SEL)
-            for u in urls:
-                seen.add(u)
+    # 2) 캐러셀
+    if ul_found and IMG_SEL and NEXT_BTN_SEL:
+        async def collect_from_main() -> None:
+            for u in await collect_max_images(IMG_SEL):
+                if u:
+                    seen.add(u)
 
         await collect_from_main()
 
@@ -363,10 +408,10 @@ async def extract_imgs_src_only(page, post_url: str):
             # 클릭
             try:
                 await next_btn.click(timeout=1000)
-            except:
+            except Exception:
                 try:
                     await next_btn.click(timeout=1000, force=True)
-                except:
+                except Exception:
                     break
 
             await asyncio.sleep(0.25) # 시간 조정
@@ -374,17 +419,11 @@ async def extract_imgs_src_only(page, post_url: str):
         # 마지막 한 번 더
         await collect_from_main()
 
-    else:
-        # ===== 3) Fallback: 전체 영역에서 IMG 수집 (최대해상도만) =====
-        # section main 이 없을 수도 있으니 즉시 검사
-        has_any_img = await page.locator(FALLBACK_IMG).count()
-        if not has_any_img:
-            # 정말로 이미지가 전혀 없다면 패스
-            # print(f"[INFO] {post_url}: 이미지 없음 (UL도 IMG도 못 찾음)")
-            return []
-
-        urls = await collect_max_images(FALLBACK_IMG)
-        seen.update(urls)
+    # 3) Fallback
+    if await page.locator(FALLBACK_IMG).count():
+        for u in await collect_max_images(FALLBACK_IMG):
+            if u:
+                seen.add(u)
 
     # ===== 4) (선택) 추가 중복 축소: 사이즈 파라미터 무시 키로 병합 =====
     # 같은 사진인데 ?w=, ?h=, =s2048 등만 다른 경우를 더 줄이고 싶다면 사용
@@ -484,7 +523,8 @@ async def extract_media_from_post(page, url: str):
     await asyncio.sleep(1.2) # 시간 조정
 
     # 이미지 수집 (도우미 사용)
-    images: List[str] = await extract_imgs_src_only(page, url)
+    seen = set()
+    images: List[str] = await extract_imgs_src_only(page, url, seen)
 
     # 캐러셀 이미지 추가 수집
     # imgs = page.locator("article img")
@@ -514,7 +554,7 @@ async def extract_media_from_post(page, url: str):
         await asyncio.sleep(0.75) # 시간 조정
 
     # 보조: DOM의 <video src>도 수집(있을 수 있음) → CDN 필터 적용
-    vids = page.locator("section main > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) video")
+    vids = page.locator("section main > div:nth-of-type(1) video")
     n_vid = await vids.count()
     dom_video_srcs = []
     for i in range(n_vid):
@@ -705,13 +745,14 @@ async def handle_account(context, account: str):
     dirs = ensure_dirs(BASE_SAVE_DIR, account)
 
     all_saved = []
+    check_saved = []
     for idx, link in enumerate(links, 1):
         today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
 
         parsed = urlparse(link)
         # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
-        qs_link = parsed.path
+        qs_link = normalize_ig_post_url(parsed.path)
 
         url = "https://chickchick.shop/func/scrap-posts?urls="+qs_link
         res = requests.get(url)
@@ -732,14 +773,18 @@ async def handle_account(context, account: str):
                 )
                 # print('saved', saved)
                 all_saved.extend(saved or [])
+                check_saved.extend(saved or [])
+                if idx % 10 == 0:
+                    print(f"[{account}] 저장 완료 파일 수 중간 체크 : {len(check_saved)}")
+                    check_saved = []
 
-                link_segment = extract_account_and_type(link)
+                link_segment = extract_account_and_type(normalize_ig_post_url(link))
                 try:
                     requests.post(
                         'https://chickchick.shop/func/scrap-posts',
                         json={
                             "account": str(account),
-                            "post_urls": link,
+                            "post_urls": qs_link,
                             "type": link_segment["type"],
                         },
                         timeout=5
@@ -766,6 +811,9 @@ async def main():
             # viewport={"width": 1920, "height": 1080},
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
+
+        # 디버깅
+        # await handle_account(context, 'test')
 
         for i, acc in enumerate(ACCOUNTS):
             print(f"\n=== 계정 처리 시작: {acc} ===")
