@@ -25,13 +25,15 @@ ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
 
 IMAGE_DIR2 = settings['IMAGE_DIR2']
 # print(IMAGE_DIR2)
-# BASE_SAVE_DIR = r"D:\temp"
 BASE_SAVE_DIR = IMAGE_DIR2
+# BASE_SAVE_DIR = r"D:\temp"
 
 
 # 스크롤/속도
-SCROLL_PAUSE = 1.5
+SCROLL_PAUSE = 2.0
 MAX_SCROLLS = 30000
+DELAY_SECOND = 2.0
+DELAY_MINUTE = 60 * 5
 
 # ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
 CDN_HOST_RE   = re.compile(r"^https://scontent-[a-z0-9\-]+\.cdninstagram\.com/") # scontent-ssn1-1 등
@@ -146,7 +148,7 @@ def extract_account_and_type(url):
 # ======== 브라우저 조작 ========
 async def ensure_login(page):
     await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
-    await asyncio.sleep(3)
+    await asyncio.sleep(4)
     # 로그인 폼 보이면 로그인
     login_user = page.locator("input[name='username']")
     login_pass = page.locator("input[name='password']")
@@ -155,13 +157,13 @@ async def ensure_login(page):
         await login_pass.fill(PASSWORD)
         await login_pass.press("Enter")
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(8)
+        await asyncio.sleep(10)
         # 팝업 닫기
         for txt in ["나중에 하기", "Not Now"]:
             btn = page.locator(f"button:has-text('{txt}')")
             if await btn.count():
                 await btn.click()
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1)
 
 async def go_to_profile(page, handle: str):
     url = f"https://www.instagram.com/{handle.strip('/')}/"
@@ -213,7 +215,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
                 href = urljoin("https://www.instagram.com", href)
 
             # acount 세그먼트 제거
-            href = normalize_ig_post_url(href)
+            # href = normalize_ig_post_url(href)
 
             if is_post_or_reel(href):
                 if href not in post_links:
@@ -414,7 +416,7 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
                 except Exception:
                     break
 
-            await asyncio.sleep(0.25) # 시간 조정
+            await asyncio.sleep(0.5) # 시간 조정
 
         # 마지막 한 번 더
         await collect_from_main()
@@ -520,29 +522,11 @@ async def extract_media_from_post(page, url: str):
     page.on("response", on_response)
 
     await page.goto(url, wait_until="domcontentloaded")
-    await asyncio.sleep(1.2) # 시간 조정
+    await asyncio.sleep(DELAY_SECOND) # 시간 조정
 
     # 이미지 수집 (도우미 사용)
     seen = set()
     images: List[str] = await extract_imgs_src_only(page, url, seen)
-
-    # 캐러셀 이미지 추가 수집
-    # imgs = page.locator("article img")
-    # for _ in range(5):
-    #     next_btn = page.locator("button[aria-label*='Next'], button:has-text('Next')")
-    #     if not await next_btn.count():
-    #         break
-    #     try:
-    #         await next_btn.click()
-    #         await asyncio.sleep(0.7)
-    #         n_img = await imgs.count()
-    #         for i in range(n_img):
-    #             src = await imgs.nth(i).get_attribute("src")
-    #             if src and src.startswith("http"):
-    #                 images.append(src)
-    #     except:
-    #         break
-    # images = list(dict.fromkeys(images))
 
     # 비디오 수집: 보이게/재생 유도 → '좋은' 응답 대기
     await force_play_video_if_possible(page)
@@ -737,8 +721,13 @@ async def handle_account(context, account: str):
     await ensure_login(page)
     await go_to_profile(page, account)
 
-    # 링크 수집
-    links = await collect_post_links(page)
+    if account == 'test':
+        # 디버깅
+        links = TEST_LINKS
+    else:
+        # 링크 수집
+        links = await collect_post_links(page)
+
     print(f"[{account}] 포스트 링크 수집: {len(links)}개")
 
     # 저장 디렉토리 준비
@@ -746,6 +735,7 @@ async def handle_account(context, account: str):
 
     all_saved = []
     check_saved = []
+    cnt = 0
     for idx, link in enumerate(links, 1):
         today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
@@ -753,11 +743,13 @@ async def handle_account(context, account: str):
         parsed = urlparse(link)
         # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
         qs_link = normalize_ig_post_url(parsed.path)
+        parsed = urlparse(qs_link)
 
-        url = "https://chickchick.shop/func/scrap-posts?urls="+qs_link
+        url = "https://chickchick.shop/func/scrap-posts?urls="+parsed.path
         res = requests.get(url)
         data = res.json()
         if not data["result"]: # 등록한적 없음
+            cnt += 1
             # None, False, 0, '', [], {}, 모두 여기로 들어옴
 
             # if idx == 5: # 디버깅 테스트용
@@ -784,7 +776,7 @@ async def handle_account(context, account: str):
                         'https://chickchick.shop/func/scrap-posts',
                         json={
                             "account": str(account),
-                            "post_urls": qs_link,
+                            "post_urls": link,
                             "type": link_segment["type"],
                         },
                         timeout=5
@@ -794,7 +786,13 @@ async def handle_account(context, account: str):
                     print(f"progress-update 요청 실패-1: {e}")
                     pass  # 오류
 
-                await asyncio.sleep(1)  # 과도한 요청 방지, 1.5 > 1
+                await asyncio.sleep(DELAY_SECOND)  # 과도한 요청 방지
+
+                if cnt % 300 == 0:
+                    await asyncio.sleep(60 * 40)  # 과도한 요청 방지
+                elif cnt % 100 == 0:
+                    await asyncio.sleep(DELAY_MINUTE)  # 과도한 요청 방지
+
             except Exception as e:
                 print(f"  -> 에러: {e}")
         else:
@@ -824,19 +822,19 @@ async def main():
                 pass
 
             if i < len(ACCOUNTS) - 1:
-                await asyncio.sleep(300) # 계정 간 쿨다운(선택): 과도한 접근 방지, 5분
+                await asyncio.sleep(DELAY_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
 
         await context.close()
 
-    import threading, traceback, sys
-
-    _old_start = threading.Thread.start
-    def _debug_start(self, *a, **k):
-        print(f"[Thread start] name={self.name}, target={getattr(self, '_target', None)}", file=sys.stderr)
-        traceback.print_stack(limit=6, file=sys.stderr)
-        return _old_start(self, *a, **k)
-
-    threading.Thread.start = _debug_start
+    # import threading, traceback, sys
+    #
+    # _old_start = threading.Thread.start
+    # def _debug_start(self, *a, **k):
+    #     print(f"[Thread start] name={self.name}, target={getattr(self, '_target', None)}", file=sys.stderr)
+    #     traceback.print_stack(limit=6, file=sys.stderr)
+    #     return _old_start(self, *a, **k)
+    #
+    # threading.Thread.start = _debug_start
 
 if __name__ == "__main__":
     asyncio.run(main())
