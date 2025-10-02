@@ -256,9 +256,11 @@ function startPolling() {
         }, 500);
     }
     if (!m_intervalId2) {
-        m_intervalId2 = setInterval(() => {
-            moveMinusOneToEnd(); // 채팅중을 가장 아래로 이동
-        }, 50);
+        setTimeout(()=>{
+            m_intervalId2 = setInterval(() => {
+                moveMinusOneToEnd(); // 채팅중을 가장 아래로 이동
+            }, 50);
+        }, 1000)
     }
     if (!m_intervalId3) {
         m_intervalId3 = setInterval(() => {
@@ -667,7 +669,7 @@ function addMessage(data, load = false) {
             const video = document.createElement('video');
             video.classList.add('thumbnail');
             video.controls = true;
-            video.style.height = '500px';
+            // video.style.height = '500px';
             const source = document.createElement('source');
             source.type = 'video/mp4';
             source.src = data.msg;
