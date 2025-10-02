@@ -230,7 +230,7 @@ def _sel(root: str, kind: str, rel_main: str, rel_dialog: Optional[str] = None) 
 
 async def extract_imgs_src_only2(page, post_url: str, seen: Set[str]) -> None:
     root, kind = await _resolve_root(page)
-    print('root', root)
+    # print('root', root)
 
     # 루트/종류에 맞춰 모든 셀렉터 구성
     if root:
@@ -461,7 +461,8 @@ async def main():
         # 지정한 포스트들 처리
         for url in POST_URLS:
             seen = set()
-            await extract_imgs_src_only2(page, url, seen)
+            await extract_imgs_src_only(page, url)
+            # await extract_imgs_src_only2(page, url, seen)
 
         await context.close()
 

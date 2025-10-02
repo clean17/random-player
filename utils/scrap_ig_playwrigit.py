@@ -14,26 +14,42 @@ import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config.config import settings
 
-# ======== 설정 ========
-USER_DATA_DIR = str(Path("./ig_profile").resolve())  # 세션 저장 (2회차부터 자동 로그인)
-HEADLESS = False
-
-USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
-PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
-
-ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
-
 IMAGE_DIR2 = settings['IMAGE_DIR2']
 # print(IMAGE_DIR2)
 BASE_SAVE_DIR = IMAGE_DIR2
 # BASE_SAVE_DIR = r"D:\temp"
 
+# ======== 설정 ========
+USER_DATA_DIR = str(Path("./ig_profile-0").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
+USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
+# USER_DATA_DIR = str(Path("./ig_profile-2").resolve())  # fx016
+HEADLESS = False
+
+USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
+PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
+
+# USERNAME = ""   # 인스타 로그인 계정
+# PASSWORD = ""   # 비밀번호
 
 # 스크롤/속도
 SCROLL_PAUSE = 2.0
 MAX_SCROLLS = 30000
 DELAY_SECOND = 2.0
 DELAY_MINUTE = 60 * 5
+
+ACCOUNTS = [
+
+]
+# ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
+
+TEST_LINKS = [
+
+]
+
+
+
+
+
 
 # ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
 CDN_HOST_RE   = re.compile(r"^https://scontent-[a-z0-9\-]+\.cdninstagram\.com/") # scontent-ssn1-1 등
@@ -484,7 +500,6 @@ async def force_play_video_if_possible(page):
     """비디오 보이게 하고 재생 유도 → 네트워크 트리거"""
     vid = page.locator("section main > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) video").first
     if await vid.count():
-        print('DEBUG-008')
         try:
             await vid.scroll_into_view_if_needed()
         except:
@@ -542,7 +557,6 @@ async def extract_media_from_post(page, url: str):
     n_vid = await vids.count()
     dom_video_srcs = []
     for i in range(n_vid):
-        print('DEBUG-011')
         vsrc = await vids.nth(i).get_attribute("src")
         if vsrc and vsrc.startswith("http"):
             dom_video_srcs.append(vsrc)
@@ -767,7 +781,7 @@ async def handle_account(context, account: str):
                 all_saved.extend(saved or [])
                 check_saved.extend(saved or [])
                 if idx % 10 == 0:
-                    print(f"[{account}] 저장 완료 파일 수 중간 체크 : {len(check_saved)}")
+                    print(f"[{account}] Interim check of number of saved files : {len(check_saved)}")
                     check_saved = []
 
                 link_segment = extract_account_and_type(normalize_ig_post_url(link))
@@ -789,7 +803,7 @@ async def handle_account(context, account: str):
                 await asyncio.sleep(DELAY_SECOND)  # 과도한 요청 방지
 
                 if cnt % 300 == 0:
-                    await asyncio.sleep(60 * 40)  # 과도한 요청 방지
+                    await asyncio.sleep(60 * 30)  # 과도한 요청 방지
                 elif cnt % 100 == 0:
                     await asyncio.sleep(DELAY_MINUTE)  # 과도한 요청 방지
 
@@ -799,7 +813,7 @@ async def handle_account(context, account: str):
             continue
 
     await page.close()
-    print(f"[{account}] 저장 완료 파일 수: {len(all_saved)}")
+    print(f"[{account}] Number of files saved: {len(all_saved)}")
 
 async def main():
     async with async_playwright() as pw:
