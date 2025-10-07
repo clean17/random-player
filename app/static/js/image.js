@@ -35,6 +35,7 @@ let lastScrollTop = 0;
 let lastScrollTime = Date.now();
 const SCROLL_DELAY = 100;
 const SCROLL_THRESHOLD = 100000;  // px per second
+const THROTTLE_NEXT_IMG_SEC = 200
 
 // slideShow
 let slideShowTimer = null;
@@ -43,7 +44,7 @@ let slideShowIdx = 0;
 
 
 // 다음 이미지 함수 스로틀링
-const throttledNextImage = throttle(() => nextImage(), 180);
+const throttledNextImage = throttle(() => nextImage(), THROTTLE_NEXT_IMG_SEC);
 const debouncedScrollEvent = debounce(handleScroll, SCROLL_DELAY);
 
 /******************************************  Procress  ****************************************/
@@ -219,7 +220,8 @@ function deletePage(e) {
     delBtn.style.background = 'gray';
 
     axios.post("/image/delete-images?dir="+dir, {
-        images: delImages
+        images: delImages,
+        page: page
     })
         .then(res => {
             // 응답 JSON의 redirect 사용 (절대 URL로 보장)
