@@ -174,7 +174,7 @@ function moveImageToPreviousStep(event, imageItem) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                imagepath: 'ref_image',
+                imagepath: 'refine',
                 filename: `${decodeURIComponent(filename)}`
             })
         })

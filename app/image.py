@@ -94,7 +94,7 @@ def get_images(start, count, dir, page):
         full_paths.sort(key=lambda x: os.path.getmtime(x)) # 수정시간 오름차순
         # 파일명만 추출
         images = [os.path.basename(f) for f in full_paths]
-        if start > len(images):
+        if start >= len(images) and len(images) > 0:
             start = max(0, start - LIMIT_PAGE_NUM)
             page = max(1, page - 1)
     return images[start:start + count], page
@@ -117,7 +117,7 @@ def get_subdir_images(start, count, dirs):
     return images[start:start + count]
 
 
-def get_subdir_and_reels_images(start, count, parent_dir):
+def get_subdir_and_reels_images(start, count, parent_dir, page):
     global image2_arr
     images = []
     # subdir: 각 인스타그램 계정 폴더
@@ -145,8 +145,11 @@ def get_subdir_and_reels_images(start, count, parent_dir):
                     if os.path.isfile(img_file_path) and not f.lower().endswith(('.zip', '.ini')):
                         images.append(f"{subdir}/images/{f}")
     images.sort()
+    if start >= len(images) and len(images) > 0:
+        start = max(0, start - LIMIT_PAGE_NUM)
+        page = max(1, page - 1)
     image2_arr = images
-    return images[start:start + count]
+    return images[start:start + count], page
 
 
 def get_reverse_images(start, count, dir):
@@ -267,7 +270,7 @@ def image_list():
 
 
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
-        # images, page = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR)
+        # images, page = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR, page)
         # images_length = count_non_zip_files(TEMP_IMAGE_DIR)
         # template_html = 'trip_image_list.html'
         template_html = 'image_list.html'
@@ -295,26 +298,26 @@ def image_list():
 
         isSlide = request.args.get('slide', '')
         if isSlide == 'y':
-            images, page = get_images(0, images_length, REF_IMAGE_DIR)
+            images, page = get_images(0, images_length, REF_IMAGE_DIR, page)
             return jsonify({"slide_show_images": images})
         else:
-            images, page = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR)
+            images, page = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR, page)
         # template_html = 'ref_image_list.html'
         template_html = 'image_list.html'
     elif dir == 'image':
-        images, page = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR)
+        images, page = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR, page)
         images_length = count_non_zip_files(IMAGE_DIR)
         template_html = 'image_list.html'
     elif dir == 'image2':
-        images = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2)
+        images, page = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2, page)
         images_length = count_non_zip_files_in_subfolders_and_reels(IMAGE_DIR2)
         template_html = 'image_list.html'
     # elif dir == 'trip':
-    #     images, page = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR)
+    #     images, page = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR, page)
     #     images_length = count_non_zip_files(TRIP_IMAGE_DIR)
     #     template_html = 'trip_image_list.html'
     elif dir == 'move':
-        images, page = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR)
+        images, page = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR, page)
         images_length = count_non_zip_files(MOVE_DIR)
         template_html = 'image_list.html'
     elif dir == 'stock':
@@ -360,7 +363,7 @@ def move_image():
         src_path = os.path.join(MOVE_DIR, filename)
         thumb_dir = os.path.join(MOVE_DIR, "thumb")
         dest_path = ref_dest_path
-    elif imagepath == "ref":
+    elif imagepath == "refine":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
         thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
     elif imagepath == "trip":
