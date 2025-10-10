@@ -1,6 +1,5 @@
 import aiohttp
 import re, os, sys, time, itertools
-import json
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 from typing import List, Dict, Any, Optional, Set, Tuple
@@ -32,7 +31,7 @@ PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
 # PASSWORD = ""   # 비밀번호
 
 # 스크롤/속도
-SCROLL_PAUSE = 2.0
+SCROLL_PAUSE = 1.8
 MAX_SCROLLS = 30000
 DELAY_SECOND = 2.0
 DELAY_MINUTE = 60 * 5
@@ -214,6 +213,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
     post_links: Set[str] = set()
     # stable_rounds = 0
     # last_count = 0
+    already_collected_count = 0
     await page.wait_for_selector("main", timeout=15000)
     await asyncio.sleep(3)
 
@@ -228,12 +228,26 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
 
             # 절대경로화
             if href.startswith("/"):
+                # href: /계정/p/postId/
+                parseResult = urlparse(normalize_ig_post_url(href))
+                origin_href = parseResult.path
+
                 href = urljoin("https://www.instagram.com", href)
 
             # acount 세그먼트 제거
             # href = normalize_ig_post_url(href)
 
             if is_post_or_reel(href):
+                url = "https://chickchick.shop/func/scrap-posts?urls="+origin_href
+                res = requests.get(url)
+                data = res.json()
+                if data["result"]: # 등록되어 있음
+                    already_collected_count += 1
+
+                # if already_collected_count > 30:
+                #     links = []
+                #     break
+
                 if href not in post_links:
                     post_links.add(href)
                     links.append(href)
@@ -743,6 +757,8 @@ async def handle_account(context, account: str):
         links = await collect_post_links(page)
 
     print(f"[{account}] 포스트 링크 수집: {len(links)}개")
+    if len(links) > 300:
+        await asyncio.sleep(60 * 30)  # 과도한 요청 방지
 
     # 저장 디렉토리 준비
     dirs = ensure_dirs(BASE_SAVE_DIR, account)
@@ -833,22 +849,12 @@ async def main():
                 await handle_account(context, acc)
             except Exception as e:
                 print(f"[{acc}] 처리 중 에러: {e}")
-                pass
+                continue
 
             if i < len(ACCOUNTS) - 1:
                 await asyncio.sleep(DELAY_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
 
         await context.close()
-
-    # import threading, traceback, sys
-    #
-    # _old_start = threading.Thread.start
-    # def _debug_start(self, *a, **k):
-    #     print(f"[Thread start] name={self.name}, target={getattr(self, '_target', None)}", file=sys.stderr)
-    #     traceback.print_stack(limit=6, file=sys.stderr)
-    #     return _old_start(self, *a, **k)
-    #
-    # threading.Thread.start = _debug_start
 
 if __name__ == "__main__":
     asyncio.run(main())
