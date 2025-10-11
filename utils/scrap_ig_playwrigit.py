@@ -756,7 +756,7 @@ async def handle_account(context, account: str):
         # 링크 수집
         links = await collect_post_links(page)
 
-    print(f"[{account}] 포스트 링크 수집: {len(links)}개")
+    print(f"[{account}] Collect Postlinks: {len(links)}개")
     if len(links) > 300:
         await asyncio.sleep(60 * 30)  # 과도한 요청 방지
 
@@ -844,11 +844,11 @@ async def main():
         # await handle_account(context, 'test')
 
         for i, acc in enumerate(ACCOUNTS):
-            print(f"\n=== 계정 처리 시작: {acc} ===")
+            print(f"\n=== Start account processing: {acc} ===")
             try:
                 await handle_account(context, acc)
             except Exception as e:
-                print(f"[{acc}] 처리 중 에러: {e}")
+                print(f"[{acc}] Error in processing: {e}")
                 continue
 
             if i < len(ACCOUNTS) - 1:
