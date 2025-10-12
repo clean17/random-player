@@ -11,6 +11,7 @@ import time
 import urllib.parse
 import shutil
 from urllib.parse import unquote
+from typing import Final
 
 image_bp = Blueprint('image', __name__)
 LIMIT_PAGE_NUM = 100
@@ -36,6 +37,8 @@ DIRECTORY_MAP = {
     'interest': INTEREST_DIR
 }
 
+EXCLUDE_SUFFIXES: Final = (".zip", ".ini", ".Identifier")  # 불변 튜플
+
 # MOVE_DIR = os.path.join(os.getcwd(), 'move')
 def initialize_image_directories():
     os.makedirs(IMAGE_DIR, exist_ok=True)
@@ -50,7 +53,7 @@ def initialize_shuffle_images():
     images = [
         f for f in os.listdir(REF_IMAGE_DIR)
         if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))
-           and not f.lower().endswith(('.zip', '.ini'))
+           and not f.lower().endswith(EXCLUDE_SUFFIXES)
     ]
     random.seed(time.time())
     random.shuffle(images)
@@ -72,7 +75,7 @@ initialize_shuffle_images()
 #     else:
 #         images = [
 #             f for f in os.listdir(dir)
-#             if not f.lower().endswith(('.zip', '.ini'))  # ✅ .zip 파일 제외
+#             if not f.lower().endswith(EXCLUDE_SUFFIXES)  # ✅ .zip 파일 제외
 #         ]
 #         images.sort()
 #     return images[start:start + count]
@@ -84,7 +87,7 @@ def get_images(start, count, dir, page):
         # .zip, .ini 파일 제외한 파일 리스트
         files = [
             f for f in os.listdir(dir)
-            if not f.lower().endswith(('.zip', '.ini'))
+            if not f.lower().endswith(EXCLUDE_SUFFIXES)
         ]
         # 전체 경로로 변환
         full_paths = [os.path.join(dir, f) for f in files]
@@ -110,7 +113,7 @@ def get_subdir_images(start, count, dirs):
             if os.path.isdir(subdir_path):
                 for f in os.listdir(subdir_path):
                     full_path = os.path.join(subdir_path, f)
-                    if os.path.isfile(full_path) and not f.lower().endswith(('.zip', '.ini')):
+                    if os.path.isfile(full_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
                         # 내부 디렉토리명과 파일명을 붙임 (ex: data1/filename.jpg)
                         images.append(f"{subdir}/{f}")
     images.sort()
@@ -128,21 +131,21 @@ def get_subdir_and_reels_images(start, count, parent_dir, page):
             # 1. dirA, dirB 바로 아래 파일
             for f in os.listdir(subdir_path):
                 file_path = os.path.join(subdir_path, f)
-                if os.path.isfile(file_path) and not f.lower().endswith(('.zip', '.ini')):
+                if os.path.isfile(file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
                     images.append(f"{subdir}/{f}")
             # 2. reels 서브디렉토리의 파일도 포함
             reels_path = os.path.join(subdir_path, "reels")
             if os.path.isdir(reels_path):
                 for f in os.listdir(reels_path):
                     reels_file_path = os.path.join(reels_path, f)
-                    if os.path.isfile(reels_file_path) and not f.lower().endswith(('.zip', '.ini')):
+                    if os.path.isfile(reels_file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
                         images.append(f"{subdir}/reels/{f}")
             # 3. images 서브디렉토리의 파일
             images_path = os.path.join(subdir_path, "images")
             if os.path.isdir(images_path):
                 for f in os.listdir(images_path):
                     img_file_path = os.path.join(images_path, f)
-                    if os.path.isfile(img_file_path) and not f.lower().endswith(('.zip', '.ini')):
+                    if os.path.isfile(img_file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
                         images.append(f"{subdir}/images/{f}")
     images.sort()
     if start >= len(images) and len(images) > 0:
@@ -154,7 +157,7 @@ def get_subdir_and_reels_images(start, count, parent_dir, page):
 
 def get_reverse_images(start, count, dir):
     images = sorted(
-        [f for f in os.listdir(dir) if not f.lower().endswith(('.zip', '.ini'))],
+        [f for f in os.listdir(dir) if not f.lower().endswith(EXCLUDE_SUFFIXES)],
         reverse=True
     )
     return images[start:start + count]
@@ -244,7 +247,7 @@ def count_non_zip_files_in_subfolders_and_reels(parent_dir):
             if os.path.isdir(images_path):
                 for f in os.listdir(images_path):
                     img_file_path = os.path.join(images_path, f)
-                    if os.path.isfile(img_file_path) and not f.lower().endswith(('.zip', '.ini')):
+                    if os.path.isfile(img_file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
                         count += 1
     return count
 

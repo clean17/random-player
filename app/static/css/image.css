@@ -25,7 +25,7 @@ body {
 /* 뷰포트가 2000px 이상일 때 max-width: 1000px 적용 */
 @media (orientation: landscape) {
     .container {
-        max-width: 1200px;
+        max-width: 80%;
     }
 }
 
