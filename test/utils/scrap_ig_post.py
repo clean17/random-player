@@ -1,11 +1,12 @@
 import asyncio
 from pathlib import Path
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from typing import Optional, Tuple, List, Set
 import re
 
 # ======== 설정 ========
-USER_DATA_DIR = str(Path("./ig_profile").resolve())  # 세션 저장 (2회차부터 자동 로그인)
+USER_DATA_DIR = str(Path("./ig_profile-0").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
+USER_DATA_DIR = str(Path("./ig_profile-2").resolve())  # fx015
 HEADLESS = False
 
 USERNAME = "fkaus015"   # 인스타 로그인 계정
@@ -20,18 +21,22 @@ async def ensure_login(page):
     # 로그인 폼 보이면 로그인
     login_user = page.locator("input[name='username']")
     login_pass = page.locator("input[name='password']")
+    # 존재/가시성 대기 (선호)
+    # await expect(login_user).to_be_visible()
+    # await expect(login_pass).to_be_visible()
+
     if await login_user.count() and await login_pass.count():
         await login_user.fill(USERNAME)
         await login_pass.fill(PASSWORD)
         await login_pass.press("Enter")
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(3)
+        await asyncio.sleep(10)
         # 팝업 닫기
         for txt in ["나중에 하기", "Not Now"]:
             btn = page.locator(f"button:has-text('{txt}')")
             if await btn.count():
                 await btn.click()
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1)
 
 
 
@@ -229,6 +234,9 @@ def _sel(root: str, kind: str, rel_main: str, rel_dialog: Optional[str] = None) 
     return _under(root, rel)
 
 async def extract_imgs_src_only2(page, post_url: str, seen: Set[str]) -> None:
+    await page.goto(post_url, wait_until="domcontentloaded")
+    await asyncio.sleep(3) # 시간 조정
+
     root, kind = await _resolve_root(page)
     # print('root', root)
 
@@ -348,7 +356,7 @@ async def extract_imgs_src_only2(page, post_url: str, seen: Set[str]) -> None:
                 except Exception:
                     break
 
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.5)
 
         await collect_from_main()
         # return  # 반환 없음, seen만 업데이트
@@ -450,19 +458,18 @@ async def main():
         context = await pw.chromium.launch_persistent_context(
             USER_DATA_DIR,
             headless=HEADLESS,
-            viewport={"width": 900, "height": 480},
+            viewport={"width": 1280, "height": 720},
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
         page = await context.new_page()
-
-        # 로그인 보장
         await ensure_login(page)
 
         # 지정한 포스트들 처리
         for url in POST_URLS:
             seen = set()
-            await extract_imgs_src_only(page, url)
-            # await extract_imgs_src_only2(page, url, seen)
+            print('url', url)
+            # await extract_imgs_src_only(page, url)
+            await extract_imgs_src_only2(page, url, seen)
 
         await context.close()
 
