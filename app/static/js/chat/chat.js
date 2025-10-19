@@ -1267,7 +1267,7 @@ async function initPage() {
             if (attempt >= maxAttempts) {
                 clearInterval(intervalId);
             }
-        }, 20);
+        }, 30);
     }, 250)
 
     m_intervalId2 = setInterval(() => {

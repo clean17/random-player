@@ -395,7 +395,7 @@ async def run_schedule():
     # schedule.every().day.at("06:00").do(run_crawl_ai_image)
     schedule.every().day.at("07:00").do(renew_kiwoom_token)
     schedule.every().day.at("18:00").do(predict_stock_graph_scheduled, 'kospi')
-    schedule.every().day.at("11:00").do(predict_stock_graph_scheduled, 'nasdaq')
+    schedule.every().day.at("10:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
     # 국장 시작
     schedule.every().day.at("09:05").do(run_weekdays_only, find_stocks)

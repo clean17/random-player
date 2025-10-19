@@ -151,6 +151,7 @@ def get_subdir_and_reels_images(start, count, parent_dir, page):
     if start >= len(images) and len(images) > 0:
         start = max(0, start - LIMIT_PAGE_NUM)
         page = max(1, page - 1)
+    # 'account/p/{파일명}'
     image2_arr = images
     return images[start:start + count], page
 
@@ -312,8 +313,12 @@ def image_list():
         images_length = count_non_zip_files(IMAGE_DIR)
         template_html = 'image_list.html'
     elif dir == 'image2':
-        images, page = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2, page)
-        images_length = count_non_zip_files_in_subfolders_and_reels(IMAGE_DIR2)
+        if page != 1:
+            images = image2_arr[start:start + LIMIT_PAGE_NUM]
+        else:
+            images, page = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2, page)
+            # images_length = count_non_zip_files_in_subfolders_and_reels(IMAGE_DIR2)
+        images_length = len(image2_arr)
         template_html = 'image_list.html'
     # elif dir == 'trip':
     #     images, page = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR, page)
@@ -414,8 +419,10 @@ def delete_images():
     # images_to_delete = request.form.getlist('images[]')
     dir = request.args.get('dir')
     data = request.get_json()
+    # 'account/p/{파일명}'
     images_to_delete = data.get("images", [])
 
+    # delete_images_background(images_to_delete, dir_key=dir)
     for image in images_to_delete:
         try:
             if dir == 'move':
@@ -443,6 +450,11 @@ def delete_images():
             # 다른 문제(권한, path traversal 등)
             print(f"[ERROR] delete failed: {image} -> {e}")
 
+    # 루프가 끝난 뒤, image2_arr에서 한 번에 삭제(모든 중복 제거)
+    if dir == 'image2' and image2_arr:
+        to_delete = set(images_to_delete)
+        # in-place 갱신(참조 유지)
+        image2_arr[:] = [p for p in image2_arr if p not in to_delete]
 
     page = int(data.get("page", 1))
     # if dir == 'image2':
