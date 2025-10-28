@@ -35,6 +35,7 @@ SCROLL_PAUSE = 1.8
 MAX_SCROLLS = 30000
 DELAY_SECOND = 2.0
 DELAY_MINUTE = 60 * 5
+ALREADY_COLLECTED_COUNT = 50
 
 ACCOUNTS = [
 
@@ -221,6 +222,8 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
 
     for _ in range(max_scrolls):
         anchors = await page.locator('a[href*="/p/"], a[href*="/reel/"]').element_handles()
+        if len(anchors) == 0:
+            print('  ★★★★★★★★★★★★★★★★★★★★★★★ Account is not valid ★★★★★★★★★★★★★★★★★★★★★★★ ')
         for a in anchors:
             href = await a.get_attribute("href")
             if not href:
@@ -238,15 +241,16 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
             # href = normalize_ig_post_url(href)
 
             if is_post_or_reel(href):
+                if already_collected_count > ALREADY_COLLECTED_COUNT:
+                    rev_links = links[::-1]   # slicing, 원본 보존
+                    return rev_links
+
                 url = "https://chickchick.shop/func/scrap-posts?urls="+origin_href
                 res = requests.get(url)
                 data = res.json()
                 if data["result"]: # 등록되어 있음
                     already_collected_count += 1
-
-                # if already_collected_count > 30:
-                #     links = []
-                #     break
+                    continue
 
                 if href not in post_links:
                     post_links.add(href)
@@ -756,7 +760,8 @@ async def handle_account(context, account: str):
         # 링크 수집
         links = await collect_post_links(page)
 
-    print(f"[{account}] Collect Postlinks: {len(links)}개")
+    if len(links) > 0:
+        print(f"[{account}] Collect Postlinks: {len(links)}개")
     if len(links) > 300:
         await asyncio.sleep(60 * 30)  # 과도한 요청 방지
 
@@ -768,74 +773,63 @@ async def handle_account(context, account: str):
     cnt = 0
     for idx, link in enumerate(links, 1):
         today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-        print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
+        # print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
+        print(f"[{account}] ({idx}/{len(links)}) {link}")
 
         parsed = urlparse(link)
         # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
         qs_link = normalize_ig_post_url(parsed.path)
         parsed = urlparse(qs_link)
 
-        url = "https://chickchick.shop/func/scrap-posts?urls="+parsed.path
-        res = requests.get(url)
-        data = res.json()
-        if not data["result"]: # 등록한적 없음
-            cnt += 1
-            # None, False, 0, '', [], {}, 모두 여기로 들어옴
-
-            # if idx == 5: # 디버깅 테스트용
-            #     break
-
+        cnt += 1
+        # None, False, 0, '', [], {}, 모두 여기로 들어옴
+        # if idx == 5: # 디버깅 테스트용
+        #     break
+        try:
+            media = await extract_media_from_post(page, link)
+            # print('media', media)
+            # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
+            saved = await download_media(
+                media["images"], media["videos"], media["video_cdn"], dirs, account
+            )
+            # print('saved', saved)
+            all_saved.extend(saved or [])
+            check_saved.extend(saved or [])
+            if idx % 10 == 0:
+                print(f"[{account}] Interim check of number of saved files : {len(check_saved)}")
+                check_saved = []
+            link_segment = extract_account_and_type(normalize_ig_post_url(link))
             try:
-                media = await extract_media_from_post(page, link)
-                # print('media', media)
-
-                # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
-                saved = await download_media(
-                    media["images"], media["videos"], media["video_cdn"], dirs, account
+                requests.post(
+                    'https://chickchick.shop/func/scrap-posts',
+                    json={
+                        "account": str(account),
+                        "post_urls": link,
+                        "type": link_segment["type"],
+                    },
+                    timeout=5
                 )
-                # print('saved', saved)
-                all_saved.extend(saved or [])
-                check_saved.extend(saved or [])
-                if idx % 10 == 0:
-                    print(f"[{account}] Interim check of number of saved files : {len(check_saved)}")
-                    check_saved = []
-
-                link_segment = extract_account_and_type(normalize_ig_post_url(link))
-                try:
-                    requests.post(
-                        'https://chickchick.shop/func/scrap-posts',
-                        json={
-                            "account": str(account),
-                            "post_urls": link,
-                            "type": link_segment["type"],
-                        },
-                        timeout=5
-                    )
-                except Exception as e:
-                    # logging.warning(f"progress-update 요청 실패: {e}")
-                    print(f"progress-update 요청 실패-1: {e}")
-                    pass  # 오류
-
-                await asyncio.sleep(DELAY_SECOND)  # 과도한 요청 방지
-
-                if cnt % 300 == 0:
-                    await asyncio.sleep(60 * 30)  # 과도한 요청 방지
-                elif cnt % 100 == 0:
-                    await asyncio.sleep(DELAY_MINUTE)  # 과도한 요청 방지
-
             except Exception as e:
-                print(f"  -> 에러: {e}")
-        else:
-            continue
+                # logging.warning(f"progress-update 요청 실패: {e}")
+                print(f"progress-update 요청 실패-1: {e}")
+                pass  # 오류
+            await asyncio.sleep(DELAY_SECOND)  # 과도한 요청 방지
+            if cnt % 300 == 0:
+                await asyncio.sleep(60 * 30)  # 과도한 요청 방지
+            elif cnt % 100 == 0:
+                await asyncio.sleep(DELAY_MINUTE)  # 과도한 요청 방지
+        except Exception as e:
+            print(f"  -> 에러: {e}")
 
     await page.close()
-    print(f"[{account}] Number of files saved: {len(all_saved)}")
+    if len(links) > 0:
+        print(f"[{account}] Number of files saved: {len(all_saved)}")
 
 async def main():
     async with async_playwright() as pw:
         context = await pw.chromium.launch_persistent_context(
             USER_DATA_DIR,
-            # headless=HEADLESS,
+            # headless=HEADLESS,  # 주석하면 브라우저 off
             # viewport={"width": 1920, "height": 1080},
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
@@ -844,7 +838,8 @@ async def main():
         # await handle_account(context, 'test')
 
         for i, acc in enumerate(ACCOUNTS):
-            print(f"\n=== Start account processing: {acc} ===")
+            today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+            print(f"\n=== [{today}] Start account processing: {acc} ===")
             try:
                 await handle_account(context, acc)
             except Exception as e:
