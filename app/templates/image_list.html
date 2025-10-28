@@ -63,6 +63,7 @@
             <select id="market-select" name="market" onchange="location = this.value;">
                 <option value="{{ url_for('image.stock-graph-list', market='kospi', page=1) }}" {% if market == 'kospi' %}selected{% endif %}>KOSPI</option>
                 <option value="{{ url_for('image.stock-graph-list', market='nasdaq', page=1) }}" {% if market == 'nasdaq' %}selected{% endif %}>NASDAQ</option>
+                <option value="{{ url_for('image.stock-graph-list', market='kospil', page=1) }}" {% if market == 'kospil' %}selected{% endif %}>KOSPI_LOW</option>
             </select>
         </form>
     </div>

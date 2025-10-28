@@ -29,12 +29,14 @@ DEL_TEMP_IMAGE_DIR = settings['DEL_TEMP_IMAGE_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 SP500_DIR = settings['SP500_DIR']
 INTEREST_DIR = settings['INTEREST_DIR']
+LOW_KOSPI_DIR = settings['LOW_KOSPI_DIR']
 
 # 시장 디렉터리 매핑
 DIRECTORY_MAP = {
     'kospi': KOSPI_DIR,
     'nasdaq': SP500_DIR,
-    'interest': INTEREST_DIR
+    'interest': INTEREST_DIR,
+    'kospil': LOW_KOSPI_DIR,
 }
 
 EXCLUDE_SUFFIXES: Final = (".zip", ".ini", ".Identifier")  # 불변 튜플

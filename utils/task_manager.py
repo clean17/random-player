@@ -364,7 +364,8 @@ def should_predict(market):
     today = datetime.datetime.today().weekday()
     print(f'    ############################### should_predict : {today}, {market} ###############################')
     if market == 'kospi':
-        return today not in (4, 5)    # 금, 토 제외
+        # return today not in (4, 5)    # 금, 토 제외
+        return today not in (5, 6)    # 토, 일 제외
     elif market == 'nasdaq':
         return today not in (5, 6)    # 토, 일 제외
     return False
@@ -394,8 +395,8 @@ async def run_schedule():
     schedule.every().saturday.at("08:00").do(lambda: run_async_function(async_buy_lotto()))
     # schedule.every().day.at("06:00").do(run_crawl_ai_image)
     schedule.every().day.at("07:00").do(renew_kiwoom_token)
-    schedule.every().day.at("18:00").do(predict_stock_graph_scheduled, 'kospi')
-    schedule.every().day.at("10:00").do(predict_stock_graph_scheduled, 'nasdaq')
+    schedule.every().day.at("20:00").do(predict_stock_graph_scheduled, 'kospi')
+    schedule.every().day.at("07:00").do(predict_stock_graph_scheduled, 'nasdaq')
 
     # 국장 시작
     schedule.every().day.at("09:05").do(run_weekdays_only, find_stocks)
