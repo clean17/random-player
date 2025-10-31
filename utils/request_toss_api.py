@@ -10,7 +10,8 @@ def request_stock_info_with_toss_api(stock_name):
         "query": stock_name,
         "sections": [
             {"type": "SCREENER"},
-            {"type": "PRODUCT", "option": {"addIntegratedSearchResult": "true"}},
+            # {"type": "NEWS"},
+            {"type": "PRODUCT", "option": {"addIntegratedSearchResult": True}},
             {"type": "TICS"}
         ]
     }
@@ -33,3 +34,5 @@ def request_stock_category(company_code):
     REPLACE_URL = CATEGORY_URL.replace('COMPANYCODE', company_code);
     res = requests.get(REPLACE_URL)
     return res.json()
+
+# print(request_stock_info_with_toss_api('086390'))
