@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>관리자 - 사용자 세션 초기화</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/common.js?v={{ version }}"></script>
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
         .search-box { margin-bottom: 30px; }
@@ -69,25 +70,6 @@
 <p>검색 결과가 없습니다.</p>
 {% endif %}
 <script>
-    function showDebugToast(message, duration = 3000) {
-        let container = document.getElementById('debug-toast-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'debug-toast-container';
-            document.body.appendChild(container);
-        }
-
-        const toast = document.createElement('div');
-        toast.className = 'debug-toast';
-        toast.textContent = message;
-
-        container.appendChild(toast);
-
-        setTimeout(() => {
-            toast.remove();
-        }, duration);
-    }
-
     function reset_user_session() {
         if (confirm('정말 초기화하시겠습니까?')) {
             axios.post('/admin/reset-user-session/{{ found_user.username }}', {

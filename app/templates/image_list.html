@@ -168,7 +168,9 @@
           page = "{{ page }}",
           currentUserName = '{{ current_user.get_id() }}',
           guestName = '{{ config.GUEST_USERNAME }}',
-          stock_name = `{{ market }}`;
+          stock_name = `{{ market }}`,
+          progressBar = document.getElementById('progress-bar'),
+          progressStatus = document.getElementById('progress-status');
 
 
 
@@ -295,7 +297,7 @@
         imageItems = document.querySelectorAll('.image-item');
         lazyImages = document.querySelectorAll("img[data-src]");
 
-        if (dir === 'stock') {
+        if (dir === 'stock' && stock_name !== 'kospil') {
             pollProgress(stock_name);
 
             imageItems.forEach(item => {
@@ -306,6 +308,10 @@
                     }
                 });
             });
+        }
+        if (stock_name === 'kospil') {
+            progressBar.remove();
+            progressStatus.remove();
         }
 
         /*imageItems.forEach(item => {
