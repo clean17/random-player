@@ -241,9 +241,9 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         // 처음 연결 시 마이크 off
         if (!switchCamera) {
             myStream.getAudioTracks().forEach(track => {
-                if (username !== 'nh824') {
+                // if (username !== 'nh824') {
                     track.enabled = false;
-                }
+                // }
             });
         }
 
@@ -377,9 +377,9 @@ function handleTrack(event) {
 
 function handleMuteClick() {
     myStream.getAudioTracks().forEach(track => {
-        if (username !== 'nh824') {
+        // if (username !== 'nh824') {
             track.enabled = !track.enabled;
-        }
+        // }
     });
     micOn = !micOn;
     const micIcon = document.getElementById("micIcon");
