@@ -404,6 +404,7 @@ async def run_schedule():
     # 10시부터 15시까지 1시간마다 실행
     for h in range(10, 16):  # 10 ~ 15
         schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks)
+        schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_low_stocks)
 
     # 9:30부터 15:30시까지 1시간마다 실행
     for h in range(9, 16):  # 9 ~ 15
@@ -521,6 +522,22 @@ def find_stocks():
     script_dir = r'C:\my-project\AutoSales.py'
     venv_activate = r'venv\Scripts\activate'
     py_script = r'python 2_finding_stocks_with_increased_volume.py'
+
+    cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
+
+    # subprocess 실행
+    process = subprocess.Popen(
+        cmd,
+        text=True,
+        shell=True,
+        encoding='utf-8',
+        errors="ignore" # 디코딩 안되는 문자 무시
+    )
+
+def find_low_stocks():
+    script_dir = r'C:\my-project\AutoSales.py'
+    venv_activate = r'venv\Scripts\activate'
+    py_script = r'python 4_find_low_point.py.py'
 
     cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
 
