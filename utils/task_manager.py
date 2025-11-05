@@ -404,11 +404,11 @@ async def run_schedule():
     # 10시부터 15시까지 1시간마다 실행
     for h in range(10, 16):  # 10 ~ 15
         schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_stocks)
-        schedule.every().day.at(f"{h:02d}:00").do(run_weekdays_only, find_low_stocks)
 
     # 9:30부터 15:30시까지 1시간마다 실행
     for h in range(9, 16):  # 9 ~ 15
         schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks)
+        schedule.every().day.at(f"{h:02d}:45").do(run_weekdays_only, find_low_stocks)
 
     # 월~금, 5분마다 실행
     schedule.every(5).minutes.do(run_cumtom_time_only, update_interest_stocks)
