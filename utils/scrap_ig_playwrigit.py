@@ -32,7 +32,7 @@ PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
 
 # 스크롤/속도
 SCROLL_PAUSE = 1.8
-MAX_SCROLLS = 30000
+MAX_SCROLLS = 30001
 DELAY_SECOND = 2.0
 DELAY_MINUTE = 60 * 5
 ALREADY_COLLECTED_COUNT = 50
@@ -216,7 +216,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
     # last_count = 0
     already_collected_count = 0
     await page.wait_for_selector("main", timeout=15000)
-    await asyncio.sleep(3)
+    await asyncio.sleep(4)
 
     last_height = await page.evaluate("document.body.scrollHeight")
 
@@ -760,8 +760,11 @@ async def handle_account(context, account: str):
         # 링크 수집
         links = await collect_post_links(page)
 
+    if len(links) == 0:
+        return False
+
     if len(links) > 0:
-        print(f"[{account}] Collect Postlinks: {len(links)}개")
+        print(f"[{account}] Collect Postlinks: {len(links)}")
     if len(links) > 300:
         await asyncio.sleep(60 * 30)  # 과도한 요청 방지
 
@@ -807,7 +810,8 @@ async def handle_account(context, account: str):
                         "post_urls": link,
                         "type": link_segment["type"],
                     },
-                    timeout=5
+                    # timeout=5
+                    timeout=(3, 20)  # (connect_timeout=3초, read_timeout=20초)
                 )
             except Exception as e:
                 # logging.warning(f"progress-update 요청 실패: {e}")
@@ -824,6 +828,7 @@ async def handle_account(context, account: str):
     await page.close()
     if len(links) > 0:
         print(f"[{account}] Number of files saved: {len(all_saved)}")
+        return True
 
 async def main():
     async with async_playwright() as pw:
@@ -841,13 +846,16 @@ async def main():
             today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
             print(f"\n=== [{today}] Start account processing: {acc} ===")
             try:
-                await handle_account(context, acc)
+                rs = await handle_account(context, acc)
             except Exception as e:
                 print(f"[{acc}] Error in processing: {e}")
                 continue
 
             if i < len(ACCOUNTS) - 1:
-                await asyncio.sleep(DELAY_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
+                if rs == True:
+                    await asyncio.sleep(DELAY_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
+                else:
+                    await asyncio.sleep(30)
 
         await context.close()
 
