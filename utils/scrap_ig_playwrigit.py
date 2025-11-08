@@ -746,6 +746,17 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
         # 삭제되지 않은 경로만 반환
         return [p for p in ok_paths if p not in deleted]
 
+def log_targets(context, tag=""):
+    pages = context.pages
+    bgs = context.background_pages
+    sws = context.service_workers
+    print(f"[DEBUG]{tag} pages={len(pages)} bg_pages={len(bgs)} service_workers={len(sws)}")
+    for p in pages:
+        try:
+            print("  - page:", p.url)
+        except Exception:
+            pass
+
 
 # ======== 메인 플로우 ========
 async def handle_account(context, account: str):
@@ -760,8 +771,6 @@ async def handle_account(context, account: str):
         # 링크 수집
         links = await collect_post_links(page)
 
-    if len(links) == 0:
-        return False
 
     if len(links) > 0:
         print(f"[{account}] Collect Postlinks: {len(links)}")
@@ -799,7 +808,8 @@ async def handle_account(context, account: str):
             all_saved.extend(saved or [])
             check_saved.extend(saved or [])
             if idx % 10 == 0:
-                print(f"[{account}] Interim check of number of saved files : {len(check_saved)}")
+                today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+                print(f"[{account}] [{today}] Interim check of number of saved files : {len(check_saved)}")
                 check_saved = []
             link_segment = extract_account_and_type(normalize_ig_post_url(link))
             try:
@@ -826,9 +836,12 @@ async def handle_account(context, account: str):
             print(f"  -> 에러: {e}")
 
     await page.close()
+#     log_targets(context, tag=f" after {account}")
+
     if len(links) > 0:
         print(f"[{account}] Number of files saved: {len(all_saved)}")
-        return True
+
+    return len(links)
 
 async def main():
     async with async_playwright() as pw:
@@ -852,7 +865,7 @@ async def main():
                 continue
 
             if i < len(ACCOUNTS) - 1:
-                if rs == True:
+                if rs > 30:
                     await asyncio.sleep(DELAY_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
                 else:
                     await asyncio.sleep(30)
