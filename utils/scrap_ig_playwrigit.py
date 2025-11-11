@@ -772,7 +772,7 @@ async def handle_account(context, account: str):
         links = await collect_post_links(page)
 
 
-    if len(links) > 0:
+    if len(links) > 5:
         print(f"[{account}] Collect Postlinks: {len(links)}")
     if len(links) > 300:
         await asyncio.sleep(60 * 30)  # 과도한 요청 방지
@@ -857,7 +857,7 @@ async def main():
 
         for i, acc in enumerate(ACCOUNTS):
             today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"\n=== [{today}] Start account processing: {acc} ===")
+            print(f"\n=== [{today}] Start account processing: {acc} ({i+1}/{len(ACCOUNTS)}) ===")
             try:
                 rs = await handle_account(context, acc)
             except Exception as e:
