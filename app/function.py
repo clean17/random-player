@@ -15,7 +15,8 @@ from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_
 from app.repository.scrap_posts.ScrapPostDTO import ScrapPostDTO
 from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap_post
 from app.repository.stocks.StockDTO import StockDTO
-from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, update_stock_list, get_stock_list
+from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
+    update_stock_list, get_stock_list
 from app.repository.users.users import find_user_by_username
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from utils.compress_file import compress_directory, compress_directory_to_zip
@@ -595,6 +596,8 @@ def save_interesting_stocks():
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
     category = data.get("category") or None
+    target = data.get("target") or None
+    last_close = data.get("last_close") or None
 
 
     stock = StockDTO(
@@ -612,6 +615,8 @@ def save_interesting_stocks():
         logo_image_url=logo_image_url,
         market_value=market_value,
         category=category,
+        target=target,
+        last_close=last_close,
     )
     # print(stock)
     result = merge_daily_interest_stocks(stock)
@@ -621,7 +626,16 @@ def save_interesting_stocks():
 def get_interesting_stocks():
     data = request.json
     date = data.get("date")
+    target = data.get("target")
     stocks = get_interest_stocks(date)
+    return stocks
+
+@func.route("/stocks/interest/data/info", methods=["POST"])
+def get_interesting_stocks_info():
+    data = request.json
+    date = data.get("date")
+    target = data.get("target")
+    stocks = get_interest_stocks_info(date)
     return stocks
 
 @func.route("/stocks/interest/view", methods=["GET"])

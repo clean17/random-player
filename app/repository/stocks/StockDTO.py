@@ -21,4 +21,6 @@ class StockDTO:
     stock_market: str = None
     market_value: str = None
     category: str = None
+    target: str = None
+    last_close: str = None
 
