@@ -90,15 +90,16 @@
             <table class="table" id="table-summary">
                 <thead>
                 <tr>
-<!--                    <th>그래프</th>-->
+                    <th>그래프</th>
+                    <th>카운트</th>
 <!--                    <th>순서</th>-->
-                    <th>종목코드</th>
+<!--                    <th>종목코드</th>-->
                     <th>종목명</th>
-                    <th>상승_카운트</th>
+                    <th>카테고리</th>
                     <th>시작가</th>
                     <th>현재가</th>
-                    <th>평균_변동률</th>
                     <th>전체_상승률</th>
+                    <th>평균_변동률</th>
                     <th>시가총액</th>
                     <th>평균_거래대금</th>
                     <th class="right">처음_상승일자</th>
@@ -306,28 +307,29 @@
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
             const hasImg = !!r.image_url;
             const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
-            const date = new Date(`${r.last_date}`);
-            const date2 = new Date(`${r.first_date}`);
+            const date = new Date(`${r.first_date}`);
+            const date2 = new Date(`${r.last_date}`);
 
             const parts = fmt.formatToParts(date);
-            const parts2 = fmt.formatToParts(date);
+            const parts2 = fmt.formatToParts(date2);
             const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-            const obj2 = Object.fromEntries(parts.map(p => [p.type, p.value]));
+            const obj2 = Object.fromEntries(parts2.map(p => [p.type, p.value]));
 
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.year}.${obj.month}.${obj.day}`;
             const formatted_date2 = `${obj2.year}.${obj2.month}.${obj2.day}`;
             return `
         <tr>
-<!--          <td>${imgBtn}</td>-->
-<!--          <td class="">${r.rn}</td>-->
-          <td class="">${r.stock_code ?? ''}</td>
-          <td class="">${r.stock_name ?? ''}</td>
+          <td>${imgBtn}</td>
           <td class="">${r.count ?? ''}</td>
+<!--          <td class="">${r.rn}</td>-->
+<!--          <td class="">${r.stock_code ?? ''}</td>-->
+          <td class="">${r.stock_name ?? ''}</td>
+          <td class="">${r.category ?? ''}</td>
           <td class="right">${fmt2(r.min)}</td>
-          <td class="right">${fmt2(r.max)}</td>
-          <td class="">${r.avg_change_pct ?? ''}</td>
+          <td class="right">${fmt2(r.last)}</td>
           <td class="">${r.total_rate_of_increase ?? ''}</td>
+          <td class="">${r.avg_change_pct ?? ''}</td>
           <td class="">${r.market_value ?? ''}</td>
           <td class="">${r.avg_trading_value ?? ''}</td>
           <td>`+formatted_date+`</td>
