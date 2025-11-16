@@ -1,6 +1,7 @@
 from config.logger_config import setup_logging
 from werkzeug.middleware.proxy_fix import ProxyFix
 from urllib.parse import unquote
+from http.cookies import SimpleCookie
 
 logger = setup_logging()
 
@@ -24,6 +25,19 @@ class RequestLoggingMiddleware:
         full_path = f"{path}?{decoded_query}" if decoded_query else path
         protocol = environ.get("SERVER_PROTOCOL", "-")
 
+        # 🔹 1) 쿠키 파싱
+        cookie_header = environ.get("HTTP_COOKIE", "")
+        cookie = SimpleCookie()
+        try:
+            cookie.load(cookie_header)
+        except Exception:
+            cookie = SimpleCookie()
+
+        # 🔹 2) remember_username 꺼내기 (없으면 '-')
+        username = "-"
+        if "remember_username" in cookie:
+            username = cookie["remember_username"].value or "-"
+
         status_code = None
 
         # start_response를 감싸는 내부 함수를 정의합니다.
@@ -37,7 +51,7 @@ class RequestLoggingMiddleware:
         result = self.app(environ, custom_start_response)
 
         # self.logger.info('%s - - "%s %s %s" %s ', client_ip, method, path, protocol, status_code)
-        self.logger.info('%s - - "%s %s %s" %s', client_ip, method, full_path, protocol, status_code)
+        self.logger.info('%s - - %s "%s %s %s" %s', client_ip, username, method, full_path, protocol, status_code)
 
         return result
 
