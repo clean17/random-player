@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from utils.wsgi_midleware import logger
-from utils.jwt import create_access_token
+from utils.my_jwt import create_access_token
 from .rds import redis_client
 import time
 import pytz
@@ -128,6 +128,8 @@ def login():
                 logger.info(f"############################### login_username: {username} ###############################")
 
             session['principal'] = fetch_user
+            session['username'] = fetch_user.username
+
             resp = None
             if username == settings['GUEST_USERNAME']:
                 resp = make_response(redirect('/func/chat'))

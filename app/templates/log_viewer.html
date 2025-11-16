@@ -62,7 +62,9 @@
           eventSource = new EventSource("/func/logs/stream"),
           statusEl = document.getElementById("sse-status");
 
-    const ipKeywords = [" 122.42", " 223.39", " 223.38", " 27.171", " 27.173", " 223.63", " 211.251", " 211.195", " 49.172", " 106.101"];
+    // const ipKeywords = [" 122.42", " 223.39", " 223.38", " 27.171", " 27.173", " 223.63", " 211.251", " 211.195", " 49.172", " 106.101.2"]; // 106.101.139.173 제외
+    const ipKeywords = ["nh824"]; // 106.101.139.173 제외
+    const ipKeywords2 = ["fkaus14"]; // 106.101.139.173 제외
 
     // 실시간 로그 업데이트 (오늘 로그일 때만 WebSocket 사용)
     /*socket.on("log_update", (data) => {
@@ -147,6 +149,9 @@
                 }
                 if (ipKeywords.some(keyword => subline.includes(keyword))) {
                     span.style.backgroundColor = "Lightgoldenrodyellow";
+                }
+                if (ipKeywords2.some(keyword => subline.includes(keyword))) {
+                    span.style.backgroundColor = "PaleTurquoise";
                 }
 
                 logContainer.appendChild(span);

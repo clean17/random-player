@@ -55,12 +55,13 @@ BLOCKED_PATHS = [
     "/image/shuffle/ref-images",
     # "/video/select-directory", # video는 화이트리스트 하나만 허용하니까 블랙리스트 추가할 필요 없음
     # "/video/video-player",
+    "/video/video-player/1", "/video/video-player/2", "/video/video-player/3", "/video/video-player/4", "/video/video-player/5",
     # "/video/videos",
     # "/video/delete",
     # "/video/stream",
     "/ffmpeg",
     "/func/empty-trash-bin",
-    "/func/logs",
+    # "/func/logs",
     "/func/buy/lotto-test",
     "/rds"
 ]
@@ -275,8 +276,9 @@ def create_app():
                     (weekday == 4 and hour <= 20) ):        # 금요일 20시 이전
                 check_date_conditions = False
 
-            # if check_date_conditions:
-            if False:
+            # if check_date_conditions: # 평일에만 추가인증 안함
+            # if False: # 추가인증 안함
+            if True: # 추가인증 필수
                 url = request.path
                 parts = url.split("/")
                 base_path = "/" + "/".join(parts[1:3])

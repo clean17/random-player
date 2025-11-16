@@ -438,7 +438,7 @@ function updateUserReadChatId(option = false) {
 // }
 
 function isScrollAtTheBottom() {
-    const threshold = 60; // 허용 오차 (픽셀)
+    const threshold = 100; // 허용 오차 (픽셀)
     return chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight <= threshold;
 }
 

@@ -222,7 +222,7 @@ server {
 win-acme에서는 `crt.pem`, `chain.pem`이 따로 생성되므로
 `crt.pem`+`chain.pem`을 합쳐서 넣는다.
 ```bash
-$ copy chickchick.shop-crt.pem + chickchick.shop-chain.pem fullchain.pem
+$ copy chickchick.shop-crt.pem + chickchick.shop-chain.pem chickchick.shop-fullchain.pem
 ```
 <br>
 

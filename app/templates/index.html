@@ -48,7 +48,7 @@
     <form action="/video/select-directory" method="post">
         <select name="directory" class="select-dropdown" onchange="this.form.submit()">
             <option value="">Video Directory</option>
-            <option value="10" >HAPPY</option>
+            <option value="_open" >HAPPY</option>
         </select>
     </form>
         <form id="image-select-form">
@@ -69,9 +69,9 @@
         <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload File</button></a>
     <a href="/func/stocks/interest/view"><button type="button" id="btn9233" class="btn-w100">Interest Stocks</button></a>
     <a href="/posts"><button type="button" id="btn913" class="btn-w100">Posts</button></a>
-    {% if current_user.get_id() != config.GUEST_USERNAME %}
+    {# {% if current_user.get_id() != config.GUEST_USERNAME %} #}
         <a href="{{ url_for('func.get_log_viewer') }}"><button type="button" id="btn923" class="btn-w100">Log Viewer</button></a>
-    {% endif %}
+    {# {% endif %} #}
 <!--        <a href="{{ url_for('func.get_video_call') }}"><button type="button" id="btn9224" class="btn-w100">Video Call</button></a>-->
         <a href="{{ url_for('func.get_chat_ui') }}" class="chat-btn-wrapper"><button type="button" id="btn924" class="btn-w100">Chat</button><span class="unread-badge" style="display: none">5</span>
         </a>
@@ -198,7 +198,7 @@
     }
 
     async function run_crawl() {
-        const response = await fetch("/func/crawl-ai", {method: "POST"});
+        const response = await fetch("/func/crawl-ai", {method: "GET"});
         const result = await response.json();
 
         if (response.ok) {
