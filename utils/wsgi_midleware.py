@@ -35,8 +35,8 @@ class RequestLoggingMiddleware:
 
         # 🔹 2) remember_username 꺼내기 (없으면 '-')
         username = "-"
-        if "remember_username" in cookie:
-            username = cookie["remember_username"].value or "-"
+        if "username" in cookie:
+            username = cookie["username"].value or "-"
 
         status_code = None
 

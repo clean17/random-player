@@ -88,7 +88,7 @@
         }
     }
 
-    setInterval(updateStatus, 100);
+    setInterval(updateStatus, 500);
 
     eventSource.onerror = updateStatus;
     eventSource.onopen = updateStatus;
@@ -191,8 +191,10 @@
     document.addEventListener('visibilitychange', () => {
         // window.location.href = '/func/logs/view'; // home 으로 갈 수 없음..
         if (!document.hidden) {
-            logContainer.innerText = '';
-            setTimeout(()=>{loadLogs()},100);
+            setTimeout(()=>{
+                logContainer.innerText = '';
+                loadLogs()},200
+            );
         }
     })
 

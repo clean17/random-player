@@ -139,6 +139,8 @@ def login():
                 resp.set_cookie('remember_username', username, max_age=60*60*24*30) # 30일
             else:
                 resp.set_cookie('remember_username', '', expires=0)
+
+            resp.set_cookie('username', username, max_age=60*60*24*30) # 30일
             return resp
 
         # 로그인 실패

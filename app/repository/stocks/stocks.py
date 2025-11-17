@@ -175,7 +175,7 @@ and max(created_at) >= (CURRENT_DATE - INTERVAL '5 days') -- x일 전부터 등�
 order by count(stock_code) desc, max(created_at) desc
 ) as b
 where REGEXP_REPLACE(avg_change_pct, '%', '', 'g')::numeric > 6
-and REGEXP_REPLACE(total_rate_of_increase, '%', '', 'g')::numeric > 5;
+and REGEXP_REPLACE(total_rate_of_increase, '%', '', 'g')::numeric > 6;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
         # cur.execute(sql, (date,))
