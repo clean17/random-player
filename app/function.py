@@ -685,14 +685,26 @@ def get_stocks(nation):
 def get_realtime_price():
     data = request.json
     stock_name = data.get('stock_name') or ""
-    return request_stock_info_with_toss_api(stock_name)
+
+    result = request_stock_info_with_toss_api(stock_name)
+
+    # 에러 형식이면 status code 같이 내려주기
+    if isinstance(result, dict) and not result.get("success", True):
+        return jsonify(result), 502  # Bad Gateway or 503 등
+
+    return jsonify(result)
 
 # 요약 정보
 @func.route("/stocks/overview", methods=["POST"])
 def get_stock_overview():
     data = request.json
     product_code = data.get('product_code') or ""
-    return request_stock_overview_with_toss_api(product_code)
+    result = request_stock_overview_with_toss_api(product_code)
+
+    if not result.get("success", False):
+        return jsonify(result), 502
+
+    return jsonify(result["data"])
 
 # 시총 가져오기
 @func.route("/stocks/amount", methods=["POST"])
