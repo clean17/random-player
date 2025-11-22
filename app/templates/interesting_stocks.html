@@ -99,7 +99,9 @@
                     <th>시작가</th>
                     <th>최근 종가</th>
                     <th>전체_상승률</th>
+                    <th>일별_상승률</th>
                     <th>평균_변동률</th>
+                    <th>최고_대비_변동</th>
                     <th>시가총액</th>
                     <th>평균_거래대금</th>
                     <th class="right">처음_상승일자</th>
@@ -118,6 +120,7 @@
 
     const p = new Set();
     const s = new Set();
+    const s2 = new Set();
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
@@ -143,18 +146,25 @@
             document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
             const target = document.querySelector(btn.dataset.target);
             if (target) target.style.display = 'block';
+            if (target.id === 'tab-summary') {
+                setDefaultDateToday(14);
+                loadData()
+            } else {
+                setDefaultDateToday();
+                loadData()
+            }
         });
     });
 
     // 오늘 날짜 기본값
-    (function setDefaultDateToday(){
+    function setDefaultDateToday(interval=0){
         const input = document.getElementById('dateInput');
         const now = new Date();
         const yyyy = now.getFullYear();
         const mm = String(now.getMonth()+1).padStart(2,'0');
-        const dd = String(now.getDate()).padStart(2,'0');
+        const dd = String(now.getDate() - interval).padStart(2,'0');
         input.value = `${yyyy}-${mm}-${dd}`;
-    })();
+    }
 
     // 숫자 포맷, fmtNum.format(1234567.891); // "1,234,567.89"
     const fmtNum = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }); // Intl.NumberFormat 은 언어에 맞는 숫자 서식을 지원하는 객체의 생성자
@@ -324,14 +334,16 @@
           <td class="">${r.count ?? ''}</td>
 <!--          <td class="">${r.rn}</td>-->
 <!--          <td class="">${r.stock_code ?? ''}</td>-->
-          <td class="">${r.stock_name ?? ''}</td>
+          <td class="stock_name2">${r.stock_name ?? ''}</td>
           <td class="">${r.category ?? ''}</td>
-          <td class="right">${fmt2(r.min)}</td>
-          <td class="right">${fmt2(r.last)}</td>
-          <td class="">${r.total_rate_of_increase ?? ''}</td>
-          <td class="">${r.avg_change_pct ?? ''}</td>
-          <td class="">${r.market_value ?? ''}</td>
-          <td class="">${r.avg_trading_value ?? ''}</td>
+          <td class="right min_close">${fmt2(r.min)}</td>
+          <td class="right last_close">${fmt2(r.last)}</td>
+          <td class="right">${r.total_rate_of_increase ?? ''}</td>
+          <td class="right">${r.increase_per_day ?? ''}</td>
+          <td class="right">${r.avg_change_pct ?? ''}</td>
+          <td class="right chg_compare_peak"></td>
+          <td class="right">${r.market_value ?? ''}</td>
+          <td class="right">${r.avg_trading_value ?? ''}</td>
           <td>`+formatted_date+`</td>
           <td>`+formatted_date2+`</td>
         </tr>
@@ -374,11 +386,14 @@
         const payload = { date: yyyymmdd };
 
         try {
+            renderOverlay();
+            document.getElementById('overlay').style.display = 'block';
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
                 body: JSON.stringify(payload),
             });
+            document.getElementById('overlay').style.display = 'none';
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
@@ -415,13 +430,13 @@
         if (timer) clearInterval(timer);
         if (timer2) clearInterval(timer2);
 
+        // 금일 등락률
         timer = setInterval(()=>{
             const input = document.getElementById('dateInput');
             const yyyymmdd = input.value?.replace(/-/g, '');
             // if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
             const stock_names = document.querySelectorAll('.stock_name'); // 탭 1
             stock_names.forEach(i=>s.add((i.textContent)));
-
             const stocks = Array.from(s);
 
             stocks.forEach(stock_name=>{
@@ -459,8 +474,9 @@
                     throw error; // 기타 에러는 그대로 던짐
                 });
             })
-        }, 2000)
+        }, 3000)
 
+        // 거래대금 변동률
         timer2 = setInterval(()=>{
             const productCodes = Array.from(p);
             productCodes.forEach(productCode => {
@@ -492,6 +508,42 @@
                     });
                 }
             })
+
+            const stock_names2 = document.querySelectorAll('.stock_name2'); // 탭 1
+            stock_names2.forEach(i=>s2.add((i.textContent)));
+            const stocks2 = Array.from(s2);
+
+            stocks2.forEach(stock_name=>{
+                // console.log('ss', stock_name)
+                const data = {
+                    stock_name: stock_name,
+                }
+                axios.post("/func/stocks/info", data, {
+                    headers: {"Content-Type": "application/json"},
+                    timeout: 3000 // 3초 초과시 자동 reject
+                }).then(async res => {
+                    const stock_data = res.data.result[0]?.data.items[0];
+                    const stock_name = stock_data?.productName;
+                    const product_code = stock_data?.productCode;
+                    // const logo_url = stock_data?.logoImageUrl;
+                    const realtime_price = stock_data?.close.krw;
+
+                    for (const i of stock_names2) {
+                        if (i.textContent === stock_name) {
+                            const tr = i.closest('tr');
+                            const last_close_el = tr.querySelector('.last_close');
+                            const chg_compare_peak_rate_el = tr.querySelector('.chg_compare_peak');
+                            const calc_change_pct = (realtime_price - last_close_el.textContent.replace(/[^0-9.]/g, ''))
+                                / last_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
+                            await updateTdWithBlink(chg_compare_peak_rate_el, fmt2(calc_change_pct) + '%');
+                        }
+                    }
+
+
+                }).catch(error => {
+                    throw error; // 기타 에러는 그대로 던짐
+                });
+            })
         }, 1000 * 10)
     }
 
@@ -513,7 +565,10 @@
     document.getElementById('dateInput').addEventListener('change', loadData);
 
     // 첫 진입 시 현재 날짜로 자동 로드
-    window.addEventListener('DOMContentLoaded', loadData);
+    window.addEventListener('DOMContentLoaded', _ => {
+        setDefaultDateToday();
+        loadData();
+    });
 </script>
 
 </body>
