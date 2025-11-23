@@ -2,8 +2,10 @@ from config.logger_config import setup_logging
 from werkzeug.middleware.proxy_fix import ProxyFix
 from urllib.parse import unquote
 from http.cookies import SimpleCookie
+from config.config import settings
 
 logger = setup_logging()
+SUPER_USERNAME = settings['SUPER_USERNAME']
 
 # 요청 로깅 미들웨어
 class RequestLoggingMiddleware:
@@ -51,7 +53,8 @@ class RequestLoggingMiddleware:
         result = self.app(environ, custom_start_response)
 
         # self.logger.info('%s - - "%s %s %s" %s ', client_ip, method, path, protocol, status_code)
-        self.logger.info('%s - - %s "%s %s %s" %s', client_ip, username, method, full_path, protocol, status_code)
+        if username != SUPER_USERNAME:
+            self.logger.info('%s - - %s "%s %s %s" %s', client_ip, username, method, full_path, protocol, status_code)
 
         return result
 

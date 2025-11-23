@@ -153,6 +153,12 @@
                 if (ipKeywords2.some(keyword => subline.includes(keyword))) {
                     span.style.backgroundColor = "PaleTurquoise";
                 }
+                if (subline.includes('" 403')) {
+                    span.style.backgroundColor = "LightCoral";
+                }
+                if (subline.includes('" 404')) {
+                    span.style.backgroundColor = "Gainsboro";
+                }
 
                 logContainer.appendChild(span);
             }

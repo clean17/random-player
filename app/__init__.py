@@ -100,12 +100,15 @@ def clean_expired_blocked_ips():
 
 
 
-BLOCKED_IPS = load_blocked_ips()                      # 차단된 IP: {ip: block_until_time}
+
+
+BLOCKED_IPS = load_blocked_ips()                      # 차단된 IP: {ip: block_until_time}, 회사 IP: 106.101.2.102
 ip_404_log = defaultdict(lambda: deque(maxlen=10))    # IP별 최근 404 기록 시간 저장 (deque로 sliding window)
 IP_404_COUNTS = {}                                    # IP 기록: {ip: [404_count, last_404_time]}
 BLOCK_THRESHOLD = 5                                   # 차단 설정 임계횟수
 BLOCK_DURATION = timedelta(days=99999)                # 차단 기간
-BLOCKED_IP_PREFIXES = ['43', '45', '167', '185', '64', '65', '162', '172', '170']
+# BLOCKED_IP_PREFIXES = ['43', '3', '222', '139', '49', '66', '51', '34', '104', '124', '45', '167', '185', '64', '65', '162', '172', '170']
+BLOCKED_IP_PREFIXES = ['222.239.104']
 
 # csrf = CSRFProtect()
 

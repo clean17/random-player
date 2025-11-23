@@ -72,18 +72,27 @@ C:/nginx/nginx-1.26.2/nginx.exe &
 C:/nginx/nginx-1.26.2/nginx.exe -s quit
 C:/nginx/nginx-1.26.2/nginx.exe -s reload
 ```
+Git Bash `~` (home)에서 실행하면 안되므로 직접 경로 이동 후 실행
+```bash
+cd /c/nginx/nginx-1.26.2
+```
+
 실행 결과 <br>
 
 ![img.png](app/static/readme/img.png)
 ## nginx 재기동
 ```bash
 cd /c/nginx/nginx-1.26.2
+
 # graceful 종료
 ./nginx.exe -s quit
+
 # 즉시 종료
 ./nginx.exe -s stop
+
 # 기동 (백그라운드)
 start ./nginx.exe
+
 # 재기동 
 ./nginx.exe -s reload
 ```
@@ -91,8 +100,10 @@ start ./nginx.exe
 ```bash
 # Nginx 프로세스를 확인
 tasklist | findstr nginx
+
 # Nginx 프로세스를 강제 종료
 taskkill /F /IM nginx.exe
+
 # pid 파일 삭제
 cd ..\..\nginx\nginx-1.26.2\logs
 del nginx.pid
