@@ -175,7 +175,7 @@ function connectSocket() {
 
     // enter_room >> room_user_list
     socket.on("room_user_list", (userList) => {
-        // console.log('현재 접속 중인 유저 목록:', userList);
+        console.log('현재 접속 중인 유저 목록:', userList);
         updateUserCount(userList.length);
         const tempUserList = [];
         userList.forEach(user => {

@@ -2,6 +2,9 @@ import os
 import subprocess
 
 def convert_mp4_to_m4a(directory):
+    """
+    mp4 동영상 파일을 m4a 오디오 파일로 컨버팅
+    """
     for filename in os.listdir(directory):
         if filename.lower().endswith('.mp4'):
             mp4_path = os.path.join(directory, filename)

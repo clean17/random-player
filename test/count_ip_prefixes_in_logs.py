@@ -3,7 +3,13 @@ import re
 from collections import Counter
 
 def count_ip_prefixes_in_logs(log_dir):
+    """
+    xxx.xxx.xxx.* 형태로 그룹핑
+    로그에서 302를 응답받은 IP를 횟수로 출력
+    """
     prefix_counter = Counter()
+    ip_pattern = re.compile(r'INFO - (\d+\.\d+\.\d+\.\d+)')  # IP 전체 추출
+
     # log 파일만 찾기
     for filename in os.listdir(log_dir):
         if filename.endswith('.log'):
@@ -12,14 +18,19 @@ def count_ip_prefixes_in_logs(log_dir):
                 for line in f:
                     # "GET / HTTP/1.1" 302 가 있는 라인만
                     if '"GET / HTTP/1.1" 302' in line:
-                        # IP 추출: INFO - 65.49.1.238 - - ...
-                        m = re.search(r'INFO - (\d+)\.', line)
+                        # 예: INFO - 65.49.1.238 - - ...
+                        m = ip_pattern.search(line)
                         if m:
-                            prefix = m.group(1)
-                            prefix_counter[prefix] += 1
+                            full_ip = m.group(1)              # "65.49.1.238"
+                            parts = full_ip.split('.')        # ["65", "49", "1", "238"]
+                            if len(parts) == 4:
+                                prefix = '.'.join(parts[:3])  # "65.49.1"
+                                prefix_counter[prefix] += 1
+
     # 많은 순서대로 출력
     for prefix, count in prefix_counter.most_common():
-        print(f"{prefix}: {count}회")
+        if count > 10:
+            print(f"{prefix}.*: {count}회")
 
 
 def count_ip_full_in_logs(log_dir: str, filter_substr='"GET / HTTP/1.1" 302'):
@@ -48,12 +59,10 @@ def count_ip_full_in_logs(log_dir: str, filter_substr='"GET / HTTP/1.1" 302'):
 
     # 많이 나온 순으로 출력
     for ip, cnt in counter.most_common():
-        print(f"{ip} : {cnt}회")
+        if cnt > 10:
+            print(f"{ip} : {cnt}회")
 
 
-# 사용 예시
-# count_ip_prefixes_in_logs('./logs')
-
-# 사용 예시
-count_ip_full_in_logs('./logs')
+count_ip_prefixes_in_logs('./logs')
+# count_ip_full_in_logs('./logs')
 
