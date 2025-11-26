@@ -49,6 +49,19 @@ def save_image_with_uuid(img_name, img_url, save_dir):
     save_path = os.path.join(save_dir, unique_img_name)
     download_image(img_url, save_path)
 
+def save_video_with_uuid(video_name: str, video_url: str, save_dir: str):
+    ext = os.path.splitext(video_name)[1] or ".mp4"
+    new_name = f"{uuid.uuid4().hex}{ext}"
+    save_path = os.path.join(save_dir, new_name)
+
+    resp = requests.get(video_url, stream=True, timeout=60)
+    resp.raise_for_status()
+
+    with open(save_path, "wb") as f:
+        for chunk in resp.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+
 def auto_scroll_page(page):
     page.evaluate("""
         () => {
@@ -161,6 +174,17 @@ def crawl_images_from_page(page_num):
                     if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
                 ]
 
+                video_srcs = page.eval_on_selector_all(
+                    "div.article-body div.fr-view.article-content p span > video",
+                    "els => els.map(video => video.getAttribute('src'))"
+                )
+
+                video_urls = [
+                    ('https:' + src if src and src.startswith('//') else src)
+                    for src in video_srcs
+                    if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
+                ]
+
                 count = 0
                 for img_url in img_urls:
                     if img_url.startswith('//'):
@@ -170,6 +194,16 @@ def crawl_images_from_page(page_num):
 
                     img_name = os.path.basename(img_url.split('?')[0])
                     save_image_with_uuid(img_name, img_url, IMAGE_DIR)
+                    count = count + 1
+
+                for video_url in video_urls:
+                    if video_url.startswith('//'):
+                        video_url = 'https:' + video_url
+                    elif video_url.startswith('/'):
+                        video_url = urljoin(url_host, video_url)
+
+                    video_name = os.path.basename(video_url.split('?')[0])
+                    save_video_with_uuid(video_name, video_url, IMAGE_DIR)
                     count = count + 1
                 print(f'download success : {count}')
 
