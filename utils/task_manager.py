@@ -3,6 +3,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import threading
 import time
 import os
+import re
 import glob
 import ffmpeg
 import psutil
@@ -21,7 +22,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from utils.lotto_schedule import async_buy_lotto
 from utils.compress_file import compress_directory, compress_directory_to_zip
-import re
+from utils.renew_stock_close import renew_interest_stocks_close
 
 tasks = []
 
@@ -409,6 +410,7 @@ async def run_schedule():
     for h in range(9, 16):  # 9 ~ 15
         schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks)
         schedule.every().day.at(f"{h:02d}:45").do(run_weekdays_only, find_low_stocks)
+        schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, renew_interest_stocks_close)
 
     # 월~금, 5분마다 실행
     schedule.every(5).minutes.do(run_cumtom_time_only, update_interest_stocks)
@@ -537,7 +539,7 @@ def find_stocks():
 def find_low_stocks():
     script_dir = r'C:\my-project\AutoSales.py'
     venv_activate = r'venv\Scripts\activate'
-    py_script = r'python 4_find_low_point.py.py'
+    py_script = r'python 4_find_low_point.py'
 
     cmd = f'cmd /c "cd /d {script_dir} && {venv_activate} && {py_script} && exit"'
 

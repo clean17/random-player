@@ -20,6 +20,7 @@
     <h2>Select Menu</h2>
     {% if current_user.get_id() == config.SUPER_USERNAME %}
 <!--    <a href="{{ url_for('main.home') }}">Back</a>-->
+
     <form action="/video/select-directory" method="post">
         <select name="directory" id="directory-select" class="select-dropdown" onchange="this.form.submit()">
             <option value="">Video Directory</option>
@@ -28,6 +29,7 @@
             <option value="3" id="btn3">Directory D120</option>
             <option value="4" id="btn4">Directory R120</option>
             <option value="5" >Directory NH</option>
+            <option value="7" >TO</option>
         </select>
     </form>
     {% endif %}
@@ -51,22 +53,21 @@
             <option value="_open" >HAPPY</option>
         </select>
     </form>
-        <form id="image-select-form">
-            <select id="image-select" class="select-dropdown">
-                <option value="">Select Image Dir</option>
-                <option value="{{ url_for('image.image_list', dir=TRIP_IMAGE_DIR) }}">Trip Images</option>
-                <option value="/image/stock-graph-list/kospi">Stocks Graph</option>
-                <!--                    <option value="{{ url_for('image.image_list', dir=TEMP_IMAGE_DIR) }}">Temp Images</option>-->
-                {% if current_user.get_id() == config.SUPER_USERNAME %}
-                <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
-                <option value="{{ url_for('image.image_list', dir=IMAGE_DIR2) }}">View Images2</option>
-                <option value="{{ url_for('image.image_list', dir=MOVE_DIR) }}">Move Image</option>
-<!--                <option value="{{ url_for('image.image_list', dir=CHK_IMAGE_DIR) }}">Check Images</option>-->
-                <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
-                {% endif %}
-            </select>
-        </form>
-        <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload File</button></a>
+    <form id="image-select-form">
+        <select id="image-select" class="select-dropdown">
+            <option value="">Select Image Dir</option>
+            <option value="{{ url_for('image.image_list', dir=TRIP_IMAGE_DIR) }}">Trip Images</option>
+            <option value="/image/stock-graph-list/kospi">Stocks Graph</option>
+            <!--<option value="{{ url_for('image.image_list', dir=TEMP_IMAGE_DIR) }}">Temp Images</option>-->
+            {% if current_user.get_id() == config.SUPER_USERNAME %}
+            <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
+            <option value="{{ url_for('image.image_list', dir=IMAGE_DIR2) }}">View Images2</option>
+            <option value="{{ url_for('image.image_list', dir=MOVE_DIR) }}">Move Image</option>
+            <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
+            {% endif %}
+        </select>
+    </form>
+    <a href="{{ url_for('upload.get_file_upload_html') }}"><button type="button" id="btn922" class="btn-w100">Upload File</button></a>
     <a href="/func/stocks/interest/view"><button type="button" id="btn9233" class="btn-w100">Interest Stocks</button></a>
     <a href="/posts"><button type="button" id="btn913" class="btn-w100">Posts</button></a>
     {# {% if current_user.get_id() != config.GUEST_USERNAME %} #}
@@ -78,7 +79,7 @@
         <a href="{{ url_for('func.memo') }}"><button type="button" id="btn925" class="btn-w100">Memo</button></a>
     {% if current_user.get_id() != config.GUEST_USERNAME %}
 <!--        <button type="button" id="buy-lotto" class="btn-w100">Buy Lotto</button>-->
-        <!--<button type="button" id="run-crawl" class="btn-w100">Run Crawl</button>-->
+        <button type="button" id="run-crawl" class="btn-w100">Run Crawl</button>
 <!--        <button type="button" id="kospi" class="btn-w100">KOSPI</button>-->
 <!--        <button type="button" id="nasdaq" class="btn-w100">NASDAQ</button>-->
 <!--        <a href="{{ url_for('func.get_hls') }}"><button type="button" id="" class="btn-w100">HLS</button></a>-->

@@ -95,6 +95,7 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         'VIDEO_DIRECTORY4': directories.get('video_directory4'),
         'VIDEO_DIRECTORY5': directories.get('video_directory5'),
         'TT_DIRECTORY': directories.get('video_directory6'),
+        'VIDEO_DIRECTORY7': directories.get('video_directory7'),
         'VIDEO_DIRECTORY_open': directories.get('video_directory_open'),
         'IMAGE_DIR': directories.get('images_directory'),
         'IMAGE_DIR2': directories.get('images_directory2'),

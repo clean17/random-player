@@ -381,7 +381,8 @@ def save_chat_message():
     # with open(CHAT_FILE_PATH, "a", encoding="utf-8", errors='replace') as log_file: # errors='replace'; 인코딩할 수 없는 문자를 자동으로 '?'로 대체
     #     log_file.write(log_entry + "\n")
 
-    fetch_user = find_user_by_username(data['username'])
+    username = (data.get('username') or '').strip()
+    fetch_user = find_user_by_username(username)
     chat_room = find_chat_room_by_roomname(data['roomname'])
     chat = ChatDTO(created_at=str(datetime.now()), user_id=fetch_user.id, message=sanitized_message, chat_room_id=chat_room.id)
     inserted_id = insert_chat(chat)
@@ -389,7 +390,21 @@ def save_chat_message():
     last_chat_id = update_chat_room(chat)
     update_last_chat_id_in_state(inserted_id)
 
-    return {"status": "success", "inserted_id": inserted_id}, 200
+    resp = jsonify({"status": "success", "inserted_id": inserted_id})
+    # return {"status": "success", "inserted_id": inserted_id}, 200
+
+    # username이 있으면 쿠키로 내려보내기
+    if username:
+        resp.set_cookie(
+            "username",
+            username,
+            max_age=60 * 60 * 24 * 30,  # 30일 유지
+            path="/",
+            httponly=True,  # JS에서 안 쓸 거면 True
+            samesite="Lax"
+        )
+
+    return resp
 
 # 비동기로 추가 채팅 로그 요청 API
 @func.route("/chat/load-more-chat", methods=["POST"])
