@@ -691,6 +691,20 @@ def update_stocks():
 
     return {"status": "success", "result": "200"}, 200
 
+@func.route("/stocks/delisted-stock", methods=["POST"])
+def delete_delisted_stock_stocks():
+    try:
+        delete_delisted_stock()
+    except Exception as e:
+        # 오류 발생시 JSON 반환
+        return {
+            "status": "error",
+            "message": str(e)
+        }, 500
+
+    return {"status": "success", "result": "200"}, 200
+
+
 @func.route("/stocks/<nation>", methods=["GET"])
 def get_stocks(nation):
     return get_stock_list(nation)

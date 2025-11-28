@@ -170,20 +170,30 @@ and is2.market_value::numeric > 50_000_000_000
 and is2.current_trading_value::numeric > 7_000_000_000
 --and is2.created_at >= NOW() - INTERVAL '1 month'
 --and is2.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
-and is2.created_at >= %s::date - 1
+and is2.created_at >= %s::date
 and today_price_change_pct is not null
 group by stock_code, stock_name
 having count(stock_code) > 1
 --and count(stock_code) < 6
-and max(created_at) >= (CURRENT_DATE - INTERVAL '5 days') -- x일 전부터 등록된 것
+--and max(created_at) >= (CURRENT_DATE - INTERVAL '5 days') -- x일 전부터 등록된 것
 order by count(stock_code) desc, max(created_at) desc
 ) as b
 where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
 and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 5
-and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3;
+and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
         cur.execute(sql, (date,))
         # cur.execute(sql, )
         rows = cur.fetchall()
     return rows
+
+@db_transaction
+def delete_delisted_stock(conn=None):
+    sql = """
+    delete from stocks where updated_at::date <> now()::date;
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        deleted_count = cur.rowcount   # ← 삭제된 행 수
+    return deleted_count
