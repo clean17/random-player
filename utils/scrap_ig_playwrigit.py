@@ -450,7 +450,8 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
                 except Exception:
                     break
 
-            await asyncio.sleep(0.5) # 시간 조정
+            # await asyncio.sleep(0.5) # 시간 조정
+            await asyncio.sleep(0.7) # 시간 조정
 
         # 마지막 한 번 더
         await collect_from_main()
@@ -527,7 +528,8 @@ async def force_play_video_if_possible(page):
         play_btn = page.locator("button[aria-label*='Play'], button:has-text('Play')")
         if await play_btn.count():
             await play_btn.click()
-            await asyncio.sleep(0.5)
+            # await asyncio.sleep(0.5)
+            await asyncio.sleep(0.7)
     except:
         pass
     # JS로 강제 재생
