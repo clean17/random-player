@@ -16,7 +16,7 @@ from app.repository.scrap_posts.ScrapPostDTO import ScrapPostDTO
 from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap_post
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
-    update_stock_list, get_stock_list, delete_delisted_stock
+    update_stock_list, get_stock_list, delete_delisted_stock, get_interest_low_stocks
 from app.repository.users.users import find_user_by_username
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from utils.compress_file import compress_directory, compress_directory_to_zip
@@ -651,6 +651,14 @@ def get_interesting_stocks_info():
     date = data.get("date")
     target = data.get("target")
     stocks = get_interest_stocks_info(date)
+    return stocks
+
+@func.route("/stocks/interest/data/low", methods=["POST"])
+def get_low_stocks():
+    data = request.json
+    date = data.get("date")
+    # target = data.get("target")
+    stocks = get_interest_low_stocks(date)
     return stocks
 
 @func.route("/stocks/interest/view", methods=["GET"])

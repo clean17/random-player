@@ -26,10 +26,11 @@
         <button class="tab-btn active" data-target="#tab-trading">실시간 등락</button>
         <button class="tab-btn" data-target="#tab-change">금일 등락</button>
         <button class="tab-btn" data-target="#tab-summary">상승주 검색</button>
+        <button class="tab-btn" data-target="#tab-low">저점 검색</button>
         <input id="dateInput" class="date" type="date" />
     </div>
 
-    <!-- 탭 1: 거래대금 증감% -->
+    <!-- 탭 1: 거래대금 증감 -->
     <section id="tab-trading" class="tab-panel" style="display:block;">
         <h3 class="section-title">실시간 등락
             <span class="badge" id="count-trading">0건</span>
@@ -55,7 +56,7 @@
         </div>
     </section>
 
-    <!-- 탭 2: 금일 등락% -->
+    <!-- 탭 2: 금일 등락 -->
     <section id="tab-change" class="tab-panel" style="display:none;">
         <h3 class="section-title">금일 등락
             <span class="badge" id="count-change">0건</span>
@@ -81,9 +82,9 @@
         </div>
     </section>
 
-    <!-- 탭 3: 상승주 검색% -->
+    <!-- 탭 3: 상승주 검색 -->
     <section id="tab-summary" class="tab-panel" style="display:none;">
-        <h3 class="section-title">금일 등락
+        <h3 class="section-title">상숭주 검색
             <span class="badge" id="count-summary">0건</span>
         </h3>
         <div class="table-scroller">
@@ -106,6 +107,36 @@
                     <th>평균_거래대금</th>
                     <th class="right">처음_상승일자</th>
                     <th class="right">마지막_상승일자</th>
+                </tr>
+                </thead>
+                <tbody><!-- JS 렌더링 --></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 탭 4: 저점 검색 -->
+    <section id="tab-low" class="tab-panel" style="display:none;">
+        <h3 class="section-title">저점 검색
+            <span class="badge" id="count-low">0건</span>
+        </h3>
+        <div class="table-scroller">
+            <table class="table" id="table-low">
+                <thead>
+                <tr>
+                    <th>그래프</th>
+                    <!--                    <th>순서</th>-->
+                    <!--                    <th>종목코드</th>-->
+                    <th>종목명</th>
+                    <th>카테고리</th>
+<!--                    <th>시작가</th>-->
+<!--                    <th>최근 종가</th>-->
+<!--                    <th>전체_상승률</th>-->
+                    <!--                    <th>일별_상승률</th>-->
+<!--                    <th>평균_변동률</th>-->
+<!--                    <th>최고_대비_변동</th>-->
+                    <th>오늘 변동률</th>
+                    <th>시가총액</th>
+                    <th>거래대금(금일)</th>
                 </tr>
                 </thead>
                 <tbody><!-- JS 렌더링 --></tbody>
@@ -160,9 +191,10 @@
     function setDefaultDateToday(interval=0){
         const input = document.getElementById('dateInput');
         const now = new Date();
-        const yyyy = now.getFullYear();
-        const mm = String(now.getMonth()+1).padStart(2,'0');
-        const dd = String(now.getDate() - interval).padStart(2,'0');
+        const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() - interval);
+        const yyyy = target.getFullYear();
+        const mm = String(target.getMonth() + 1).padStart(2, '0');
+        const dd = String(target.getDate()).padStart(2, '0');
         input.value = `${yyyy}-${mm}-${dd}`;
     }
 
@@ -358,6 +390,53 @@
         bindImageToggles(document.getElementById('table-summary'));
     }
 
+    const renderLowTable = function (rows) {
+        const lowTable = document.getElementById('table-low');
+        const thCount = lowTable.querySelectorAll("thead tr th").length;
+        const tbody =    lowTable.querySelector('tbody');
+        if (!rows || !rows.length) {
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
+            document.getElementById('count-change').textContent = '0건';
+            return;
+        }
+        const html = rows.map(r => {
+            const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
+            const hasImg = !!r.image_url;
+            const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
+            const date = new Date(`${r.created_at}`);
+
+            const parts = fmt.formatToParts(date);
+            const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+
+            // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
+            const formatted_date = `${obj.hour}:${obj.minute}`;
+            // console.log('formatted_date', formatted_date)
+            return `
+        <tr>
+          <td>${imgBtn}</td>
+<!--          <td>`+formatted_date+`</td>-->
+          <td class="">${r.stock_name ?? ''}</td>
+          <td class="">${r.category ?? ''}</td>
+<!--          <td class="right">${fmt_won(r.avg5d_trading_value)}</td>-->
+<!--          <td class="right">${fmt_won(r.current_trading_value)}</td>-->
+<!--          <td class="right">${fmt2(r.trading_value_change_pct)}%</td>-->
+<!--          <td class="right">${fmt2(r.yesterday_close)}원</td>-->
+<!--          <td class="right">${fmt2(r.current_price)}원</td>-->
+          <td class="right">${fmt2(r.today_price_change_pct)}%</td>
+          <td class="right">${r.market_value ?? ''}</td>
+          <td class="right">${fmt_won(r.current_trading_value)}</td>
+        </tr>
+        <tr id="${detailId}" class="detail-row" style="display:none;">
+          <td colspan="${thCount}">
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+          </td>
+        </tr>`;
+        }).join('');
+        tbody.innerHTML = html;
+        document.getElementById('count-change').textContent = `${rows.length}건`;
+        bindImageToggles(document.getElementById('table-change'));
+    }
+
 
     // 실시간 가격 업데이트 표시
     function updateTdWithBlink(td, newValue) {
@@ -383,6 +462,7 @@
 
         const url = 'https://chickchick.shop/func/stocks/interest/data';
         const url2 = 'https://chickchick.shop/func/stocks/interest/data/info';
+        const url3 = 'https://chickchick.shop/func/stocks/interest/data/low';
         const payload = { date: yyyymmdd };
 
         try {
@@ -412,6 +492,15 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data2 = await res2.json();
             renderSummaryTable(data2)
+
+            const res3 = await fetch(url3, {
+                method: 'POST',
+                headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data3 = await res3.json();
+            renderLowTable(data3)
         } catch (e) {
             console.error(e);
             alert('데이터를 불러오지 못했습니다.');
