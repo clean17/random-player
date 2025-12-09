@@ -1066,7 +1066,7 @@ function enterEvent(event) {
         if (event.shiftKey) {
             return; // 줄바꿈만 하고 종료
         }
-        if (!isMobile || true) {
+        if (!isMobile) {
             event.preventDefault(); // 기본 Enter 줄바꿈 방지
             // sendMessage();
             sendButton.click();

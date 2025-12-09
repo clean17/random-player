@@ -396,7 +396,7 @@
         const tbody =    lowTable.querySelector('tbody');
         if (!rows || !rows.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
-            document.getElementById('count-change').textContent = '0건';
+            document.getElementById('count-low').textContent = '0건';
             return;
         }
         const html = rows.map(r => {
@@ -433,7 +433,7 @@
         </tr>`;
         }).join('');
         tbody.innerHTML = html;
-        document.getElementById('count-change').textContent = `${rows.length}건`;
+        document.getElementById('count-low').textContent = `${rows.length}건`;
         bindImageToggles(document.getElementById('table-change'));
     }
 
@@ -524,7 +524,9 @@
             const input = document.getElementById('dateInput');
             const yyyymmdd = input.value?.replace(/-/g, '');
             // if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
-            const stock_names = document.querySelectorAll('.stock_name'); // 탭 1
+            const activeTable = document.querySelector('.tab-bar .tab-btn.active').dataset.target;
+            const stock_names = document.querySelector(activeTable).querySelectorAll('.stock_name'); // 탭 1
+            s.clear();
             stock_names.forEach(i=>s.add((i.textContent)));
             const stocks = Array.from(s);
 
@@ -598,8 +600,10 @@
                 }
             })
 
-            const stock_names2 = document.querySelectorAll('.stock_name2'); // 탭 1
+            const activeTable = document.querySelector('.tab-bar .tab-btn.active').dataset.target;
+            const stock_names2 = document.querySelector(activeTable).querySelectorAll('.stock_name2'); // 탭 1
             stock_names2.forEach(i=>s2.add((i.textContent)));
+            s2.clear();
             const stocks2 = Array.from(s2);
 
             stocks2.forEach(stock_name=>{

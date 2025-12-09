@@ -156,6 +156,7 @@ def login():
 
             # 로그인 아이디가 정보가 없음
             else:
+                # 브라우저 세션
                 if 'attempts' not in session:
                     session['attempts'] = 0
                     session['lockout_time'] = None
