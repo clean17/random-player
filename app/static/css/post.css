@@ -20,7 +20,7 @@ body {
     width: 1000px;
     height: 100%;
     background: white;
-    padding: 10px;
+    padding: 15px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     /*text-align: center;*/
@@ -69,14 +69,31 @@ hr {
     text-overflow: ellipsis;
 }
 .view-post-title {
-    font-size: 1.2em;
+    font-size: 1.6em;
     font-weight: bold;
-    margin-bottom: 6px;
+    margin-bottom: 10px;
+}
+.edit-post-title {
+    font-size: 1.5em;
+    padding: 5px;
+    margin-top: 3px;
+}
+.edit-post-title input {
+    border: none !important;
+    outline: none;          /* 포커스 테두리까지 제거 */
+    font-size: 1.6em;
+    font-weight: bold;
+    font-family: inherit;  /* 필요하면 폰트도 상속 */
+}
+.view-post-title input{
+    font-size: 1.6em;
+    font-weight: bold;
+    margin-bottom: 10px;
 }
 .post-meta {
     color: #7b7b7b;
-    font-size: 0.8em;
-    margin-bottom: 10px;
+    font-size: 1em;
+    /*margin-bottom: 6px;*/
 }
 
 .post-box {
@@ -110,9 +127,10 @@ hr {
     align-items: center;
     justify-content: center;
     border-radius: 6px;
-    min-width: 60px;
-    max-width: 60px; /* 원하면 조절 */
+    min-width: 70px;
+    max-width: 70px; /* 원하면 조절 */
     margin-right: 12px;
+    margin-left: 6px;
     font-weight: bold;
 }
 .thumbnail img {
@@ -128,7 +146,7 @@ hr {
     /*justify-content: center;*/
     justify-content: space-between; /* 세로 요소들을 위/아래로 최대한 벌림 */
     min-width: 0;
-    padding: 5px;
+    padding: 15px;
 }
 
 
@@ -159,6 +177,19 @@ hr {
 .btn-secondary:hover {
     background: #eaf1fb;
     border-color: #2492ff;
+}
+/* 🔴 게시글 삭제용 버튼 */
+.btn-danger {
+    background: linear-gradient(90deg, #a94442, #d97c76 90%);
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    box-shadow: 0 1px 6px #0001;
+    transition: background 0.18s, filter 0.18s;
+}
+
+.btn-danger:hover {
+    filter: brightness(1.05);
 }
 /*************** Button *************/
 
@@ -228,6 +259,7 @@ hr {
 .form-actions {
     position: absolute;
     bottom: 15px;
+    left: 20px;
     right: 20px;
     display: flex;
     gap: 10px;
@@ -236,5 +268,10 @@ hr {
 
     margin-top: auto;   /* 플렉스에서 자동으로 아래 밀림 */
     padding-top: 10px;
+}
+/* 첫 번째 버튼이 왼쪽으로 붙고,
+   나머지 버튼들을 오른쪽으로 밀어냄 */
+.form-actions a {
+    margin-right: auto;
 }
 /*************** edit *************/

@@ -1,8 +1,8 @@
-from flask import Blueprint, render_template, session, Flask, send_from_directory, request, redirect, url_for
+from flask import Blueprint, render_template, session, Flask, send_from_directory, request, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 
 from app.repository.posts.PostDTO import PostDTO
-from app.repository.posts.posts import find_post, find_post_list, get_posts_count, insert_post, update_post
+from app.repository.posts.posts import find_post, find_post_list, get_posts_count, insert_post, update_post, delete_post
 from app.repository.users.users import find_user_by_username
 from config.config import settings
 import time
@@ -74,3 +74,18 @@ def edit_post(post_id):
         , post_id=post_id
         , version=int(time.time())
     )
+
+@posts.route('/<int:post_id>/del', methods=['POST'])
+@login_required
+def delete_posts(post_id):
+    post = find_post(post_id)
+    user = find_user_by_username(current_user.get_id()) # current_user.get_id(): 사용자 ID
+
+    if not post:
+        return jsonify({"result": "존재 하지 않는 게시글"}), 404
+    else:
+        delete_post(post)
+
+    return jsonify({"result": "true"}), 200
+
+

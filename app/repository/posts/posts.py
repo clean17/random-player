@@ -25,6 +25,16 @@ def update_post(post: "PostDTO", conn=None) -> int:
         return post_id
 
 @db_transaction
+def delete_post(post: "PostDTO", conn=None) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM posts WHERE id = %s RETURNING id;",
+            (post.id,)
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+@db_transaction
 def find_post(post_id: str, conn=None) -> List["PostDTO"]:
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
