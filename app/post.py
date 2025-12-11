@@ -60,8 +60,23 @@ def create_post():
 @login_required
 def edit_post(post_id):
     post = find_post(post_id)
+    user = find_user_by_username(current_user.get_id()) # current_user.get_id(): 사용자 ID
+
+    if post.user_id != user.id:
+        return jsonify(
+            {
+                "result": "false",
+                "comment": "권한이 없습니다"
+            }
+        ), 403
+
     if not post:
-        return "존재하지 않는 게시글", 404
+        return jsonify(
+            {
+                "result": "false",
+                "comment": "존재하지 않는 게시글"
+            }
+        ), 404
     if request.method == 'POST':
         user = find_user_by_username(current_user.get_id())
         post = PostDTO(user_id=user.id, title=request.form['title'], content=request.form['content'], id=post_id)
@@ -81,11 +96,29 @@ def delete_posts(post_id):
     post = find_post(post_id)
     user = find_user_by_username(current_user.get_id()) # current_user.get_id(): 사용자 ID
 
+    if post.user_id != user.id:
+        return jsonify(
+            {
+                "result": "false",
+                "comment": "권한이 없습니다"
+            }
+        ), 403
+
     if not post:
-        return jsonify({"result": "존재 하지 않는 게시글"}), 404
+        return jsonify(
+            {
+                "result": "false",
+                "comment": "존재하지 않는 게시글"
+            }
+        ), 404
     else:
         delete_post(post)
 
-    return jsonify({"result": "true"}), 200
+    return jsonify(
+        {
+            "result": "true",
+            "comment": "삭제되었습니다."
+        }
+    ), 200
 
 
