@@ -32,8 +32,19 @@ headers = {
 
 
 url = 'https://m.blog.naver.com/PostView.naver?blogId=mojjustice&logNo=224100395324'
-response = requests.get(url, headers=headers, proxies=proxies)
-soup = BeautifulSoup(response.content, 'html.parser')
-print(soup.prettify())
+try:
+    response = requests.get(url, headers=headers, proxies=proxies, timeout=20)
+    response.raise_for_status()  # HTTP 에러 자동 예외 발생
 
+    soup = BeautifulSoup(response.content, 'html.parser')
+    html_text = soup.prettify()
 
+    # 저장 경로 설정
+    save_path = "naver_post.html"
+    with open(save_path, "w", encoding="utf-8") as f:
+        f.write(html_text)
+
+    print(f"📁 HTML 저장 완료 → {save_path}")
+
+except Exception as e:
+    print("❌ 요청 또는 저장 중 오류:", e)
