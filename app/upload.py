@@ -1,4 +1,5 @@
 from flask import Blueprint, Flask, render_template, request, jsonify
+from urllib.parse import urlencode
 import os
 from datetime import datetime
 from flask_login import login_required
@@ -111,9 +112,17 @@ def upload_file():
                     convert_file(file_path)
                     # saved_files.append(file_path)
                     mime_type, _ = guess_type(uuid_filename)
+                    params = {
+                        'filename': uuid_filename,
+                        'dir': 'temp',
+                        'selected_dir': title
+                    }
+                    query_str = urlencode(params)  # filename, title 값만 알아서 인코딩
+                    url = f"https://chickchick.shop/image/images?{query_str}"
                     file_info ={
                         "name": uuid_filename,
-                        "type": mime_type or "application/octet-stream"
+                        "type": mime_type or "application/octet-stream",
+                        "url": url
                     }
                     saved_files.append(file_info)
 

@@ -32,17 +32,17 @@
 
     <div class="post-list">
         {% for post in posts %}
-        <a href="/posts/{{ post.id }}">
-            <div class="post-box">
+<!--        <a href="/posts/{{ post.id }}">-->
+            <div class="post-box" data-post-id="{{ post.id }}">
                 <div class="thumbnail">
-                    <img src='/static/no-image.png'>
+                    <img src={{ post.thumbnail }}>
                 </div>
                 <div class="post-info">
                     <div class="post-title">{{ post.title }}</div>
                     <div class="post-meta">{{ post.realname or '이름 없음' }} &nbsp;|&nbsp; {{ post.updated_at }}</div>
                 </div>
             </div>
-        </a>
+<!--        </a>-->
         {% endfor %}
     </div>
 
@@ -61,4 +61,17 @@
     </div>
 </div>
 </body>
+<script>
+    const postBoxes = document.querySelectorAll(".post-box");
+
+    postBoxes.forEach(box => {
+        box.addEventListener('click', () => {
+            // 텍스트 드래그해서 선택한 상태면 이동 안 하도록
+            if (window.getSelection().toString().length > 0) return;
+            const postId = box.dataset.postId;
+            if (!postId) return;
+            location.href = '/posts/' + postId;
+        })
+    })
+</script>
 </html>

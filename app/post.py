@@ -6,6 +6,8 @@ from app.repository.posts.posts import find_post, find_post_list, get_posts_coun
 from app.repository.users.users import find_user_by_username
 from config.config import settings
 import time
+from bs4 import BeautifulSoup
+
 
 posts = Blueprint('posts', __name__)
 
@@ -16,6 +18,14 @@ def post_list():
     per_page = 10
     total = get_posts_count()
     page_posts = find_post_list(page, per_page)
+    for post in page_posts:
+        soup = BeautifulSoup(post.content, "html.parser")
+        first_img = soup.find("img")
+        if first_img:
+            post.thumbnail = first_img["src"]
+        else:
+            post.thumbnail = '/static/no-image.png'
+
     max_page = (total - 1) // per_page + 1
     return render_template(
         "posts/post_list.html"

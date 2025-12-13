@@ -11,3 +11,4 @@ class PostDTO:
     updated_at: str = None
     realname: str = None
     view_count: int = None
+    thumbnail: str = None
