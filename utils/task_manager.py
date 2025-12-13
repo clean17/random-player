@@ -22,7 +22,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from utils.lotto_schedule import async_buy_lotto
 from utils.compress_file import compress_directory, compress_directory_to_zip
-from utils.renew_stock_close import renew_interest_stocks_close
+# from utils.renew_stock_close import renew_interest_stocks_close
+from utils.scrap_ig_playwrigit import run_scrap
 
 tasks = []
 
@@ -410,7 +411,7 @@ async def run_schedule():
     for h in range(9, 16):  # 9 ~ 15
         schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, find_stocks)
         schedule.every().day.at(f"{h:02d}:45").do(run_weekdays_only, find_low_stocks)
-        schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, renew_interest_stocks_close)
+        # schedule.every().day.at(f"{h:02d}:30").do(run_weekdays_only, renew_interest_stocks_close)
 
     # 월~금, 5분마다 실행
     schedule.every(5).minutes.do(run_cumtom_time_only, update_interest_stocks)
@@ -610,94 +611,202 @@ initialize_directories()
 # scheduler.start()
 
 '''
-threading.Thread - 간단한 비동기 작업, GIL(Global Interpreter Lock) 문제 - 하나의 쓰레드만 인터프리터의 모든 자원을 사용 > 컨텍스트 스위칭 비용이 발생
-CPU 바운드 작업에는 multiprocessing 모듈을 사용하는 것이 더 적합 - GIL의 제약을 받지 않는 별도의 프로세스
+< 파이썬의 스케줄러 방식 추천 >
 
-asyncio - 비동기 I/O 작업에 효율적, 이벤트 루프 기반, 스레드보다 가벼운 구조
+| 항목           | APScheduler | schedule | asyncio + while |
+| -------------- | ----------- | -------- | --------------- |
+| 외부 라이브러리  | O           | O        | X               |
+| Flask 궁합     | ⭐⭐⭐⭐⭐ | ⭐⭐    | ⭐⭐⭐         |
+| 시간 정확도     | ⭐⭐⭐⭐⭐ | ⭐⭐    | ⭐⭐⭐⭐       |
+| 타임존 지원     | ⭐⭐⭐⭐⭐ | ❌      | 직접 처리         |
+| 크론 표현식     | O           | ❌      | ❌               |
+| 서버 재시작 내성 | ⭐⭐⭐     | ⭐      | ⭐⭐            |
+| CPU 점유       | 매우 낮음     | 낮음     | 매우 낮음        |
+| 메모리         | +수 MB       | 거의 없음 | 없음             |
+| 실무 사용 빈도  | 매우 높음     | 낮음     | 중간             |
+| 유지보수성      | 매우 좋음     | 나쁨     | 보통             |
 
-concurrent.futures.ThreadPoolExecutor - 스레드 관리를 자동화하고, 실행 결과를 쉽게 추적
+>> 단점 정리
+  APScheduler
+    Flask 다중 워커(gunicorn 등)에서는 job 중복 실행 주의 필요
+  schedule
+    프로세스가 block됨
+    시간 정확도 낮음 (드리프트 발생)
+  asyncio + while
+    스케줄 표현이 복잡
+    여러 작업 늘어나면 지옥
+    서버 재시작 시 보정 로직 직접 구현
+    
+>> 추천 구현 예시
+```
+Flask + APScheduler
 
----------------------------------------------------------
+from flask import Flask
+from apscheduler.schedulers.background import BackgroundScheduler
+from zoneinfo import ZoneInfo
 
-multiprocessing - 프로세스를 기반으로 병렬 처리를 구현, GIL 영향이 없음, 다중 코어 CPU 활용, 프로세스 간 메모리 분리, 메모리 사용량 높음, 프로세스 생성비용은 스레드 생성비용 보다 높다
+app = Flask(__name__)
+scheduler = BackgroundScheduler(timezone=ZoneInfo("Asia/Seoul"))
 
-concurrent.futures.ThreadPoolExecutor - 스레드를 기반으로 병렬 처리, GIL 영향을 받는다, I/O 바운드 작업에 적합, futures 객체로 작업의 완료 상태를 관리, concurrent.futures API는 작업 제출, 완료 추적, 결과 수집을 간단하게 처리, 다중 코어 활용이 제한적
-'''
+def daily_job():
+    print("하루 1번 실행")
 
-'''
-1. APScheduler
-예약된 작업을 등록해서 자동으로 실행하는 "스케줄러" 라이브러리
-(정해진 시간, 주기, 크론 등 지원)
-- 실행 방식 : 내부적으로 threading, asyncio, processpool 중 선택 가능
-- 사용 예 : 주기적 DB 정리, 백업, 알람, 리포트 작업 등
+def hourly_job():
+    print("9~15시, 1시간마다 실행")
 
-    from apscheduler.schedulers.background import BackgroundScheduler
-
-    def job():
-        print("작업 실행!")
-
-    scheduler = BackgroundScheduler()
+@app.before_first_request
+def start_scheduler():
+    scheduler.add_job(daily_job, 'cron', hour=0, minute=5)        # 매일 00:05 실행
+    scheduler.add_job(hourly_job, 'cron', hour='9-15', minute=10) # 9~15시 10분이 될 때마다 실행
+    scheduler.add_job(job_10min, 'cron', minute='*/10')           # 10분마다 실행
+    scheduler.add_job(job_min_end_5, 'cron', hour='9-10', minute='5,15,25,35,45,55') # 9~15시 5로 끝나는 분마다
+    scheduler.add_job(job, 'cron', ..., max_instances=1, coalesce=True) # 작업이 길이진다면
+    # max_instances=1: 이전 실행이 아직 끝나지 않았으면 중복 실행 제한    
+    # coalesce=True: 밀린 실행이 여러 번 생기면 1번으로 합쳐서 실행
     scheduler.add_job(job, 'interval', seconds=5)
     scheduler.start()
+``` 
 '''
 
 '''
-2. threading
-병렬로 코드를 돌리기 위한 Python 내장 방식
-실제는 진짜 병렬은 아님 (GIL 영향 받음)
-- 실행 방식 : OS 쓰레드를 이용하되 GIL 공유
-- 병렬성 : ❌ CPU 병렬성 없음 (단일 Python 인터프리터)
-- 적합 작업 : I/O 위주의 반복 작업, 로그 수집, 폴링 등
+< 파이썬 비동기·동시 처리 방법 비교표 >
 
-    import threading
+| 비교 항목 ↓ / 방식 → | asyncio (코루틴)          | threading          | ThreadPoolExecutor | ProcessPoolExecutor  | asyncio + to_thread | asyncio + ProcessPool |
+| ------------------ | ------------------------- | ----------------- | -------------------| -------------------- | ------------------- | --------------------- |
+| 실행 단위           | 코루틴(Task)               | 스레드             | 스레드(풀)          | 프로세스(풀)           | 코루틴 + 스레드      | 코루틴 + 프로세스       |
+| 주 용도             | I/O 대기 병렬화            | 간단 동시 실행      | 블로킹 I/O 병렬     | CPU 연산 병렬          | async에서 블로킹 분리 | async에서 CPU 병렬     |
+| 대표 예시           | Playwright async, aiohttp | 간단 백그라운드 작업 | requests 병렬 호출  | 이미지/영상/대규모 계산 | async + requests    | async 수집 + ML 전처리 |
+| Flask 궁합         | ⚠️ 애매 (WSGI)             | ✅ 무난           | ✅ 좋음            | ⚠️ 운영 복잡           | ⚠️ 배치/보조용       | ⚠️ 분리 권장           |
+| FastAPI 궁합       | ✅ 최적                    | ⚠️ 가능           | ✅ 좋음            | ⚠️ 가능               | ✅ 매우 좋음         | ✅ 좋음               |
+| 코드 난이도         | 중                         | 중                | 낮음~중             | 중~높음               | 낮음~중              | 높음                   |
+| 메모리 사용         | ⭐ (매우 적음)             | ⭐⭐              | ⭐⭐              | ⭐⭐⭐⭐            | ⭐⭐                | ⭐⭐⭐⭐             |
+| 실무 사용 빈도      | ⭐⭐⭐⭐⭐               | ⭐⭐⭐           | ⭐⭐⭐⭐          | ⭐⭐⭐              | ⭐⭐⭐⭐            | ⭐⭐~⭐⭐⭐          |
 
-    def background_task():
-        while True:
-            print("백그라운드 동작")
+프로세스를 사용하는 방법은 GIL 영향이 없고, 객체 공유가 어렵고, I/O 병렬 처리가 비효율적이고, CPU코어를 병렬로 사용할 수 있다
+프로세스를 사용하는 방법은 프로세스간 공유를 위해 list, dict, tuple, set같은 것들을 pickle로 저장한 뒤 전달해야 한다
 
-    t = threading.Thread(target=background_task, daemon=True)
-    t.start()
+>> 핵심 정리
+  asyncio (코루틴)
+    I/O 기다림 최강자, CPU는 직접 못 씀, 네트워크/웹 자동화
+  threading
+    간단히 몇 개만” 동시에 돌리고 싶을 때(직접 제어)
+  ThreadPoolExecutor
+    블로킹 I/O를 여러 개 병렬로 돌릴 때, CPU는 사실상 1개만 씀, GIL, I/O 위주
+    스레드를 풀로 묶어서, 작업 큐 기반으로 동시에 여러 작업을 처리하게 해주는 고수준 비동기 API
+  ProcessPoolExecutor
+    CPU 연산을 코어 여러 개로 진짜 병렬 처리할 때, 비용·제약 큼
+  asyncio + to_thread
+    async 흐름 유지하면서 특정 블로킹 함수를 “잠깐” 스레드로 빼고 싶을 때
+  asyncio + ProcessPool
+    async 앱에서 CPU 무거운 부분만 프로세스로 빼서 병렬 처리할 때(전처리/연산 파이프라인)
 
-3. asyncio
-Python의 비동기 처리 프레임워크 (싱글 스레드 기반)
-await, async def, 이벤트 루프 기반으로 작동
-- 목적 : 비동기 I/O, 고성능 서버, 병렬 요청 처리
-- 실행 방식 : 단일 쓰레드 + 논블로킹 방식 (코루틴 스케줄링)
-- 병렬성 : ❌ CPU 병렬은 아님 (하지만 I/O 병렬화에 매우 효율적)
-- 적합 작업 : API 호출, 비동기 DB, 파일 I/O 등
 
-    import asyncio
+```
+import asyncio
 
-    async def async_task():
-        while True:
-            print("비동기 작업 중")
-            await asyncio.sleep(5)
+async def fetch(name, delay):
+    await asyncio.sleep(delay)   # I/O 대기라고 가정
+    return f"{name} done"
 
-    asyncio.run(async_task())
+async def main():
+    results = await asyncio.gather(
+        fetch("A", 1),
+        fetch("B", 2),
+        fetch("C", 1),
+    )
+    print(results)
 
-4. concurrent.futures.ThreadPoolExecutor
-스레드를 풀로 묶어서, 작업 큐 기반으로 동시에 여러 작업을 처리하게 해주는 고수준 비동기 API
-- 실행 방식 : 쓰레드 풀 (큐 기반)
-- 병렬성 : 제한된 수의 스레드로 병렬 처리
+asyncio.run(main())
 
-    from concurrent.futures import ThreadPoolExecutor
+```
 
-    def task(x):
-        return x * x
+```
+import threading
+import time
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(task, i) for i in range(5)]
-        results = [f.result() for f in futures]
+def work(name):
+    time.sleep(1)  # 블로킹 작업
+    print(f"{name} done")
 
-- 스레드 수를 제한해서 동시에 실행
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        executor.submit(task1)
-        executor.submit(task2)
+t1 = threading.Thread(target=work, args=("A",))
+t2 = threading.Thread(target=work, args=("B",))
 
-- Future 객체로 결과/예외를 다룰 수 있음
-    future = executor.submit(task)
-    try:
-        result = future.result(timeout=5)
-    except Exception as e:
-        print(f"에러 발생: {e}")
+t1.start(); t2.start()
+t1.join();  t2.join()
+
+```
+
+```
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+
+def blocking_call(x):
+    time.sleep(1)
+    return x * 2
+
+with ThreadPoolExecutor(max_workers=5) as ex:
+    futures = [ex.submit(blocking_call, i) for i in range(10)]
+    for f in as_completed(futures):
+        print(f.result())
+
+```
+
+```
+from concurrent.futures import ProcessPoolExecutor
+import os
+
+def cpu_heavy(n: int) -> int:
+    s = 0
+    for i in range(10_000_00):  # CPU를 좀 쓰는 작업(예시)
+        s += (i * n) % 97
+    return s
+
+if __name__ == "__main__":
+    with ProcessPoolExecutor(max_workers=os.cpu_count()) as ex:
+        results = list(ex.map(cpu_heavy, range(1, 9)))
+    print(results)
+
+```
+
+```
+import asyncio
+import time
+
+def blocking_job(x):
+    time.sleep(2)
+    return x + 10
+
+async def main():
+    # 블로킹 함수를 스레드로 보내고 결과를 await
+    r = await asyncio.to_thread(blocking_job, 5)
+    print(r)
+
+asyncio.run(main())
+
+```
+
+```
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
+
+def cpu_heavy(x: int) -> int:
+    s = 0
+    for i in range(5_000_00):
+        s += (i * x) % 97
+    return s
+
+async def main():
+    loop = asyncio.get_running_loop()
+    with ProcessPoolExecutor(max_workers=4) as pool:
+        tasks = [
+            loop.run_in_executor(pool, cpu_heavy, i)
+            for i in range(1, 9)
+        ]
+        results = await asyncio.gather(*tasks)
+    print(results)
+
+asyncio.run(main())
+
+```
+
 '''
