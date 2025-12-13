@@ -5,7 +5,7 @@ body, html {
 body {
     background-color: #f4f4f4;
 
-    display: flex;
+    display: flex;            /* 부모를 flex로 만들면 자식들이 자동으로 정렬된다 */
     flex-direction: column;   /* 세로 흐름 */
     justify-content: center;  /* 세로 가운데 */
     align-items: center;      /* 가로 가운데 */
@@ -20,7 +20,7 @@ body {
     width: 1000px;
     height: 100%;
     background: white;
-    padding: 15px;
+    padding: 10px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     /*text-align: center;*/
@@ -29,10 +29,9 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 0; /* 플렉스 컨테이너에서 내부 스크롤 허용 */
-    height: 100%;
 
     position: relative;
-    overflow: auto;
+    /*overflow: auto;*/
 }
 
 hr {
@@ -40,118 +39,6 @@ hr {
     border-top: 1px solid #ebebeb;
     margin: 10px 0;
 }
-
-
-
-/* 메인화면 */
-.post-top-bar {
-    margin-top: 10px;
-    display: flex;
-    justify-content: space-evenly;
-    /*justify-content: center;*/
-    align-items: center;
-    margin-bottom: 10px;
-}
-.post-top-bar h2 {
-    margin: 0;
-    font-size: 1.35em;
-}
-
-
-
-
-.post-title {
-    font-size: 1.2em;
-    font-weight: bold;
-    margin-bottom: 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.view-post-title {
-    font-size: 1.6em;
-    font-weight: bold;
-    margin-bottom: 10px;
-}
-.edit-post-title {
-    font-size: 1.5em;
-    padding: 5px;
-    margin-top: 3px;
-}
-.edit-post-title input {
-    border: none !important;
-    outline: none;          /* 포커스 테두리까지 제거 */
-    font-size: 1.6em;
-    font-weight: bold;
-    font-family: inherit;  /* 필요하면 폰트도 상속 */
-}
-.view-post-title input{
-    font-size: 1.6em;
-    font-weight: bold;
-    margin-bottom: 10px;
-}
-.post-meta {
-    color: #7b7b7b;
-    font-size: 1em;
-    /*margin-bottom: 6px;*/
-}
-
-.post-box {
-    background: #fff;
-    box-shadow: 0 4px 20px #0001;
-    margin-bottom: 6px;
-    transition: box-shadow 0.18s;
-
-    display: flex;
-    align-items: center;
-    width: 100%;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 5px;
-    box-sizing: border-box;
-}
-.post-box:hover {
-    box-shadow: 0px 0px 10px #2492ff;
-}
-
-.post-list a {
-    color: inherit;
-    text-decoration: none;
-}
-
-.thumbnail {
-    flex: 2;
-    aspect-ratio: 1 / 1;
-    background: #eee;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    min-width: 70px;
-    max-width: 70px; /* 원하면 조절 */
-    margin-right: 12px;
-    margin-left: 6px;
-    font-weight: bold;
-}
-.thumbnail img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;     /* fill, contain, cover, scale-down 등 선택 가능 */
-    display: block;
-}
-.post-info {
-    flex: 9;
-    display: flex;
-    flex-direction: column;
-    /*justify-content: center;*/
-    justify-content: space-between; /* 세로 요소들을 위/아래로 최대한 벌림 */
-    min-width: 0;
-    padding: 15px;
-}
-
-
-
-
 
 
 
@@ -187,18 +74,147 @@ hr {
     box-shadow: 0 1px 6px #0001;
     transition: background 0.18s, filter 0.18s;
 }
-
 .btn-danger:hover {
     filter: brightness(1.05);
 }
+
+.post-content-wrapper {
+    position: relative;
+    height: 100%;
+}
+
+/* 복사 버튼 스타일 */
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 20px;
+    z-index: 10;
+
+    padding: 8px 12px;
+    font-size: 16px;
+    border-radius: 999px;
+    border: 1px solid #d0d7e2;
+    background: #f7f9fc;
+    color: #445;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s, background 0.15s;
+}
+.copy-btn:hover {
+    opacity: 1;
+    background: #e9f1ff;
+}
 /*************** Button *************/
+
+
+
+/*************** Main *************/
+.post-top-bar {
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-evenly;
+    /*justify-content: center;*/
+    align-items: center;
+    margin-bottom: 10px;
+}
+.post-top-bar h2 {
+    margin: 0;
+    font-size: 1.35em;
+}
+.post-title {
+    font-size: 1.4em;
+    font-weight: bold;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.post-box {
+    background: #fff;
+    box-shadow: 0 4px 20px #0001;
+    margin-bottom: 6px;
+    transition: box-shadow 0.18s;
+
+    display: flex;
+    align-items: center;
+    width: 100%;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    /*padding: 5px;*/
+    box-sizing: border-box;
+}
+.post-box:hover {
+    box-shadow: 0px 0px 10px #2492ff;
+}
+.post-list a {
+    color: inherit;
+    text-decoration: none;
+}
+.post-meta {
+    color: #7b7b7b;
+    font-size: 1em;
+}
+.form-group .post-meta {
+    margin-left: 5px;
+}
+
+.thumbnail {
+    flex: 2;
+    aspect-ratio: 1 / 1;
+    background: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    min-width: 80px;
+    max-width: 80px; /* 원하면 조절 */
+    /*margin-right: 12px;*/
+    margin-left: 6px;
+    font-weight: bold;
+}
+.thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;     /* fill, contain, cover, scale-down 등 선택 가능 */
+    display: block;
+}
+/*************** Main *************/
+
+
+
+.view-post-title {
+    font-size: 2.4em;
+    font-weight: bold;
+    margin: 0 0 10px 2px;
+}
+.edit-post-title {
+    margin: 5px 0 15px 0;
+}
+.edit-post-title input {
+    border: none;
+    outline: none;          /* 포커스 테두리까지 제거 */
+    font-size: 2.4em;
+    font-weight: bold;
+    font-family: inherit;  /* 필요하면 폰트도 상속 */
+}
+.post-info {
+    flex: 9;                       /* 영역을 차지하는 크기 90% */
+    display: flex;
+    flex-direction: column;
+    /*justify-content: center;*/
+    justify-content: space-between; /* 세로 요소들을 위/아래로 최대한 벌림 */
+    min-width: 0;
+    padding: 15px;
+    margin-left: 5px;
+}
+
 
 
 
 
 /*************** edit *************/
 .form-group {
-    margin-bottom: 10px;
+    /*margin-bottom: 10px;*/
 }
 .form-group label {
     display: block;
@@ -206,21 +222,11 @@ hr {
     font-weight: 500;
     font-size: 1.2em;
 }
-.form-group input,
-.form-group textarea {
-    width: 100%;
-    box-sizing: border-box; /* padding, border 포함해서 100% 계산 */
-    padding: 10px;
-    border: 1px solid #d3d6e1;
-    border-radius: 6px;
-    font-size: 1.07em;
-    transition: border 0.2s, box-shadow 0.2s;
-    margin-bottom: 10px;
-}
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group .ql-editor:focus {
     outline: none;                 /* 기본 외곽선 해제 */
-    border: 1.5px solid #3494ff;
+    /*border: 1.5px solid #3494ff;*/
     /*background: #f4faff;*/
     background: #f9fbfe;
     box-shadow: 0 2px 8px #2492ff15;
@@ -229,33 +235,43 @@ hr {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding-bottom: 50px; /* 버튼 자리 확보 */
-
-    min-height: 0;
+    min-height: 0;                /* 자식 콘텐츠가 아무리 커도, 부모 높이를 넘지 말고 스크롤(overflow) 되도록 */
+    padding-bottom: 70px;         /* 버튼 자리 확보 */
 }
-.form-group.textarea-wrapper textarea {
-    flex: 1;                      /* flex-grow flex-shrink flex-basis의 축약형; flex-grow:1; flex-shrink:1; flex-basis:0; 남는 공간이 있으면 균등하게 나눠서 차지하고, 공간이 부족하면 줄어들 수 있음. */
+.form-group.textarea-wrapper #editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     min-height: 0;                /* 자식 콘텐츠가 아무리 커도, 부모 높이를 넘지 말고 스크롤(overflow) 되도록 */
 }
-.form-group.textarea-wrapper pre {
-    width: 100%;
-    box-sizing: border-box;
+
+/*.form-group.textarea-wrapper textarea {*/
+/*    flex: 1;                      !* flex-grow flex-shrink flex-basis의 축약형; flex-grow:1; flex-shrink:1; flex-basis:0; 남는 공간이 있으면 균등하게 나눠서 차지하고, 공간이 부족하면 줄어들 수 있음. *!*/
+/*    min-height: 0;                !* 자식 콘텐츠가 아무리 커도, 부모 높이를 넘지 말고 스크롤(overflow) 되도록 *!*/
+/*}*/
+/*.form-group.textarea-wrapper pre,*/
+.form-group.textarea-wrapper .post-content {
+    padding: 16px;
+    /*width: 100%;*/
+    /*box-sizing: border-box;*/
 
     /* 가로 스크롤 방지 + 줄바꿈 */
-    white-space: pre-wrap;        /* \n 유지 + 자동 줄바꿈 허용 */
-    word-break: break-word;       /* 긴 단어 줄바꿈 */
-    overflow-wrap: anywhere;      /* 아주 긴 토큰도 강제 줄바꿈 */
-    overflow-x: hidden;           /* 혹시 모를 가로 스크롤 숨김 */
-    padding: 10px;
-    border: 1px solid #d3d6e1;
-    border-radius: 6px;
-    font-size: 1.07em;
-
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;   /* 내용 많으면 세로 스크롤 */
+    /*white-space: pre-wrap;        !* \n 유지 + 자동 줄바꿈 허용 *!*/
+    /*word-break: break-word;       !* 긴 단어 줄바꿈 *!*/
+    /*overflow-wrap: anywhere;      !* 아주 긴 토큰도 강제 줄바꿈 *!*/
+    /*overflow-x: hidden;           !* 혹시 모를 가로 스크롤 숨김 *!*/
+    /*border: 1px solid #d3d6e1;*/
+    /*border-radius: 6px;*/
+    /*font-size: 1.07em;*/
+    /*flex: 1;*/
+    /*min-height: 0;                !* 자식 콘텐츠가 아무리 커도, 부모 높이를 넘지 말고 스크롤(overflow) 되도록 *!*/
 }
-
+.form-group.textarea-wrapper .post-content img {
+    max-width: 100%;
+}
+.form-group.textarea-wrapper .post-content video{
+    width: 100%;
+}
 .form-actions {
     position: absolute;
     bottom: 15px;
@@ -274,4 +290,15 @@ hr {
 .form-actions a {
     margin-right: auto;
 }
+
 /*************** edit *************/
+
+/*************** Quill *************/
+.ql-editor {
+    font-size: 17px;     /* 기본은 13~14px 느낌이라 16px 정도 추천 */
+    line-height: 1.6;    /* 가독성 좋게 줄간격도 좀 넉넉하게 */
+}
+.post-content-wrapper .ql-editor {
+    cursor: default;           /* I자 대신 기본 화살표 커서 */
+    caret-color: transparent;  /* 깜빡이는 입력 막대기 색을 투명으로 */
+}

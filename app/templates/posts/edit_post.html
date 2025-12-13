@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport"
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-    <title>게시글 EDIT</title>
+    <title>게시글 수정</title>
+    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.7/quill.js"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
 </head>
 <body>
-<div class="top-bar">
+<!--<div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
         <a href="{{ url_for('auth.logout') }}">Logout</a>
@@ -18,27 +20,25 @@
     <div class="back">
         <a href="{{ url_for('main.home') }}">Back</a>
     </div>
-</div>
-<form class="container" action="{% if type == 'C' %}/posts/create{% elif type == 'U' %}/posts/{{ post_id }}/edit{% endif %}"
+</div>-->
+
+<form class="container" id="post-form" action="{% if type == 'C' %}/posts/create{% elif type == 'U' %}/posts/{{ post_id }}/edit{% endif %}"
       method="post">
-    <!--<h2>게시글 수정</h2>-->
     <div class="form-group">
-<!--        <label for="title">제목</label>-->
-        <div class="edit-post-title">
-            <input type="text" name="title" id="title" value="{{ post.title if post else ''}}" required placeholder="Enter the title">
+        <div class="post-info">
+            <div class="edit-post-title">
+                <input type="text" name="title" id="title" value="{{ post.title if post else ''}}" required placeholder="제목을 입력하세요">
+            </div>
         </div>
-    </div>
-    <div class="form-group" style="display: none">
-        <label for="author">작성자</label>
-        <input type="text" name="author" id="author" value="{{ user.realname if user else post.realname if post else '' }}" disabled>
     </div>
     <!--<div class="form-group">
         <label for="content">첨부</label>
         <input type="file" name="file" id="file"/>
     </div>-->
     <div class="form-group textarea-wrapper">
-<!--        <label for="content">내용</label>-->
-        <textarea name="content" id="content" required placeholder="Enter the contents">{{ post.content if post else ''}}</textarea>
+<!--        <textarea name="content" id="content" required placeholder="Enter the contents">{{ post.content if post else ''}}</textarea>-->
+        <div id="editor"></div>
+        <input type="hidden" name="content" id="content-input">
     </div>
     <div class="form-actions">
         {% if post %}
@@ -57,4 +57,160 @@
     </div>
 </form>
 </body>
+<script>
+    const form = document.getElementById('post-form');
+    const contentInput = document.getElementById('content-input');
+    const toolbarOptions = [
+        [{ 'header': [1, 2, 3, false] }],              // <h1>, <h2>, <h3>, 기본
+        ['bold', 'italic', 'underline', 'strike'],     // 굵게, 기울임, 밑줄, 취소선
+        [{ 'color': [] }, { 'background': [] }],       // 글자색, 배경색
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }], // 번호 매겨진 목록 (1. 2. 3.…), 점 목록 (• • •)
+        ['link', 'image', /*'video'*/],                    // 하이퍼링크, 이미지, 비디오
+        ['clean']                                      // 포맷 제거 버튼 (Clear formatting) > 순수 텍스트로
+    ];
+    const quill = new Quill('#editor', {
+        theme: 'snow',
+        placeholder: '내용을 입력하세요...',
+        modules: {
+            toolbar: {
+                container: toolbarOptions,
+                handlers: {
+                    image: imageHandler,
+                    // video: videoHandler
+                }
+            }
+        }
+    });
+
+
+    // ----------------------------
+    // 🔥 수정 모드일 때 초기값 채우기
+    // ----------------------------
+    {% if type == 'U' and post %}
+    const html = {{ post.content|tojson|safe }};
+    quill.root.innerHTML = html;
+    {% endif %}
+
+    form.addEventListener('submit', function () {
+        // 1) HTML로 저장하고 싶으면:
+        contentInput.value = quill.root.innerHTML;
+
+        // 2) Delta(JSON)으로 저장하고 싶으면:
+        // contentInput.value = JSON.stringify(quill.getContents());
+    });
+
+    // Quill 초기화 뒤쪽에 붙이면 됨
+    quill.root.addEventListener('paste', async (e) => {
+        const clipboardData = e.clipboardData || window.clipboardData;
+        if (!clipboardData) return;
+
+        const imageFiles = [];
+
+        // 1) files에 이미지가 여러 개 들어온 경우 (탐색기에서 파일 복사 등)
+        if (clipboardData.files && clipboardData.files.length > 0) {
+            for (let i = 0; i < clipboardData.files.length; i++) {
+                const file = clipboardData.files[i];
+                if (file.type && file.type.startsWith('image/')) {
+                    imageFiles.push(file);
+                }
+            }
+        } else {
+            // 2) files가 비어있을 때만 items에서 이미지 찾기 (캡처/그림판 등)
+            const items = clipboardData.items;
+            if (items && items.length > 0) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        const file = item.getAsFile();
+                        if (file) imageFiles.push(file);
+                    }
+                }
+            }
+        }
+
+        // 이미지가 아예 없으면 기본 붙여넣기 그대로
+        if (imageFiles.length === 0) return;
+
+        // 이미지 있으면 Quill 기본 paste 동작 막고 우리가 처리
+        e.preventDefault();
+
+        let range = quill.getSelection(true);
+        if (!range) {
+            range = { index: quill.getLength(), length: 0 };
+        }
+
+        // /upload는 한 번에 하나씩
+        for (const file of imageFiles) {
+            const imageUrl = await uploadImage(file);
+            if (!imageUrl) continue;
+
+            quill.insertEmbed(range.index, 'image', imageUrl);
+            range.index += 1;
+            quill.setSelection(range.index);
+        }
+    });
+;
+;
+
+
+    async function uploadImage(file) {
+        if (!file) return null;
+
+        const formData = new FormData();
+        formData.append('files[]', file);
+
+        const res = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!res.ok) {
+            alert('이미지 업로드 실패');
+            return null;
+        }
+
+        const data = await res.json();
+        // 서버에서 여러 파일을 돌려줬다면 첫 번째 것만 쓴다고 가정
+        const first = data.files && data.files[0];
+        return first ? first.url : null;
+    }
+
+    function imageHandler() {
+        const input = document.createElement('input');
+        input.setAttribute('type', 'file');
+        input.setAttribute('accept', 'image/*');
+        input.click();
+
+        input.onchange = async () => {
+            const file = input.files[0];
+            if (!file) return;
+
+            const imageUrl = await uploadImage(file);
+            if (!imageUrl) return;
+
+            const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+            quill.insertEmbed(range.index, 'image', imageUrl);
+            quill.setSelection(range.index + 1);
+        };
+    }
+
+
+
+    /*function videoHandler() {
+        const url = prompt('비디오 URL을 입력하세요 (https 권장):');
+        if (!url) return;
+
+        if (!url.startsWith('https://')) {
+            alert('https 주소만 안전하게 재생할 수 있습니다. http는 링크로만 추가할게요.');
+            const range = this.quill.getSelection(true);
+            this.quill.insertText(range.index, url, { link: url });
+            this.quill.setSelection(range.index + url.length);
+            return;
+        }
+
+        const range = this.quill.getSelection(true);
+        this.quill.insertEmbed(range.index, 'customVideo', url);
+        this.quill.setSelection(range.index + 1);
+    }*/
+</script>
 </html>
