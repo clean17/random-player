@@ -82,7 +82,7 @@ if __name__ == "__main__":
         buy_lotto(playwright)  # ✅ import해도 실행되지 않음
 
 
-# task_manager.py 에서 호출
+# batch_runner.py 에서 호출
 async def run(playwright):
     """비동기 Playwright 로또 구매 실행"""
     print('### 로또 구매 시작 ###')

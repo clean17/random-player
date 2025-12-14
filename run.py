@@ -3,7 +3,8 @@ import subprocess
 # from flask_cors import CORS
 from config.config import settings
 from utils.common import signal_handler
-from utils.task_manager import start_background_tasks
+from utils.batch_runner import start_background_tasks, initialize_directories
+from utils.threading_lock import acquire_lock
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
 # CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True) # 해당 출처를 통해서만 리소스 접근 허용
@@ -16,15 +17,18 @@ select_server = 1
 if __name__ == '__main__':
     # SIGINT(인터럽트 시그널, 보통 Ctrl+C 누름)에 대한 핸들러를 등록
     signal.signal(signal.SIGINT, signal_handler)
+    initialize_directories()
 
     # 업로드 디렉토리 압축파일 생성, 로또 구매 배치
     # start_periodic_task() # multiprocessing
+
+    acquire_lock() # thread 중복 실행 방지
     start_background_tasks() # thread
 
     # 'npm run dev' 실행 (백그라운드 실행)
     node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
 
-    if select_server == 0: # werkzeug
+    if select_server == 0: # werkzeug, 개발
         from utils.wsgi_midleware import logger
         from werkzeug.middleware.proxy_fix import ProxyFix
         logger.info("############################### Starting server.... ####################################")
@@ -32,10 +36,10 @@ if __name__ == '__main__':
         app = create_app()
         # 실제 클라이언트 IP (X-Forwarded-For) 를 읽도록
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
-        app.run(debug=True, host='0.0.0.0', port=8090, use_reloader=False, threaded=True)
+        app.run(debug=True, host='0.0.0.0', port=8088, use_reloader=True, threaded=True)
         # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True)
 
-    if select_server == 1: # waitress 서버
+    if select_server == 1: # waitress, 운영
         from waitress import serve
         from utils.wsgi_midleware import RequestLoggingMiddleware, HopByHopHeaderFilter, ReverseProxied, logger
         logger.info("############################### Starting server.... ####################################")

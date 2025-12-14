@@ -227,4 +227,4 @@ def crawl_ai():
         print(f"##### Done: page {page_num} #####")
 
 crawl_ai()
-# run_crawl_ai_image >> task_manager.py 에서 실행한다
+# run_crawl_ai_image >> batch_runner.py 에서 실행한다
