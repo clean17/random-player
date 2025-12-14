@@ -189,6 +189,26 @@ and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5;
     return rows
 
 @db_transaction
+def get_interest_low_stocks(date: str, conn=None):
+    sql = """
+    SELECT id, image_url, stock_name, category, created_at
+    , yesterday_close, current_price, today_price_change_pct
+    , avg5d_trading_value, current_trading_value, trading_value_change_pct
+    , case when market_value::numeric >= 1_000_000_000_000
+      		 then ROUND(market_value::numeric/1_000_000_000_000, 1)||'조'
+             else ROUND(market_value::numeric/100_000_000)||'억'
+             end as market_value  
+    FROM interest_stocks
+    WHERE created_at::date = %s
+    AND target = 'low'
+    ORDER BY today_price_change_pct::numeric DESC;
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
+        cur.execute(sql, (date,))
+        rows = cur.fetchall()
+    return rows
+
+@db_transaction
 def delete_delisted_stock(conn=None):
     sql = """
     delete from stocks where updated_at::date <> now()::date;
