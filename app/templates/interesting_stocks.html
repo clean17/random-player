@@ -417,12 +417,12 @@
           <td class="right">${fmt2(r.today_price_change_pct)}%</td>
           <td class="right">${fmt2(r.yesterday_close)}원</td>
           <td class="right yst_close">${fmt2(r.current_price)}원</td>
-          <td class="right cur_close">${fmt2(r.current_price)}원</td>
-          <td class="right prc_change">${fmt2(r.today_price_change_pct)}%</td>
+          <td class="right cur_close"></td>
+          <td class="right prc_change"></td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/kospil/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -521,6 +521,7 @@
             const activeTable = document.querySelector('.tab-bar .tab-btn.active').dataset.target;
             const stock_names = document.querySelector(activeTable).querySelectorAll('.stock_name'); // 탭 1
             s.clear();
+            p.clear();
             stock_names.forEach(i=>s.add((i.textContent)));
             const stocks = Array.from(s);
             console.log('stocks', stocks);
@@ -548,14 +549,12 @@
                             const yesterday_close_el = tr.querySelector('.yst_close');
                             const current_price_el = tr.querySelector('.cur_close');
                             const price_change_pct_el = tr.querySelector('.prc_change');
+                            await updateTdWithBlink(current_price_el, fmt2(realtime_price) + '원');
                             const calc_change_pct = (current_price_el.textContent.replace(/[^0-9.]/g, '') - yesterday_close_el.textContent.replace(/[^0-9.]/g, ''))
                                 / yesterday_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
-                            await updateTdWithBlink(current_price_el, fmt2(realtime_price) + '원');
                             await updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
                         }
                     }
-
-
                 }).catch(error => {
                     throw error; // 기타 에러는 그대로 던짐
                 });
@@ -566,7 +565,7 @@
         timer2 = setInterval(()=>{
             const productCodes = Array.from(p);
             productCodes.forEach(productCode => {
-                // console.log('p', productCode)
+                console.log('p', productCode)
                 if (productCode) {
                     const data = {
                         product_code: productCode
