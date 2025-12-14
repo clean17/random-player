@@ -3,8 +3,8 @@ import subprocess
 # from flask_cors import CORS
 from config.config import settings
 from utils.common import signal_handler
-from utils.batch_runner import start_background_tasks, initialize_directories
-from utils.threading_lock import acquire_lock
+from job.batch_runner import initialize_directories, start_async_loop_in_background, \
+    create_scheduler
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
 # CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True) # 해당 출처를 통해서만 리소스 접근 허용
@@ -18,12 +18,16 @@ if __name__ == '__main__':
     # SIGINT(인터럽트 시그널, 보통 Ctrl+C 누름)에 대한 핸들러를 등록
     signal.signal(signal.SIGINT, signal_handler)
     initialize_directories()
+    start_async_loop_in_background()
 
     # 업로드 디렉토리 압축파일 생성, 로또 구매 배치
     # start_periodic_task() # multiprocessing
 
-    acquire_lock() # thread 중복 실행 방지
-    start_background_tasks() # thread
+    # acquire_lock() # thread 중복 실행 방지
+    # start_background_tasks() # thread
+
+    scheduler = create_scheduler()
+    scheduler.start()
 
     # 'npm run dev' 실행 (백그라운드 실행)
     node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)

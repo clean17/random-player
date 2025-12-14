@@ -33,7 +33,7 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
 from utils.wsgi_midleware import logger
 from filelock import FileLock, Timeout
 import random
-from utils.batch_runner import run_crawl_ai_image, predict_stock_graph
+from job.batch_runner import run_crawl_ai_image, predict_stock_graph
 
 func = Blueprint('func', __name__)
 
