@@ -308,7 +308,7 @@ def create_scheduler():
     # 10) 매일 02:00 스크랩
     scheduler.add_job(
         run_scrap_job,
-        trigger=CronTrigger(hour=1, minute=13),
+        trigger=CronTrigger(hour=2, minute=0),
         id="scrap_daily",
         executor="io",
         replace_existing=True,

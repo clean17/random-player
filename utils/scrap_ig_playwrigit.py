@@ -846,8 +846,6 @@ async def handle_account(context, account: str):
     return len(links)
 
 async def run_scrap():
-    nowTime = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-    print(f'        {nowTime}: running scrap ig')
     async with async_playwright() as pw:
         context = await pw.chromium.launch_persistent_context(
             USER_DATA_DIR,

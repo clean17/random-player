@@ -18,6 +18,7 @@ from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, get_interest_low_stocks
 from app.repository.users.users import find_user_by_username
+from job.batch_process import run_crawl_ai_image
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from utils.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
@@ -33,7 +34,7 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
 from utils.wsgi_midleware import logger
 from filelock import FileLock, Timeout
 import random
-from job.batch_runner import run_crawl_ai_image, predict_stock_graph
+from job.batch_runner import predict_stock_graph
 
 func = Blueprint('func', __name__)
 
