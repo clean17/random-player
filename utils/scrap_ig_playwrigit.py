@@ -215,7 +215,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
     # stable_rounds = 0
     # last_count = 0
     already_collected_count = 0
-    await page.wait_for_selector("main", timeout=15000)
+    await page.wait_for_selector("main", timeout=20000)
     await asyncio.sleep(4)
 
     last_height = await page.evaluate("document.body.scrollHeight")
@@ -845,7 +845,9 @@ async def handle_account(context, account: str):
 
     return len(links)
 
-async def main():
+async def run_scrap():
+    nowTime = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+    print(f'        {nowTime}: running scrap ig')
     async with async_playwright() as pw:
         context = await pw.chromium.launch_persistent_context(
             USER_DATA_DIR,
@@ -874,5 +876,13 @@ async def main():
 
         await context.close()
 
+def run_scrap_job():
+    # 이벤트 루프는 “스레드당 1개”가 원칙
+    asyncio.run(run_scrap())
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    '''
+    asyncio.run(run_scrap)      # ❌ 함수 자체를 넘김
+    asyncio.run(run_scrap())    # ✅ 코루틴 객체를 넘김
+    '''
+    asyncio.run(run_scrap())

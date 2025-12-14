@@ -1,6 +1,6 @@
 import signal
 from utils.common import signal_handler
-from utils.batch_runner import start_background_tasks
+from job.batch_runner import start_background_tasks
 
 # 0: werkzeug, 1: waitress
 select_server = 1

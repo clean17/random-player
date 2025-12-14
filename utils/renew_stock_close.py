@@ -8,7 +8,6 @@ import time
 from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
-from app.repository.stocks.stocks import get_interest_stock_list, update_interest_stock_list_close
 
 # def dict_from_env() -> Dict[str, Dict[str, str]]:
 #     db = {}
@@ -98,6 +97,7 @@ from app.repository.stocks.stocks import get_interest_stock_list, update_interes
 
 
 def renew_interest_stocks_close():
+    from app.repository.stocks.stocks import get_interest_stock_list, update_interest_stock_list_close
     rows = get_interest_stock_list()
 
     close_list = []
