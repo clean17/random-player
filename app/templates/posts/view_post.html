@@ -57,6 +57,36 @@
     const copyBtn = document.getElementById('copy-post-text');
     const editor = document.querySelector('.post-content.ql-editor');
 
+    function htmlToPlainCode(html) {
+        if (!html) return '';
+
+        // 1) 줄바꿈이 될 태그를 먼저 \n으로 바꿔둠
+        let s = html
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p\s*>/gi, '\n')
+            .replace(/<p[^>]*>/gi, ''); // <p> 시작태그 제거
+
+        // 2) HTML 엔티티 해제( &nbsp; 등 )
+        //    브라우저에 맡기는 방식이 가장 안전함
+        const ta = document.createElement('textarea');
+        ta.innerHTML = s;
+        s = ta.value;
+
+        // 3) NBSP/제로폭 문자 정리
+        s = s
+            .replace(/\u00A0/g, ' ')   // NBSP -> space
+            .replace(/\u200B/g, '')    // zero-width space 제거
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+
+        // 4) 불필요한 공백 줄 정리(원하면 조절)
+        s = s.replace(/\n{3,}/g, '\n\n');
+
+        // 5) 끝부분 정리
+        return s.trimEnd();
+    }
+
+
     function initPage() {
         if (editor) {
             editor.setAttribute('contenteditable', 'false');
@@ -77,23 +107,10 @@
             }
         })
 
-        copyBtn?.addEventListener('click', async function () {
-            let text = editor.innerText || editor.textContent || '';
-
-            // 1) 윈도우/맥 섞여 있을 수 있으니 \r\n, \r 를 \n으로 통일
-            // text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-            // 2) 연속 개행 두 개 이상 → 하나로 줄이기 (원하는 경우만)
-            // text = text.replace(/\n{2,}/g, '\n');
-
-            /*text = text.trim();
-
-            const imgs = editor.querySelectorAll('img');
-            const imgUrls = Array.from(imgs).map(img => img.src);
-
-            if (imgUrls.length > 0) {
-                text += '\n\n[이미지]\n' + imgUrls.map(url => `![](${url})`).join('\n');
-            }*/
+        copyBtn?.addEventListener('click', async () => {
+            // editor가 HTML을 갖고 있는 경우 (DB 원본을 editor.innerHTML로 넣었다면)
+            const html = editor.innerHTML || '';
+            const text = htmlToPlainCode(html);
 
             if (!text.trim()) {
                 showDebugToast('복사할 내용이 없습니다.');
@@ -102,14 +119,14 @@
 
             try {
                 await navigator.clipboard.writeText(text);
-                // 살짝 피드백
                 copyBtn.textContent = '복사됨!';
-                setTimeout(() => copyBtn.textContent = '내용 복사', 1000);
+                setTimeout(() => (copyBtn.textContent = '내용 복사'), 1000);
             } catch (err) {
                 console.error(err);
                 showDebugToast('복사에 실패했습니다.');
             }
         });
+
     }
 
     document.addEventListener("DOMContentLoaded", initPage);
