@@ -57,33 +57,85 @@
     const copyBtn = document.getElementById('copy-post-text');
     const editor = document.querySelector('.post-content.ql-editor');
 
+
+    /**
+     * 텍스트를 줄 단위로 보고, 인덴트 깊이(레벨)는 유지하면서 들여쓰기를 4칸 스페이스로 통일
+     *
+     * text.split('\n')
+     *   → 줄 단위로 나눔
+     * indents 계산
+     *   빈 줄 제외
+     *   각 줄의 맨 앞 연속 스페이스 길이를 수집
+     *   예: " def" → 2, " super" → 4
+     * unit / baseUnit 결정
+     *   unit = 최소 인덴트 길이
+     *   보통 DB가 &nbsp;&nbsp; 기반이면 최소가 2가 나오고, 코드가 원래 2칸 단위였다고 “추정”
+     *   baseUnit을 2 또는 4 중 하나로 잡아서 “레벨” 계산 기준으로 삼음
+     * 각 줄에 대해
+     *   \t(탭)가 있으면 ' ' 4칸으로 교체
+     *   앞 스페이스 길이 n을 구함
+     *   level = round(n / baseUnit)
+     *     → “원래 몇 단계 들여쓰기였는지”로 환산
+     *   fixed = level * 4
+     *     → 그 레벨을 4칸 들여쓰기 기준으로 다시 만들기
+     *   앞 공백을 ' '.repeat(fixed) 로 교체
+     * */
+    function normalizeIndentTo4(text) {
+        const lines = text.split('\n');
+
+        // 1) 유효한(비어있지 않은) 라인들에서 "최소 인덴트 단위" 감지
+        const indents = lines
+            .filter(l => l.trim().length > 0)
+            .map(l => (l.match(/^[ ]+/)?.[0].length ?? 0))
+            .filter(n => n > 0);
+
+        // 보통 DB는 2칸(&nbsp;&nbsp;) 단위가 많음
+        // 최소 인덴트가 2면 2->4로 스케일, 4면 그대로
+        const unit = indents.length ? Math.min(...indents) : 4;
+        const baseUnit = (unit === 2 || unit === 4) ? unit : (unit % 4 === 0 ? 4 : 2);
+
+        return lines.map(line => {
+            // 탭이 혹시 있으면 4칸으로
+            line = line.replace(/\t/g, '    ');
+
+            const m = line.match(/^[ ]+/);
+            if (!m) return line;
+
+            const n = m[0].length;
+            const level = Math.round(n / baseUnit);     // 원래 레벨
+            const fixed = level * 4;                    // 4칸 인덴트로 환산
+
+            return ' '.repeat(fixed) + line.slice(n);
+        }).join('\n');
+    }
+
     function htmlToPlainCode(html) {
         if (!html) return '';
 
-        // 1) 줄바꿈이 될 태그를 먼저 \n으로 바꿔둠
+        // p/br -> 줄바꿈
         let s = html
             .replace(/<br\s*\/?>/gi, '\n')
             .replace(/<\/p\s*>/gi, '\n')
-            .replace(/<p[^>]*>/gi, ''); // <p> 시작태그 제거
+            .replace(/<p[^>]*>/gi, '');
 
-        // 2) HTML 엔티티 해제( &nbsp; 등 )
-        //    브라우저에 맡기는 방식이 가장 안전함
-        const ta = document.createElement('textarea');
-        ta.innerHTML = s;
-        s = ta.value;
+        // 엔티티 디코딩 (&nbsp; -> NBSP 등)
+        s = decodeHtmlEntities(s);
 
-        // 3) NBSP/제로폭 문자 정리
+        // 유니코드 공백 전부 ASCII 스페이스로 강제
+        s = forceAsciiSpaces(s);
+
+        // 줄바꿈 통일 + 과한 공백줄 정리
         s = s
-            .replace(/\u00A0/g, ' ')   // NBSP -> space
-            .replace(/\u200B/g, '')    // zero-width space 제거
             .replace(/\r\n/g, '\n')
-            .replace(/\r/g, '\n');
+            .replace(/\r/g, '\n')
+            .replace(/[ \t]+\n/g, '\n')   // 줄 끝 공백 제거
+            // .replace(/\n{3,}/g, '\n\n')   // 3줄 이상은 2줄로
+            .trimEnd();
 
-        // 4) 불필요한 공백 줄 정리(원하면 조절)
-        s = s.replace(/\n{3,}/g, '\n\n');
+        // 인덴트를 "레벨 유지 + 4칸"으로 정규화
+        s = normalizeIndentTo4(s);
 
-        // 5) 끝부분 정리
-        return s.trimEnd();
+        return s;
     }
 
 
@@ -109,8 +161,16 @@
 
         copyBtn?.addEventListener('click', async () => {
             // editor가 HTML을 갖고 있는 경우 (DB 원본을 editor.innerHTML로 넣었다면)
-            const html = editor.innerHTML || '';
+            const html = editor.innerHTML || editor.innerText || editor.textContent || '';
             const text = htmlToPlainCode(html);
+            /*text = text.trim();
+
+            const imgs = editor.querySelectorAll('img');
+            const imgUrls = Array.from(imgs).map(img => img.src);
+
+            if (imgUrls.length > 0) {
+                text += '\n\n[이미지]\n' + imgUrls.map(url => `![](${url})`).join('\n');
+            }*/
 
             if (!text.trim()) {
                 showDebugToast('복사할 내용이 없습니다.');

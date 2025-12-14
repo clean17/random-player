@@ -138,3 +138,24 @@ async function emptyTrash() {
 function once(el, type, fn) {
     el.addEventListener(type, fn, { once: true });
 }
+
+/**
+ *  HTML 문자열 안에 있는 엔티티(entity) 를 실제 문자로
+ *    &nbsp; → (유니코드) 공백 문자(NBSP, \u00A0)
+ *    &lt; → <
+ *    &gt; → >
+ *    &amp; → &
+ *    &quot; → "
+ * */
+function decodeHtmlEntities(str) {
+    const ta = document.createElement('textarea');
+    ta.innerHTML = str;
+    return ta.value;
+}
+
+/**
+ * NBSP 같은 유니코드 공백들을 전부 일반 스페이스(ASCII 0x20) 로
+ * */
+function forceAsciiSpaces(str) {
+    return str.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF]/g, ' ');
+}
