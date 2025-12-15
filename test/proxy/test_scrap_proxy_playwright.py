@@ -43,7 +43,7 @@ async def auto_scroll_page(page):
 
 async def main():
     # ─────────────────────────────────────────
-    # 2. Playwright 시작 + SOCKS5 프록시 설정
+    # 2. Playwright 시작 + 프록시 설정
     # ─────────────────────────────────────────
     proxy = {
         "server": "http://127.0.0.1:8899"
@@ -75,9 +75,10 @@ async def main():
         # ─────────────────────────────────────
         html = await page.content()
 
-        out_dir = Path(__file__).resolve().parent / "output"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"naver_m_blog.html"
+        # out_dir = Path(__file__).resolve().parent / "output"
+        out_dir = Path(__file__).resolve()
+        # out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "naver_m_blog.html"
 
         out_path.write_text(html, encoding="utf-8")
         print(f"✅ 전체 HTML 저장 완료: {out_path}")
