@@ -8,8 +8,11 @@ TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR]
 
-# CPU 바운드 작업: 디렉토리를 압축하는 함수
+# I/O 바운드 작업: 디렉토리를 압축하는 함수
 def compress_directory_to_zip():
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+    print(f"### {current_time} - All Directory start compressing")
+
     for dir_to_compress in DIRECTORIES_TO_COMPRESS:
 
         if not os.path.exists(dir_to_compress):
@@ -21,9 +24,9 @@ def compress_directory_to_zip():
         for item in os.listdir(dir_to_compress):
             subdir_path = os.path.join(dir_to_compress, item)
             if os.path.isdir(subdir_path):
-                # ✅ 디렉토리 이름이 '영상'으로 끝나면 압축하지 않고 건너뛰기
-                if os.path.basename(subdir_path).endswith('영상'):
-                    print(f"Skip compressing directory (ends with '영상'): {subdir_path}")
+                SUFFIXES = ('영상', '유틸', 'war', 'video-call', 'chat')
+                if os.path.basename(subdir_path).endswith(SUFFIXES):
+                    print(f"Skip compressing directory: {subdir_path}")
                     continue
                 subdirs.append(subdir_path)
 
