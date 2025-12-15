@@ -28,7 +28,7 @@ def update_stock_list(stocks: List["StockDTO"], conn=None, batch_size: int = 500
 @db_transaction
 def update_interest_stock_list_close(rows: Sequence[Tuple[float, str]], conn=None, batch_size: int = 500) -> None:
     sql = """
-        UPDATE interest_stocks SET last_close = %s WHERE stock_code = %s;
+        UPDATE interest_stocks SET last_close = %s, updated_at = now() WHERE stock_code = %s;
     """
 
     with conn.cursor() as cur:
@@ -175,11 +175,11 @@ and today_price_change_pct is not null
 group by stock_code, stock_name
 having count(stock_code) > 1
 --and count(stock_code) < 6
---and max(created_at) >= (CURRENT_DATE - INTERVAL '5 days') -- x일 전부터 등록된 것
+and max(created_at) >= (CURRENT_DATE - INTERVAL '10 days') -- x일 전부터 등록된 것
 order by count(stock_code) desc, max(created_at) desc
 ) as b
-where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
-and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 5
+where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5.7
+and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 10
 and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
