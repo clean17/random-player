@@ -23,7 +23,7 @@ async def auto_scroll_page(page):
         () => {
             return new Promise((resolve) => {
                 let totalHeight = 0;
-                const distance = 20; // px 단위로 조금씩 내리기
+                const distance = 80; // px 단위로 조금씩 내리기
                 const timer = setInterval(() => {
                     const scrollHeight = document.body.scrollHeight;
                     window.scrollBy(0, distance);
@@ -47,6 +47,7 @@ async def main():
     # ─────────────────────────────────────────
     proxy = {
         "server": "http://127.0.0.1:8899"
+        # "server": "http://192.168.60.101:3128"
     }
 
 
@@ -76,9 +77,9 @@ async def main():
         html = await page.content()
 
         # out_dir = Path(__file__).resolve().parent / "output"
-        out_dir = Path(__file__).resolve()
+        out_dir = Path(__file__).resolve().parent
         # out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / "naver_m_blog.html"
+        out_path = out_dir / "naver_m_blog_playwright.html"
 
         out_path.write_text(html, encoding="utf-8")
         print(f"✅ 전체 HTML 저장 완료: {out_path}")
