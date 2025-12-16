@@ -92,7 +92,7 @@ def crawl_images_from_page(page_num):
         page = browser.new_page()
 
         page_url = url_template.format(page_num)
-        print('url', page_url)
+        # print('url', page_url)
         page.goto(page_url, timeout=15000)
         page.wait_for_timeout(4000)
         page.reload()
@@ -114,12 +114,9 @@ def crawl_images_from_page(page_num):
         # 정규화 (불필요한 .. 처리)
         file_path = os.path.normpath(file_path)
 
-        # print('file_path', file_path)  # 실제 참조 경로 확인
-
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # for post_url in post_links:
         for i, post_url in enumerate(post_links, start=1):
             try:
                 print(f"[{i}/{len(post_links)}] ************************** post_url: {post_url}")
@@ -139,9 +136,7 @@ def crawl_images_from_page(page_num):
                 # 어제 작업을 시작한 url에 도달하면 첫번째 url을 마지막 작업 url에 수정
                 if data.get('last_ai_scheduler_uri') == current_url:
                     print(f"동일함! for문 중단  {data.get('last_ai_scheduler_uri')}")
-
                     data['last_ai_scheduler_uri'] = save_url
-
                     with open(file_path, "w", encoding="utf-8") as f: # 쓰기
                         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -213,13 +208,6 @@ def crawl_images_from_page(page_num):
         # browser.close()
 
 
-# 실행
-# 25.05.07
-# 25.06.13
-# for page_num in range(1, 21):
-#     crawl_images_from_page(page_num)
-#     print(f"##### Done: page {page_num} #####")
-
 def crawl_ai():
     for page_num in range(1, 11):
         print(f"##### Start: page {page_num} #####")
@@ -227,4 +215,4 @@ def crawl_ai():
         print(f"##### Done: page {page_num} #####")
 
 crawl_ai()
-# run_crawl_ai_image >> batch_runner.py 에서 실행한다
+# run_crawl_ai_image >> batch_process.py 에서 실행한다

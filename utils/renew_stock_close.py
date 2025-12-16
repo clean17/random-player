@@ -134,7 +134,7 @@ def renew_interest_stocks_close():
             print(f"progress-update 요청 실패-3: {e}")
             pass  # 오류
 
-        print(f'{i+1}/{len(rows)} ticker : {ticker}, close : {last_close}')
+        # print(f'{i+1}/{len(rows)} ticker : {ticker}, close : {last_close}')
         close_list.append((last_close, ticker))    # 순서: (값, 키)
 
     if len(close_list) > 0:

@@ -57,4 +57,6 @@ if __name__ == '__main__':
         # 모든 요청에 대해 URL 스킴(scheme)을 강제로 HTTPS로 설정, 리버스 프록시 환경에서도 클라이언트 요청을 HTTPS로 인식하여 보안 기능 동작하도록 함
         app.wsgi_app = ReverseProxied(app.wsgi_app)
 
-        serve(app, host='0.0.0.0', port=8090, threads=12, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
+        # serve(app, host='0.0.0.0', port=8090, threads=12, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
+        # nginx 프록시 서버만 접근 허용
+        serve(app, host='127.0.0.1', port=8090, threads=12, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB

@@ -8,11 +8,13 @@ from PIL import Image
 from io import BytesIO
 import uuid, os, requests
 import json
+import asyncio
 
 # 게시글 목록 페이지 URL 템플릿
 url_template = settings['CRAWL_URL']
 url_host = settings['CRAWL_HOST']
 IMAGE_DIR = settings['IMAGE_DIR']
+# IMAGE_DIR = 'D:\\temp_img_dir'
 is_first = True
 save_url = None
 
@@ -49,20 +51,34 @@ def save_image_with_uuid(img_name, img_url, save_dir):
     save_path = os.path.join(save_dir, unique_img_name)
     download_image(img_url, save_path)
 
+def save_video_with_uuid(video_name: str, video_url: str, save_dir: str):
+    ext = os.path.splitext(video_name)[1] or ".mp4"
+    new_name = f"{uuid.uuid4().hex}{ext}"
+    save_path = os.path.join(save_dir, new_name)
+
+    resp = requests.get(video_url, stream=True, timeout=60)
+    resp.raise_for_status()
+
+    with open(save_path, "wb") as f:
+        for chunk in resp.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+
 async def async_auto_scroll_page(page):
     await page.evaluate("""
         async () => {
-            await new Promise((resolve) => {
+            return new Promise((resolve) => {
                 let totalHeight = 0;
-                const distance = 100;
+                const distance = 200; // px 단위로 조금씩 내리기
                 const timer = setInterval(() => {
+                    const scrollHeight = document.body.scrollHeight;
                     window.scrollBy(0, distance);
                     totalHeight += distance;
-                    if (totalHeight >= document.body.scrollHeight) {
+                    if (totalHeight >= scrollHeight - window.innerHeight) {
                         clearInterval(timer);
                         resolve();
                     }
-                }, 100);
+                }, 120);
             });
         }
     """)
@@ -73,11 +89,19 @@ async def async_crawl_images_from_page(page_num):
     global save_url
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
-        page = await browser.new_page()
+        # browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(
+            headless=False,
+            args=["--window-size=10,10"],
+        )
+        # browser = p.chromium.launch(headless=True) # 운영
+        # page = await browser.new_page()
+
+        context = await browser.new_context(viewport={"width": 10, "height": 10})
+        page = await context.new_page()
 
         page_url = url_template.format(page_num)
-        print('url', page_url)
+        # print('url', page_url)
         await page.goto(page_url, timeout=15000)
         await page.wait_for_timeout(4000)
         await page.reload()
@@ -95,6 +119,8 @@ async def async_crawl_images_from_page(page_num):
         # 현재 스크립트 파일의 경로
         SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(SCRIPT_DIR, '..', 'data', 'data.json')
+
+        # 정규화 (불필요한 .. 처리)
         file_path = os.path.normpath(file_path)
 
         with open(file_path, "r", encoding="utf-8") as f:
@@ -105,15 +131,24 @@ async def async_crawl_images_from_page(page_num):
                 print(f"[{i}/{len(post_links)}] ************************** post_url: {post_url}")
                 current_url = post_url.split('?')[0]
 
+                data['current_ai_scheduler_uri'] = current_url
+
+                # 현재 url 저장
+                with open(file_path, "w", encoding="utf-8") as f: # 쓰기
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+
+                # 글로벌 변수
                 if is_first and page_num == 1:
                     save_url = current_url
                     is_first = False
 
+                # 어제 작업을 시작한 url에 도달하면 첫번째 url을 마지막 작업 url에 수정
                 if data.get('ai_scheduler_uri') == current_url:
                     print(f"동일함! for문 중단  {data.get('ai_scheduler_uri')}")
                     data['ai_scheduler_uri'] = save_url
                     with open(file_path, "w", encoding="utf-8") as f: # 쓰기
                         json.dump(data, f, ensure_ascii=False, indent=2)
+
                     sys.exit(0)  # 여기서 프로그램 전체가 종료됨
 
                 await page.goto(post_url, timeout=15000)
@@ -133,6 +168,17 @@ async def async_crawl_images_from_page(page_num):
                     if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
                 ]
 
+                video_srcs = await page.eval_on_selector_all(
+                    "div.article-body div.fr-view.article-content p span > video",
+                    "els => els.map(video => video.getAttribute('src'))"
+                )
+
+                video_urls = [
+                    ('https:' + src if src and src.startswith('//') else src)
+                    for src in video_srcs
+                    if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
+                ]
+
                 count = 0
                 for img_url in img_urls:
                     if img_url.startswith('//'):
@@ -142,13 +188,23 @@ async def async_crawl_images_from_page(page_num):
 
                     img_name = os.path.basename(img_url.split('?')[0])
                     save_image_with_uuid(img_name, img_url, IMAGE_DIR)
-                    count += 1
+                    count = count + 1
+
+                for video_url in video_urls:
+                    if video_url.startswith('//'):
+                        video_url = 'https:' + video_url
+                    elif video_url.startswith('/'):
+                        video_url = urljoin(url_host, video_url)
+
+                    video_name = os.path.basename(video_url.split('?')[0])
+                    save_video_with_uuid(video_name, video_url, IMAGE_DIR)
+                    count = count + 1
                 print(f'download success : {count}')
 
             except Exception as e:
                 print(f"Error in {post_url}: {e}")
 
-        await browser.close()
+        # await browser.close()
 
 
 async def async_crawl_ai():
@@ -157,8 +213,12 @@ async def async_crawl_ai():
         await async_crawl_images_from_page(page_num)
         print(f"##### Done: page {page_num} #####")
 
+def run_scrap_ai_job():
+    # 이벤트 루프는 “스레드당 1개”가 원칙
+    asyncio.run(async_crawl_ai())
+
 # 그냥 호출(async_crawl_ai())하면 코루틴 객체만 리턴, 코드가 실행되지 않음
-# asyncio.run(async_crawl_ai())
+asyncio.run(async_crawl_ai())
 
 '''
 비동기 함수(코루틴, asyncio) 안에서 아래 코드 사용하면 ?
