@@ -200,6 +200,7 @@ def get_interest_low_stocks(date: str, conn=None):
              end as market_value  
     FROM interest_stocks
     WHERE created_at::date = %s
+    AND trading_value_change_pct::numeric > 3.8
     AND target = 'low'
     ORDER BY today_price_change_pct::numeric DESC;
     """

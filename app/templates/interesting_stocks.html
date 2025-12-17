@@ -99,12 +99,12 @@
                     <th>카테고리</th>
                     <th>시작가</th>
                     <th>최근 종가</th>
-                    <th>전체_상승률</th>
-<!--                    <th>일별_상승률</th>-->
-                    <th>평균_변동률</th>
+                    <th>⭐⭐⭐전체_상승률</th>
+                    <th>⭐일평균(전체/카운트)_상승률</th>
+<!--                    <th>평균_변동률</th>--> <!-- 의미가 없음 -->
                     <th>최고_대비_변동</th>
-                    <th>시가총액</th>
-                    <th>평균_거래대금</th>
+                    <th>시가총액(1조⬇️)</th>
+                    <th>평균_거래대금(<5k)</th>
                     <th class="right">처음_상승일자</th>
                     <th class="right">마지막_상승일자</th>
                 </tr>
@@ -175,10 +175,10 @@
             if (target) target.style.display = 'block';
             if (target.id === 'tab-summary') {
                 setDefaultDateToday(14);
-                loadData()
+                loadData(target.id)
             } else {
                 setDefaultDateToday();
-                loadData()
+                loadData(target.id)
             }
         });
     });
@@ -367,8 +367,8 @@
           <td class="right min_close">${fmt2(r.min)}</td>
           <td class="right last_close">${fmt2(r.last)}</td>
           <td class="right">${r.total_rate_of_increase ?? ''}</td>
-<!--          <td class="right">${r.increase_per_day ?? ''}</td>-->
-          <td class="right">${r.avg_change_pct ?? ''}</td>
+          <td class="right">${r.increase_per_day ?? ''}</td>
+<!--          <td class="right">${r.avg_change_pct ?? ''}</td>-->
           <td class="right chg_compare_peak"></td>
           <td class="right">${r.market_value ?? ''}</td>
           <td class="right">${r.avg_trading_value ?? ''}</td>
@@ -450,7 +450,7 @@
 
 
     // 데이터 로드 (날짜 변경 시 자동 호출)
-    async function loadData() {
+    async function loadData(target) {
         const input = document.getElementById('dateInput');
         const yyyymmdd = input.value?.replace(/-/g, '');
 
@@ -462,39 +462,51 @@
         try {
             renderOverlay();
             document.getElementById('overlay').style.display = 'block';
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
-                body: JSON.stringify(payload),
-            });
-            document.getElementById('overlay').style.display = 'none';
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
+            document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
 
-            // 분리: 거래대금 증감% 있는 항목 / 금일 등락% 있는 항목
-            const tradingRows = (data || []).filter(r => r.trading_value_change_pct !== null && r.trading_value_change_pct !== undefined);
-            const changeRows   = (data || []).filter(r => r.today_price_change_pct   !== null && r.today_price_change_pct   !== undefined);
+            if (target == null || target === 'tab-trading' || target === 'tab-change') {
+                document.getElementById('overlay').style.display = 'block';
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
 
-            renderTradingTable(tradingRows);
-            renderChangeTable(changeRows);
+                // 분리: 거래대금 증감% 있는 항목 / 금일 등락% 있는 항목
+                const tradingRows = (data || []).filter(r => r.trading_value_change_pct !== null && r.trading_value_change_pct !== undefined);
+                const changeRows   = (data || []).filter(r => r.today_price_change_pct   !== null && r.today_price_change_pct   !== undefined);
 
-            const res2 = await fetch(url2, {
-                method: 'POST',
-                headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data2 = await res2.json();
-            renderSummaryTable(data2)
+                document.getElementById('overlay').style.display = 'none';
+                renderTradingTable(tradingRows);
+                renderChangeTable(changeRows);
+            }
 
-            const res3 = await fetch(url3, {
-                method: 'POST',
-                headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data3 = await res3.json();
-            renderLowTable(data3)
+            if (target === 'tab-summary') {
+                const res2 = await fetch(url2, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
+                const data2 = await res2.json();
+                document.getElementById('overlay').style.display = 'none';
+                renderSummaryTable(data2)
+            }
+
+            if (target === 'tab-low') {
+                const res3 = await fetch(url3, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res3.ok) throw new Error(`HTTP ${res3.status}`);
+                const data3 = await res3.json();
+                document.getElementById('overlay').style.display = 'none';
+                renderLowTable(data3)
+            }
+            document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
         } catch (e) {
             console.error(e);
             alert('데이터를 불러오지 못했습니다.');
