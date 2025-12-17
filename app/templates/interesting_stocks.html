@@ -175,10 +175,10 @@
             if (target) target.style.display = 'block';
             if (target.id === 'tab-summary') {
                 setDefaultDateToday(14);
-                loadData(target.id)
+                loadData()
             } else {
                 setDefaultDateToday();
-                loadData(target.id)
+                loadData()
             }
         });
     });
@@ -450,7 +450,13 @@
 
 
     // 데이터 로드 (날짜 변경 시 자동 호출)
-    async function loadData(target) {
+    async function loadData() {
+        let target;
+        document.querySelectorAll('.tab-btn[data-target]').forEach(btn => {
+            if (btn.classList.contains('active')) {
+                target = document.querySelector(btn.dataset.target).id;
+            }
+        });
         const input = document.getElementById('dateInput');
         const yyyymmdd = input.value?.replace(/-/g, '');
 
