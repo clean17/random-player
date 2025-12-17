@@ -15,8 +15,6 @@ url_template = settings['CRAWL_URL']
 url_host = settings['CRAWL_HOST']
 IMAGE_DIR = settings['IMAGE_DIR']
 # IMAGE_DIR = 'D:\\temp_img_dir'
-is_first = True
-save_url = None
 
 # 이미지 저장 경로 설정
 os.makedirs(IMAGE_DIR, exist_ok=True)
@@ -85,8 +83,6 @@ async def async_auto_scroll_page(page):
 
 
 async def async_crawl_images_from_page(page_num):
-    global is_first
-    global save_url
 
     async with async_playwright() as p:
         # browser = await p.chromium.launch(headless=False)
@@ -116,40 +112,21 @@ async def async_crawl_images_from_page(page_num):
         post_links = [url_host + link for link in links if link and link.startswith("/")]
         # print(f"Page {page_num} post links:", post_links)
 
-        # 현재 스크립트 파일의 경로
-        SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(SCRIPT_DIR, '..', 'data', 'data.json')
-
-        # 정규화 (불필요한 .. 처리)
-        file_path = os.path.normpath(file_path)
-
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
 
         for i, post_url in enumerate(post_links, start=1):
             try:
                 print(f"[{i}/{len(post_links)}] ************************** post_url: {post_url}")
                 current_url = post_url.split('?')[0]
+                account = current_url.split('/')[-2]
 
-                data['current_ai_scheduler_uri'] = current_url
-
-                # 현재 url 저장
-                with open(file_path, "w", encoding="utf-8") as f: # 쓰기
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-
-                # 글로벌 변수
-                if is_first and page_num == 1:
-                    save_url = current_url
-                    is_first = False
-
-                # 어제 작업을 시작한 url에 도달하면 첫번째 url을 마지막 작업 url에 수정
-                if data.get('ai_scheduler_uri') == current_url:
-                    print(f"동일함! for문 중단  {data.get('ai_scheduler_uri')}")
-                    data['ai_scheduler_uri'] = save_url
-                    with open(file_path, "w", encoding="utf-8") as f: # 쓰기
-                        json.dump(data, f, ensure_ascii=False, indent=2)
-
+                # 수집한 적이 있는지 확인
+                url = "https://chickchick.shop/func/scrap-posts?urls="+current_url
+                res = requests.get(url)
+                data = res.json()
+                # print(data)
+                if data["result"]: # 등록되어 있음
                     sys.exit(0)  # 여기서 프로그램 전체가 종료됨
+
 
                 await page.goto(post_url, timeout=15000)
 
@@ -200,6 +177,22 @@ async def async_crawl_images_from_page(page_num):
                     save_video_with_uuid(video_name, video_url, IMAGE_DIR)
                     count = count + 1
                 print(f'download success : {count}')
+
+                # 수집 후 url을 등록한다
+                try:
+                    requests.post(
+                        'https://chickchick.shop/func/scrap-posts',
+                        json={
+                            "account": str(account),
+                            "post_urls": current_url,
+                            "type": 'ai',
+                        },
+                        timeout=(3, 20)  # (connect_timeout=3초, read_timeout=20초)
+                    )
+                except Exception as e:
+                    # logging.warning(f"progress-update 요청 실패: {e}")
+                    print(f"progress-update 요청 실패-ai: {e}")
+                    pass  # 오류
 
             except Exception as e:
                 print(f"Error in {post_url}: {e}")
