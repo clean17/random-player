@@ -2,7 +2,7 @@ import signal
 import subprocess
 # from flask_cors import CORS
 from config.config import settings
-from utils.common import signal_handler
+from utils.common import signal_handler, register_shutdown_handlers
 from job.batch_runner import initialize_directories, start_async_loop_in_background, \
     create_scheduler
 
@@ -16,7 +16,9 @@ select_server = 1
 
 if __name__ == '__main__':
     # SIGINT(인터럽트 시그널, 보통 Ctrl+C 누름)에 대한 핸들러를 등록
-    signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGINT, signal_handler)
+    register_shutdown_handlers()
+
     initialize_directories()
     start_async_loop_in_background()
 

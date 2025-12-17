@@ -21,6 +21,15 @@ def auto_endpoint(bp_or_app):
         return decorator
     return route_wrapper
 
+def register_shutdown_handlers():
+    def handler(sig, frame):
+        cleanup()
+        pid = os.getpid()
+        os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
+
+    signal.signal(signal.SIGINT, handler)   # Ctrl+C
+    signal.signal(signal.SIGTERM, handler)  # docker stop / 서비스 종료
+
 # Ctrl+C 이벤트 핸들러
 def signal_handler(sig, frame):
     pid = os.getpid()
