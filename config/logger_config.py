@@ -23,18 +23,28 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 # NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
 NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
+
+                # [chat]
                 "/func/chat/save-file", "/func/logs/stream", "/func/logs/",
-                "dir=refine", "dir=image", "dir=move", "?dir=1", "?dir=2", "?dir=3", "?dir=4", "?dir=5",
-                # "video-player",
-                "/video/select-directory", "video-player/1", "video-player/2", "video-player/3", "video-player/4", "video-player/5",
                 "update-session-time", "apple-touch-icon",
-                "/delete-images",
-                "Client disconnected while serving", "Invalid HTTP version", "Bad request version",
-                "/func/stocks/progress", "/func/stocks/info", "/func/stocks/overview", "/func/stocks/amount", "/func/stocks/company",
-                "/func/stocks/interest",
                 "/func/last-read-chat-id?username",
+                # [video]
+                # "video-player",
+                "dir=refine", "dir=image", "dir=move", "?dir=1", "?dir=2", "?dir=3", "?dir=4", "?dir=5",
+                "/video/select-directory", "video-player/1", "video-player/2", "video-player/3", "video-player/4", "video-player/5",
+
+                # [image]
+                "/delete-images",
                 "/image/move-image", "/image/stock-graphs/interest",
+
+                # [stock]
+                "/func/stocks/progress", "/func/stocks/info", "/func/stocks/overview", "/func/stocks/amount", "/func/stocks/company",
+                "/func/stocks/interest/insert", # 관심 종목 insert
+
+                # [scrap]
                 "/func/scrap-posts",
+
+                "Client disconnected while serving", "Invalid HTTP version", "Bad request version",
                 ]
 HIDE_DETAIL_URLS = ["/image/move-image/image/", "/video/delete/"]
 
