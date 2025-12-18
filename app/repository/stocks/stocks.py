@@ -152,13 +152,13 @@ select stock_code
           NULLIF(REGEXP_REPLACE(today_price_change_pct, '%%', '', 'g'), '')::numeric, 0)
        )
     , 1)||'%%' AS avg_change_pct  
-  , ROUND(100.0 * (coalesce(max(last_close)::numeric, 0) - MIN(current_price)::numeric)
-       / NULLIF(MIN(current_price)::numeric, 0),1)||'%%' AS total_rate_of_increase
-  , ROUND(100.0 * (coalesce(max(last_close)::numeric, 0) - MIN(current_price)::numeric)
-       / NULLIF(MIN(current_price)::numeric, 0)  / count(stock_code), 1)||'%%' as increase_per_day
-  , case when max(market_value)::numeric >= 1_000_000_000_000
-  		 then ROUND(max(market_value)::numeric/1_000_000_000_000, 1)||'조'
-         else ROUND(max(market_value)::numeric/100_000_000)||'억'
+  , ROUND(100.0 * (coalesce(max(last_close::numeric), 0) - MIN(current_price::numeric))
+       / NULLIF(MIN(current_price::numeric), 0),1)||'%%' AS total_rate_of_increase
+  , ROUND(100.0 * (coalesce(max(last_close::numeric), 0) - MIN(current_price::numeric))
+       / NULLIF(MIN(current_price::numeric), 0)  / count(stock_code), 1)||'%%' as increase_per_day
+  , case when max(market_value::numeric) >= 1_000_000_000_000
+  		 then ROUND(max(market_value::numeric)/1_000_000_000_000, 1)||'조'
+         else ROUND(max(market_value::numeric)/100_000_000)||'억'
          end as market_value
   , ROUND(avg(current_trading_value::numeric)/100000000)||'억' as avg_trading_value
   , min(created_at)::date as first_date
@@ -168,6 +168,7 @@ from interest_stocks is2
 where 1=1
 and is2.market_value::numeric > 50_000_000_000
 and is2.current_trading_value::numeric > 7_000_000_000
+and is2.current_trading_value::numeric < 500_000_000_000
 --and is2.created_at >= NOW() - INTERVAL '1 month'
 --and is2.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
 and is2.created_at >= %s::date
@@ -175,12 +176,14 @@ and today_price_change_pct is not null
 group by stock_code, stock_name
 having count(stock_code) > 1
 --and count(stock_code) < 6
-and max(created_at) >= (CURRENT_DATE - INTERVAL '10 days') -- x일 전부터 등록된 것
+and max(created_at) >= (CURRENT_DATE - INTERVAL '7 days') -- x일 전부터 등록된 것
 order by count(stock_code) desc, max(created_at) desc
 ) as b
 where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5.7
 and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 10
-and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5;
+and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
+and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 14
+;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
         cur.execute(sql, (date,))
@@ -191,7 +194,7 @@ and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5;
 @db_transaction
 def get_interest_low_stocks(date: str, conn=None):
     sql = """
-    SELECT id, image_url, stock_name, category, created_at
+    SELECT id, image_url, stock_name, stock_code, category, created_at
     , yesterday_close, current_price, today_price_change_pct
     , avg5d_trading_value, current_trading_value, trading_value_change_pct
     , case when market_value::numeric >= 1_000_000_000_000
@@ -200,7 +203,7 @@ def get_interest_low_stocks(date: str, conn=None):
              end as market_value  
     FROM interest_stocks
     WHERE created_at::date = %s
-    AND trading_value_change_pct::numeric > 3.8
+    AND today_price_change_pct::numeric > 3.8
     AND target = 'low'
     ORDER BY today_price_change_pct::numeric DESC;
     """
