@@ -575,9 +575,23 @@ async def extract_media_from_post(page, url: str):
     # 보조: DOM의 <video src>도 수집(있을 수 있음) → CDN 필터 적용
     vids = page.locator("section main > div:nth-of-type(1) video")
     n_vid = await vids.count()
+    # 1) 비디오가 뜰 때까지 기다림
+    try:
+        await vids.first.wait_for(state="attached", timeout=30000)
+    except Exception:
+        n_vid=0 # 비디오가 불러와지지 않음
+
     dom_video_srcs = []
     for i in range(n_vid):
-        vsrc = await vids.nth(i).get_attribute("src")
+        v = vids.nth(i)
+        # 2) video src가 안 박히는 경우가 많아서 두 군데를 봄
+        vsrc = await v.get_attribute("src")
+        if not vsrc or vsrc.startswith("blob:"):
+            # <video><source src="..."></source></video> 케이스
+            src_el = v.locator("source").first
+            if await src_el.count():
+                vsrc = await src_el.get_attribute("src")
+
         if vsrc and vsrc.startswith("http"):
             dom_video_srcs.append(vsrc)
 
@@ -874,7 +888,7 @@ async def run_scrap():
 
         await context.close()
 
-def run_scrap_job():
+def run_scrap_ig_job():
     # 이벤트 루프는 “스레드당 1개”가 원칙
     asyncio.run(run_scrap())
 
