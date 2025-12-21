@@ -17,7 +17,6 @@ select_server = 1
 if __name__ == '__main__':
     # SIGINT(인터럽트 시그널, 보통 Ctrl+C 누름)에 대한 핸들러를 등록
     # signal.signal(signal.SIGINT, signal_handler)
-    register_shutdown_handlers()
 
     initialize_directories()
     start_async_loop_in_background()
@@ -33,6 +32,9 @@ if __name__ == '__main__':
 
     # 'npm run dev' 실행 (백그라운드 실행)
     node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
+
+    # 종료 핸들러
+    register_shutdown_handlers(scheduler, node_process)
 
     if select_server == 0: # werkzeug, 개발
         from utils.wsgi_midleware import logger

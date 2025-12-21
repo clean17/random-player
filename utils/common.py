@@ -7,6 +7,7 @@ import subprocess
 from collections import defaultdict
 import logging
 
+from config.db_connect import db_pool
 
 already_cleaned = False
 node_process = None
@@ -21,9 +22,9 @@ def auto_endpoint(bp_or_app):
         return decorator
     return route_wrapper
 
-def register_shutdown_handlers():
+def register_shutdown_handlers(scheduler=None, node_process=None):
     def handler(sig, frame):
-        cleanup()
+        cleanup(scheduler=scheduler, node_process=node_process)
         pid = os.getpid()
         os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
 
@@ -38,21 +39,38 @@ def signal_handler(sig, frame):
     # os.system('taskkill /f /im python.exe')
     # sys.exit(0)
 
-def cleanup():
+def cleanup(scheduler=None, node_process=None):
     global already_cleaned
     if already_cleaned:
         return
     already_cleaned = True
 
-    print("🧹 서버 종료 중: 자식 프로세스 정리")
+    # node_process
     if node_process is not None and node_process.poll() is None:
         try:
+            print("🧹 서버 종료 중: 자식 프로세스 정리")
             if os.name == 'nt':
                 subprocess.call(['taskkill', '/F', '/T', '/PID', str(node_process.pid)])
             else:
                 node_process.terminate()
         except Exception as e:
             print(f"⚠️ 종료 중 예외: {e}")
+
+    # APScheduler
+    try:
+        print("🧹 서버 종료 중: 스케줄러 정리")
+        if scheduler and getattr(scheduler, "running", False):
+            scheduler.shutdown(wait=True)
+    except Exception as e:
+        print("scheduler shutdown error:", e)
+
+    # psycopg pool
+    try:
+        print("🧹 서버 종료 중: db_pool 정리")
+        if db_pool:
+            db_pool.close()
+    except Exception as e:
+        print("db_pool close error:", e)
 
 # 애플리케이션 종료 후 실행
 def on_exit():
@@ -99,4 +117,4 @@ def on_exit():
         except Exception as e:
             print(f"Error deleting {lock_file}: {e}")
 
-atexit.register(on_exit) #  프로그램이 정상적으로 종료될 때 호출될 함수를 등록
+# atexit.register(on_exit) #  프로그램이 정상적으로 종료될 때 호출될 함수를 등록, 정상: main 종료, ctrl+c는 동작안함
