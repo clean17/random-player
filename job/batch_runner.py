@@ -314,11 +314,11 @@ def create_scheduler():
         args=[update_interest_stocks],
     )
 
-    # 10) 매일 00:00 스크랩
+    # 10) 매일 02:00 스크랩
     scheduler.add_job(
         run_crawl_ig_image,
         trigger=CronTrigger(hour=2, minute=0),
-        id="scrap_daily",
+        id="scrap_ig_daily",
         executor="io",
         replace_existing=True,
     )
@@ -336,7 +336,7 @@ def create_scheduler():
     scheduler.add_job(
         run_crawl_ai_image,
         trigger=CronTrigger(hour=4, minute=0),
-        id="scrap_daily",
+        id="scrap_ai_daily",
         executor="io",
         replace_existing=True,
     )
