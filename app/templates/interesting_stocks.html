@@ -6,8 +6,10 @@
     <title>관심 종목 테이블</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="/static/js/common.js?v={{ version }}"></script>
+    <script src="/static/js/stock_card.js?v={{ version }}"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/interest_stocks.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/carousel.css?v={{ version }}">
 </head>
 <body>
 <div class="top-bar">
@@ -24,7 +26,7 @@
 <div class="container">
     <div class="tab-bar">
         <button class="tab-btn active" data-target="#tab-trading">실시간 등락</button>
-        <button class="tab-btn" data-target="#tab-change">금일 등락</button>
+<!--        <button class="tab-btn" data-target="#tab-change">금일 등락</button>-->
         <button class="tab-btn" data-target="#tab-summary">상승주 검색</button>
         <button class="tab-btn" data-target="#tab-low">저점 검색</button>
         <input id="dateInput" class="date" type="date" />
@@ -34,6 +36,11 @@
     <section id="tab-trading" class="tab-panel" style="display:block;">
         <h3 class="section-title">실시간 등락
             <span class="badge" id="count-trading">0건</span>
+
+            <select id="view-trading" class="view-select">
+                <option value="cards" selected>카드</option>
+                <option value="table" >테이블</option>
+            </select>
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-trading">
@@ -45,10 +52,10 @@
                     <th>카테고리</th>
                     <th class="right">거래대금(5일 평균)</th>
                     <th class="right">거래대금(실시간)</th>
-                    <th class="right">거래대금 증감%</th>
+                    <th class="right">거래대금 증감</th>
                     <th class="right">어제종가</th>
                     <th class="right">현재가</th>
-                    <th class="right">금일 등락%</th>
+                    <th class="right">금일 등락</th>
                 </tr>
                 </thead>
                 <tbody><!-- JS 렌더링 --></tbody>
@@ -62,7 +69,7 @@
             <span class="badge" id="count-change">0건</span>
         </h3>
         <div class="table-scroller">
-            <table class="table" id="table-change">
+            <table class="table" id="table-today">
                 <thead>
                 <tr>
                     <th>그래프</th>
@@ -71,10 +78,10 @@
                     <th>카테고리</th>
                     <th class="right">거래대금(5일 평균)</th>
                     <th class="right">거래대금(금일)</th>
-                    <th class="right">거래대금 증감%</th>
+                    <th class="right">거래대금 증감</th>
                     <th class="right">어제종가</th>
                     <th class="right">금일종가</th>
-                    <th class="right">금일 등락%</th>
+                    <th class="right">금일 등락</th>
                 </tr>
                 </thead>
                 <tbody><!-- JS 렌더링 --></tbody>
@@ -84,8 +91,13 @@
 
     <!-- 탭 3: 상승주 검색 -->
     <section id="tab-summary" class="tab-panel" style="display:none;">
-        <h3 class="section-title">상숭주 검색
+        <h3 class="section-title">상승주 검색
             <span class="badge" id="count-summary">0건</span>
+
+            <select id="view-summary" class="view-select">
+                <option value="cards" selected>카드</option>
+                <option value="table" >테이블</option>
+            </select>
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-summary">
@@ -99,13 +111,14 @@
                     <th>카테고리</th>
                     <th>시작가</th>
                     <th>최근 종가</th>
-                    <th>⭐⭐⭐전체_상승률</th>
-                    <th>⭐일평균(전체/카운트)_상승률</th>
+                    <th>전체_상승률</th>
+                    <th>(전체/카운트)<br>
+                        ⭐(10%⬇️)</th> <!-- increase_per_day -->
 <!--                    <th>평균_변동률</th>--> <!-- 의미가 없음 -->
                     <th>최고_대비_변동</th>
-                    <th>시가총액(1조⬇️)</th>
-                    <th>평균_거래대금(<5k)</th>
-                    <th class="right">처음_상승일자</th>
+                    <th>시가총액<br>(1조⬇️)</th>
+                    <th>거래대금<br>(평균)</th> <!-- avg_trading_value -->
+<!--                    <th class="right">처음_상승일자</th>-->
                     <th class="right">마지막_상승일자</th>
                 </tr>
                 </thead>
@@ -118,6 +131,11 @@
     <section id="tab-low" class="tab-panel" style="display:none;">
         <h3 class="section-title">저점 검색
             <span class="badge" id="count-low">0건</span>
+
+            <select id="view-low" class="view-select">
+                <option value="cards" selected>카드</option>
+                <option value="table" >테이블</option>
+            </select>
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-low">
@@ -132,7 +150,7 @@
                     <th>어제 종가</th>
                     <th>금일 종가</th>
                     <th class="right">현재가</th>
-                    <th class="right">현재 등락%</th>
+                    <th class="right">현재 등락</th>
                 </tr>
                 </thead>
                 <tbody><!-- JS 렌더링 --></tbody>
@@ -236,9 +254,9 @@
         });
     }
 
-    // 테이블 렌더: 거래대금 증감%
-    function renderTradingTable(rows) {
-        const tradingTable = document.getElementById('table-trading');
+    // 테이블 렌더: 거래대금 증감
+    const renderTradingTable = function (rows, tableName) {
+        const tradingTable = document.getElementById(tableName);
         const thCount = tradingTable.querySelectorAll("thead tr th").length;
         const tbody =    tradingTable.querySelector('tbody');
 
@@ -259,6 +277,7 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.hour}:${obj.minute}`;
             // console.log('formatted_date', formatted_date)
+            const encoded_url = encodeURIComponent(`${r.image_url}`);
             return `
         <tr>
           <td>${imgBtn}</td>
@@ -266,18 +285,18 @@
           <td>`+formatted_date+`</td>
           <input type="hidden" class="stock_code" value="${r.stock_code ?? ''}">
           <input type="hidden" class="product_code" value="">
-          <td class="stock_name">${r.stock_name ?? ''}</td>
+          <td class="stock_name">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right avg_amount" data-avg5d-amount="${r.avg5d_trading_value}">${fmt_won(r.avg5d_trading_value)}</td>
           <td class="right cur_amount" data-current-amount="${r.current_trading_value}">${fmt_won(r.current_trading_value)}</td>
           <td class="right tv_change">${fmt2(r.trading_value_change_pct)}%</td>
           <td class="right yst_close">${fmt2(r.yesterday_close)}원</td>
           <td class="right cur_close">${fmt2(r.current_price)}원</td>
-          <td class="right prc_change">${fmt2(r.today_price_change_pct)}%</td>
+          <td class="right prc_change gradient">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -286,9 +305,9 @@
         bindImageToggles(document.getElementById('table-trading'));
     }
 
-    // 테이블 렌더: 금일 등락%
-    function renderChangeTable(rows) {
-        const changeTable = document.getElementById('table-change');
+    // 테이블 렌더: 금일 등락
+    /*const renderTodayTable = function (rows) {
+        const changeTable = document.getElementById('table-today');
         const thCount = changeTable.querySelectorAll("thead tr th").length;
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
@@ -308,29 +327,30 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.hour}:${obj.minute}`;
             // console.log('formatted_date', formatted_date)
+            const encoded_url = encodeURIComponent(`${r.image_url}`);
             return `
         <tr>
           <td>${imgBtn}</td>
           <td>`+formatted_date+`</td>
-          <td class="">${r.stock_name ?? ''}</td>
+          <td class="">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right">${fmt_won(r.avg5d_trading_value)}</td>
           <td class="right">${fmt_won(r.current_trading_value)}</td>
           <td class="right">${fmt2(r.trading_value_change_pct)}%</td>
           <td class="right">${fmt2(r.yesterday_close)}원</td>
           <td class="right">${fmt2(r.current_price)}원</td>
-          <td class="right">${fmt2(r.today_price_change_pct)}%</td>
+          <td class="right gradient">${fmt2(r.today_price_change_pct)}%</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
         tbody.innerHTML = html;
         document.getElementById('count-change').textContent = `${rows.length}건`;
-        bindImageToggles(document.getElementById('table-change'));
-    }
+        bindImageToggles(document.getElementById('table-today'));
+    }*/
 
     const renderSummaryTable = function (rows) {
         const changeTable = document.getElementById('table-summary');
@@ -356,13 +376,14 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.year}.${obj.month}.${obj.day}`;
             const formatted_date2 = `${obj2.year}.${obj2.month}.${obj2.day}`;
+            const encoded_url = encodeURIComponent(`${r.image_url}`);
             return `
         <tr>
           <td>${imgBtn}</td>
-          <td class="">${r.count ?? ''}</td>
+          <td class="count gradient">${r.count ?? ''}</td>
 <!--          <td class="">${r.rn}</td>-->
 <!--          <td class="">${r.stock_code ?? ''}</td>-->
-          <td class="stock_name2">${r.stock_name ?? ''}</td>
+          <td class="stock_name2">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right min_close">${fmt2(r.min)}</td>
           <td class="right last_close">${fmt2(r.last)}</td>
@@ -372,12 +393,12 @@
           <td class="right chg_compare_peak"></td>
           <td class="right">${r.market_value ?? ''}</td>
           <td class="right">${r.avg_trading_value ?? ''}</td>
-          <td>`+formatted_date+`</td>
+<!--          <td>`+formatted_date+`</td>-->
           <td>`+formatted_date2+`</td>
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -407,10 +428,11 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.hour}:${obj.minute}`;
             // console.log('formatted_date', formatted_date)
+            const encoded_url = encodeURIComponent(`${r.image_url}`);
             return `
         <tr>
           <td>${imgBtn}</td>
-          <td class="stock_name">${r.stock_name ?? ''}</td>
+          <td class="stock_name">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right">${r.market_value ?? ''}</td>
           <td class="right">${fmt_won(r.current_trading_value)}</td>
@@ -422,7 +444,7 @@
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/kospil/${r.image_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/kospil/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -480,13 +502,17 @@
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
 
-                // 분리: 거래대금 증감% 있는 항목 / 금일 등락% 있는 항목
+                // 분리: 거래대금 증감 있는 항목 / 금일 등락 있는 항목
                 const tradingRows = (data || []).filter(r => r.trading_value_change_pct !== null && r.trading_value_change_pct !== undefined);
-                const changeRows   = (data || []).filter(r => r.today_price_change_pct   !== null && r.today_price_change_pct   !== undefined);
+                const todayRows   = (data || []).filter(r => r.today_price_change_pct   !== null && r.today_price_change_pct   !== undefined);
 
                 document.getElementById('overlay').style.display = 'none';
-                renderTradingTable(tradingRows);
-                renderChangeTable(changeRows);
+                // console.log('tradingRows', tradingRows);
+                // renderTradingTable(tradingRows);
+                // renderTradingCards(tradingRows);
+                renderTradingView(tradingRows);
+
+                // renderTodayTable(todayRows); // 금일변동
             }
 
             if (target === 'tab-summary') {
@@ -498,7 +524,9 @@
                 if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
                 const data2 = await res2.json();
                 document.getElementById('overlay').style.display = 'none';
-                renderSummaryTable(data2)
+                // console.log('summary:', data2);
+                // renderSummaryTable(data2);
+                renderTradingView(data2);
             }
 
             if (target === 'tab-low') {
@@ -510,7 +538,8 @@
                 if (!res3.ok) throw new Error(`HTTP ${res3.status}`);
                 const data3 = await res3.json();
                 document.getElementById('overlay').style.display = 'none';
-                renderLowTable(data3)
+                // renderLowTable(data3);
+                renderTradingView(data3);
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
         } catch (e) {
@@ -540,19 +569,19 @@
             const stock_names = document.querySelector(activeTable).querySelectorAll('.stock_name'); // 탭 1
             s.clear();
             p.clear();
-            stock_names.forEach(i=>s.add((i.textContent)));
+            stock_names.forEach(i=>s.add((i.textContent.match(/\(([^)]*)\)/) || [null, null])[1]));
             const stocks = Array.from(s);
-            console.log('stocks', stocks);
+            // console.log('stocks', stocks);
 
             stocks.forEach(stock_name=>{
-                // console.log('ss', stock_name)
+                // console.log(stock_name);
                 const data = {
                     stock_name: stock_name,
                 }
                 axios.post("/func/stocks/info", data, {
                     headers: {"Content-Type": "application/json"},
                     timeout: 3000 // 3초 초과시 자동 reject
-                }).then(async res => {
+                }).then(res => {
                     const stock_data = res.data.result[0]?.data.items[0];
                     const stock_name = stock_data?.productName;
                     const product_code = stock_data?.productCode;
@@ -561,16 +590,16 @@
                     const realtime_price = stock_data?.close.krw;
 
                     for (const i of stock_names) {
-                        if (i.textContent === stock_name) {
+                        if (i.textContent.split('(')[0] === stock_name) {
                             const tr = i.closest('tr');
                             i.previousElementSibling.value = product_code;
                             const yesterday_close_el = tr.querySelector('.yst_close');
                             const current_price_el = tr.querySelector('.cur_close');
                             const price_change_pct_el = tr.querySelector('.prc_change');
-                            await updateTdWithBlink(current_price_el, fmt2(realtime_price) + '원');
+                            updateTdWithBlink(current_price_el, fmt2(realtime_price) + '원');
                             const calc_change_pct = (current_price_el.textContent.replace(/[^0-9.]/g, '') - yesterday_close_el.textContent.replace(/[^0-9.]/g, ''))
                                 / yesterday_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
-                            await updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
+                            updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
                         }
                     }
                 }).catch(error => {
@@ -591,7 +620,7 @@
                     axios.post("/func/stocks/amount", data, {
                         headers: {"Content-Type": "application/json"},
                         timeout: 3000 // 3초 초과시 자동 reject
-                    }).then(async res => {
+                    }).then(res => {
                         const amount = res.data.result.candles[0].amount;
                         const product_codes = document.querySelectorAll('.product_code');
 
@@ -602,8 +631,8 @@
                                 const amount_change_pct = Number(amount) / Number(yesterday_amount.replace(/[^0-9.]/g, "")) * 100
                                 const current_amount_el = tr.querySelector('.cur_amount');
                                 const amount_change_pct_el = tr.querySelector('.tv_change');
-                                await updateTdWithBlink(current_amount_el, fmt_won(amount));
-                                await updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
+                                updateTdWithBlink(current_amount_el, fmt_won(amount));
+                                updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
                             }
                         }
                     }).catch(error => {
@@ -614,13 +643,14 @@
 
             const activeTable = document.querySelector('.tab-bar .tab-btn.active').dataset.target;
             const stock_names2 = document.querySelector(activeTable).querySelectorAll('.stock_name2'); // 탭 1
-            stock_names2.forEach(i=>s2.add((i.textContent)));
             s2.clear();
+            stock_names2.forEach(i=>s2.add((i.textContent.match(/\(([^)]*)\)/) || [null, null])[1]));
             const stocks2 = Array.from(s2);
-            console.log('stocks2', stocks2);
+            // console.log('stocks2', stocks2);
 
             stocks2.forEach(stock_name=>{
-                // console.log('ss', stock_name)
+                stock_name = stock_name.split('(')[0];
+                // console.log(stock_name);
                 const data = {
                     stock_name: stock_name,
                 }
@@ -635,7 +665,7 @@
                     const realtime_price = stock_data?.close.krw;
 
                     for (const i of stock_names2) {
-                        if (i.textContent === stock_name) {
+                        if (i.textContent.split('(')[0] === stock_name) {
                             const tr = i.closest('tr');
                             const last_close_el = tr.querySelector('.last_close');
                             const chg_compare_peak_rate_el = tr.querySelector('.chg_compare_peak');

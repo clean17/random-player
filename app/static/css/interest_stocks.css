@@ -21,7 +21,8 @@ body {
 
     display: flex;
     flex-direction: column;
-    min-height: 0;             /* 내부 스크롤 허용 */
+    /*min-height: 0;             !* 내부 스크롤 허용 *!*/
+    min-height: 100vh;             /* 내부 스크롤 허용 */
 }
 
 /* 뷰포트가 2000px 이상일 때 max-width: 1000px 적용 */
@@ -72,8 +73,8 @@ button.primary:hover {
     width: 100%;
     overflow-x: auto;          /* 가로 스크롤 허용 */
     -webkit-overflow-scrolling: touch;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
+    /*border: 1px solid #e5e7eb;*/
+    /*border-radius: 12px;*/
     background: #fff;
 }
 
@@ -115,8 +116,8 @@ tr.detail-row td { background: #fafafa; }
 img.preview {
     max-width: 100%;
     height: auto;
-    border-radius: 10px;
-    border: 1px solid #e5e7eb;
+    /*border-radius: 10px;*/
+    /*border: 1px solid #e5e7eb;*/
 }
 
 /* 이미지 토글 버튼(작게) */
