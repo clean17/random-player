@@ -19,14 +19,12 @@ from concurrent.futures import ThreadPoolExecutor
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
-    renew_kiwoom_token_job
+    renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image
 # utils패키지의 모듈을 임포트
 from utils.lotto_schedule import async_buy_lotto
 from utils.compress_file import compress_directory_to_zip
 from utils.renew_stock_close import renew_interest_stocks_close
-from utils.scrap_ig_playwrigit import run_scrap_job
 
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
@@ -187,6 +185,8 @@ def start_background_tasks():
     threading.Thread(target=start_lotto_scheduler, daemon=True).start()
 '''
 
+def debug_scheduler():
+    print("Scheduler running.... ")
 
 
 def create_scheduler():
@@ -208,6 +208,15 @@ def create_scheduler():
         job_defaults=job_defaults
     )
 
+    # 0) 스케줄러 동작 확인용
+    scheduler.add_job(
+        debug_scheduler,
+        # trigger=IntervalTrigger(minutes=5),
+        trigger=IntervalTrigger(hours=1),
+        id="debug_scheduler",
+        executor="io",
+        replace_existing=True
+    )
 
     # 1) 로또 주 1회
     scheduler.add_job(
@@ -285,11 +294,11 @@ def create_scheduler():
         args=[find_stocks],
     )
 
-    # 8) 09:45~15:45 매시 45분 - run_weekdays_only(find_low_stocks)
+    # 8) 15:05 - run_weekdays_only(find_low_stocks)
     scheduler.add_job(
         run_weekdays_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-15", minute=45),
-        id="hourly_0945_1545_find_low_stocks",
+        trigger=CronTrigger(day_of_week="mon-fri", hour="12-15", minute=5),
+        id="hourly_1505_find_low_stocks",
         executor="io",
         replace_existing=True,
         args=[find_low_stocks],
@@ -305,9 +314,9 @@ def create_scheduler():
         args=[update_interest_stocks],
     )
 
-    # 10) 매일 02:00 스크랩
+    # 10) 매일 00:00 스크랩
     scheduler.add_job(
-        run_scrap_job,
+        run_crawl_ig_image,
         trigger=CronTrigger(hour=2, minute=0),
         id="scrap_daily",
         executor="io",
@@ -321,6 +330,24 @@ def create_scheduler():
         id="renew_interest_close",
         executor="io",
         replace_existing=True
+    )
+
+    # 12) 매일 04:00 스크랩
+    scheduler.add_job(
+        run_crawl_ai_image,
+        trigger=CronTrigger(hour=4, minute=0),
+        id="scrap_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 13) 매일 09:01 주식 종목 갱신
+    scheduler.add_job(
+        update_stocks_daily,
+        trigger=CronTrigger(hour=9, minute=1),
+        id="renewal_stocks_daily",
+        executor="io",
+        replace_existing=True,
     )
 
     return scheduler

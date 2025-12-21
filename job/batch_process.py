@@ -49,10 +49,34 @@ def renew_kiwoom_token_job():
 
 
 def run_crawl_ai_image():
-    print('    ############################### run_crawl_image ###############################')
+    print('    ############################### run_crawl_ai_image ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
     # py_script = r"C:\my-project\random-player\utils\scrap_ai_by_playwright.py"
     py_script = r"C:\my-project\random-player\utils\scrap_ai_by_playwright_async.py"
+
+    # subprocess 실행 (새로운 프로세스)
+    process = subprocess.Popen(
+        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        cwd=r"C:\my-project\random-player",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
+        stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
+        stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
+        text=True,
+        encoding="utf-8",                     # 부모도 UTF-8로 읽기
+        errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
+        bufsize=1
+    )
+
+    for line in process.stdout:
+        print(line, end="")   # 실시간 콘솔 출력
+
+    process.wait()
+    print("returncode =", process.returncode)
+
+def run_crawl_ig_image():
+    print('    ############################### run_crawl_ig_image ###############################')
+    venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
+    # py_script = r"C:\my-project\random-player\utils\scrap_ai_by_playwright.py"
+    py_script = r"C:\my-project\random-player\utils\scrap_ig_playwrigit.py"
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
