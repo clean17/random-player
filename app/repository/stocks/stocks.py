@@ -119,8 +119,8 @@ def get_interest_stocks(date: str, conn=None):
     SELECT *
     FROM interest_stocks
     WHERE created_at::date = %s
-    AND today_price_change_pct::float >= 3
-    AND current_trading_value::numeric > 5000000000
+    AND today_price_change_pct::float >= 4
+    AND current_trading_value::numeric > 5_000_000_000
     ORDER BY today_price_change_pct::numeric DESC, current_trading_value::numeric DESC;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
@@ -182,7 +182,7 @@ order by count(stock_code) desc, max(created_at) desc
 where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5.7
 and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 10
 and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
-and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 14
+and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 10
 ;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다

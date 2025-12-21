@@ -65,11 +65,11 @@ def main():
                   NULLIF(REGEXP_REPLACE(today_price_change_pct, '%', '', 'g'), '')::numeric, 0)
                )
             , 1)||'%' AS 평균_변동률  
-          , ROUND(100.0 * (coalesce(max(last_close)::numeric, 0) - MIN(current_price)::numeric)
-               / NULLIF(MIN(current_price)::numeric, 0),1)||'%' AS 전체_상승률
-          , case when max(market_value)::numeric >= 1000000000000
-          		 then ROUND(max(market_value)::numeric/1000000000000, 1)||'조'
-                 else ROUND(max(market_value)::numeric/100000000)||'억'
+          , ROUND(100.0 * (coalesce(max(last_close::numeric), 0) - MIN(current_price::numeric))
+               / NULLIF(MIN(current_price::numeric), 0),1)||'%' AS 전체_상승률
+          , case when max(market_value::numeric) >= 1000000000000
+          		 then ROUND(max(market_value::numeric)/1000000000000, 1)||'조'
+                 else ROUND(max(market_value::numeric)/100000000)||'억'
                  end as 시가총액
           , ROUND(avg(current_trading_value::numeric)/100000000)||'억' as 평균_거래대금
           , min(created_at)::date as 처음_상승일자
