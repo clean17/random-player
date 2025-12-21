@@ -25,8 +25,16 @@ def auto_endpoint(bp_or_app):
 def register_shutdown_handlers(scheduler=None, node_process=None):
     def handler(sig, frame):
         cleanup(scheduler=scheduler, node_process=node_process)
-        pid = os.getpid()
-        os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
+
+        # pid = os.getpid()
+        # os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
+
+        # ✅ 여기서 kill 하지 말고 즉시 종료로 빠짐
+        raise SystemExit(0)
+
+        # 정리 로그 출력할 시간 조금 주고
+        # time.sleep(0.2)
+        # os._exit(0)  # ✅ 어떤 스레드가 살아있든 프로세스 즉시 종료
 
     signal.signal(signal.SIGINT, handler)   # Ctrl+C
     signal.signal(signal.SIGTERM, handler)  # docker stop / 서비스 종료
@@ -56,14 +64,6 @@ def cleanup(scheduler=None, node_process=None):
         except Exception as e:
             print(f"⚠️ 종료 중 예외: {e}")
 
-    # APScheduler
-    try:
-        print("🧹 서버 종료 중: 스케줄러 정리")
-        if scheduler and getattr(scheduler, "running", False):
-            scheduler.shutdown(wait=True)
-    except Exception as e:
-        print("scheduler shutdown error:", e)
-
     # psycopg pool
     try:
         print("🧹 서버 종료 중: db_pool 정리")
@@ -71,6 +71,14 @@ def cleanup(scheduler=None, node_process=None):
             db_pool.close()
     except Exception as e:
         print("db_pool close error:", e)
+
+    # APScheduler
+    try:
+        print("🧹 서버 종료 중: 스케줄러 정리")
+        if scheduler and getattr(scheduler, "running", False):
+            scheduler.shutdown(wait=False)
+    except Exception as e:
+        print("scheduler shutdown error:", e)
 
 # 애플리케이션 종료 후 실행
 def on_exit():

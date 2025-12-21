@@ -588,7 +588,7 @@ def update_progress(stock):
         nasdaq_progress["stock_name"] = data.get("stock_name", "")
         return jsonify(nasdaq_progress)
 
-@func.route("/stocks/interest", methods=["POST"])
+@func.route("/stocks/interest/insert", methods=["POST"])
 def save_interesting_stocks():
     data = request.json
     nation = data.get("nation")
