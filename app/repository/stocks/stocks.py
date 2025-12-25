@@ -113,6 +113,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
         return row[0] if row else None
 
 
+# 오늘의 실시간 등락
 @db_transaction
 def get_interest_stocks(date: str, conn=None):
     sql = """

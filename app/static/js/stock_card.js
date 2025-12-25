@@ -297,9 +297,9 @@ function renderTradingCards(rows, section, tableName) {
 
     root.innerHTML = `
     <div class="trade-carousel" style="position:relative;">
-      <button type="button" class="carousel-btn left" aria-label="prev">‹</button>
+      <button type="button" class="carousel-btn left" aria-label="prev"><span class="chev">‹</span></button>
       <div class="trade-track"></div>
-      <button type="button" class="carousel-btn right" aria-label="next">›</button>
+      <button type="button" class="carousel-btn right" aria-label="next"><span class="chev">›</span></button>
     </div>
     <div class="dots"></div>
   `;

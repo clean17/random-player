@@ -78,8 +78,8 @@
 /* ====== Carousel Buttons (전역 button css 무시) ====== */
 .table-scroller .carousel-btn {
     all: unset;
-    position: absolute;
-    top: 55%;
+    position: fixed;
+    top: 60vh;            /* 화면 높이 기준 중앙 */
     transform: translateY(-50%);
 
     width: 50px;
@@ -95,18 +95,25 @@
     justify-content: center;
 
     font-size: 30px;
-    line-height: 1;          /* 글자 baseline 문제 줄임 */
+    line-height: 1;
     cursor: pointer;
     user-select: none;
     touch-action: manipulation; /* 모바일 클릭 반응 개선 */
+    z-index: 9999;
+}
+.table-scroller .carousel-btn .chev{
+    display: inline-block;
+    line-height: 1;
+    transform: translateY(-2px); /* ✅ -1px ~ +2px 사이로 미세조정 */
 }
 
-.table-scroller .carousel-btn.left  { left: 6px; }
-.table-scroller .carousel-btn.right { right: 6px; }
+.table-scroller .carousel-btn.left  { left: 12px; }
+.table-scroller .carousel-btn.right { right: 12px; }
 
-.table-scroller .carousel-btn:disabled {
-    opacity: .35;
-    cursor: not-allowed;
+/* 1000 이상 */
+@media (min-width: 2000px) {
+    .table-scroller .carousel-btn.left  { left: 320px; }
+    .table-scroller .carousel-btn.right { right: 320px; }
 }
 
 /* ====== Dots ====== */

@@ -112,11 +112,16 @@ def renew_interest_stocks_close():
                 timeout=10
             )
             json_data = res.json()
-            # json_data["result"][0]
+            result = json_data["result"]
+
+            # 거래정지는 데이터를 주지 않는다
+            if len(result) == 0:
+                continue
+
             product_code = json_data["result"][0]["data"]["items"][0]["productCode"]
 
         except Exception as e:
-            print(f"info 요청 실패-2: {str(ticker)} {e}")
+            print(f"renew_interest_stocks_close [info 요청 실패]: {str(ticker)} {e}")
             pass  # 오류
 
         # 현재 종가 가져오기
@@ -126,7 +131,7 @@ def renew_interest_stocks_close():
                 json={
                     "product_code": str(product_code)
                 },
-                timeout=5
+                timeout=10
             )
             json_data = res.json()
             last_close = json_data["result"]["candles"][0]["close"]
