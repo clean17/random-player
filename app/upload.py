@@ -6,7 +6,7 @@ from flask_login import login_required
 from config.config import settings
 from werkzeug.utils import secure_filename
 from zipfile import ZipFile
-from utils.make_thumbnail import convert_file
+from utils.generate_thumbnail import convert_file
 from utils.webm_to_mp4 import convert_webm_to_mp4
 import uuid
 import time

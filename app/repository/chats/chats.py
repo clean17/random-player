@@ -15,6 +15,7 @@ def find_chats_by_offset(offset: int, limit: int, conn=None) -> List["ChatDTO"]:
             "(SELECT c.*, u.username FROM chats c "
             "JOIN users u on c.user_id = u.id "
             "ORDER BY c.id DESC OFFSET %s LIMIT %s) A "
+            # "where A.id > 88633 "
             "ORDER BY A.id ASC;",
             (offset, limit)
         )

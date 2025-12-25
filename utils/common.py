@@ -8,10 +8,11 @@ from collections import defaultdict
 import logging
 
 from config.db_connect import db_pool
+from job.batch_runner import executors
 
 already_cleaned = False
 node_process = None
-
+_executors = executors
 
 def auto_endpoint(bp_or_app):
     def route_wrapper(rule, **options):
@@ -48,12 +49,40 @@ def signal_handler(sig, frame):
     # sys.exit(0)
 
 def cleanup(scheduler=None, node_process=None):
-    global already_cleaned
+    global already_cleaned, _executors
     if already_cleaned:
         return
     already_cleaned = True
 
-    # node_process
+    # 1) APScheduler 먼저 정상 종료 (작업 마무리까지 기다림)
+    try:
+        print("🧹 서버 종료 중: 스케줄러 정리")
+        if scheduler and getattr(scheduler, "running", False):
+            scheduler.shutdown(wait=True)  # ✅ 가장 깔끔
+    except Exception as e:
+        print("scheduler shutdown error:", e)
+
+    # 2) executor 확실히 shutdown (중요)
+    try:
+        if _executors:
+            for name, ex in _executors.items():
+                try:
+                    print(f"🧹 executor 종료: {name}")
+                    ex.shutdown(wait=False)   # 빨리 끊기
+                except Exception as e:
+                    print(f"executor {name} shutdown error:", e)
+    except Exception as e:
+        print("executors shutdown error:", e)
+
+    # 3) DB pool
+    try:
+        print("🧹 서버 종료 중: db_pool 정리")
+        if db_pool:
+            db_pool.close()
+    except Exception as e:
+        print("db_pool close error:", e)
+
+    # 4) node_process
     if node_process is not None and node_process.poll() is None:
         try:
             print("🧹 서버 종료 중: 자식 프로세스 정리")
@@ -64,21 +93,9 @@ def cleanup(scheduler=None, node_process=None):
         except Exception as e:
             print(f"⚠️ 종료 중 예외: {e}")
 
-    # psycopg pool
-    try:
-        print("🧹 서버 종료 중: db_pool 정리")
-        if db_pool:
-            db_pool.close()
-    except Exception as e:
-        print("db_pool close error:", e)
+    # print("⚠️ 강제 종료 진행 (남은 스레드로 인해 종료 지연)")
+    # os._exit(0)
 
-    # APScheduler
-    try:
-        print("🧹 서버 종료 중: 스케줄러 정리")
-        if scheduler and getattr(scheduler, "running", False):
-            scheduler.shutdown(wait=False)
-    except Exception as e:
-        print("scheduler shutdown error:", e)
 
 # 애플리케이션 종료 후 실행
 def on_exit():

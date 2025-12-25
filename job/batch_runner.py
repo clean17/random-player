@@ -20,7 +20,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
-    renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image
+    renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily
 # utils패키지의 모듈을 임포트
 from utils.lotto_schedule import async_buy_lotto
 from utils.compress_file import compress_directory_to_zip
@@ -43,7 +43,7 @@ DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
 
 # 전역 루프
 _loop = None
-
+executors = None
 
 def start_async_loop_in_background():
     """별도 스레드에서 asyncio 이벤트 루프를 영구 실행"""
@@ -190,7 +190,9 @@ def debug_scheduler():
 
 
 def create_scheduler():
+    global executors
     print("🕒 Scheduler start.... ")
+
     # I/O는 스레드, CPU는 프로세스
     executors = {
         "io": ThreadPoolExecutor(max_workers=8),
@@ -266,17 +268,15 @@ def create_scheduler():
         args=["kospi"],
     )
 
-    # 6) 국장 시작 09:05 - run_weekdays_only(find_stocks)
+    # 6) 국장 시작 - 2_finding_stocks_with_increased_volume.py (09:05, 09:30~20:00, 30분마다)
     scheduler.add_job(
         run_weekdays_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=5),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=4),
         id="korea_open_0905_find_stocks",
         executor="io",
         replace_existing=True,
         args=[find_stocks],
     )
-
-    # 7) 09:30 ~ 15:30, 30분마다 (평일)
     scheduler.add_job(
         run_weekdays_only,
         trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=30),
@@ -287,8 +287,16 @@ def create_scheduler():
     )
     scheduler.add_job(
         run_weekdays_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="10-15", minute="0,30"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="0,30"),
         id="every_30min_1000_1530_find_stocks",
+        executor="io",
+        replace_existing=True,
+        args=[find_stocks],
+    )
+    scheduler.add_job(
+        run_weekdays_only,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=0),
+        id="2000_find_stocks",
         executor="io",
         replace_existing=True,
         args=[find_stocks],
@@ -297,7 +305,7 @@ def create_scheduler():
     # 8) 15:05 - run_weekdays_only(find_low_stocks)
     scheduler.add_job(
         run_weekdays_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="12-15", minute=5),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="12-19", minute="5,35"),
         id="hourly_1505_find_low_stocks",
         executor="io",
         replace_existing=True,
@@ -307,7 +315,7 @@ def create_scheduler():
     # 9) 월~금 5분마다 - run_cumtom_time_only(update_interest_stocks)
     scheduler.add_job(
         run_cumtom_time_only,
-        trigger=CronTrigger(day_of_week="mon-fri", minute="*/5"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/5"),
         id="weekday_every_5min_update_interest_stocks",
         executor="io",
         replace_existing=True,
@@ -326,7 +334,7 @@ def create_scheduler():
     # 11) 09:30 ~ 15:30, 30분마다 (평일) 코스피 종가 수정
     scheduler.add_job(
         renew_interest_stocks_close,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-15", minute="30"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="0,30"),
         id="renew_interest_close",
         executor="io",
         replace_existing=True
@@ -348,6 +356,16 @@ def create_scheduler():
         id="renewal_stocks_daily",
         executor="io",
         replace_existing=True,
+    )
+
+    # 14) 데이터 갱신
+    scheduler.add_job(
+        run_weekdays_only,
+        trigger=CronTrigger(hour=1, minute=0),
+        id="update_stock_data_daily",
+        executor="io",
+        replace_existing=True,
+        args=[update_stock_data_daily],
     )
 
     return scheduler
