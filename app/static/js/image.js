@@ -522,6 +522,7 @@ function showSlideshowModal(imgList) {
         modal.style.display = "flex";
         modal.innerHTML = `
             <button class="close-modal" title="닫기" ><i class="fas fa-times" style="color:white"></i></button>
+            <!--<button class="close-modal" title="닫기" aria-label="닫기">✕</button>-->
             <img src="" alt="슬라이드" id="slideshow-img">
         `;
         document.body.appendChild(modal);

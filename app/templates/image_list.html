@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Image List</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"> <!-- 아이콘, 체크 표시 -->
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
@@ -411,7 +412,7 @@
 
         // 외부 클릭 시 드롭다운 숨기기
         document.addEventListener('click', (event) => {
-            if (!zipBtn?.contains(event.target) && !dropdownMenu.contains(event.target)) {
+            if (dropdownMenu && zipBtn && !zipBtn.contains(event.target) && !dropdownMenu.contains(event.target)) {
                 dropdownMenu.style.display = 'none';
             }
         });
