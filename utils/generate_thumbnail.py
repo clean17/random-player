@@ -11,6 +11,7 @@ root_directory = r'E:\LARIS_DATA\FILE\ARCHIVES_REP\2025\07\30\912670\ORIGIN'
 # 허용할 확장자
 VALID_IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', 'tiff', 'jfif')
 VALID_VIDEO_EXTENSIONS = ('.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm')
+THUMB_MIN_SIZE_BYTES = 120 * 1024  # 120KB
 
 # 최대 썸네일 가로 너비
 max_width = 720
@@ -66,9 +67,16 @@ def convert_video_file(file_path):
 
 # 이미지 파일을 webp파일로 변환
 def convert_image_file(file_path):
+    try:
+        if os.path.getsize(file_path) <= THUMB_MIN_SIZE_BYTES:
+            return
+    except OSError:
+        # 파일 접근/조회 불가 시 스킵
+        return
+
     dir_path = Path(file_path).parent
     thumb_dir = os.path.join(dir_path, 'thumb')
-    os.makedirs(thumb_dir, exist_ok=True) # ✅ thumb 디렉토리 먼저 생성 (없으면 생성)
+    os.makedirs(thumb_dir, exist_ok=True)
     filename = os.path.basename(file_path)
     file_lower = filename.lower()
 
