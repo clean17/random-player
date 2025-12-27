@@ -41,10 +41,25 @@
 /* Header */
 .table-scroller .trade-top {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
+    align-items: stretch;       /* 자식들을 같은 높이로 늘림 */
+    gap: 10px;
     margin: 12px 12px 18px 12px;
+}
+
+.table-scroller .trade-text{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;    /* 텍스트를 가운데 정렬하고 싶으면 */
+}
+
+/* ✅ 로고를 텍스트(2줄) 전체 높이에 맞춤 */
+.table-scroller .trade-logo{
+    height: 40px;
+    width: auto;                /* 비율 유지 */
+    aspect-ratio: 1 / 1;        /* 보통 로고는 정사각형이 보기 좋음(선택) */
+    object-fit: contain;        /* 로고가 찌그러지지 않게 */
+    flex: 0 0 auto;
+    border-radius: 5px;
 }
 
 .table-scroller .trade-name { font-weight: 700; line-height: 1.2; }
