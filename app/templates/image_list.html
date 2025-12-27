@@ -101,10 +101,10 @@
                 {% if file_extension in video_extensions %}
                 <!-- 비디오 파일인 경우 -->
                 <button class="delete-btn" type="button">×</button>
+                <!--data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"-->
                 <video class="thumbnail"
                        muted playsinline controls loop
                        data-index="{{ loop.index }}"
-                       <!--data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"-->
                        alt="{{ image|urlencode }}"
                        >
                     <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
@@ -268,6 +268,16 @@
     function lazyLoadVideos() {
         const videos = document.querySelectorAll("video.thumbnail");
 
+        // 옵저버 정의
+        /**
+         * IntersectionObserver
+         * 브라우저에서 어떤 요소가 뷰포트(화면) 안에 들어왔는지 자동으로 감지하는 API
+         * >> 스크롤을 감지해서 이미지 로딩, 애니메이션 트리거, 광고 노출 등을 실행
+         *
+         * observe(element); 관찰 대상 등록
+         * unobserve(element); 관찰 대상 해제
+         * disconnect(); 모든 관찰 중단
+         */
         const observer = new IntersectionObserver((entries, observer) => {
             entries.forEach(entry => {
                 const video = entry.target;
@@ -288,8 +298,8 @@
                 }
             });
         }, {
-            rootMargin: "0px 0px 300px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 300px 전에 미리 감지 → 미리 로드 가능)
-            threshold: 0.1 // 요소가 10% 보일 때 트리거
+            rootMargin: "0px 0px 1200px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 전에 미리 감지 → 미리 로드 가능)
+            // threshold: 0.1 // 요소가 10% 보일 때 트리거
         });
 
         videos.forEach(video => observer.observe(video));
