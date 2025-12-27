@@ -104,7 +104,7 @@
                 <video class="thumbnail"
                        muted playsinline controls loop
                        data-index="{{ loop.index }}"
-                       data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
+                       <!--data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"-->
                        alt="{{ image|urlencode }}"
                        >
                     <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
@@ -173,6 +173,7 @@
           progressBar = document.getElementById('progress-bar'),
           progressStatus = document.getElementById('progress-status');
 
+    let isDelRunning = false;
 
 
     function clickCenterImage() {
@@ -229,6 +230,8 @@
             })
             .catch(error => {
                 console.error('Error:', error);
+            }).finally(()=>{
+                isDelRunning = false;
             });
     }
 
@@ -341,6 +344,8 @@
                     if (dir === 'trip' || dir === 'temp')  playCenterVideo();
                     break;
                 case 'Delete':
+                    if (isDelRunning) return
+                    isDelRunning = true;
                     event.preventDefault();
                     if (dir === 'refine') {
                         handelDelBtn();

@@ -196,7 +196,7 @@ function moveImageToPreviousStep(event, imageItem) {
                 console.error('Error:', error);
             });
     }
-
+    isDelRunning = false;
 }
 
 function deleteItem(imageItem) {
@@ -228,7 +228,8 @@ function deletePage(e) {
             const url = new URL(res.data?.redirect, window.location.origin).href;
             window.location.replace(url); // 또는 window.location.href = url
         })
-        .catch(err => console.error("삭제 실패", err));
+        .catch(err => console.error("삭제 실패", err))
+        .finally(()=>{isDelRunning = false;});
 
 }
 
@@ -435,6 +436,8 @@ function moveStockImage(event) {
         })
         .catch(error => {
             console.error('Error:', error);
+        }).finally(()=>{
+            isDelRunning = false;
         });
 }
 
