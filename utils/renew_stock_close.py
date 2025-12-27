@@ -4,6 +4,7 @@ import psycopg_pool
 import os
 import requests
 import time
+from datetime import datetime, time as dtime
 
 from pathlib import Path
 import sys
@@ -98,12 +99,15 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
 
 def renew_interest_stocks_close():
     from app.repository.stocks.stocks import get_interest_stock_list, update_interest_stock_list_close
+
     rows = get_interest_stock_list()
+    print(f'running renew_interest_stocks_close: {len(rows)}')
 
     close_list = []
-    for i, dick in enumerate(rows):
-        # time.sleep(0.2)  # 200ms 대기
-        ticker = dick['stock_code']
+
+    for i, row in enumerate(rows):
+        time.sleep(0.05)  # 50ms 대기
+        ticker = row['stock_code']
 
         try:
             res = requests.post(
@@ -111,7 +115,7 @@ def renew_interest_stocks_close():
                 json={"stock_name": str(ticker)},
                 timeout=10
             )
-            json_data = res.json()
+            json_data = res.json() or {}
             result = json_data["result"]
 
             # 거래정지는 데이터를 주지 않는다
@@ -119,28 +123,61 @@ def renew_interest_stocks_close():
                 continue
 
             product_code = json_data["result"][0]["data"]["items"][0]["productCode"]
-
+            logo_image_url = json_data["result"][0]["data"]["items"][0]["logoImageUrl"]
         except Exception as e:
-            print(f"renew_interest_stocks_close [info 요청 실패]: {str(ticker)} {e}")
-            pass  # 오류
+            print(f"renew_interest_stocks_close [info 요청 실패1]: {str(ticker)} {e}")
+            continue  # 오류
+
+        now = datetime.now().time()
+        if now < dtime(10, 0):  # 10:00 이전만
+            # company_code 조회
+            try:
+                res2 = requests.post(
+                    'https://chickchick.shop/func/stocks/overview',
+                    json={"product_code": str(product_code)},
+                    timeout=10
+                )
+                json_data = res2.json() or {}
+                company_code = json_data["result"]["company"]["code"]
+            except Exception as e:
+                print(f"renew_interest_stocks_close [info 요청 실패2]: {str(ticker)} {str(product_code)} {e}")
+                continue  # 오류
+
+            # 카테고리 조회
+            try:
+                res3 = requests.post(
+                    'https://chickchick.shop/func/stocks/company',
+                    json={"company_code": str(company_code)},
+                    timeout=10
+                )
+                res3.raise_for_status() # HTTP 에러(4xx/5xx)를 바로 잡아서 예외 처리
+                json_data = res3.json() or {}
+                category = json_data["result"]["majorList"][0]["title"]
+            except Exception as e:
+                print(f"renew_interest_stocks_close [info 요청 실패3]: {str(ticker)} {str(company_code)} {e}")
+                continue  # 오류
+
 
         # 현재 종가 가져오기
         try:
-            res = requests.post(
+            res4 = requests.post(
                 'https://chickchick.shop/func/stocks/amount',
-                json={
-                    "product_code": str(product_code)
-                },
+                json={"product_code": str(product_code)},
                 timeout=10
             )
-            json_data = res.json()
+            json_data = res4.json() or {}
             last_close = json_data["result"]["candles"][0]["close"]
         except Exception as e:
-            print(f"progress-update 요청 실패-3: {e}")
-            pass  # 오류
+            print(f"renew_interest_stocks_close [info 요청 실패4]: {str(ticker)} {str(product_code)} {e}")
+            continue  # 오류
 
         # print(f'{i+1}/{len(rows)} ticker : {ticker}, close : {last_close}')
-        close_list.append((last_close, ticker))    # 순서: (값, 키)
+        if last_close is not None:
+            close_list.append((str(last_close), category, logo_image_url, ticker))    # 순서: (값, 키)
+        # update_interest_stock_list_close(close_list)   # 급하게 데이터 넣을 때
+        # close_list.clear()
 
     if len(close_list) > 0:
         update_interest_stock_list_close(close_list)
+
+    print(f'complete renew_interest_stocks_close: {len(rows)}')

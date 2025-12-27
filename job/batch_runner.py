@@ -331,7 +331,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 11) 09:30 ~ 15:30, 30분마다 (평일) 코스피 종가 수정
+    # 11) 09:30 ~ 20:30, 30분마다 (평일) 코스피 종가 수정
     scheduler.add_job(
         renew_interest_stocks_close,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="0,30"),

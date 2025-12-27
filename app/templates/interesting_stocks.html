@@ -586,7 +586,7 @@
                     const stock_name = stock_data?.productName;
                     const product_code = stock_data?.productCode;
                     p.add(product_code);
-                    const logo_url = stock_data?.logoImageUrl;
+                    const logo_image_url = stock_data?.logoImageUrl;
                     const realtime_price = stock_data?.close.krw;
 
                     for (const i of stock_names) {
@@ -661,7 +661,7 @@
                     const stock_data = res.data.result[0]?.data.items[0];
                     const stock_name = stock_data?.productName;
                     const product_code = stock_data?.productCode;
-                    // const logo_url = stock_data?.logoImageUrl;
+                    // const logo_image_url = stock_data?.logoImageUrl;
                     const realtime_price = stock_data?.close.krw;
 
                     for (const i of stock_names2) {

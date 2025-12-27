@@ -611,7 +611,6 @@ def save_interesting_stocks():
     image_url = data.get("image_url") or None
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
-    category = data.get("category") or None
     target = data.get("target") or None
     last_close = data.get("last_close") or None
 
@@ -630,7 +629,6 @@ def save_interesting_stocks():
         image_url=image_url,
         logo_image_url=logo_image_url,
         market_value=market_value,
-        category=category,
         target=target,
         last_close=last_close,
     )
