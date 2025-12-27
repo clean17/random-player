@@ -139,8 +139,8 @@
     margin-top: 8px;
 }
 .table-scroller .dot {
-    width: 7px;
-    height: 7px;
+    width: 10px;
+    height: 10px;
     border-radius: 999px;
     background: rgba(0,0,0,0.18);
 }

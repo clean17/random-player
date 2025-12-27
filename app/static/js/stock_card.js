@@ -62,6 +62,10 @@ const LOW_TABLE_HTML = `
 `;
 
 let globalTradingRows = [];
+let leftCarouselBtn;
+let rightCarouselBtn;
+let firstCarouselDot;
+let lastCarouselDot;
 
 
 // ---------- 안전 변환/포맷터 ----------
@@ -362,6 +366,16 @@ function renderTradingCards(rows, section, tableName) {
         dots.querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("active", i === activeDot));
         btnL.disabled = idx <= 0;
         btnR.disabled = idx >= rows.length - 1;
+
+        leftCarouselBtn = btnL;
+        rightCarouselBtn = btnR;
+
+        const visibleSection = [...document.querySelectorAll('section')]
+            .find(sec => getComputedStyle(sec).display === 'block');
+
+        console.log('visibleSection', visibleSection)
+        firstCarouselDot = visibleSection?.querySelector('.dots > :first-child');
+        lastCarouselDot = visibleSection?.querySelector('.dots > :last-child');
     }
 
     track.addEventListener("scroll", () => {
@@ -462,6 +476,25 @@ setTimeout(()=>{
                 e.target.blur();
                 renderTradingView(globalTradingRows || []);
             });
+        });
+
+        document.addEventListener('keydown', function(event) {
+            switch (event.key) {
+                case 'ArrowLeft':
+                    leftCarouselBtn.click();
+                    break;
+                case 'ArrowRight':
+                    rightCarouselBtn.click();
+                    break;
+                case 'Home':
+                    firstCarouselDot.click();
+                    break;
+                case 'End':
+                    lastCarouselDot.click();
+                    break;
+                default:
+                    break;
+            }
         });
     }
     ,100)
