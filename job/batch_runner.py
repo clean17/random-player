@@ -20,7 +20,8 @@ from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
-    renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily
+    renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
+    update_summary_stock_graph_daily
 # utils패키지의 모듈을 임포트
 from utils.lotto_schedule import async_buy_lotto
 from utils.compress_file import compress_directory_to_zip
@@ -270,46 +271,41 @@ def create_scheduler():
 
     # 6) 국장 시작 - 2_finding_stocks_with_increased_volume.py (09:05, 09:30~20:00, 30분마다)
     scheduler.add_job(
-        run_weekdays_only,
+        find_stocks,
         trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=4),
         id="korea_open_0905_find_stocks",
         executor="io",
         replace_existing=True,
-        args=[find_stocks],
     )
     scheduler.add_job(
-        run_weekdays_only,
+        find_stocks,
         trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=30),
         id="0930_find_stocks",
         executor="io",
         replace_existing=True,
-        args=[find_stocks],
     )
     scheduler.add_job(
-        run_weekdays_only,
+        find_stocks,
         trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="0,30"),
         id="every_30min_1000_1530_find_stocks",
         executor="io",
         replace_existing=True,
-        args=[find_stocks],
     )
     scheduler.add_job(
-        run_weekdays_only,
+        find_stocks,
         trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=0),
         id="2000_find_stocks",
         executor="io",
         replace_existing=True,
-        args=[find_stocks],
     )
 
-    # 8) 15:05 - run_weekdays_only(find_low_stocks)
+    # 8) 12~19 - 저점 매수 찾기
     scheduler.add_job(
-        run_weekdays_only,
+        find_low_stocks,
         trigger=CronTrigger(day_of_week="mon-fri", hour="12-19", minute="5,35"),
         id="hourly_1505_find_low_stocks",
         executor="io",
         replace_existing=True,
-        args=[find_low_stocks],
     )
 
     # 9) 월~금 5분마다 - run_cumtom_time_only(update_interest_stocks)
@@ -360,12 +356,20 @@ def create_scheduler():
 
     # 14) 데이터 갱신
     scheduler.add_job(
-        run_weekdays_only,
-        trigger=CronTrigger(hour=1, minute=0),
+        update_stock_data_daily,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=1, minute=0),
         id="update_stock_data_daily",
         executor="io",
         replace_existing=True,
-        args=[update_stock_data_daily],
+    )
+
+    # 15) 상승주 그래프 갱신
+    scheduler.add_job(
+        update_summary_stock_graph_daily,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute=10),
+        id="update_summary_stocks_graph",
+        executor="io",
+        replace_existing=True,
     )
 
     return scheduler

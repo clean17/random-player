@@ -31,7 +31,7 @@ def renew_kiwoom_token_job():
 
     # subprocess 실행 (새로운 프로세스), subprocess.Popen()은 어느 스레드에서 호출하든 OS에 “새 프로세스 생성”을 요청
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능 // -u 붙여서 자식 파이썬을 unbuffered로 실행 > 출력이 PIPE를 타지 않고 버퍼에 쌓이지 않아 바로 출력됨
         cwd=r"C:\my-project\random-player",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -57,7 +57,7 @@ def run_crawl_ai_image():
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\random-player",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -81,7 +81,7 @@ def run_crawl_ig_image():
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\random-player",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -113,7 +113,7 @@ def predict_stock_graph(stock):
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -136,7 +136,7 @@ def update_interest_stocks():
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -160,7 +160,7 @@ def find_stocks():
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -174,7 +174,7 @@ def find_stocks():
         print(line, end="")   # 실시간 콘솔 출력
 
     process.wait()
-    print("returncode =", process.returncode)
+    print("find_stocks_returncode =", process.returncode)
 
 
 def find_low_stocks():
@@ -183,7 +183,7 @@ def find_low_stocks():
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -206,7 +206,7 @@ def update_stocks_daily():
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
@@ -229,7 +229,30 @@ def update_stock_data_daily():
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
-        [venv_python, "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
+        stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
+        stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
+        text=True,
+        encoding="utf-8",                     # 부모도 UTF-8로 읽기
+        errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
+        bufsize=1
+    )
+
+    for line in process.stdout:
+        print(line, end="")   # 실시간 콘솔 출력
+
+    process.wait()
+    print("returncode =", process.returncode)
+
+
+def update_summary_stock_graph_daily():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\5_generate_interest_stocks_graph.py"
+
+    # subprocess 실행 (새로운 프로세스)
+    process = subprocess.Popen(
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
         cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
