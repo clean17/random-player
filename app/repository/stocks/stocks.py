@@ -96,13 +96,13 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             created_at, updated_at, nation, stock_code, stock_name, 
             pred_price_change_3d_pct, yesterday_close, current_price, today_price_change_pct,
             avg5d_trading_value, current_trading_value, trading_value_change_pct,
-            image_url, market_value, target
+            graph_file, market_value, target
         )
         VALUES (
             now(), now(), %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s, %s,
-            %s, %s, %s, %s, %s, %s
+            %s, %s, %s
         )
         -- ON CONFLICT ON CONSTRAINT stocks_code_daily
         ON CONFLICT (stock_code, (created_at::date))
@@ -117,9 +117,9 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             avg5d_trading_value      = COALESCE(EXCLUDED.avg5d_trading_value,      interest_stocks.avg5d_trading_value),
             current_trading_value    = COALESCE(EXCLUDED.current_trading_value,    interest_stocks.current_trading_value),
             trading_value_change_pct = COALESCE(EXCLUDED.trading_value_change_pct, interest_stocks.trading_value_change_pct),
-            image_url                = COALESCE(EXCLUDED.image_url,                interest_stocks.image_url),
+            graph_file                = COALESCE(EXCLUDED.graph_file,                interest_stocks.graph_file),
             market_value             = COALESCE(EXCLUDED.market_value,             interest_stocks.market_value),
-            target                   = COALESCE(EXCLUDED.target,                   interest_stocks.target),
+            target                   = COALESCE(EXCLUDED.target,                   interest_stocks.target)
         RETURNING id;
         """
         cur.execute(
@@ -128,7 +128,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
                 stock.nation, stock.stock_code, stock.stock_name, stock.pred_price_change_3d_pct,
                 stock.yesterday_close, stock.current_price, stock.today_price_change_pct,
                 stock.avg5d_trading_value, stock.current_trading_value,
-                stock.trading_value_change_pct, stock.image_url, stock.market_value,
+                stock.trading_value_change_pct, stock.graph_file, stock.market_value,
                 stock.target
             )
         )
@@ -151,7 +151,7 @@ def get_interest_stocks(date: str, conn=None):
          , i.avg5d_trading_value
          , i.current_trading_value
          , i.trading_value_change_pct
-         , i.image_url
+         , i.graph_file
          , i.updated_at
          , i.market_value
          , s.category
@@ -180,7 +180,7 @@ def get_interest_stocks_info(date: str, conn=None):
         , REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric desc
         ) as rn
         , b.* 
-        , (select image_url from interest_stocks is3 where is3.id = b.id)
+        , (select graph_file from stocks s where s.stock_code = b.stock_code) as graph_file
     from (
         select i.stock_code
           , i.stock_name
@@ -241,7 +241,7 @@ def get_interest_stocks_info(date: str, conn=None):
 def get_interest_low_stocks(date: str, conn=None):
     sql = """
     SELECT i.id
-         , i.image_url
+         , i.graph_file
          , i.stock_name
          , i.stock_code        
          , i.created_at

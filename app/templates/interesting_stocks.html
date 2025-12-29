@@ -267,7 +267,7 @@
         }
         const html = rows.map(r => {
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
-            const hasImg = !!r.image_url;
+            const hasImg = !!r.graph_file;
             const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
             const date = new Date(`${r.created_at}`);
 
@@ -277,7 +277,7 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.hour}:${obj.minute}`;
             // console.log('formatted_date', formatted_date)
-            const encoded_url = encodeURIComponent(`${r.image_url}`);
+            const encoded_url = encodeURIComponent(`${r.graph_file}`);
             return `
         <tr>
           <td>${imgBtn}</td>
@@ -317,7 +317,7 @@
         }
         const html = rows.map(r => {
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
-            const hasImg = !!r.image_url;
+            const hasImg = !!r.graph_file;
             const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
             const date = new Date(`${r.created_at}`);
 
@@ -327,7 +327,7 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.hour}:${obj.minute}`;
             // console.log('formatted_date', formatted_date)
-            const encoded_url = encodeURIComponent(`${r.image_url}`);
+            const encoded_url = encodeURIComponent(`${r.graph_file}`);
             return `
         <tr>
           <td>${imgBtn}</td>
@@ -363,7 +363,7 @@
         }
         const html = rows.map(r => {
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
-            const hasImg = !!r.image_url;
+            const hasImg = !!r.graph_file;
             const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
             const date = new Date(`${r.first_date}`);
             const date2 = new Date(`${r.last_date}`);
@@ -376,7 +376,7 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.year}.${obj.month}.${obj.day}`;
             const formatted_date2 = `${obj2.year}.${obj2.month}.${obj2.day}`;
-            const encoded_url = encodeURIComponent(`${r.image_url}`);
+            const encoded_url = encodeURIComponent(`${r.graph_file}`);
             return `
         <tr>
           <td>${imgBtn}</td>
@@ -418,7 +418,7 @@
         }
         const html = rows.map(r => {
             const detailId = `detail-tr-${Math.random().toString(36).slice(2)}`;
-            const hasImg = !!r.image_url;
+            const hasImg = !!r.graph_file;
             const imgBtn = `<button class="btn img-toggle" data-target="${detailId}" ${hasImg ? '' : 'disabled'}>열기</button>`;
             const date = new Date(`${r.created_at}`);
 
@@ -428,7 +428,7 @@
             // const formatted_date = `${obj.year}.${obj.month}.${obj.day} ${obj.hour}:${obj.minute}`;
             const formatted_date = `${obj.hour}:${obj.minute}`;
             // console.log('formatted_date', formatted_date)
-            const encoded_url = encodeURIComponent(`${r.image_url}`);
+            const encoded_url = encodeURIComponent(`${r.graph_file}`);
             return `
         <tr>
           <td>${imgBtn}</td>

@@ -608,7 +608,7 @@ def save_interesting_stocks():
     # print('6', current_trading_value)
     trading_value_change_pct = data.get("trading_value_change_pct") or None
     # print('7', trading_value_change_pct)
-    image_url = data.get("image_url") or None
+    graph_file = data.get("graph_file") or None
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
     target = data.get("target") or None
@@ -626,7 +626,7 @@ def save_interesting_stocks():
         avg5d_trading_value=avg5d_trading_value,
         current_trading_value=current_trading_value,
         trading_value_change_pct=trading_value_change_pct,
-        image_url=image_url,
+        graph_file=graph_file,
         logo_image_url=logo_image_url,
         market_value=market_value,
         target=target,

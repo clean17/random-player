@@ -145,8 +145,8 @@ function renderTradingCardHtml(track, rows) {
         const cPrice = toFloat(r.close) ?? 0;
         const pChg = toFloat(r.today_price_change_pct) ?? 0;
 
-        const hasImg = !!r.image_url;
-        const encoded_url = encodeURIComponent(String(r.image_url ?? ""));
+        const hasImg = !!r.graph_file;
+        const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
         const imgHtml = hasImg
             ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
@@ -194,8 +194,8 @@ function renderSummaryCardHtml(track, rows) {
         const formatted_date1 = fmtDate(d1);
         const formatted_date2 = fmtDate(d2);
 
-        const hasImg = !!r.image_url;
-        const encoded_url = encodeURIComponent(String(r.image_url ?? ""));
+        const hasImg = !!r.graph_file;
+        const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
         const imgHtml = hasImg
             ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
@@ -253,8 +253,8 @@ function renderLowCardHtml(track, rows) {
         const cPrice = toFloat(r.close) ?? 0;
 
         // 이미지
-        const hasImg = !!r.image_url;
-        const encoded_url = encodeURIComponent(String(r.image_url ?? ""));
+        const hasImg = !!r.graph_file;
+        const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
         const imgHtml = hasImg
             ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/kospil/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
@@ -373,7 +373,6 @@ function renderTradingCards(rows, section, tableName) {
         const visibleSection = [...document.querySelectorAll('section')]
             .find(sec => getComputedStyle(sec).display === 'block');
 
-        console.log('visibleSection', visibleSection)
         firstCarouselDot = visibleSection?.querySelector('.dots > :first-child');
         lastCarouselDot = visibleSection?.querySelector('.dots > :last-child');
     }
@@ -487,9 +486,11 @@ setTimeout(()=>{
                     rightCarouselBtn.click();
                     break;
                 case 'Home':
+                    event.preventDefault();
                     firstCarouselDot.click();
                     break;
                 case 'End':
+                    event.preventDefault();
                     lastCarouselDot.click();
                     break;
                 default:

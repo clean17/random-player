@@ -156,6 +156,8 @@ def renew_interest_stocks_close():
             except Exception as e:
                 print(f"renew_interest_stocks_close [info 요청 실패3]: {str(ticker)} {str(company_code)} {e}")
                 continue  # 오류
+        else:
+            category = None
 
 
         # 현재 종가 가져오기

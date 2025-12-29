@@ -393,7 +393,7 @@ ON CONFLICT (stock_code, (created_at::date))
     avg5d_trading_value        = EXCLUDED.avg5d_trading_value,
     current_trading_value      = EXCLUDED.current_trading_value,
     trading_value_change_pct   = EXCLUDED.trading_value_change_pct,
-    image_url                  = EXCLUDED.image_url
+    graph_file                  = EXCLUDED.graph_file
     -- , updated_at            = now()
 RETURNING id;
 ```

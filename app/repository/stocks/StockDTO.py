@@ -15,7 +15,7 @@ class StockDTO:
     avg5d_trading_value: str = None
     current_trading_value: str = None
     trading_value_change_pct: str = None
-    image_url: str = None
+    graph_file: str = None
     logo_image_url: str = None
     sector_code: str = None
     stock_market: str = None
