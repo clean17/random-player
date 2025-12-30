@@ -23,7 +23,7 @@ BASE_SAVE_DIR = IMAGE_DIR2
 # ======== 설정 ========
 USER_DATA_DIR = str(Path("./ig_profile-0").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
 USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
-# USER_DATA_DIR = str(Path("./ig_profile-2").resolve())  # fx016
+# USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
 HEADLESS = False
 
 USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
@@ -218,7 +218,13 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
     # last_count = 0
     already_collected_count = 0
     await page.wait_for_selector("main", timeout=20000)
-    await asyncio.sleep(4)
+    # await asyncio.sleep(5)
+
+    # 처음에만 게시물 링크가 뜰 때까지 최대 10초 기다림
+    try:
+        await page.wait_for_selector('a[href*="/p/"], a[href*="/reel/"]', timeout=10_000)
+    except:
+        pass
 
     last_height = await page.evaluate("document.body.scrollHeight")
 
@@ -615,69 +621,6 @@ async def extract_media_from_post(page, url: str):
         "video_cdn": video_cdn,  # 항상 채움(있으면)
     }
 
-# async def extract_media_from_post(page, url: str) -> Dict[str, Any]:
-#     """개별 포스트/릴스 페이지에서 이미지/영상 URL 추출."""
-#     collected_network: Set[str] = set()
-#
-#     def on_response(resp):
-#         # blob: 제외, 이미지/비디오 응답만 수집
-#         ct = (resp.headers or {}).get("content-type", "")
-#         if ("image" in ct or "video" in ct) and not resp.url.startswith("blob:"):
-#             collected_network.add(resp.url)
-#
-#     page.on("response", on_response)
-#
-#     await page.goto(url, wait_until="domcontentloaded")
-#     await asyncio.sleep(2.5)
-#
-#     # DOM 기반 수집
-#     images: List[str] = await extract_imgs_src_only(page, url)   # ← 반드시 await
-#     videos: List[str] = []
-#     imgs = page.locator("article img")                      # ← 캐러셀 루프에서 사용할 locator
-#     vids = page.locator("article video")
-#
-#     # 비디오(src)
-#     n_vid = await vids.count()
-#     for i in range(n_vid):
-#         vsrc = await vids.nth(i).get_attribute("src")
-#         if vsrc and vsrc.startswith("http"):
-#             videos.append(vsrc)
-#
-#     # 캐러셀 '다음' 클릭 시도 (최대 5회)
-#     for _ in range(5):
-#         next_btn = page.locator("button[aria-label*='Next'], button:has-text('Next')")
-#         if not await next_btn.count():
-#             break
-#         try:
-#             await next_btn.click()
-#             await asyncio.sleep(1.5)
-#
-#             # 새로 로드된 이미지/비디오 다시 수집
-#             n_img = await imgs.count()
-#             for i in range(n_img):
-#                 src = await imgs.nth(i).get_attribute("src")
-#                 if src and src.startswith("http"):
-#                     images.append(src)
-#
-#             n_vid = await vids.count()
-#             for i in range(n_vid):
-#                 vsrc = await vids.nth(i).get_attribute("src")
-#                 if vsrc and vsrc.startswith("http"):
-#                     videos.append(vsrc)
-#         except Exception:
-#             break
-#
-#     # 중복 제거
-#     images = list(dict.fromkeys(images))
-#     videos = list(dict.fromkeys(videos))
-#
-#     return {
-#         "post_url": url,
-#         "images": images,
-#         "videos": videos,
-#         "video_cdn": filtered_video_cdn,
-#     }
-
 
 _seq = itertools.count()
 _seq_lock = asyncio.Lock()
@@ -804,12 +747,12 @@ async def handle_account(context, account: str):
     for idx, link in enumerate(links, 1):
         today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         # print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
-        print(f"[{account}] ({idx}/{len(links)}) {link}")
 
         parsed = urlparse(link)
         # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
         qs_link = normalize_ig_post_url(parsed.path)
         parsed = urlparse(qs_link)
+        print(f"[{account}] ({idx}/{len(links)}) {parsed.path}")
 
         cnt += 1
         # None, False, 0, '', [], {}, 모두 여기로 들어옴
