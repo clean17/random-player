@@ -3,12 +3,24 @@ import asyncio
 from typing import Optional, List
 from playwright.async_api import async_playwright, Page, BrowserContext
 
+import configparser
+from pathlib import Path
+
+config = configparser.ConfigParser()
+
+cfg_path = Path(__file__).resolve().parent.parent / "config" / "config.ini"
+read_files = config.read(cfg_path, encoding="utf-8")
+# print("sections  =", config.sections())    # 올라온 섹션 이름들
+
+SCRAP_USERNAME = config['settings']['scrap_username']
+SCRAP_PASSWORD = config['settings']['scrap_password']
 
 ACCOUNTS = [
 
 ]
 
-USER_DATA_DIR = str(Path("./ig_profile-1").resolve())
+USER_DATA_DIR = str(Path("./ig_profile-16").resolve())
+WAIT_SECOND = 13
 
 
 async def ensure_login(page):
@@ -18,8 +30,8 @@ async def ensure_login(page):
     login_user = page.locator("input[name='username']")
     login_pass = page.locator("input[name='password']")
     if await login_user.count() and await login_pass.count():
-        await login_user.fill('fkaus015')
-        await login_pass.fill('gPdnjs0705.hyem')
+        await login_user.fill(SCRAP_USERNAME)
+        await login_pass.fill(SCRAP_PASSWORD)
         await login_pass.press("Enter")
         await page.wait_for_load_state("networkidle")
         await asyncio.sleep(10)
@@ -28,7 +40,7 @@ async def ensure_login(page):
             btn = page.locator(f"button:has-text('{txt}')")
             if await btn.count():
                 await btn.click()
-                await asyncio.sleep(3)
+                await asyncio.sleep(1)
 
 async def get_focus_page(context: BrowserContext, focus_page: Optional[Page]) -> Page:
     # 1) 전달된 focus_page가 살아있으면 그대로 사용
@@ -69,7 +81,7 @@ async def open_tabs_keep_focus(context: BrowserContext, urls: List[str], focus_p
             pass
 
         pages.append(page)
-        await asyncio.sleep(1)
+        await asyncio.sleep(WAIT_SECOND)
 
     return pages
 
@@ -79,7 +91,7 @@ async def open_tabs(context, urls):
         url = 'https://www.instagram.com//'+ url
         page = await context.new_page()   # 새 탭
         await page.goto(url, wait_until="domcontentloaded")
-        await asyncio.sleep(1)
+        await asyncio.sleep(WAIT_SECOND)
         pages.append(page)
     return pages
 
