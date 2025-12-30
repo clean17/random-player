@@ -10,6 +10,8 @@ import asyncio
 import requests
 import datetime
 
+sys.stdout.reconfigure(line_buffering=True)
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config.config import settings
 
