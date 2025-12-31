@@ -1,5 +1,6 @@
 import subprocess
-
+import signal
+import time
 
 def renew_kiwoom_token_job():
     print('    ############################### renew_kiwoom_token ###############################')
@@ -35,16 +36,36 @@ def renew_kiwoom_token_job():
         cwd=r"C:\my-project\random-player",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
-        text=True,
+        text=True,                            # stdout에서 읽히는 값이 bytes가 아니라 **str(문자열)**로
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
-        errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        errors="replace",                     # ignore 대신 replace 추천(문제 보이게), 깨진 문자를 �로 바꿔서 출력은 계속되고 “문제도 보임”
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
     if process.returncode != 0:
         print("returncode =", process.returncode)
 
@@ -64,14 +85,35 @@ def run_crawl_ai_image():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
 
 def run_crawl_ig_image():
     print('    ############################### run_crawl_ig_image ###############################')
@@ -88,14 +130,35 @@ def run_crawl_ig_image():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
 
 
 '''
@@ -120,14 +183,35 @@ def predict_stock_graph(stock):
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
 
 
 def update_interest_stocks():
@@ -143,13 +227,33 @@ def update_interest_stocks():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
     if process.returncode != 0:
         print("returncode =", process.returncode)
 
@@ -167,14 +271,35 @@ def find_stocks():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("find_stocks_returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
 
 
 def find_low_stocks():
@@ -190,14 +315,35 @@ def find_low_stocks():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
 
 
 def update_stocks_daily():
@@ -213,14 +359,35 @@ def update_stocks_daily():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
 
 
 def update_stock_data_daily():
@@ -236,14 +403,35 @@ def update_stock_data_daily():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
 
 
 def update_summary_stock_graph_daily():
@@ -259,11 +447,32 @@ def update_summary_stock_graph_daily():
         text=True,
         encoding="utf-8",                     # 부모도 UTF-8로 읽기
         errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
-        bufsize=1
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
     )
 
-    for line in process.stdout:
-        print(line, end="")   # 실시간 콘솔 출력
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
 
-    process.wait()
-    print("returncode =", process.returncode)
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
