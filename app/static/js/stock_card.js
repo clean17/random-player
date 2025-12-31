@@ -9,7 +9,7 @@ const TRADING_TABLE_HTML = `
       <th class="right">거래대금(5일 평균)</th>
       <th class="right">거래대금(실시간)</th>
       <th class="right">거래대금 증감</th>
-      <th class="right">어제종가</th>
+      <th class="right">전일종가</th>
       <th class="right">현재가</th>
       <th class="right">금일 등락</th>
     </tr>
@@ -75,6 +75,12 @@ const toFloat = (v) => {
     return Number.isFinite(num) ? num : null;   // 유한한 숫자인지 확인.. NaN, Infinity, -Infinity는 걸러져서 null 반환
 };
 
+function hhmmFromRfc1123Gmt(s) {
+    // "Mon, 29 Dec 2025 17:35:18 GMT"
+    const m = s.match(/\b(\d{2}):(\d{2}):\d{2}\b/);
+    return m ? `${m[1]}:${m[2]}` : "";
+}
+
 // 한국어(ko-KR) 로컬 기준의 시간 포맷터
 const timeFmt = new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",     // 시(hour)를 두 자리로 표시 (예: 09, 13)
@@ -133,9 +139,10 @@ function fastScrollTo(el, left, duration = 60) {
 // ---------- 메인 ----------
 function renderTradingCardHtml(track, rows) {
     track.innerHTML = rows.map((r, idx) => {
-        const ts = Date.parse(r.created_at);
+        /*const ts = Date.parse(r.created_at);
         const date = Number.isFinite(ts) ? new Date(ts) : new Date();
-        const formatted_time = timeFmt.format(date);
+        const formatted_time = timeFmt.format(date);*/
+        const formatted_time = hhmmFromRfc1123Gmt(r.created_at);
 
         const avg5d = toFloat(r.avg5d_trading_value) ?? 0;
         const curTv = toFloat(r.current_trading_value) ?? 0;
@@ -158,16 +165,16 @@ function renderTradingCardHtml(track, rows) {
           <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
-            <div class="trade-sub">(${r.stock_code ?? ""}) · ${formatted_time} · ${r.category ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value_fmt ?? ""}</div>
           </div>
         </div>
 
         <div class="trade-grid">
           <div class="kv"><span class="k">5일평균 거래대금</span><span class="v">${fmt_won(avg5d)}</span></div>
           <div class="kv"><span class="k">현재거래대금</span><span class="v">${fmt_won(curTv)}</span></div>
-          <div class="kv"><span class="k">어제종가</span><span class="v">${Math.round(yClose).toLocaleString("ko-KR")}원</span></div>
+          <div class="kv"><span class="k">전일종가</span><span class="v">${Math.round(yClose).toLocaleString("ko-KR")}원</span></div>
           <div class="kv"><span class="k">현재가</span><span class="v">${Math.round(cPrice).toLocaleString("ko-KR")}원</span></div>
-          <div class="kv"><span class="k">거래대금 변화율</span><span class="v">${fmt2(tvChg)}%</span></div>
+          <div class="kv"><span class="k">거래대금 변동율</span><span class="v">${fmt2(tvChg)}%</span></div>
           <div class="kv"><span class="k">등락률</span><span class="v">${fmt2(pChg)}%</span></div>
         </div>
 
@@ -206,17 +213,16 @@ function renderSummaryCardHtml(track, rows) {
           <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
-            <div class="trade-sub">(${r.stock_code ?? ""}) · <!--${formatted_date1} ~ ${formatted_date2} · 카운트: ${r.count ?? ""} ·--> ${r.category ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
           </div>
         </div>
 
         <div class="trade-grid">
           <div class="kv"><span class="k">출현횟수</span><span class="v">${r.count ?? ""}</span></div>
           <div class="kv"><span class="k">구간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
-          <div class="kv"><span class="k">시총</span><span class="v">${r.market_value ?? ""}</span></div>
+          <!--<div class="kv"><span class="k">시총</span><span class="v">${r.market_value ?? ""}</span></div>-->
           <div class="kv"><span class="k">평균거래대금</span><span class="v">${r.avg_trading_value ?? ""}</span></div>
-          <div class="kv"><span class="k">최저가</span><span class="v">${fmt2(r.min)}</span></div>
-          <div class="kv"><span class="k">현재가</span><span class="v">${fmt2(r.last)}</span></div>
+          <div class="kv"><span class="k">종가</span><span class="v">${fmt2(r.min)} ➡️ ${fmt2(r.last)}</span></div>
           <div class="kv"><span class="k">총상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일상승(총/출현횟수)</span><span class="v">${r.increase_per_day ?? ""}</span></div>
         </div>
@@ -241,9 +247,10 @@ function renderLowCardHtml(track, rows) {
 
     track.innerHTML = rows.map((r, idx) => {
         // 시간
-        const ts = Date.parse(r.created_at);
+        /*const ts = Date.parse(r.created_at);
         const date = Number.isFinite(ts) ? new Date(ts) : new Date();
-        const formatted_time = timeFmt.format(date); // "HH:mm"
+        const formatted_time = timeFmt.format(date); // "HH:mm"*/
+        const formatted_time = hhmmFromRfc1123Gmt(r.created_at);
 
         // 숫자 문자열 안전 변환(있으면 사용)
         const curTv  = toFloat(r.current_trading_value) ?? 0;
@@ -265,17 +272,17 @@ function renderLowCardHtml(track, rows) {
           <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
-            <div class="trade-sub">(${r.stock_code ?? ""}) · ${formatted_time} · ${r.category ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
           </div>
         </div>
 
         <div class="trade-grid">
-          <div class="kv"><span class="k">시가총액</span><span class="v">${r.market_value ?? ""}</span></div>
-          <div class="kv"><span class="k">금일 거래대금</span><span class="v">${fmt_won(curTv)}</span></div>
-          <div class="kv"><span class="k">어제종가</span><span class="v">${Math.round(yClose).toLocaleString("ko-KR")}원</span></div>
+<!--          <div class="kv"><span class="k">시가총액</span><span class="v">${r.market_value ?? ""}</span></div>-->          
+          <div class="kv"><span class="k">전일종가</span><span class="v">${Math.round(yClose).toLocaleString("ko-KR")}원</span></div>
           <div class="kv"><span class="k">현재가</span><span class="v">${Math.round(cPrice).toLocaleString("ko-KR")}원</span></div>
+          <div class="kv"><span class="k">금일 거래대금</span><span class="v">${fmt_won(curTv)}</span></div>
           <div class="kv"><span class="k">등락률</span><span class="v">${fmt2(pChg)}%</span></div>
-          <div class="kv"><span class="k">비고</span><span class="v"></span></div>
+          <!--<div class="kv"><span class="k">비고</span><span class="v"></span></div>-->
         </div>
 
         <div class="trade-detail" style="margin-top:10px;">
@@ -462,18 +469,59 @@ function renderTradingView(tradingRows) {
     }
 }
 
+function renderTradingView2(tradingRows) {
+    globalTradingRows = tradingRows;
+
+    // 요소 중 'display: none' 아닌 요소 찾기
+    const el = [...document.querySelectorAll('.view-toggle')]
+        .find(x => x.offsetParent !== null);
+    // console.log(el); // 보이는 요소(없으면 undefined)
+    const section = el.closest('section');
+    const tableName = 'table-'+section.id.split('-')[1];
+
+    if (el.dataset.view === "table") {
+        removeTradingCards(section);
+        ensureTradingTableExists(section, tableName);
+        if (tableName === 'table-trading') renderTradingTable(tradingRows, tableName);
+        if (tableName === 'table-summary') renderSummaryTable(tradingRows, tableName);
+        if (tableName === 'table-low') renderLowTable(tradingRows, tableName);
+    } else {
+        removeTradingTable(tableName);
+        renderTradingCards(tradingRows, section, tableName);
+    }
+}
+
+
+
+function setView(toggle, view, focus = false) {
+    toggle.dataset.view = view;
+
+    const btns = Array.from(toggle.querySelectorAll(".view-btn"));
+    btns.forEach(b => {
+        const active = b.dataset.view === view;
+        b.classList.toggle("is-active", active);
+        b.setAttribute("aria-selected", String(active));
+        b.tabIndex = active ? 0 : -1;
+        if (active && focus) b.focus();
+    });
+
+    renderTradingView2(globalTradingRows);
+}
 
 // 드롭다운 변경 시 즉시 반영
 setTimeout(()=>{
-        /*document.getElementById('view-trading').addEventListener("change", (e) => {
-            e.target.blur();
-            renderTradingView(globalTradingRows || []);
-        });*/
+        // document.querySelectorAll('.view-select').forEach((el)=>{
+        //     el.addEventListener("change", (e) => {
+        //         e.target.blur();
+        //         renderTradingView(globalTradingRows);
+        //     });
+        // });
 
-        document.querySelectorAll('.view-select').forEach((el)=>{
-            el.addEventListener("change", (e) => {
-                e.target.blur();
-                renderTradingView(globalTradingRows || []);
+        document.querySelectorAll('.view-toggle').forEach((el)=>{
+            el.addEventListener("click", (e) => {
+                const btn = e.target.closest(".view-btn");
+                if (!btn) return;
+                setView(el, btn.dataset.view, true);
             });
         });
 

@@ -130,7 +130,7 @@ img.preview {
 .btn.img-toggle[disabled] { opacity:.5; cursor:not-allowed; }
 
 /* 제목/배지(선택) */
-.section-title { margin: 6px 0 10px; color:#111827; font-weight: 600; }
+.section-title { margin: 6px 0 10px; color:#111827; font-weight: 600; font-size: 22px}
 .badge {
     display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px;
     background:#eef2ff; color:#3730a3; font-size:12px;

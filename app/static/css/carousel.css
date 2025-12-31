@@ -146,12 +146,56 @@
 }
 .table-scroller .dot.active { background: rgba(0,0,0,0.55); }
 
-/* ====== View select (섹션 타이틀 안) ====== */
-.section-title .view-select {
-    margin-left: 10px;
-    padding: 6px 10px;
+
+
+
+
+/* ====== 토글 버튼 (전역 button css 무시) ====== */
+.view-toggle{
+    position: absolute;
+    right: 10px;
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid #d7d7d7;
     border-radius: 10px;
-    border: 1px solid rgba(0,0,0,0.15);
+    background: #f3f3f3;
+    user-select: none;
+}
+.view-btn{
+    all: unset;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    z-index: 1;
+    width: 34px;
+    height: 28px;
+    border: 0;
+    background: transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    color: #555;
+}
+.view-btn:hover{
+    background: transparent;
+}
+.view-btn .icon{
+    width: 18px;
+    height: 18px;
+}
+.view-indicator{
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 34px;
+    height: 28px;
+    border-radius: 10px;
     background: #fff;
-    font-size: 13px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+    transition: transform 180ms ease;
+}
+
+/* table 선택 시 오른쪽으로 이동 */
+.view-toggle[data-view="table"] .view-indicator{
+    transform: translateX(34px);
 }

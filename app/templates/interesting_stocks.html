@@ -37,10 +37,35 @@
         <h3 class="section-title">실시간 등락
             <span class="badge" id="count-trading">0건</span>
 
-            <select id="view-trading" class="view-select">
+            <!--<select id="view-trading" class="view-select">
                 <option value="cards" selected>카드</option>
                 <option value="table" >테이블</option>
-            </select>
+            </select>-->
+
+            <div class="view-toggle" role="tablist" aria-label="보기 전환">
+                <button type="button" class="view-btn is-active" data-view="cards"
+                        role="tab" aria-selected="true" tabindex="0" title="카드 보기">
+                    <!-- 카드 아이콘 -->
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="5" width="7" height="7" rx="1"></rect>
+                        <rect x="13" y="5" width="7" height="7" rx="1"></rect>
+                        <rect x="4" y="14" width="7" height="7" rx="1"></rect>
+                        <rect x="13" y="14" width="7" height="7" rx="1"></rect>
+                    </svg>
+                </button>
+
+                <button type="button" class="view-btn" data-view="table"
+                        role="tab" aria-selected="false" tabindex="-1" title="테이블 보기">
+                    <!-- 테이블 아이콘 -->
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
+                        <path d="M4 10h16M4 14h16M10 6v12M14 6v12" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    </svg>
+                </button>
+
+                <!-- 이동하는 하이라이트 바 -->
+                <span class="view-indicator" aria-hidden="true"></span>
+            </div>
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-trading">
@@ -94,10 +119,35 @@
         <h3 class="section-title">상승주 검색
             <span class="badge" id="count-summary">0건</span>
 
-            <select id="view-summary" class="view-select">
+            <!--<select id="view-summary" class="view-select">
                 <option value="cards" selected>카드</option>
                 <option value="table" >테이블</option>
-            </select>
+            </select>-->
+
+            <div class="view-toggle" role="tablist" aria-label="보기 전환">
+                <button type="button" class="view-btn is-active" data-view="cards"
+                        role="tab" aria-selected="true" tabindex="0" title="카드 보기">
+                    <!-- 카드 아이콘 -->
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="5" width="7" height="7" rx="1"></rect>
+                        <rect x="13" y="5" width="7" height="7" rx="1"></rect>
+                        <rect x="4" y="14" width="7" height="7" rx="1"></rect>
+                        <rect x="13" y="14" width="7" height="7" rx="1"></rect>
+                    </svg>
+                </button>
+
+                <button type="button" class="view-btn" data-view="table"
+                        role="tab" aria-selected="false" tabindex="-1" title="테이블 보기">
+                    <!-- 테이블 아이콘 -->
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
+                        <path d="M4 10h16M4 14h16M10 6v12M14 6v12" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    </svg>
+                </button>
+
+                <!-- 이동하는 하이라이트 바 -->
+                <span class="view-indicator" aria-hidden="true"></span>
+            </div>
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-summary">
@@ -132,10 +182,35 @@
         <h3 class="section-title">저점 검색
             <span class="badge" id="count-low">0건</span>
 
-            <select id="view-low" class="view-select">
+            <!--<select id="view-low" class="view-select">
                 <option value="cards" selected>카드</option>
                 <option value="table" >테이블</option>
-            </select>
+            </select>-->
+
+            <div class="view-toggle" role="tablist" aria-label="보기 전환">
+                <button type="button" class="view-btn is-active" data-view="cards"
+                        role="tab" aria-selected="true" tabindex="0" title="카드 보기">
+                    <!-- 카드 아이콘 -->
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="5" width="7" height="7" rx="1"></rect>
+                        <rect x="13" y="5" width="7" height="7" rx="1"></rect>
+                        <rect x="4" y="14" width="7" height="7" rx="1"></rect>
+                        <rect x="13" y="14" width="7" height="7" rx="1"></rect>
+                    </svg>
+                </button>
+
+                <button type="button" class="view-btn" data-view="table"
+                        role="tab" aria-selected="false" tabindex="-1" title="테이블 보기">
+                    <!-- 테이블 아이콘 -->
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
+                        <path d="M4 10h16M4 14h16M10 6v12M14 6v12" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    </svg>
+                </button>
+
+                <!-- 이동하는 하이라이트 바 -->
+                <span class="view-indicator" aria-hidden="true"></span>
+            </div>
         </h3>
         <div class="table-scroller">
             <table class="table" id="table-low">
@@ -510,7 +585,7 @@
                 // console.log('tradingRows', tradingRows);
                 // renderTradingTable(tradingRows);
                 // renderTradingCards(tradingRows);
-                renderTradingView(tradingRows);
+                renderTradingView2(tradingRows);
 
                 // renderTodayTable(todayRows); // 금일변동
             }
@@ -526,7 +601,7 @@
                 document.getElementById('overlay').style.display = 'none';
                 // console.log('summary:', data2);
                 // renderSummaryTable(data2);
-                renderTradingView(data2);
+                renderTradingView2(data2);
             }
 
             if (target === 'tab-low') {
@@ -539,7 +614,7 @@
                 const data3 = await res3.json();
                 document.getElementById('overlay').style.display = 'none';
                 // renderLowTable(data3);
-                renderTradingView(data3);
+                renderTradingView2(data3);
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
         } catch (e) {
