@@ -87,7 +87,7 @@ def get_interest_stock_list(conn=None):
     return rows
 
 
-# 관심 종목 insert
+# 관심 종목 insert, EXCLUDED: 새로 들어온 값
 @db_transaction
 def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
     with conn.cursor() as cur:
@@ -117,7 +117,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             avg5d_trading_value      = COALESCE(EXCLUDED.avg5d_trading_value,      interest_stocks.avg5d_trading_value),
             current_trading_value    = COALESCE(EXCLUDED.current_trading_value,    interest_stocks.current_trading_value),
             trading_value_change_pct = COALESCE(EXCLUDED.trading_value_change_pct, interest_stocks.trading_value_change_pct),
-            graph_file                = COALESCE(EXCLUDED.graph_file,                interest_stocks.graph_file),
+            graph_file               = COALESCE(EXCLUDED.graph_file,               interest_stocks.graph_file),
             market_value             = COALESCE(EXCLUDED.market_value,             interest_stocks.market_value),
             target                   = COALESCE(EXCLUDED.target,                   interest_stocks.target)
         RETURNING id;
@@ -135,6 +135,28 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
         row = cur.fetchone()
         return row[0] if row else None
 
+
+# 상승주 그래프만 갱신
+@db_transaction
+def update_interest_stock_graph(stock: "StockDTO", conn=None) -> None:
+    sql = """
+        UPDATE stocks 
+        SET 
+            graph_file  = COALESCE(%s, graph_file),
+            updated_at = now() 
+        WHERE stock_code = %s 
+        RETURNING id;
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(
+            sql,
+            (
+                stock.graph_file, stock.stock_code
+            )
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
 
 # 오늘의 실시간 등락
 @db_transaction
@@ -154,6 +176,10 @@ def get_interest_stocks(date: str, conn=None):
          , i.graph_file
          , i.updated_at
          , i.market_value
+         , case when market_value::numeric >= 1_000_000_000_000
+      		 then ROUND(market_value::numeric/1_000_000_000_000, 1)||'조'
+             else ROUND(market_value::numeric/100_000_000)||'억'
+             end as market_value_fmt
          , s.category
          , s.close
          , s.logo_image_url
@@ -162,6 +188,7 @@ def get_interest_stocks(date: str, conn=None):
     and i.stock_code = s.stock_code
     AND i.today_price_change_pct::float >= 4
     AND i.current_trading_value::numeric > 5_000_000_000
+    AND i.target is null
     ORDER BY i.today_price_change_pct::numeric DESC, i.current_trading_value::numeric DESC;   
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
@@ -211,20 +238,21 @@ def get_interest_stocks_info(date: str, conn=None):
         where 1=1
         and i.stock_code = s.stock_code
         and i.market_value::numeric > 50_000_000_000
-        and i.current_trading_value::numeric > 7_000_000_000
-        and i.current_trading_value::numeric < 500_000_000_000
+        and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
+        --and i.current_trading_value::numeric < 500_000_000_000 -- 의미가 없는것 같다 
         --and i.created_at >= NOW() - INTERVAL '1 month'
         --and i.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
         and i.created_at >= %s::date
         and today_price_change_pct is not null
+        AND i.target is null
         group by i.stock_code, i.stock_name, s.close, s.logo_image_url, s.category
-        having count(i.stock_code) > 1
+        having count(i.stock_code) >= 1
         --and count(stock_code) < 6
         and max(i.created_at) >= (CURRENT_DATE - INTERVAL '7 days') -- x일 전부터 등록된 것
         order by count(i.stock_code) desc, max(i.created_at) desc
     ) as b
-    where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5.7
-    and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 10
+    where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
+    and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8
     and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
     --and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 10 -- 의미가 있나 ?
     ;
