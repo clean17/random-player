@@ -58,7 +58,8 @@ def cleanup(scheduler=None, node_process=None):
     try:
         print("🧹 서버 종료 중: 스케줄러 정리")
         if scheduler and getattr(scheduler, "running", False):
-            scheduler.shutdown(wait=True)  # ✅ 가장 깔끔
+            # scheduler.shutdown(wait=True)  # wait=True면 실행 중인 job이 끝나길 기다리다가 계속 대기한다
+            scheduler.shutdown(wait=False)  # wait=False면 종료를 기다리지 말고 확실히 끈다
     except Exception as e:
         print("scheduler shutdown error:", e)
 
