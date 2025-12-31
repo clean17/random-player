@@ -8,11 +8,16 @@ from typing import List
 def insert_scrap_post(post: "ScrapPostDTO", conn=None) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO scrap_posts (created_at, account, post_urls, type) VALUES (now(), %s, %s, %s) RETURNING id;",
-            (post.account, post.post_urls, post.type)
+            """
+            INSERT INTO scrap_posts (created_at, account, post_urls, type)
+            VALUES (now(), %s, %s, %s)
+            ON CONFLICT (post_urls) DO NOTHING
+            RETURNING id;
+            """,
+            (post.account, post.post_urls, post.type),
         )
-        chat_id = cur.fetchone()[0]
-        return chat_id
+        row = cur.fetchone()
+        return row[0] if row else None   # 중복이면 None
 
 @db_transaction
 def find_scrap_post(post_urls: str, conn=None) -> List["ScrapPostDTO"]:
