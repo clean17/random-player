@@ -37,7 +37,15 @@ SCROLL_PAUSE = 1.8
 MAX_SCROLLS = 30001
 DELAY_SECOND = 2.0
 DELAY_MINUTE = 60 * 5
-ALREADY_COLLECTED_COUNT = 50
+ALREADY_COLLECTED_COUNT = 40
+
+# ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
+CDN_HOST_RE   = re.compile(r"^https://scontent-[a-z0-9\-]+\.cdninstagram\.com/") # scontent-ssn1-1 등
+CDN_PATH_ALLOW= re.compile(r"/o1/")   # # /o1/ 경로 포함 (t2, t16 등 세부 버전은 다양), 필요 시 |/o0/ 등 추가
+MIN_GOOD_VIDEO_BYTES = 500_000        # 0.5MB 이상만 후보
+
+# 동시 다운로드 제한
+MAX_CONCURRENCY = 4
 
 ACCOUNTS = [
 
@@ -53,14 +61,7 @@ TEST_LINKS = [
 
 
 
-# ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
-CDN_HOST_RE   = re.compile(r"^https://scontent-[a-z0-9\-]+\.cdninstagram\.com/") # scontent-ssn1-1 등
-CDN_PATH_ALLOW= re.compile(r"/o1/")   # # /o1/ 경로 포함 (t2, t16 등 세부 버전은 다양), 필요 시 |/o0/ 등 추가
-MIN_GOOD_VIDEO_BYTES = 500_000        # 0.5MB 이상만 후보
 
-
-# 동시 다운로드 제한
-MAX_CONCURRENCY = 4
 
 # ======== 유틸 ========
 def sanitize_filename(name: str) -> str:
