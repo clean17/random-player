@@ -2,11 +2,10 @@ import os
 import subprocess
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, send_from_directory
 from flask_login import login_required
-from flask_cors import CORS, cross_origin
+from flask_cors import cross_origin
 from config.config import settings
-from utils.ffmpeg_handle_task_manager import tasks, Task, current_date, terminate_task
+from utils.ffmpeg.ffmpeg_handle_task_manager import tasks, Task, current_date, terminate_task
 import shutil
-from urllib.parse import quote
 
 m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
 

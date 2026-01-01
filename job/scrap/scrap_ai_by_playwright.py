@@ -1,20 +1,20 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
-from playwright.async_api import async_playwright
+from playwright.sync_api import Playwright, sync_playwright
 from urllib.parse import urljoin
 from PIL import Image
 from io import BytesIO
 import uuid, os, requests
 import json
-import asyncio
 
 # 게시글 목록 페이지 URL 템플릿
 url_template = settings['CRAWL_URL']
 url_host = settings['CRAWL_HOST']
 IMAGE_DIR = settings['IMAGE_DIR']
-# IMAGE_DIR = 'D:\\temp_img_dir'
+is_first = True
+save_url = None
 
 # 이미지 저장 경로 설정
 os.makedirs(IMAGE_DIR, exist_ok=True)
@@ -62,9 +62,9 @@ def save_video_with_uuid(video_name: str, video_url: str, save_dir: str):
             if chunk:
                 f.write(chunk)
 
-async def async_auto_scroll_page(page):
-    await page.evaluate("""
-        async () => {
+def auto_scroll_page(page):
+    page.evaluate("""
+        () => {
             return new Promise((resolve) => {
                 let totalHeight = 0;
                 const distance = 200; // px 단위로 조금씩 내리기
@@ -82,29 +82,24 @@ async def async_auto_scroll_page(page):
     """)
 
 
-async def async_crawl_images_from_page(page_num):
+def crawl_images_from_page(page_num):
+    global is_first   # 전역 변수를 함수 내부에서 변경(할당)할 때는 꼭 global 사용!
+    global save_url
 
-    async with async_playwright() as p:
-        # browser = await p.chromium.launch(headless=False)
-        browser = await p.chromium.launch(
-            headless=False,
-            args=["--window-size=10,10"],
-        )
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False) # 개발
         # browser = p.chromium.launch(headless=True) # 운영
-        # page = await browser.new_page()
-
-        context = await browser.new_context(viewport={"width": 10, "height": 10})
-        page = await context.new_page()
+        page = browser.new_page()
 
         page_url = url_template.format(page_num)
         # print('url', page_url)
-        await page.goto(page_url, timeout=15000)
-        await page.wait_for_timeout(4000)
-        await page.reload()
-        await page.wait_for_timeout(4000)
+        page.goto(page_url, timeout=15000)
+        page.wait_for_timeout(4000)
+        page.reload()
+        page.wait_for_timeout(4000)  # 10초 대기 (ms 단위)
 
         # 게시글 링크 추출
-        links = await page.eval_on_selector_all(
+        links = page.eval_on_selector_all(
             "a.vrow.column:not(.notice)",
             "els => els.map(e => e.getAttribute('href'))"
         )
@@ -112,40 +107,69 @@ async def async_crawl_images_from_page(page_num):
         post_links = [url_host + link for link in links if link and link.startswith("/")]
         # print(f"Page {page_num} post links:", post_links)
 
+        # 현재 스크립트 파일의 경로
+        SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(SCRIPT_DIR, '../..', 'data', 'data.json')  # 상위폴더 data/data.json
+
+        # 정규화 (불필요한 .. 처리)
+        file_path = os.path.normpath(file_path)
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
         for i, post_url in enumerate(post_links, start=1):
             try:
                 print(f"[{i}/{len(post_links)}] ************************** post_url: {post_url}")
                 current_url = post_url.split('?')[0]
-                account = current_url.split('/')[-2]
 
-                # 수집한 적이 있는지 확인
-                url = "https://chickchick.shop/func/scrap-posts?urls="+current_url
-                res = requests.get(url)
-                data = res.json()
-                # print(data)
-                if data["result"]: # 등록되어 있음
+                data['current_ai_scheduler_uri'] = current_url
+
+                # 현재 url 저장
+                with open(file_path, "w", encoding="utf-8") as f: # 쓰기
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+
+                # 글로벌 변수
+                if is_first and page_num == 1:
+                    save_url = current_url
+                    is_first = False
+
+                # 어제 작업을 시작한 url에 도달하면 첫번째 url을 마지막 작업 url에 수정
+                if data.get('last_ai_scheduler_uri') == current_url:
+                    print(f"동일함! for문 중단  {data.get('last_ai_scheduler_uri')}")
+                    data['last_ai_scheduler_uri'] = save_url
+                    with open(file_path, "w", encoding="utf-8") as f: # 쓰기
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+
                     sys.exit(0)  # 여기서 프로그램 전체가 종료됨
 
-
-                await page.goto(post_url, timeout=15000)
+                page.goto(post_url, timeout=15000)
 
                 # ✅ 천천히 자동 스크롤
-                await async_auto_scroll_page(page)
+                auto_scroll_page(page)
+
+                # # ✅ <p><a><img></a></p> 구조에서 a 태그의 href 추출
+                # hrefs = page.eval_on_selector_all(
+                #     "div.article-body div.fr-view.article-content p a > img",
+                #     "els => els.map(img => img.parentElement.getAttribute('href'))"
+                # )
+                #
+                # # ac.namu.la 또는 ac-p1.namu.la 로 시작하는 원본 링크만 추출
+                # img_urls = [href for href in hrefs if href and ("ac.namu.la" in href or "ac-p1.namu.la" in href)]
 
                 # ✅ <p><a><img></a></p> 구조에서 img 태그의 src 추출
-                srcs = await page.eval_on_selector_all(
+                srcs = page.eval_on_selector_all(
                     "div.article-body div.fr-view.article-content p a > img",
                     "els => els.map(img => img.getAttribute('src'))"
                 )
 
+                # ac.namu.la 또는 ac-p1.namu.la 로 시작하는 이미지 링크만 추출
                 img_urls = [
                     ('https:' + src if src and src.startswith('//') else src)
                     for src in srcs
                     if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
                 ]
 
-                video_srcs = await page.eval_on_selector_all(
+                video_srcs = page.eval_on_selector_all(
                     "div.article-body div.fr-view.article-content p span > video",
                     "els => els.map(video => video.getAttribute('src'))"
                 )
@@ -178,48 +202,17 @@ async def async_crawl_images_from_page(page_num):
                     count = count + 1
                 print(f'download success : {count}')
 
-                # 수집 후 url을 등록한다
-                try:
-                    requests.post(
-                        'https://chickchick.shop/func/scrap-posts',
-                        json={
-                            "account": str(account),
-                            "post_urls": current_url,
-                            "type": 'ai',
-                        },
-                        timeout=(3, 20)  # (connect_timeout=3초, read_timeout=20초)
-                    )
-                except Exception as e:
-                    # logging.warning(f"progress-update 요청 실패: {e}")
-                    print(f"progress-update 요청 실패-ai: {e}")
-                    pass  # 오류
-
             except Exception as e:
                 print(f"Error in {post_url}: {e}")
 
-        # await browser.close()
+        # browser.close()
 
 
-async def async_crawl_ai():
-    for page_num in range(1, 21):
+def crawl_ai():
+    for page_num in range(1, 11):
         print(f"##### Start: page {page_num} #####")
-        await async_crawl_images_from_page(page_num)
+        crawl_images_from_page(page_num)
         print(f"##### Done: page {page_num} #####")
 
-def run_scrap_ai_job():
-    # 이벤트 루프는 “스레드당 1개”가 원칙
-    asyncio.run(async_crawl_ai())
-
-# 그냥 호출(async_crawl_ai())하면 코루틴 객체만 리턴, 코드가 실행되지 않음
-asyncio.run(async_crawl_ai())
-
-'''
-비동기 함수(코루틴, asyncio) 안에서 아래 코드 사용하면 ?
-
-with sync_playwright() as p:
-    → Sync API(동기 API)를 호출하면
-    → Playwright 내부적으로 이미 asyncio 이벤트 루프가 돌고 있는데, 또다시 블로킹 코드(Sync API)를 쓰면 안 됨
-    (Python의 asyncio 시스템은 비동기/동기 코드가 충돌하지 않도록 엄격하게 막고 있음)
-    
-따라서 비동기 함수 안에서는 Playwright의 Async API를 써야 함 >> sync_playwright > async_playwright
-'''
+crawl_ai()
+# run_crawl_ai_image >> batch_process.py 에서 실행한다

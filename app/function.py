@@ -21,12 +21,12 @@ from app.repository.stocks.stocks import merge_daily_interest_stocks, get_intere
 from app.repository.users.users import find_user_by_username
 from job.batch_process import run_crawl_ai_image
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
-from utils.compress_file import compress_directory, compress_directory_to_zip
+from job.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
 from flask_socketio import SocketIO
 from datetime import datetime
-from utils.lotto_schedule import async_buy_lotto
+from job.lotto_schedule import async_buy_lotto
 from config.config import settings
 import asyncio
 

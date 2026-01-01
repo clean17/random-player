@@ -266,7 +266,7 @@ def _decode_data_text(data_uri: str) -> str:
 
 def main():
     url = TARGET_URL  # 저장하려는 대상 URL
-    out_dir = Path(".")
+    out_dir = Path("../html")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     opts = Options()
