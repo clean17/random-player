@@ -1,20 +1,10 @@
-import time
 import os
-import glob
-import ffmpeg
-import psutil
-import subprocess
 import datetime
-from moviepy.editor import VideoFileClip
-from send2trash import send2trash
 from config.config import settings
-import multiprocessing
 import asyncio
 # import sched ++ 서버/운영용보다는 테스트·학습용
-import schedule
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
@@ -23,9 +13,9 @@ from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks,
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily
 # utils패키지의 모듈을 임포트
-from utils.lotto_schedule import async_buy_lotto
-from utils.compress_file import compress_directory_to_zip
-from utils.renew_stock_close import renew_interest_stocks_close
+from job.lotto_schedule import async_buy_lotto
+from job.compress_file import compress_directory_to_zip
+from job.renew_stock_close import renew_interest_stocks_close
 
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)

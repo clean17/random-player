@@ -28,7 +28,7 @@ def renew_kiwoom_token_job():
     # )
 
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
-    py_script = r"C:\my-project\random-player\utils\renew_kiwoom_token.py"
+    py_script = r"C:\my-project\random-player\job\renew_kiwoom_token.py"
 
     # subprocess 실행 (새로운 프로세스), subprocess.Popen()은 어느 스레드에서 호출하든 OS에 “새 프로세스 생성”을 요청
     process = subprocess.Popen(
@@ -74,7 +74,7 @@ def run_crawl_ai_image():
     print('    ############################### run_crawl_ai_image ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
     # py_script = r"C:\my-project\random-player\utils\scrap_ai_by_playwright.py"
-    py_script = r"C:\my-project\random-player\utils\scrap_ai_by_playwright_async.py"
+    py_script = r"C:\my-project\random-player\job\scrap\scrap_ai_by_playwright_async.py"
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
@@ -118,8 +118,7 @@ def run_crawl_ai_image():
 def run_crawl_ig_image():
     print('    ############################### run_crawl_ig_image ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
-    # py_script = r"C:\my-project\random-player\utils\scrap_ai_by_playwright.py"
-    py_script = r"C:\my-project\random-player\utils\scrap_ig_playwrigit.py"
+    py_script = r"C:\my-project\random-player\job\scrap\scrap_ig_playwrigit.py"
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(

@@ -1,13 +1,12 @@
-from flask import Blueprint, Flask, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify
 from urllib.parse import urlencode
 import os
 from datetime import datetime
 from flask_login import login_required
 from config.config import settings
-from werkzeug.utils import secure_filename
 from zipfile import ZipFile
-from utils.generate_thumbnail import convert_file
-from utils.webm_to_mp4 import convert_webm_to_mp4
+from utils.ffmpeg.generate_thumbnail import convert_file
+from utils.ffmpeg.webm_to_mp4 import convert_webm_to_mp4
 import uuid
 import time
 from mimetypes import guess_type
