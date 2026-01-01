@@ -38,7 +38,7 @@ body {
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
-    margin-bottom: 12px;
+    /*margin-bottom: 12px;*/
 }
 
 .tab-btn {
@@ -130,9 +130,17 @@ img.preview {
 .btn.img-toggle[disabled] { opacity:.5; cursor:not-allowed; }
 
 /* 제목/배지(선택) */
-.section-title { margin: 6px 0 10px; color:#111827; font-weight: 600; font-size: 22px}
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0 10px; color:#111827; font-weight: 600; font-size: 18px
+}
 .badge {
-    display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px;
+    display:inline-block;
+    /*margin-left:6px; */
+    padding:2px 8px;
+    border-radius:999px;
     background:#eef2ff; color:#3730a3; font-size:12px;
 }
 

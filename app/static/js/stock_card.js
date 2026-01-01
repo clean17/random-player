@@ -450,29 +450,6 @@ function renderTradingView(tradingRows) {
     globalTradingRows = tradingRows;
 
     // 요소 중 'display: none' 아닌 요소 찾기
-    const el = [...document.querySelectorAll('select.view-select')]
-        .find(x => x.offsetParent !== null);
-    // console.log(el); // 보이는 요소(없으면 undefined)
-    const section = el.closest('section');
-    const mode = section.querySelector('.view-select').value;
-    const tableName = 'table-'+section.id.split('-')[1];
-
-    if (mode === "table") {
-        removeTradingCards(section);
-        ensureTradingTableExists(section, tableName);
-        if (tableName === 'table-trading') renderTradingTable(tradingRows, tableName);
-        if (tableName === 'table-summary') renderSummaryTable(tradingRows, tableName);
-        if (tableName === 'table-low') renderLowTable(tradingRows, tableName);
-    } else {
-        removeTradingTable(tableName);
-        renderTradingCards(tradingRows, section, tableName);
-    }
-}
-
-function renderTradingView2(tradingRows) {
-    globalTradingRows = tradingRows;
-
-    // 요소 중 'display: none' 아닌 요소 찾기
     const el = [...document.querySelectorAll('.view-toggle')]
         .find(x => x.offsetParent !== null);
     // console.log(el); // 보이는 요소(없으면 undefined)
@@ -505,18 +482,11 @@ function setView(toggle, view, focus = false) {
         if (active && focus) b.focus();
     });
 
-    renderTradingView2(globalTradingRows);
+    renderTradingView(globalTradingRows);
 }
 
 // 드롭다운 변경 시 즉시 반영
 setTimeout(()=>{
-        // document.querySelectorAll('.view-select').forEach((el)=>{
-        //     el.addEventListener("change", (e) => {
-        //         e.target.blur();
-        //         renderTradingView(globalTradingRows);
-        //     });
-        // });
-
         document.querySelectorAll('.view-toggle').forEach((el)=>{
             el.addEventListener("click", (e) => {
                 const btn = e.target.closest(".view-btn");

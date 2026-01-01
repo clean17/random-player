@@ -152,7 +152,7 @@
 
 /* ====== 토글 버튼 (전역 button css 무시) ====== */
 .view-toggle{
-    position: absolute;
+    position: relative;
     right: 10px;
     display: inline-flex;
     padding: 3px;
@@ -160,6 +160,7 @@
     border-radius: 10px;
     background: #f3f3f3;
     user-select: none;
+    margin-left: auto;
 }
 .view-btn{
     all: unset;

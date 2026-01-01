@@ -25,23 +25,17 @@
 
 <div class="container">
     <div class="tab-bar">
-        <button class="tab-btn active" data-target="#tab-trading">실시간 등락</button>
+        <button class="tab-btn active" data-target="#tab-trading">실시간</button>
 <!--        <button class="tab-btn" data-target="#tab-change">금일 등락</button>-->
-        <button class="tab-btn" data-target="#tab-summary">상승주 검색</button>
-        <button class="tab-btn" data-target="#tab-low">저점 검색</button>
+        <button class="tab-btn" data-target="#tab-summary">관심</button>
+        <button class="tab-btn" data-target="#tab-low">저점</button>
         <input id="dateInput" class="date" type="date" />
     </div>
 
     <!-- 탭 1: 거래대금 증감 -->
     <section id="tab-trading" class="tab-panel" style="display:block;">
-        <h3 class="section-title">실시간 등락
+        <h3 class="section-title">검색 결과
             <span class="badge" id="count-trading">0건</span>
-
-            <!--<select id="view-trading" class="view-select">
-                <option value="cards" selected>카드</option>
-                <option value="table" >테이블</option>
-            </select>-->
-
             <div class="view-toggle" role="tablist" aria-label="보기 전환">
                 <button type="button" class="view-btn is-active" data-view="cards"
                         role="tab" aria-selected="true" tabindex="0" title="카드 보기">
@@ -68,62 +62,56 @@
             </div>
         </h3>
         <div class="table-scroller">
-            <table class="table" id="table-trading">
-                <thead>
-                <tr>
-                    <th>그래프</th>
-                    <th>등록시간</th>
-                    <th>종목명</th>
-                    <th>카테고리</th>
-                    <th class="right">거래대금(5일 평균)</th>
-                    <th class="right">거래대금(실시간)</th>
-                    <th class="right">거래대금 증감</th>
-                    <th class="right">어제종가</th>
-                    <th class="right">현재가</th>
-                    <th class="right">금일 등락</th>
-                </tr>
-                </thead>
-                <tbody><!-- JS 렌더링 --></tbody>
-            </table>
+<!--            <table class="table" id="table-trading">-->
+<!--                <thead>-->
+<!--                <tr>-->
+<!--                    <th>그래프</th>-->
+<!--                    <th>등록시간</th>-->
+<!--                    <th>종목명</th>-->
+<!--                    <th>카테고리</th>-->
+<!--                    <th class="right">거래대금(5일 평균)</th>-->
+<!--                    <th class="right">거래대금(실시간)</th>-->
+<!--                    <th class="right">거래대금 증감</th>-->
+<!--                    <th class="right">어제종가</th>-->
+<!--                    <th class="right">현재가</th>-->
+<!--                    <th class="right">금일 등락</th>-->
+<!--                </tr>-->
+<!--                </thead>-->
+<!--                <tbody>&lt;!&ndash; JS 렌더링 &ndash;&gt;</tbody>-->
+<!--            </table>-->
         </div>
     </section>
 
     <!-- 탭 2: 금일 등락 -->
     <section id="tab-change" class="tab-panel" style="display:none;">
-        <h3 class="section-title">금일 등락
+        <h3 class="section-title">검색 결과
             <span class="badge" id="count-change">0건</span>
         </h3>
         <div class="table-scroller">
-            <table class="table" id="table-today">
-                <thead>
-                <tr>
-                    <th>그래프</th>
-                    <th>등록시간</th>
-                    <th>종목명</th>
-                    <th>카테고리</th>
-                    <th class="right">거래대금(5일 평균)</th>
-                    <th class="right">거래대금(금일)</th>
-                    <th class="right">거래대금 증감</th>
-                    <th class="right">어제종가</th>
-                    <th class="right">금일종가</th>
-                    <th class="right">금일 등락</th>
-                </tr>
-                </thead>
-                <tbody><!-- JS 렌더링 --></tbody>
-            </table>
+<!--            <table class="table" id="table-today">-->
+<!--                <thead>-->
+<!--                <tr>-->
+<!--                    <th>그래프</th>-->
+<!--                    <th>등록시간</th>-->
+<!--                    <th>종목명</th>-->
+<!--                    <th>카테고리</th>-->
+<!--                    <th class="right">거래대금(5일 평균)</th>-->
+<!--                    <th class="right">거래대금(금일)</th>-->
+<!--                    <th class="right">거래대금 증감</th>-->
+<!--                    <th class="right">어제종가</th>-->
+<!--                    <th class="right">금일종가</th>-->
+<!--                    <th class="right">금일 등락</th>-->
+<!--                </tr>-->
+<!--                </thead>-->
+<!--                <tbody>&lt;!&ndash; JS 렌더링 &ndash;&gt;</tbody>-->
+<!--            </table>-->
         </div>
     </section>
 
     <!-- 탭 3: 상승주 검색 -->
     <section id="tab-summary" class="tab-panel" style="display:none;">
-        <h3 class="section-title">상승주 검색
+        <h3 class="section-title">검색 결과
             <span class="badge" id="count-summary">0건</span>
-
-            <!--<select id="view-summary" class="view-select">
-                <option value="cards" selected>카드</option>
-                <option value="table" >테이블</option>
-            </select>-->
-
             <div class="view-toggle" role="tablist" aria-label="보기 전환">
                 <button type="button" class="view-btn is-active" data-view="cards"
                         role="tab" aria-selected="true" tabindex="0" title="카드 보기">
@@ -150,43 +138,37 @@
             </div>
         </h3>
         <div class="table-scroller">
-            <table class="table" id="table-summary">
-                <thead>
-                <tr>
-                    <th>그래프</th>
-                    <th>카운트</th>
-<!--                    <th>순서</th>-->
-<!--                    <th>종목코드</th>-->
-                    <th>종목명</th>
-                    <th>카테고리</th>
-                    <th>시작가</th>
-                    <th>최근 종가</th>
-                    <th>전체_상승률</th>
-                    <th>(전체/카운트)<br>
-                        ⭐(10%⬇️)</th> <!-- increase_per_day -->
-<!--                    <th>평균_변동률</th>--> <!-- 의미가 없음 -->
-                    <th>최고_대비_변동</th>
-                    <th>시가총액<br>(1조⬇️)</th>
-                    <th>거래대금<br>(평균)</th> <!-- avg_trading_value -->
-<!--                    <th class="right">처음_상승일자</th>-->
-                    <th class="right">마지막_상승일자</th>
-                </tr>
-                </thead>
-                <tbody><!-- JS 렌더링 --></tbody>
-            </table>
+<!--            <table class="table" id="table-summary">-->
+<!--                <thead>-->
+<!--                <tr>-->
+<!--                    <th>그래프</th>-->
+<!--                    <th>카운트</th>-->
+<!--&lt;!&ndash;                    <th>순서</th>&ndash;&gt;-->
+<!--&lt;!&ndash;                    <th>종목코드</th>&ndash;&gt;-->
+<!--                    <th>종목명</th>-->
+<!--                    <th>카테고리</th>-->
+<!--                    <th>시작가</th>-->
+<!--                    <th>최근 종가</th>-->
+<!--                    <th>전체_상승률</th>-->
+<!--                    <th>(전체/카운트)<br>-->
+<!--                        ⭐(10%⬇️)</th> &lt;!&ndash; increase_per_day &ndash;&gt;-->
+<!--&lt;!&ndash;                    <th>평균_변동률</th>&ndash;&gt; &lt;!&ndash; 의미가 없음 &ndash;&gt;-->
+<!--                    <th>최고_대비_변동</th>-->
+<!--                    <th>시가총액<br>(1조⬇️)</th>-->
+<!--                    <th>거래대금<br>(평균)</th> &lt;!&ndash; avg_trading_value &ndash;&gt;-->
+<!--&lt;!&ndash;                    <th class="right">처음_상승일자</th>&ndash;&gt;-->
+<!--                    <th class="right">마지막_상승일자</th>-->
+<!--                </tr>-->
+<!--                </thead>-->
+<!--                <tbody>&lt;!&ndash; JS 렌더링 &ndash;&gt;</tbody>-->
+<!--            </table>-->
         </div>
     </section>
 
     <!-- 탭 4: 저점 검색 -->
     <section id="tab-low" class="tab-panel" style="display:none;">
-        <h3 class="section-title">저점 검색
+        <h3 class="section-title">검색 결과
             <span class="badge" id="count-low">0건</span>
-
-            <!--<select id="view-low" class="view-select">
-                <option value="cards" selected>카드</option>
-                <option value="table" >테이블</option>
-            </select>-->
-
             <div class="view-toggle" role="tablist" aria-label="보기 전환">
                 <button type="button" class="view-btn is-active" data-view="cards"
                         role="tab" aria-selected="true" tabindex="0" title="카드 보기">
@@ -213,23 +195,23 @@
             </div>
         </h3>
         <div class="table-scroller">
-            <table class="table" id="table-low">
-                <thead>
-                <tr>
-                    <th>그래프</th>
-                    <th>종목명</th>
-                    <th>카테고리</th>
-                    <th>시가총액</th>
-                    <th class="right">거래대금(금일)</th>
-                    <th>금일 변동률</th>
-                    <th>어제 종가</th>
-                    <th>금일 종가</th>
-                    <th class="right">현재가</th>
-                    <th class="right">현재 등락</th>
-                </tr>
-                </thead>
-                <tbody><!-- JS 렌더링 --></tbody>
-            </table>
+<!--            <table class="table" id="table-low">-->
+<!--                <thead>-->
+<!--                <tr>-->
+<!--                    <th>그래프</th>-->
+<!--                    <th>종목명</th>-->
+<!--                    <th>카테고리</th>-->
+<!--                    <th>시가총액</th>-->
+<!--                    <th class="right">거래대금(금일)</th>-->
+<!--                    <th>금일 변동률</th>-->
+<!--                    <th>어제 종가</th>-->
+<!--                    <th>금일 종가</th>-->
+<!--                    <th class="right">현재가</th>-->
+<!--                    <th class="right">현재 등락</th>-->
+<!--                </tr>-->
+<!--                </thead>-->
+<!--                <tbody>&lt;!&ndash; JS 렌더링 &ndash;&gt;</tbody>-->
+<!--            </table>-->
         </div>
     </section>
 </div>
@@ -585,7 +567,7 @@
                 // console.log('tradingRows', tradingRows);
                 // renderTradingTable(tradingRows);
                 // renderTradingCards(tradingRows);
-                renderTradingView2(tradingRows);
+                renderTradingView(tradingRows);
 
                 // renderTodayTable(todayRows); // 금일변동
             }
@@ -601,7 +583,7 @@
                 document.getElementById('overlay').style.display = 'none';
                 // console.log('summary:', data2);
                 // renderSummaryTable(data2);
-                renderTradingView2(data2);
+                renderTradingView(data2);
             }
 
             if (target === 'tab-low') {
@@ -614,7 +596,7 @@
                 const data3 = await res3.json();
                 document.getElementById('overlay').style.display = 'none';
                 // renderLowTable(data3);
-                renderTradingView2(data3);
+                renderTradingView(data3);
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
         } catch (e) {
