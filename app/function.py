@@ -17,16 +17,16 @@ from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, get_interest_low_stocks, update_interest_stock_graph, \
-    update_interest_stock_list_close
+    update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks
 from app.repository.users.users import find_user_by_username
 from job.batch_process import run_crawl_ai_image
+from job.buy_lotto import async_buy_lotto
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from job.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
 from flask_socketio import SocketIO
 from datetime import datetime
-from job.lotto_schedule import async_buy_lotto
 from config.config import settings
 import asyncio
 
@@ -768,6 +768,30 @@ def get_stock_company_info():
     data = request.json
     company_code = data.get('company_code') or ""
     return request_stock_category(company_code)
+
+
+@func.route("/stocks/favorites", methods=["POST"])
+@login_required
+def upsert_favorite_stock():
+    data = request.json
+    stock_code = data.get('stock_code') or ""
+
+    fetch_user = find_user_by_username(session["_user_id"])
+    stock = StockDTO(
+        stock_code=stock_code,
+        user_id=fetch_user.id,
+    )
+
+    result = upsert_favorite_stocks(stock)
+    return {"status": "success", "result": result}, 200
+
+
+@func.route("/stocks/favorites", methods=["GET"])
+@login_required
+def fetch_favorite_stocks():
+    fetch_user = find_user_by_username(session["_user_id"])
+    stocks = get_favorite_stocks(fetch_user.id)
+    return jsonify(stocks)
 
 ################################# STATE ####################################
 

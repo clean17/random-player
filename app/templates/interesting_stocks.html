@@ -29,6 +29,7 @@
 <!--        <button class="tab-btn" data-target="#tab-change">금일 등락</button>-->
         <button class="tab-btn" data-target="#tab-summary">관심</button>
         <button class="tab-btn" data-target="#tab-low">저점</button>
+<!--        <button class="tab-btn" data-target="#tab-favorite">즐겨찾기</button>-->
         <input id="dateInput" class="date" type="date" />
     </div>
 
@@ -227,6 +228,7 @@
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
     const dd = String(today.getDate()).padStart(2, '0');
+    const favoriteStocks = [];
 
     const today_yyyymmdd = `${yyyy}${mm}${dd}`;
     const fmt = new Intl.DateTimeFormat("ko-KR", {
@@ -743,6 +745,18 @@
         timer = null;
     }
 
+    function getFavoriteStocks() {
+        axios.get('/func/stocks/favorites').then(res => {
+            data = res.data
+            favoriteStocks.length = 0;
+            data.forEach(item=>{
+                favoriteStocks.push(item["stock_code"])
+            })
+        }).catch(error => {
+            throw error; // 기타 에러는 그대로 던짐
+        });
+    }
+
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) { // 다시 브라우저를 방문하면 한 번만 실행된다
             startTimer();
@@ -759,6 +773,7 @@
     window.addEventListener('DOMContentLoaded', _ => {
         setDefaultDateToday();
         loadData();
+        getFavoriteStocks();
     });
 </script>
 

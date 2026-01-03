@@ -167,6 +167,16 @@ function renderTradingCardHtml(track, rows) {
             <div class="trade-name">${r.stock_name ?? ""}</div>
             <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value_fmt ?? ""}</div>
           </div>
+          <div class="fav-toggle">
+            <button
+              class="fav-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-favorited="false"
+              data-shape="star"
+              aria-pressed="false"
+              aria-label="즐겨찾기 추가"
+            ></button>
+          </div>
         </div>
 
         <div class="trade-grid">
@@ -214,6 +224,16 @@ function renderSummaryCardHtml(track, rows) {
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
             <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
+          </div>
+          <div class="fav-toggle">
+            <button
+              class="fav-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-favorited="false"
+              data-shape="star"
+              aria-pressed="false"
+              aria-label="즐겨찾기 추가"
+            ></button>
           </div>
         </div>
 
@@ -274,6 +294,16 @@ function renderLowCardHtml(track, rows) {
             <div class="trade-name">${r.stock_name ?? ""}</div>
             <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
           </div>
+          <div class="fav-toggle">
+            <button
+              class="fav-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-favorited="false"
+              data-shape="star"
+              aria-pressed="false"
+              aria-label="즐겨찾기 추가"
+            ></button>
+          </div>
         </div>
 
         <div class="trade-grid">
@@ -329,6 +359,7 @@ function renderTradingCards(rows, section, tableName) {
     if (tableName === 'table-trading') renderTradingCardHtml(track, rows);
     if (tableName === 'table-summary') renderSummaryCardHtml(track, rows);
     if (tableName === 'table-low') renderLowCardHtml(track, rows);
+    initFavoriteButtons();
 
     // dots (많으면 12개로 축약)
     const maxDots = 12;
@@ -350,7 +381,7 @@ function renderTradingCards(rows, section, tableName) {
     btnR.addEventListener("click", () => go(1));
 
     // 드래그/스와이프
-    let isDown = false, startX = 0, startScroll = 0;
+/*    let isDown = false, startX = 0, startScroll = 0;
     track.addEventListener("pointerdown", (e) => {
         isDown = true;
         startX = e.clientX;
@@ -362,7 +393,62 @@ function renderTradingCards(rows, section, tableName) {
         track.scrollLeft = startScroll - (e.clientX - startX);
     });
     track.addEventListener("pointerup", () => { isDown = false; });
-    track.addEventListener("pointercancel", () => { isDown = false; });
+    track.addEventListener("pointercancel", () => { isDown = false; });*/
+
+    // 드래그/스와이프 (클릭과 충돌 방지)
+    let isDown = false;
+    let isDragging = false;
+    let startX = 0;
+    let startScroll = 0;
+    let pointerId = null;
+    const DRAG_THRESHOLD = 6; // px: 이 이상 움직이면 드래그로 판단
+
+    // 드래그 제외 대상(버튼/링크/인풋 등)
+    function isInteractiveTarget(e) {
+        return !!e.target.closest("button, a, input, select, textarea, .fav-btn, .carousel-btn");
+    }
+
+    track.addEventListener("pointerdown", (e) => {
+        // ✅ 즐겨찾기 버튼 등 인터랙티브 요소에서 시작하면 캐러셀 드래그 안 함
+        if (isInteractiveTarget(e)) return;
+
+        isDown = true;
+        isDragging = false;
+        startX = e.clientX;
+        startScroll = track.scrollLeft;
+        pointerId = e.pointerId;
+
+        // ✅ 여기서 캡처하지 마세요. (드래그 판정 후에 캡처)
+    }, { passive: true });
+
+    track.addEventListener("pointermove", (e) => {
+        if (!isDown || e.pointerId !== pointerId) return;
+
+        const dx = e.clientX - startX;
+
+        // ✅ 일정 거리 이상 움직일 때만 드래그 시작 + 포인터 캡처
+        if (!isDragging && Math.abs(dx) > DRAG_THRESHOLD) {
+            isDragging = true;
+            track.setPointerCapture(pointerId);
+        }
+
+        if (!isDragging) return;
+
+        // 드래그 중 스크롤
+        track.scrollLeft = startScroll - dx;
+    }, { passive: true });
+
+    track.addEventListener("pointerup", () => {
+        isDown = false;
+        isDragging = false;
+        pointerId = null;
+    });
+
+    track.addEventListener("pointercancel", () => {
+        isDown = false;
+        isDragging = false;
+        pointerId = null;
+    });
 
     // 현재 인덱스/버튼/dot 업데이트
     function updateUI() {
@@ -517,4 +603,97 @@ setTimeout(()=>{
         });
     }
     ,100)
+
+
+
+// --- SVG 아이콘 템플릿 ---
+function getIconSVG(shape, filled) {
+    if (shape === "heart") {
+        return filled
+            ? `<svg class="fav-icon" viewBox="0 0 24 24" aria-hidden="true">
+           <path fill="currentColor"
+             d="M12 21s-7.2-4.6-9.6-8.6C.6 9.3 2.2 6.2 5.4 5.3c2.1-.6 4.2.3 6.6 2.8 2.4-2.5 4.5-3.4 6.6-2.8 3.2.9 4.8 4 3 7.1C19.2 16.4 12 21 12 21z"/>
+         </svg>`
+            : `<svg class="fav-icon" viewBox="0 0 24 24" aria-hidden="true">
+           <path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+             d="M12 21s-7.2-4.6-9.6-8.6C.6 9.3 2.2 6.2 5.4 5.3c2.1-.6 4.2.3 6.6 2.8 2.4-2.5 4.5-3.4 6.6-2.8 3.2.9 4.8 4 3 7.1C19.2 16.4 12 21 12 21z"/>
+         </svg>`;
+    }
+
+    // Star (default)
+    // OFF=테두리 / ON=채움
+    return filled
+        ? `<svg class="fav-icon" viewBox="0 0 24 24" aria-hidden="true">
+         <path fill="currentColor"
+           d="M12 2.6c.4 0 .8.2 1 .6l2.4 4.9c.2.4.6.6 1 .7l5.4.8c.9.1 1.3 1.2.7 1.8l-3.9 3.8c-.3.3-.4.7-.3 1.1l.9 5.4c.2.9-.8 1.6-1.6 1.2l-4.8-2.5c-.4-.2-.8-.2-1.2 0L6.9 22c-.8.4-1.8-.3-1.6-1.2l.9-5.4c.1-.4-.1-.8-.3-1.1L2 11.5c-.6-.6-.2-1.7.7-1.8l5.4-.8c.4-.1.8-.3 1-.7l2.4-4.9c.2-.4.6-.6 1-.6z"/>
+       </svg>`
+        : `<svg class="fav-icon" viewBox="0 0 24 24" aria-hidden="true">
+         <path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+           d="M12 2.6c.4 0 .8.2 1 .6l2.4 4.9c.2.4.6.6 1 .7l5.4.8c.9.1 1.3 1.2.7 1.8l-3.9 3.8c-.3.3-.4.7-.3 1.1l.9 5.4c.2.9-.8 1.6-1.6 1.2l-4.8-2.5c-.4-.2-.8-.2-1.2 0L6.9 22c-.8.4-1.8-.3-1.6-1.2l.9-5.4c.1-.4-.1-.8-.3-1.1L2 11.5c-.6-.6-.2-1.7.7-1.8l5.4-.8c.4-.1.8-.3 1-.7l2.4-4.9c.2-.4.6-.6 1-.6z"/>
+       </svg>`;
+}
+
+function renderButton(btn) {
+    const shape = btn.dataset.shape || "star";
+    const favorited = btn.dataset.favorited === "true";
+
+    btn.innerHTML = getIconSVG(shape, favorited);
+    btn.setAttribute("aria-pressed", String(favorited));
+    btn.setAttribute("aria-label", favorited ? "즐겨찾기 해제" : "즐겨찾기 추가");
+}
+
+async function requestToggleFavorite({ stockCode, next }) {
+    const res = await fetch("/func/stocks/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "stock_code": stockCode })
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || "Server request failed");
+    }
+    return res.json().catch(() => ({}));
+
+
+}
+
+function initFavoriteButtons() {
+    document.querySelectorAll(".fav-btn").forEach((btn) => {
+        renderButton(btn);
+
+        const stockCode = btn.dataset.stockCode;
+        const favorited = favoriteStocks.includes(stockCode);
+        if (favorited) {
+            btn.dataset.favorited = String(true);
+            renderButton(btn);
+        }
+
+        btn.addEventListener("click", async () => {
+            if (btn.disabled) return;
+
+            const stockCode = btn.dataset.stockCode;
+            const current = btn.dataset.favorited === "true";
+            const next = !current;
+
+            // optimistic UI
+            btn.dataset.favorited = String(next);
+            renderButton(btn);
+            btn.disabled = true;
+
+            try {
+                await requestToggleFavorite({ stockCode, next });
+                // 성공: 그대로 유지
+            } catch (e) {
+                // 실패: rollback
+                btn.dataset.favorited = String(current);
+                renderButton(btn);
+                console.error(e);
+                alert("즐겨찾기 변경에 실패했어요. 다시 시도해주세요.");
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+}
 

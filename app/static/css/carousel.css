@@ -41,7 +41,7 @@
 /* Header */
 .table-scroller .trade-top {
     display: flex;
-    align-items: stretch;       /* 자식들을 같은 높이로 늘림 */
+    /*align-items: stretch;       !* 자식들을 같은 높이로 늘림 *!*/
     gap: 10px;
     margin: 12px 12px 18px 12px;
 }
@@ -200,3 +200,37 @@
 .view-toggle[data-view="table"] .view-indicator{
     transform: translateX(34px);
 }
+
+
+
+.fav-toggle {
+    position: relative;
+    display: inline-flex;
+    padding: 3px;
+    user-select: none;
+    margin-left: auto;
+}
+.fav-btn{
+    border: 0;
+    background: transparent;
+    padding: 4px;
+    cursor: pointer;
+    line-height: 0;
+}
+.fav-btn:hover{
+    background: transparent;
+}
+.fav-icon{
+    width: 22px;
+    height: 22px;
+    display: block;
+}
+.fav-btn svg,
+.fav-btn svg * {
+    pointer-events: none;
+}
+
+
+/* ON: 노란 별/하트 */
+.fav-btn[data-favorited="false"]{ color:#b8b8b8; } /* 회색 테두리 */
+.fav-btn[data-favorited="true"]{  color:#f5c400; } /* 노란 채움 */

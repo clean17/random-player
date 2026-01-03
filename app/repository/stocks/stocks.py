@@ -87,6 +87,45 @@ def get_interest_stock_list(conn=None):
     return rows
 
 
+@db_transaction
+def get_favorite_stocks(user_id, conn=None) -> int:
+    sql = """
+    select stock_code from favorite_stocks 
+    where user_id = %s 
+    and flag = True;
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
+        cur.execute(sql, (user_id,))
+        rows = cur.fetchall()
+    return rows
+
+
+@db_transaction
+def upsert_favorite_stocks(stock: "StockDTO", conn=None) -> int:
+    with conn.cursor() as cur:
+        sql = """
+        INSERT INTO favorite_stocks (
+            created_at, updated_at, user_id, stock_code, flag
+        )
+        VALUES (
+            now(), now(), %s, %s, True
+        )
+        ON CONFLICT (stock_code, user_id)
+        DO UPDATE SET
+            updated_at               = now(),
+            flag                     = NOT favorite_stocks.flag
+        RETURNING id;
+        """
+        cur.execute(
+            sql,
+            (
+                stock.user_id, stock.stock_code
+            )
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
 # 관심 종목 insert, EXCLUDED: 새로 들어온 값
 @db_transaction
 def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
