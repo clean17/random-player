@@ -213,9 +213,7 @@ function deletePage(e) {
     e?.preventDefault();
 
     // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
-    renderOverlay();
-    document.getElementById('overlay').style.display = 'block';
-    document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+    renderLoadingOverlay();
     delBtn.disabled = true;
     delBtn.style.background = 'gray';
 
@@ -451,16 +449,7 @@ function downloadThisPage() {
     const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
     const titleName = $title.options[$title.selectedIndex].textContent.trim();
 
-    if (!document.getElementById('overlay')) {
-        const overlay = document.createElement('div');
-        overlay.id = 'overlay';
-        overlay.style.display = 'none';
-        overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
-        document.body.appendChild(overlay);
-    }
-
-    document.getElementById('overlay').style.display = 'block';
-    document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+   renderLoadingOverlay();
 
     // ZIP 파일 요청
     // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
@@ -476,8 +465,7 @@ function downloadThisPage() {
             return response.blob();
         })
         .then(blob => {
-            document.getElementById('overlay').style.display = 'none';
-            document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+            removeLoadingOverlay();
 
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -489,8 +477,7 @@ function downloadThisPage() {
             window.URL.revokeObjectURL(url);
         })
         .catch(error => {
-            document.getElementById('overlay').style.display = 'none';
-            document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+            removeLoadingOverlay();
             alert('다운로드 중 문제가 발생했습니다: ' + error.message);
         });
 

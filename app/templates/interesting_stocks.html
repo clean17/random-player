@@ -545,9 +545,7 @@
         const payload = { date: yyyymmdd };
 
         try {
-            renderOverlay();
-            document.getElementById('overlay').style.display = 'block';
-            document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+            renderLoadingOverlay();
 
             if (target == null || target === 'tab-trading' || target === 'tab-change') {
                 document.getElementById('overlay').style.display = 'block';
@@ -563,7 +561,7 @@
                 const tradingRows = (data || []).filter(r => r.trading_value_change_pct !== null && r.trading_value_change_pct !== undefined);
                 const todayRows   = (data || []).filter(r => r.today_price_change_pct   !== null && r.today_price_change_pct   !== undefined);
 
-                document.getElementById('overlay').style.display = 'none';
+                removeLoadingOverlay();
                 // console.log('tradingRows', tradingRows);
                 // renderTradingTable(tradingRows);
                 // renderTradingCards(tradingRows);
@@ -580,7 +578,7 @@
                 });
                 if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
                 const data2 = await res2.json();
-                document.getElementById('overlay').style.display = 'none';
+                removeLoadingOverlay();
                 // console.log('summary:', data2);
                 // renderSummaryTable(data2);
                 renderTradingView(data2);
@@ -594,7 +592,7 @@
                 });
                 if (!res3.ok) throw new Error(`HTTP ${res3.status}`);
                 const data3 = await res3.json();
-                document.getElementById('overlay').style.display = 'none';
+                removeLoadingOverlay();
                 // renderLowTable(data3);
                 renderTradingView(data3);
             }

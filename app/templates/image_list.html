@@ -393,9 +393,7 @@
 
         // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
         /*form.addEventListener('submit', (event) => {
-            renderOverlay();
-            document.getElementById('overlay').style.display = 'block';
-            document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+            renderLoadingOverlay();
             delBtn.disabled = true;
             delBtn.style.background = 'gray';
         });*/

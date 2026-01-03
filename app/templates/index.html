@@ -92,10 +92,10 @@
 <script>
     const videoOption = document.getElementById("directory-select");
     const imageOption = document.getElementById("image-select");
-    const buyLottoBtn = document.getElementById("buy-lotto");
-    const runCrawlBtn = document.getElementById("run-crawl");
-    const kospiBtn = document.getElementById("kospi");
-    const nasdaqBtn = document.getElementById("nasdaq");
+    // const buyLottoBtn = document.getElementById("buy-lotto");
+    // const runCrawlBtn = document.getElementById("run-crawl");
+    // const kospiBtn = document.getElementById("kospi");
+    // const nasdaqBtn = document.getElementById("nasdaq");
 
     const username = "{{ username }}";
     const chatBadgeCnt = document.querySelector('.unread-badge');
@@ -157,6 +157,7 @@
     // document.addEventListener('keydown', keyEvent)
     document.getElementById('image-select').addEventListener('change', function() {
         var selectedValue = this.value;
+        renderLoadingOverlay();
         if (selectedValue) {
             window.location.href = selectedValue; // 선택된 URL로 이동
         }
@@ -170,16 +171,7 @@
 
     async function buy_lotto() {
         try {
-            if (!document.getElementById('overlay')) {
-                const overlay = document.createElement('div');
-                overlay.id = 'overlay';
-                overlay.style.display = 'none';
-                overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
-                document.body.appendChild(overlay);
-            }
-
-            document.getElementById('overlay').style.display = 'flex';
-            document.body.style.pointerEvents = "none";
+            renderLoadingOverlay();
 
             const response = await fetch("/func/buy/lotto-test");
             const result = await response.json();
@@ -193,8 +185,7 @@
         } catch (error) {
             alert("오류가 발생했습니다: " + error);
         } finally {
-            document.getElementById('overlay').style.display = 'none';
-            document.body.style.pointerEvents = "auto";
+            removeLoadingOverlay();
         }
     }
 
@@ -271,29 +262,41 @@
         }
     });
 
-    document.addEventListener("DOMContentLoaded", function () {
+    function init() {
         checkNewChat();
+        removeLoadingOverlay();
 
-        if (imageOption.options.length === 2) {
-            imageOption.addEventListener("click", function () {
-                const url = imageOption.options[1].value;
-                if (url) {
-                    window.location.href = url;
-                }
-            });
-        }
+        // if (imageOption.options.length === 2) {
+        //     imageOption.addEventListener("click", function () {
+        //         const url = imageOption.options[1].value;
+        //         if (url) {
+        //             window.location.href = url;
+        //         }
+        //     });
+        // }
 
-        buyLottoBtn?.removeEventListener('click', buy_lotto);
-        buyLottoBtn?.addEventListener('click', buy_lotto);
+        // buyLottoBtn?.removeEventListener('click', buy_lotto);
+        // buyLottoBtn?.addEventListener('click', buy_lotto);
 
-        runCrawlBtn?.removeEventListener('click', run_crawl);
-        runCrawlBtn?.addEventListener('click', run_crawl);
+        // runCrawlBtn?.removeEventListener('click', run_crawl);
+        // runCrawlBtn?.addEventListener('click', run_crawl);
 
-        kospiBtn?.removeEventListener('click', predict_kospi);
-        kospiBtn?.addEventListener('click', predict_kospi);
+        // kospiBtn?.removeEventListener('click', predict_kospi);
+        // kospiBtn?.addEventListener('click', predict_kospi);
 
-        nasdaqBtn?.addEventListener('click', predict_nasdaq);
-        nasdaqBtn?.addEventListener('click', predict_nasdaq);
+        // nasdaqBtn?.addEventListener('click', predict_nasdaq);
+        // nasdaqBtn?.addEventListener('click', predict_nasdaq);
+    }
+
+
+    document.addEventListener("DOMContentLoaded", init);
+
+    // 뒤로가기/앞으로가기 포함해서 페이지가 표시될 때마다
+    window.addEventListener("pageshow", (e) => {
+        // e.persisted === true 이면 BFCache 복원으로 돌아온 것
+        if (e.persisted) init();
+        // BFCache 여부 상관없이 항상 돌리고 싶으면:
+        // init();
     });
 </script>
 </html>

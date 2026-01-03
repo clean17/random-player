@@ -204,26 +204,6 @@
 
 
 
-    // 기본 업로드 //
-    // 변경을 감지하는 이벤트가 자바스크립트에 없어..
-    /*document.getElementById('fileInput').addEventListener('change', function () {
-        if (!document.getElementById('overlay')) {
-            const overlay = document.createElement('div');
-            overlay.id = 'overlay';
-            overlay.style.display = 'none';
-            overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
-            const container = document.querySelector('.container');
-            document.body.appendChild(overlay);
-        }
-
-        document.getElementById('overlay').style.display = 'block';
-        document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
-
-        document.getElementById('overlay').style.display = 'none';
-        document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
-    });*/
-
-
     document.addEventListener('DOMContentLoaded', () => {
         if (previous_title && previous_title !== 'None') {
             titleSelect.value = previous_title;

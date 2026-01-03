@@ -4,6 +4,7 @@
     {{ super() }}
     <title>Login</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/common.js?v={{ version }}"></script>
     <link rel="stylesheet" href="/static/css/login.css?v={{ version }}">
 {% endblock %}
 
@@ -13,7 +14,7 @@
     <img src="/static/favicon.ico" class="login-logo-image">
 
 </div>
-<form method="POST" action="/auth/login">
+<form id="loginForm" method="POST" action="/auth/login">
     {# <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> #}
     <!--    <form onsubmit="event.preventDefault(); login();">-->
     <div class="input-login">
@@ -73,6 +74,46 @@
     </div>-->
 </form>
 <script>
+    const form = document.getElementById("loginForm");
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        renderLoadingOverlay();
+
+        const fd = new FormData(form); // 폼 데이터 수집
+        // const email = fd.get("email");
+        // const password = fd.get("password");
+
+        try {
+            const res = await fetch(form.action, {
+                method: form.method,            // "POST"
+                body: fd,                       // form-data로 전송
+            });
+
+            if (!res.ok) throw new Error("login failed");
+
+            // 성공 후 이동
+            window.location.href = "/"; // 원하는 곳으로
+        } catch (err) {
+            console.error(err);
+            alert("로그인 실패");
+        } finally {
+            removeLoadingOverlay();
+        }
+
+        /**
+         *   // json
+         *   const payload = Object.fromEntries(fd.entries());
+         *
+         *   const res = await fetch(form.action, {
+         *     method: "POST",
+         *     headers: { "Content-Type": "application/json" },
+         *     body: JSON.stringify(payload),
+         *   });
+         */
+    });
+
     document.querySelectorAll('input').forEach(input => {
         input.addEventListener('input', () => {
             if (document.getElementById('error-messages')) {
@@ -83,6 +124,7 @@
 
     async function login() {
         try {
+            renderLoadingOverlay();
             const response = await axios.post("/auth/api/token", {
                 username: document.getElementById("username").value,
                 password: document.getElementById("password").value
@@ -107,6 +149,7 @@
                 }
             }).then(res => {
                 if (res.request.responseURL) {
+                    removeLoadingOverlay();
                     window.location.href = res.request.responseURL;
                 }
             })
