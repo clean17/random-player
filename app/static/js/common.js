@@ -101,14 +101,23 @@ function parseTimestamp(ts) {
     return new Date(year, month, day, hour, min, sec);
 }
 
-function renderOverlay() {
+function renderLoadingOverlay() {
     if (!document.getElementById('overlay')) {
         const overlay = document.createElement('div');
         overlay.id = 'overlay';
         overlay.style.display = 'none';
-        overlay.innerHTML = '<img src="/static/overlay-loading.svg" alt="Loading...">';
+        // overlay.innerHTML = '<img src="/static/overlay-loading01.svg" alt="Loading...">';
+        overlay.innerHTML = `<img src="/static/overlay-loading1-1.svg" alt="Loading...">`;
         document.body.appendChild(overlay);
     }
+    document.getElementById('overlay').style.display = 'block';
+    document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+}
+
+function removeLoadingOverlay() {
+    const overlay = document.getElementById('overlay');
+    if (overlay) overlay.style.display = 'none';
+    document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
 }
 
 // 휴지통 비우기 요청
@@ -117,20 +126,16 @@ async function emptyTrash() {
     if (!userConfirmed) return;
 
     try {
-        renderOverlay();
-        document.getElementById('overlay').style.display = 'block';
-        document.body.style.pointerEvents = "none"; // 화면 이벤트 제거
+        renderLoadingOverlay();
 
         const response = await fetch("/func/empty-trash-bin", { method: "POST" });
         const result = await response.json();
 
         alert(result.message);
-        document.getElementById('overlay').style.display = 'none';
-        document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+        removeLoadingOverlay();
     } catch (error) {
         alert("오류가 발생했습니다: " + error);
-        document.getElementById('overlay').style.display = 'none';
-        document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
+        removeLoadingOverlay();
     }
 }
 

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="Loading">
+    <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#6EE7F9"/>
+            <stop offset="50%" stop-color="#A78BFA"/>
+            <stop offset="100%" stop-color="#FB7185"/>
+        </linearGradient>
+        <linearGradient id="g2" x1="1" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FDE047"/>
+            <stop offset="100%" stop-color="#FB923C"/>
+        </linearGradient>
+
+        <!-- subtle glow for dark overlay -->
+        <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%">
+            <feGaussianBlur stdDeviation="1.6" result="b"/>
+            <feMerge>
+                <feMergeNode in="b"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+
+    <!-- tracks (better on dark overlay) -->
+    <circle cx="48" cy="48" r="34" fill="none" stroke="#FFFFFF" stroke-width="8" opacity="0.12"/>
+    <circle cx="48" cy="48" r="22" fill="none" stroke="#FFFFFF" stroke-width="6" opacity="0.10"/>
+
+    <!-- outer spinner (add subtle "breathing" like ripple via dash + width) -->
+    <circle cx="48" cy="48" r="34" fill="none" stroke="url(#g1)" stroke-width="8"
+            stroke-linecap="round" stroke-dasharray="70 160" filter="url(#softGlow)">
+        <animateTransform attributeName="transform" type="rotate"
+                          from="0 48 48" to="360 48 48"
+                          dur="1.05s" repeatCount="indefinite"/>
+        <!-- ripple-ish feel -->
+        <animate attributeName="stroke-dasharray"
+                 values="58 172;86 144;58 172"
+                 dur="1.35s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width"
+                 values="7;9;7"
+                 dur="1.35s" repeatCount="indefinite"/>
+        <animate attributeName="opacity"
+                 values="0.85;1;0.85"
+                 dur="1.35s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- inner spinner (counter-rotate + different phase breathing) -->
+    <circle cx="48" cy="48" r="22" fill="none" stroke="url(#g2)" stroke-width="6"
+            stroke-linecap="round" stroke-dasharray="40 110" filter="url(#softGlow)">
+        <animateTransform attributeName="transform" type="rotate"
+                          from="360 48 48" to="0 48 48"
+                          dur="0.85s" repeatCount="indefinite"/>
+        <!-- ripple-ish feel (offset phase) -->
+        <animate attributeName="stroke-dasharray"
+                 values="30 120;54 96;30 120"
+                 dur="1.35s" begin="0.45s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width"
+                 values="5.5;7;5.5"
+                 dur="1.35s" begin="0.45s" repeatCount="indefinite"/>
+        <animate attributeName="opacity"
+                 values="0.85;1;0.85"
+                 dur="1.35s" begin="0.45s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- subtle breathing core (same vibe as ripple code, but minimal) -->
+    <circle cx="48" cy="48" r="3" fill="#FFFFFF" opacity="0.55">
+        <animate attributeName="r" values="2.6;3.4;2.6" dur="1.0s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.40;0.70;0.40" dur="1.0s" repeatCount="indefinite"/>
+    </circle>
+</svg>

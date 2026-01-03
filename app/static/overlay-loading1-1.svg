@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 96 96" role="img" aria-label="Loading">
+    <defs>
+        <!-- brighter gradient for dark overlay -->
+        <linearGradient id="rippleBright" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"  stop-color="#A5F3FC"/>
+            <stop offset="55%" stop-color="#DDD6FE"/>
+            <stop offset="100%" stop-color="#FECDD3"/>
+        </linearGradient>
+
+        <!-- stronger glow -->
+        <filter id="glowStrong" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="2.6" result="b"/>
+            <feMerge>
+                <feMergeNode in="b"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+
+    <!-- gentle rotation wrapper -->
+    <g>
+        <animateTransform attributeName="transform" type="rotate"
+                          from="0 48 48" to="360 48 48"
+                          dur="5.5s" repeatCount="indefinite"/>
+
+        <!-- ripple arc 1 -->
+        <circle cx="48" cy="48" r="12" fill="none" stroke="url(#rippleBright)"
+                stroke-width="7" stroke-linecap="round"
+                stroke-dasharray="150 80" opacity="0" filter="url(#glowStrong)">
+            <animate attributeName="r" values="12;42" dur="1.35s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;0.92;0" dur="1.35s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="8;3" dur="1.35s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dasharray" values="120 110;170 60;120 110" dur="1.35s" repeatCount="indefinite"/>
+        </circle>
+
+        <!-- ripple arc 2 (offset) -->
+        <circle cx="48" cy="48" r="12" fill="none" stroke="url(#rippleBright)"
+                stroke-width="7" stroke-linecap="round"
+                stroke-dasharray="150 80" opacity="0" filter="url(#glowStrong)">
+            <animate attributeName="r" values="12;42" dur="1.35s" begin="0.68s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;0.70;0" dur="1.35s" begin="0.68s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="8;3" dur="1.35s" begin="0.68s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dasharray" values="120 110;170 60;120 110" dur="1.35s" begin="0.68s" repeatCount="indefinite"/>
+        </circle>
+    </g>
+</svg>
