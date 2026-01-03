@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="loading">
+    <defs>
+        <!-- 배경이 비쳐도 튀는 고대비 그라데이션 -->
+        <linearGradient id="loaderGradient" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="64" y2="64">
+            <stop offset="0%" stop-color="#60A5FA"/>
+            <stop offset="50%" stop-color="#22D3EE"/>
+            <stop offset="100%" stop-color="#67E8F9"/>
+        </linearGradient>
+
+        <!-- 글로우(뒤에 살짝 번짐) -->
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.2" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+
+    <g fill="none" stroke-linecap="round">
+        <!-- 1) 글로우/아웃라인 레이어 (더 굵고 약간 밝게) -->
+        <circle cx="32" cy="32" r="22"
+                stroke="#FFFFFF"
+                stroke-width="9"
+                stroke-opacity="0.1"
+                stroke-dasharray="12 140"
+                stroke-dashoffset="0"
+                filter="url(#glow)">
+            <animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="0.75s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dasharray" values="12 140; 126 14; 12 140" dur="0.9s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dashoffset" values="0; -140" dur="0.9s" repeatCount="indefinite"/>
+        </circle>
+
+        <!-- 2) 메인 컬러 레이어 -->
+        <circle cx="32" cy="32" r="22"
+                stroke="url(#loaderGradient)"
+                stroke-width="6"
+                stroke-dasharray="12 140"
+                stroke-dashoffset="0">
+            <animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="0.75s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dasharray" values="12 140; 126 14; 12 140" dur="0.9s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dashoffset" values="0; -140" dur="0.9s" repeatCount="indefinite"/>
+        </circle>
+    </g>
+</svg>
