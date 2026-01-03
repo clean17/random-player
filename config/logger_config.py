@@ -30,8 +30,8 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "/func/last-read-chat-id?username",
                 # [video]
                 # "video-player",
-                "dir=refine", "dir=image", "dir=move", "?dir=1", "?dir=2", "?dir=3", "?dir=4", "?dir=5",
-                "/video/select-directory", "video-player/1", "video-player/2", "video-player/3", "video-player/4", "video-player/5",
+                "dir=refine", "dir=image", "dir=move", "?dir=1", "?dir=2", "?dir=3", "?dir=4", "?dir=5", "?dir=7",
+                "/video/select-directory", "video-player/1", "video-player/2", "video-player/3", "video-player/4", "video-player/5", "video-player/7",
 
                 # [image]
                 "/delete-images",

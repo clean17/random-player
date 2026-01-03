@@ -511,7 +511,13 @@ function loadMoreChats(event) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offset: offset })
     })
-        .then(response => response.json())
+        .then(res => {
+            if (res.redirected) {
+                window.location.href = res.url;
+            } else {
+                return res.json();
+            }
+        })
         .then(data => {
             if (data.logs.length > 0) {
                 const tempArr = []

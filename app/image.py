@@ -308,6 +308,10 @@ def image_list():
             return jsonify({"slide_show_images": images})
         else:
             images, page = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR, page)
+        if len(images) == 0:
+            page = page - 1
+            start = (page - 1) * LIMIT_PAGE_NUM
+            images, page = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR, page)
         # template_html = 'ref_image_list.html'
         template_html = 'image_list.html'
     elif dir == 'image':
@@ -319,6 +323,10 @@ def image_list():
             images = image2_arr[start:start + LIMIT_PAGE_NUM]
         else:
             images, page = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2, page)
+        if len(images) == 0:
+            page = page - 1
+            start = (page - 1) * LIMIT_PAGE_NUM
+            images = image2_arr[start:start + LIMIT_PAGE_NUM]
             # images_length = count_non_zip_files_in_subfolders_and_reels(IMAGE_DIR2)
         images_length = len(image2_arr)
         template_html = 'image_list.html'
