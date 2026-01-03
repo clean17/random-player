@@ -501,10 +501,9 @@ function downloadAllFiles() {
 
 
 
+/******************************************  Slide Show  ****************************************/
 
-
-function showSlideshowModal(imgList) {
-    // 모달이 이미 있으면 재활용, 없으면 새로 만듦
+function showSlideshowModal(fileList) {
     let modal = document.getElementById('slideshow-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -513,31 +512,78 @@ function showSlideshowModal(imgList) {
         modal.innerHTML = `
             <button class="close-modal" title="닫기" ><i class="fas fa-times" style="color:white"></i></button>
             <!--<button class="close-modal" title="닫기" aria-label="닫기">✕</button>-->
-            <img src="" alt="슬라이드" id="slideshow-img">
+            <img src="" alt="슬라이드" id="slideshow-img" style="display:none;">
+      
+            <video id="slideshow-video" class="slideshow-video" style="display:none;"
+                   muted playsinline controls loop>
+              <source id="slideshow-video-source" src="" type="video/mp4">
+            </video>
         `;
         document.body.appendChild(modal);
 
-        // 닫기 버튼 이벤트
         modal.querySelector('.close-modal').onclick = () => {
             clearInterval(slideShowTimer);
+            // 영상 재생 중이면 멈추기
+            const v = modal.querySelector("#slideshow-video");
+            v.pause();
+            v.currentTime = 0;
             modal.style.display = "none";
         };
     }
     modal.style.display = "flex";
+
     const imgEl = modal.querySelector("#slideshow-img");
+    const videoEl = modal.querySelector("#slideshow-video");
+    const videoSrcEl = modal.querySelector("#slideshow-video-source");
+
+    // 확장자 판별용
+    const videoExts = ['mp4', 'mov', 'mkv', 'avi']; // 필요시 webm 추가
+    const imageBase = "https://chickchick.shop/image/images";
+    const videoBase = "/video/temp-video"; // 템플릿에서 쓰던 경로와 맞추기
+
+    function isVideo(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        return videoExts.includes(ext);
+    }
+
+    function setSlide(filename) {
+        const enc = encodeURIComponent(filename);
+
+        if (isVideo(filename)) {
+            // IMG 숨기고 VIDEO 표시
+            imgEl.style.display = "none";
+            videoEl.style.display = "block";
+
+            // 영상 src 세팅 (템플릿과 동일하게 dir/selected_dir를 필요하면 추가)
+            // 기존 렌더링: /video/temp-video/{{ image }}?dir={{ dir }}&selected_dir={{ selected_dir }}
+            videoSrcEl.src = `${videoBase}/${enc}?dir=refine`;
+            videoEl.load();
+            videoEl.play().catch(()=>{ /* 자동재생 막히면 무시 */ });
+
+        } else {
+            // VIDEO 숨기고 IMG 표시
+            videoEl.pause();
+            videoEl.style.display = "none";
+            imgEl.style.display = "block";
+
+            imgEl.src = `${imageBase}?filename=${enc}&dir=refine`;
+        }
+    }
 
     // 슬라이드 쇼 상태 초기화
     slideShowIdx = 0;
-    slideShowImgs = imgList;
-    imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(imgList[0])+"&dir=refine";
+    slideShowImgs = fileList;
+
+    // 첫 장 세팅
+    setSlide(slideShowImgs[0]);
 
     // 기존 타이머 종료
     if (slideShowTimer) clearInterval(slideShowTimer);
 
     slideShowTimer = setInterval(() => {
         slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
-        imgEl.src = "https://chickchick.shop/image/images?filename="+encodeURIComponent(slideShowImgs[slideShowIdx])+"&dir=refine";
-    }, 8000);
+        setSlide(slideShowImgs[slideShowIdx]);
+    }, 10000);
 }
 
 async function slideShow() {
