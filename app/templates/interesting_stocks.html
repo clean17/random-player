@@ -29,39 +29,40 @@
 <!--        <button class="tab-btn" data-target="#tab-change">금일 등락</button>-->
         <button class="tab-btn" data-target="#tab-summary">관심</button>
         <button class="tab-btn" data-target="#tab-low">저점</button>
-<!--        <button class="tab-btn" data-target="#tab-favorite">즐겨찾기</button>-->
+        <button class="tab-btn" data-target="#tab-favorite">즐겨찾기</button>
         <input id="dateInput" class="date" type="date" />
     </div>
 
+    <h3 class="section-title">검색 결과
+        <span class="badge" id="count">0건</span>
+        <div class="view-toggle" role="tablist" aria-label="보기 전환">
+            <button type="button" class="view-btn is-active" data-view="cards"
+                    role="tab" aria-selected="true" tabindex="0" title="카드 보기">
+                <!-- 카드 아이콘 -->
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="4" y="5" width="7" height="7" rx="1"></rect>
+                    <rect x="13" y="5" width="7" height="7" rx="1"></rect>
+                    <rect x="4" y="14" width="7" height="7" rx="1"></rect>
+                    <rect x="13" y="14" width="7" height="7" rx="1"></rect>
+                </svg>
+            </button>
+
+            <button type="button" class="view-btn" data-view="table"
+                    role="tab" aria-selected="false" tabindex="-1" title="테이블 보기">
+                <!-- 테이블 아이콘 -->
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
+                    <path d="M4 10h16M4 14h16M10 6v12M14 6v12" fill="none" stroke="currentColor" stroke-width="2"></path>
+                </svg>
+            </button>
+
+            <!-- 이동하는 하이라이트 바 -->
+            <span class="view-indicator" aria-hidden="true"></span>
+        </div>
+    </h3>
+
     <!-- 탭 1: 거래대금 증감 -->
     <section id="tab-trading" class="tab-panel" style="display:block;">
-        <h3 class="section-title">검색 결과
-            <span class="badge" id="count-trading">0건</span>
-            <div class="view-toggle" role="tablist" aria-label="보기 전환">
-                <button type="button" class="view-btn is-active" data-view="cards"
-                        role="tab" aria-selected="true" tabindex="0" title="카드 보기">
-                    <!-- 카드 아이콘 -->
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="4" y="5" width="7" height="7" rx="1"></rect>
-                        <rect x="13" y="5" width="7" height="7" rx="1"></rect>
-                        <rect x="4" y="14" width="7" height="7" rx="1"></rect>
-                        <rect x="13" y="14" width="7" height="7" rx="1"></rect>
-                    </svg>
-                </button>
-
-                <button type="button" class="view-btn" data-view="table"
-                        role="tab" aria-selected="false" tabindex="-1" title="테이블 보기">
-                    <!-- 테이블 아이콘 -->
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
-                        <path d="M4 10h16M4 14h16M10 6v12M14 6v12" fill="none" stroke="currentColor" stroke-width="2"></path>
-                    </svg>
-                </button>
-
-                <!-- 이동하는 하이라이트 바 -->
-                <span class="view-indicator" aria-hidden="true"></span>
-            </div>
-        </h3>
         <div class="table-scroller">
 <!--            <table class="table" id="table-trading">-->
 <!--                <thead>-->
@@ -85,9 +86,6 @@
 
     <!-- 탭 2: 금일 등락 -->
     <section id="tab-change" class="tab-panel" style="display:none;">
-        <h3 class="section-title">검색 결과
-            <span class="badge" id="count-change">0건</span>
-        </h3>
         <div class="table-scroller">
 <!--            <table class="table" id="table-today">-->
 <!--                <thead>-->
@@ -111,33 +109,6 @@
 
     <!-- 탭 3: 상승주 검색 -->
     <section id="tab-summary" class="tab-panel" style="display:none;">
-        <h3 class="section-title">검색 결과
-            <span class="badge" id="count-summary">0건</span>
-            <div class="view-toggle" role="tablist" aria-label="보기 전환">
-                <button type="button" class="view-btn is-active" data-view="cards"
-                        role="tab" aria-selected="true" tabindex="0" title="카드 보기">
-                    <!-- 카드 아이콘 -->
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="4" y="5" width="7" height="7" rx="1"></rect>
-                        <rect x="13" y="5" width="7" height="7" rx="1"></rect>
-                        <rect x="4" y="14" width="7" height="7" rx="1"></rect>
-                        <rect x="13" y="14" width="7" height="7" rx="1"></rect>
-                    </svg>
-                </button>
-
-                <button type="button" class="view-btn" data-view="table"
-                        role="tab" aria-selected="false" tabindex="-1" title="테이블 보기">
-                    <!-- 테이블 아이콘 -->
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
-                        <path d="M4 10h16M4 14h16M10 6v12M14 6v12" fill="none" stroke="currentColor" stroke-width="2"></path>
-                    </svg>
-                </button>
-
-                <!-- 이동하는 하이라이트 바 -->
-                <span class="view-indicator" aria-hidden="true"></span>
-            </div>
-        </h3>
         <div class="table-scroller">
 <!--            <table class="table" id="table-summary">-->
 <!--                <thead>-->
@@ -168,33 +139,6 @@
 
     <!-- 탭 4: 저점 검색 -->
     <section id="tab-low" class="tab-panel" style="display:none;">
-        <h3 class="section-title">검색 결과
-            <span class="badge" id="count-low">0건</span>
-            <div class="view-toggle" role="tablist" aria-label="보기 전환">
-                <button type="button" class="view-btn is-active" data-view="cards"
-                        role="tab" aria-selected="true" tabindex="0" title="카드 보기">
-                    <!-- 카드 아이콘 -->
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="4" y="5" width="7" height="7" rx="1"></rect>
-                        <rect x="13" y="5" width="7" height="7" rx="1"></rect>
-                        <rect x="4" y="14" width="7" height="7" rx="1"></rect>
-                        <rect x="13" y="14" width="7" height="7" rx="1"></rect>
-                    </svg>
-                </button>
-
-                <button type="button" class="view-btn" data-view="table"
-                        role="tab" aria-selected="false" tabindex="-1" title="테이블 보기">
-                    <!-- 테이블 아이콘 -->
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
-                        <path d="M4 10h16M4 14h16M10 6v12M14 6v12" fill="none" stroke="currentColor" stroke-width="2"></path>
-                    </svg>
-                </button>
-
-                <!-- 이동하는 하이라이트 바 -->
-                <span class="view-indicator" aria-hidden="true"></span>
-            </div>
-        </h3>
         <div class="table-scroller">
 <!--            <table class="table" id="table-low">-->
 <!--                <thead>-->
@@ -214,6 +158,10 @@
 <!--                <tbody>&lt;!&ndash; JS 렌더링 &ndash;&gt;</tbody>-->
 <!--            </table>-->
         </div>
+    </section>
+
+    <section id="tab-favorite" class="tab-panel" style="display:none;">
+        <div class="table-scroller"></div>
     </section>
 </div>
 
@@ -250,7 +198,7 @@
             document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
             const target = document.querySelector(btn.dataset.target);
             if (target) target.style.display = 'block';
-            if (target.id === 'tab-summary') {
+            if (target.id === 'tab-summary'||target.id === 'tab-favorite') {
                 setDefaultDateToday(14);
                 loadData()
             } else {
@@ -321,7 +269,7 @@
 
         if (!rows || !rows.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
-            document.getElementById('count-trading').textContent = '0건';
+            document.getElementById('count').textContent = '0건';
             return;
         }
         const html = rows.map(r => {
@@ -360,7 +308,7 @@
         </tr>`;
         }).join('');
         tbody.innerHTML = html;
-        document.getElementById('count-trading').textContent = `${rows.length}건`;
+        document.getElementById('count').textContent = `${rows.length}건`;
         bindImageToggles(document.getElementById('table-trading'));
     }
 
@@ -371,7 +319,7 @@
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
-            document.getElementById('count-change').textContent = '0건';
+            document.getElementById('count').textContent = '0건';
             return;
         }
         const html = rows.map(r => {
@@ -407,7 +355,7 @@
         </tr>`;
         }).join('');
         tbody.innerHTML = html;
-        document.getElementById('count-change').textContent = `${rows.length}건`;
+        document.getElementById('count').textContent = `${rows.length}건`;
         bindImageToggles(document.getElementById('table-today'));
     }*/
 
@@ -417,7 +365,7 @@
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
-            document.getElementById('count-summary').textContent = '0건';
+            document.getElementById('count').textContent = '0건';
             return;
         }
         const html = rows.map(r => {
@@ -462,7 +410,7 @@
         </tr>`;
         }).join('');
         tbody.innerHTML = html;
-        document.getElementById('count-summary').textContent = `${rows.length}건`;
+        document.getElementById('count').textContent = `${rows.length}건`;
         bindImageToggles(document.getElementById('table-summary'));
     }
 
@@ -472,7 +420,7 @@
         const tbody =    lowTable.querySelector('tbody');
         if (!rows || !rows.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
-            document.getElementById('count-low').textContent = '0건';
+            document.getElementById('count').textContent = '0건';
             return;
         }
         const html = rows.map(r => {
@@ -508,7 +456,7 @@
         </tr>`;
         }).join('');
         tbody.innerHTML = html;
-        document.getElementById('count-low').textContent = `${rows.length}건`;
+        document.getElementById('count').textContent = `${rows.length}건`;
         bindImageToggles(document.getElementById('table-low'));
     }
 
@@ -541,9 +489,10 @@
         const input = document.getElementById('dateInput');
         const yyyymmdd = input.value?.replace(/-/g, '');
 
-        const url = 'https://chickchick.shop/stocks/interest/data';
-        const url2 = 'https://chickchick.shop/stocks/interest/data/info';
+        const url = 'https://chickchick.shop/stocks/interest/data/today';
+        const url2 = 'https://chickchick.shop/stocks/interest/data/fire';
         const url3 = 'https://chickchick.shop/stocks/interest/data/low';
+        const url4 = 'https://chickchick.shop/stocks/interest/data/favorite';
         const payload = { date: yyyymmdd };
 
         try {
@@ -597,6 +546,19 @@
                 removeLoadingOverlay();
                 // renderLowTable(data3);
                 renderTradingView(data3);
+            }
+
+            if (target === 'tab-favorite') {
+                const res4 = await fetch(url4, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res4.ok) throw new Error(`HTTP ${res4.status}`);
+                const data4 = await res4.json();
+                removeLoadingOverlay();
+                // renderLowTable(data3);
+                renderTradingView(data4);
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
         } catch (e) {
@@ -746,7 +708,7 @@
     }
 
     function getFavoriteStocks() {
-        axios.get('/stocks/favorites').then(res => {
+        axios.get('/stocks/favorite').then(res => {
             data = res.data
             favoriteStocks.length = 0;
             data.forEach(item=>{

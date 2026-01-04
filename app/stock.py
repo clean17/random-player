@@ -43,6 +43,7 @@ nasdaq_progress = {
 }
 
 @stock.route("/progress/<stock>")
+@login_required
 def get_progress(stock):
     if stock == 'kospi':
         return jsonify(kospi_progress)
@@ -129,7 +130,7 @@ def update_interesting_stocks_graph():
     result = update_interest_stock_graph(stock)
     return {"status": "success", "result": result}, 200
 
-@stock.route("/interest/data", methods=["POST"])
+@stock.route("/interest/data/today", methods=["POST"])
 def get_interesting_stocks():
     data = request.json
     date = data.get("date")
@@ -137,7 +138,7 @@ def get_interesting_stocks():
     stocks = get_interest_stocks(date)
     return stocks
 
-@stock.route("/interest/data/info", methods=["POST"])
+@stock.route("/interest/data/fire", methods=["POST"])
 def get_interesting_stocks_info():
     data = request.json
     date = data.get("date")
@@ -192,6 +193,7 @@ def update_stocks():
 
     return {"status": "success", "result": "200"}, 200
 
+# 주식 종목 리스트 갱신 후 상장폐지된 종목 flag 수정
 @stock.route("/delisted-stock", methods=["POST"])
 def delete_delisted_stock_stocks():
     try:
@@ -251,7 +253,7 @@ def get_stock_company_info():
     return request_stock_category(company_code)
 
 
-@stock.route("/favorites", methods=["POST"])
+@stock.route("/favorite", methods=["POST"])
 @login_required
 def upsert_favorite_stock():
     data = request.json
@@ -267,14 +269,22 @@ def upsert_favorite_stock():
     return {"status": "success", "result": result}, 200
 
 
-@stock.route("/favorites", methods=["GET"])
+@stock.route("/favorite", methods=["GET"])
 @login_required
 def fetch_favorite_stocks():
     fetch_user = find_user_by_username(session["_user_id"])
     stocks = get_favorite_stocks(fetch_user.id)
     return jsonify(stocks)
 
+@stock.route("/interest/data/favorite", methods=["POST"])
+@login_required
+def get_favorite_stocks_data():
+    data = request.json
+    date = data.get("date")
+    fetch_user = find_user_by_username(session["_user_id"])
 
+    stocks = get_interest_stocks_info(date, fetch_user.id)
+    return stocks
 
 
 

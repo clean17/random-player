@@ -245,15 +245,40 @@ def get_interest_stocks(date: str, conn=None):
 
 # 최근 상승주 검색
 @db_transaction
-def get_interest_stocks_info(date: str, conn=None):
-    sql = """
+def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
+    # user_id 있을 때만: favorite join + current_trading_value 컬럼 추가
+    favorite_join = ""
+    target_condition = ""
+    fire_condition = ""
+    params = []
+
+    if user_id is not None:
+        favorite_join = """
+            join favorite_stocks f on f.stock_code = s.stock_code and f.flag = true and f.user_id = %s
+        """
+        params = [user_id, date]
+    else:
+        target_condition = """
+            and i.target is null
+        """
+        fire_condition = """
+            where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
+            and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8
+            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
+            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
+            --and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 10 -- 의미가 있나 ?
+        """
+        params = [date]
+
+    sql = f"""
     select row_number() over (
         order by count desc
         , REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric desc
         , REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric desc
         ) as rn
         , b.* 
-        , (select graph_file from stocks s where s.stock_code = b.stock_code) as graph_file
+        , ROUND(last_i.last_trading_value_num / 100_000_000) || '억' as current_trading_value
+        , coalesce(b.graph_file, last_i.graph_file) as graph_file
     from (
         select i.stock_code
           , i.stock_name
@@ -280,10 +305,11 @@ def get_interest_stocks_info(date: str, conn=None):
           , max(i.id) as id
           , s.logo_image_url
           , s.category
-        from interest_stocks i, stocks s 
+          , s.graph_file
+        from interest_stocks i 
+        join stocks s on s.stock_code = i.stock_code and s.flag = true
+        {favorite_join}
         where 1=1
-        and i.stock_code = s.stock_code
-        and s.flag = True
         and i.market_value::numeric > 50_000_000_000
         and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
         --and i.current_trading_value::numeric < 500_000_000_000 -- 의미가 없는것 같다 
@@ -291,22 +317,26 @@ def get_interest_stocks_info(date: str, conn=None):
         --and i.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
         and i.created_at >= %s::date
         and today_price_change_pct is not null
-        AND i.target is null
-        group by i.stock_code, i.stock_name, s.close, s.logo_image_url, s.category
+        {target_condition}
+        group by i.stock_code, i.stock_name, s.close, s.logo_image_url, s.category, s.graph_file
         having count(i.stock_code) >= 1
         --and count(stock_code) < 6
         and max(i.created_at) >= (CURRENT_DATE - INTERVAL '7 days') -- x일 전부터 등록된 것
         order by count(i.stock_code) desc, max(i.created_at) desc
     ) as b
-    where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
-    and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8
-    and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
-    and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
-    --and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 10 -- 의미가 있나 ?
+    left join lateral (
+      select i2.current_trading_value::numeric as last_trading_value_num, i2.graph_file
+      from interest_stocks i2
+      where i2.stock_code = b.stock_code            
+      order by i2.created_at desc, i2.id desc
+      limit 1
+    ) last_i on true
+    {fire_condition}
     ;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
-        cur.execute(sql, (date,))
+        cur.execute(sql, tuple(params))
+        # cur.execute(sql, (date,))
         # cur.execute(sql, )
         rows = cur.fetchall()
     return rows

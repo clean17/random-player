@@ -138,6 +138,8 @@ function fastScrollTo(el, left, duration = 60) {
 
 // ---------- 메인 ----------
 function renderTradingCardHtml(track, rows) {
+    if (!track) return;
+
     track.innerHTML = rows.map((r, idx) => {
         /*const ts = Date.parse(r.created_at);
         const date = Number.isFinite(ts) ? new Date(ts) : new Date();
@@ -194,9 +196,14 @@ function renderTradingCardHtml(track, rows) {
       </article>
     `;
     }).join("");
+
+    const countEl = document.getElementById("count");
+    if (countEl) countEl.textContent = `${rows.length}건`;
 }
 
 function renderSummaryCardHtml(track, rows) {
+    if (!track) return;
+
     const pad2 = (n) => String(n).padStart(2, "0");
     const fmtDate = (d) => {
         if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
@@ -241,7 +248,7 @@ function renderSummaryCardHtml(track, rows) {
           <div class="kv"><span class="k">출현횟수</span><span class="v">${r.count ?? ""}</span></div>
           <div class="kv"><span class="k">구간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
           <!--<div class="kv"><span class="k">시총</span><span class="v">${r.market_value ?? ""}</span></div>-->
-          <div class="kv"><span class="k">평균거래대금</span><span class="v">${r.avg_trading_value ?? ""}</span></div>
+          <div class="kv"><span class="k">거래(평균)</span><span class="v">${r.current_trading_value ?? ""}/${r.avg_trading_value ?? ""}</span></div>
           <div class="kv"><span class="k">종가</span><span class="v">${fmt2(r.min)} ➡️ ${fmt2(r.last)}</span></div>
           <div class="kv"><span class="k">총상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일상승(총/출현횟수)</span><span class="v">${r.increase_per_day ?? ""}</span></div>
@@ -253,17 +260,78 @@ function renderSummaryCardHtml(track, rows) {
       </article>
     `;
     }).join("");
+
+    const countEl = document.getElementById("count");
+    if (countEl) countEl.textContent = `${rows.length}건`;
 }
+
+function renderFavoriteCardHtml(track, rows) {
+    if (!track) return;
+
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const fmtDate = (d) => {
+        if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+        // return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`;
+        return `${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`;
+    };
+
+    track.innerHTML = rows.map((r, idx) => {
+        // 날짜
+        const d1 = new Date(String(r.first_date ?? ""));
+        const d2 = new Date(String(r.last_date ?? ""));
+        const formatted_date1 = fmtDate(d1);
+        const formatted_date2 = fmtDate(d2);
+
+        const hasImg = !!r.graph_file;
+        const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
+        const imgHtml = hasImg
+            ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
+            : `<span class="hint">그래프 없음</span>`;
+
+        return `
+      <article class="trade-card summary-card" data-index="${idx}">
+        <div class="trade-top">
+          <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
+          <div class="trade-text">
+            <div class="trade-name">${r.stock_name ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
+          </div>
+          <div class="fav-toggle">
+            <button
+              class="fav-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-favorited="false"
+              data-shape="star"
+              aria-pressed="false"
+              aria-label="즐겨찾기 추가"
+            ></button>
+          </div>
+        </div>
+
+        <div class="trade-grid">
+          <div class="kv"><span class="k">출현횟수</span><span class="v">${r.count ?? ""}</span></div>
+          <div class="kv"><span class="k">구간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
+          <!--<div class="kv"><span class="k">시총</span><span class="v">${r.market_value ?? ""}</span></div>-->
+          <div class="kv"><span class="k">거래(평균)</span><span class="v">${r.current_trading_value ?? ""}/${r.avg_trading_value ?? ""}</span></div>
+          <div class="kv"><span class="k">종가</span><span class="v">${fmt2(r.min)} ➡️ ${fmt2(r.last)}</span></div>
+          <div class="kv"><span class="k">총상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
+          <div class="kv"><span class="k">일상승(총/출현횟수)</span><span class="v">${r.increase_per_day ?? ""}</span></div>
+        </div>
+
+        <div class="trade-detail" style="margin-top:10px;">
+          ${imgHtml}
+        </div>
+      </article>
+    `;
+    }).join("");
+
+    const countEl = document.getElementById("count");
+    if (countEl) countEl.textContent = `${rows.length}건`;
+}
+
 
 function renderLowCardHtml(track, rows) {
     if (!track) return;
-
-    if (!rows || !rows.length) {
-        track.innerHTML = `<div class="trade-card">데이터가 없습니다.</div>`;
-        const countEl = document.getElementById("count-low");
-        if (countEl) countEl.textContent = "0건";
-        return;
-    }
 
     track.innerHTML = rows.map((r, idx) => {
         // 시간
@@ -322,7 +390,7 @@ function renderLowCardHtml(track, rows) {
     `;
     }).join("");
 
-    const countEl = document.getElementById("count-low");
+    const countEl = document.getElementById("count");
     if (countEl) countEl.textContent = `${rows.length}건`;
 }
 
@@ -334,7 +402,7 @@ function renderTradingCards(rows, section, tableName) {
         return;
     }
 
-    const countEl = section.querySelector('[id^="count-"]');   // count로 시작하는 id 찾기
+    const countEl = document.getElementById('count');
 
     if (!rows || !rows.length) {
         root.innerHTML = `<div class="trade-card">데이터가 없습니다.</div>`;
@@ -359,6 +427,7 @@ function renderTradingCards(rows, section, tableName) {
     if (tableName === 'table-trading') renderTradingCardHtml(track, rows);
     if (tableName === 'table-summary') renderSummaryCardHtml(track, rows);
     if (tableName === 'table-low') renderLowCardHtml(track, rows);
+    if (tableName === 'table-favorite') renderFavoriteCardHtml(track, rows);
     initFavoriteButtons();
 
     // dots (많으면 12개로 축약)
@@ -536,13 +605,18 @@ function renderTradingView(tradingRows) {
     globalTradingRows = tradingRows;
 
     // 요소 중 'display: none' 아닌 요소 찾기
-    const el = [...document.querySelectorAll('.view-toggle')]
-        .find(x => x.offsetParent !== null);
-    // console.log(el); // 보이는 요소(없으면 undefined)
-    const section = el.closest('section');
-    const tableName = 'table-'+section.id.split('-')[1];
+    // const el = [...document.querySelectorAll('.view-toggle')]
+    //     .find(x => x.offsetParent !== null);
 
-    if (el.dataset.view === "table") {
+    // const section = el.closest('section');
+
+    const activeTable = document.querySelector('.tab-bar .tab-btn.active').dataset.target;
+    const section = document.querySelector(activeTable);
+    const tableName = 'table-'+section.id.split('-')[1];
+    const viewToggleBtn = document.querySelector('.view-toggle .is-active');
+
+    // if (el.dataset.view === "table") {
+    if (viewToggleBtn.dataset.view === "table") {
         removeTradingCards(section);
         ensureTradingTableExists(section, tableName);
         if (tableName === 'table-trading') renderTradingTable(tradingRows, tableName);
@@ -643,7 +717,7 @@ function renderButton(btn) {
 }
 
 async function requestToggleFavorite({ stockCode, next }) {
-    const res = await fetch("/stocks/favorites", {
+    const res = await fetch("/stocks/favorite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ "stock_code": stockCode })
