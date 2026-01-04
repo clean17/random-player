@@ -58,7 +58,7 @@ function updateProgressBar(data) {
 }
 
 function pollProgress(stock) {
-    fetch('/func/stocks/progress/'+stock)
+    fetch('/stocks/progress/'+stock)
         .then(resp => {
             if (!resp.ok) throw new Error('네트워크 오류 또는 인증 필요');
             return resp.json();

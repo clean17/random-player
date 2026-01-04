@@ -22,7 +22,7 @@
         <circle cx="32" cy="32" r="22"
                 stroke="#FFFFFF"
                 stroke-width="9"
-                stroke-opacity="0.1"
+                stroke-opacity="0.04"
                 stroke-dasharray="12 140"
                 stroke-dashoffset="0"
                 filter="url(#glow)">

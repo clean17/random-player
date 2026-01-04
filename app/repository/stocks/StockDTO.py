@@ -23,4 +23,6 @@ class StockDTO:
     category: str = None
     target: str = None
     last_close: str = None
+    user_id: int = None
+    flag: bool = None
 

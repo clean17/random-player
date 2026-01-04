@@ -541,9 +541,9 @@
         const input = document.getElementById('dateInput');
         const yyyymmdd = input.value?.replace(/-/g, '');
 
-        const url = 'https://chickchick.shop/func/stocks/interest/data';
-        const url2 = 'https://chickchick.shop/func/stocks/interest/data/info';
-        const url3 = 'https://chickchick.shop/func/stocks/interest/data/low';
+        const url = 'https://chickchick.shop/stocks/interest/data';
+        const url2 = 'https://chickchick.shop/stocks/interest/data/info';
+        const url3 = 'https://chickchick.shop/stocks/interest/data/low';
         const payload = { date: yyyymmdd };
 
         try {
@@ -635,7 +635,7 @@
                 const data = {
                     stock_name: stock_name,
                 }
-                axios.post("/func/stocks/info", data, {
+                axios.post("/stocks/info", data, {
                     headers: {"Content-Type": "application/json"},
                     timeout: 3000 // 3초 초과시 자동 reject
                 }).then(res => {
@@ -674,7 +674,7 @@
                     const data = {
                         product_code: productCode
                     }
-                    axios.post("/func/stocks/amount", data, {
+                    axios.post("/stocks/amount", data, {
                         headers: {"Content-Type": "application/json"},
                         timeout: 3000 // 3초 초과시 자동 reject
                     }).then(res => {
@@ -711,7 +711,7 @@
                 const data = {
                     stock_name: stock_name,
                 }
-                axios.post("/func/stocks/info", data, {
+                axios.post("/stocks/info", data, {
                     headers: {"Content-Type": "application/json"},
                     timeout: 3000 // 3초 초과시 자동 reject
                 }).then(async res => {
@@ -746,7 +746,7 @@
     }
 
     function getFavoriteStocks() {
-        axios.get('/func/stocks/favorites').then(res => {
+        axios.get('/stocks/favorites').then(res => {
             data = res.data
             favoriteStocks.length = 0;
             data.forEach(item=>{

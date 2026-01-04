@@ -30,7 +30,11 @@ def update_stock_list(stocks: List["StockDTO"], conn=None, batch_size: int = 500
 @db_transaction
 def delete_delisted_stock(conn=None):
     sql = """
-    delete from stocks where updated_at::date <> now()::date;
+    --delete from stocks where updated_at::date <> now()::date;
+    update stocks
+    set
+        flag = FALSE
+    where updated_at::date <> now()::date;
     """
     with conn.cursor() as cur:
         cur.execute(sql)
@@ -62,8 +66,10 @@ def update_interest_stock_list_close(rows: Sequence[Tuple[float, str, str, str]]
 @db_transaction
 def get_stock_list(nation: str, conn=None):
     sql = """
-    SELECT stock_code, stock_name, sector_code, stock_market FROM stocks 
+    SELECT stock_code, stock_name, sector_code, stock_market 
+    FROM stocks 
     WHERE nation = %s
+    and flag = True
     ORDER BY id;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
@@ -225,6 +231,7 @@ def get_interest_stocks(date: str, conn=None):
     FROM interest_stocks i, stocks s
     WHERE i.created_at::date = %s
     and i.stock_code = s.stock_code
+    and s.flag = True
     AND i.today_price_change_pct::float >= 4
     AND i.current_trading_value::numeric > 5_000_000_000
     AND i.target is null
@@ -276,6 +283,7 @@ def get_interest_stocks_info(date: str, conn=None):
         from interest_stocks i, stocks s 
         where 1=1
         and i.stock_code = s.stock_code
+        and s.flag = True
         and i.market_value::numeric > 50_000_000_000
         and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
         --and i.current_trading_value::numeric < 500_000_000_000 -- 의미가 없는것 같다 
@@ -292,6 +300,7 @@ def get_interest_stocks_info(date: str, conn=None):
     ) as b
     where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
     and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8
+    and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
     and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
     --and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 10 -- 의미가 있나 ?
     ;
@@ -327,7 +336,8 @@ def get_interest_low_stocks(date: str, conn=None):
          , s.category
     FROM interest_stocks i, stocks s
     WHERE i.created_at::date = %s
-    and i.stock_code = s.stock_code 
+    and i.stock_code = s.stock_code
+    and s.flag = True
     AND i.today_price_change_pct::numeric > 3.8
     AND i.target = 'low'
     ORDER BY i.today_price_change_pct::numeric DESC;

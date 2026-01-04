@@ -643,7 +643,7 @@ function renderButton(btn) {
 }
 
 async function requestToggleFavorite({ stockCode, next }) {
-    const res = await fetch("/func/stocks/favorites", {
+    const res = await fetch("/stocks/favorites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ "stock_code": stockCode })
