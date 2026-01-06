@@ -25,8 +25,17 @@ body {
     min-height: 100vh;             /* 내부 스크롤 허용 */
 }
 
-/* 뷰포트가 2000px 이상일 때 max-width: 1000px 적용 */
+/* 가로모드 */
 @media (orientation: landscape) {
+    .container {
+        max-width: 1500px;
+    }
+}
+@media (min-width: 1024px) {
+    .container { max-width: 900px; }
+}
+/* 가로 1500px 이상 */
+@media (min-width: 1500px) {
     .container {
         max-width: 1500px;
     }

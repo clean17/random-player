@@ -8,22 +8,23 @@ import psycopg
 def update_stock_list(stocks: List["StockDTO"], conn=None, batch_size: int = 500) -> None:
     sql = """
     INSERT INTO stocks (
-        created_at, nation, stock_code, stock_name, sector_code, stock_market
+        created_at, nation, stock_code, stock_name, sector_code, category, stock_market
     )
-    VALUES (now(), %s, %s, %s, %s, %s)
+    VALUES (now(), %s, %s, %s, %s, %s, %s)
     ON CONFLICT (stock_code)
     DO UPDATE SET
         nation       = COALESCE(EXCLUDED.nation,       stocks.nation),
         stock_name   = COALESCE(EXCLUDED.stock_name,   stocks.stock_name),
         sector_code  = COALESCE(EXCLUDED.sector_code,  stocks.sector_code),
         stock_market = COALESCE(EXCLUDED.stock_market, stocks.stock_market),
+        category     = COALESCE(EXCLUDED.category,     stocks.category),
         updated_at   = now();
     """
 
     with conn.cursor() as cur:
         for i in range(0, len(stocks), batch_size):
             batch = stocks[i:i + batch_size]
-            rows = [(s.nation, s.stock_code, s.stock_name, s.sector_code, s.stock_market) for s in batch]
+            rows = [(s.nation, s.stock_code, s.stock_name, s.sector_code, s.category, s.stock_market) for s in batch]
             cur.executemany(sql, rows)
 
 # 매일 아침 국장 종목 갱신
@@ -250,6 +251,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
     favorite_join = ""
     target_condition = ""
     fire_condition = ""
+    trading_value_condition = ""
     params = []
 
     if user_id is not None:
@@ -258,6 +260,9 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         """
         params = [user_id, date]
     else:
+        trading_value_condition = """
+            and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
+        """
         target_condition = """
             and i.target is null
         """
@@ -311,8 +316,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         {favorite_join}
         where 1=1
         and i.market_value::numeric > 50_000_000_000
-        and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
-        --and i.current_trading_value::numeric < 500_000_000_000 -- 의미가 없는것 같다 
+        {trading_value_condition}
         --and i.created_at >= NOW() - INTERVAL '1 month'
         --and i.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
         and i.created_at >= %s::date
@@ -320,7 +324,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         {target_condition}
         group by i.stock_code, i.stock_name, s.close, s.logo_image_url, s.category, s.graph_file
         having count(i.stock_code) >= 1
-        --and count(stock_code) < 6
+--            and count(stock_code) <= 6
         and max(i.created_at) >= (CURRENT_DATE - INTERVAL '7 days') -- x일 전부터 등록된 것
         order by count(i.stock_code) desc, max(i.created_at) desc
     ) as b
@@ -338,6 +342,25 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         cur.execute(sql, tuple(params))
         # cur.execute(sql, (date,))
         # cur.execute(sql, )
+        rows = cur.fetchall()
+    return rows
+
+
+# 사용자와 상관없이 즐겨찾기가 되어 있는 종목 리스트 리턴
+@db_transaction
+def get_favorite_stocks_info_api(date: str, user_id: int = None, conn=None):
+    sql = f"""
+    select i.stock_code
+         , i.stock_name
+    from interest_stocks i 
+    join favorite_stocks f on f.stock_code = i.stock_code and f.flag = true
+    where 1=1
+    and i.created_at >= %s::date
+    group by i.stock_code, i.stock_name
+    ;
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
+        cur.execute(sql, (date,))
         rows = cur.fetchall()
     return rows
 

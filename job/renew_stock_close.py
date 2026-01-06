@@ -125,9 +125,10 @@ def renew_interest_stocks_close():
                 continue
 
             product_code = json_data["result"][0]["data"]["items"][0]["productCode"]
+            product_name = json_data["result"][0]["data"]["items"][0]["productName"]
             logo_image_url = json_data["result"][0]["data"]["items"][0]["logoImageUrl"]
         except Exception as e:
-            print(f"renew_interest_stocks_close [info 요청 실패1]: {str(ticker)} {e}")
+            print(f"renew_interest_stocks_close [info 요청 실패1]: {str(ticker)} {str(product_name)} {e}")
             continue  # 오류
 
         # now = datetime.now().time()
@@ -142,7 +143,7 @@ def renew_interest_stocks_close():
         #         json_data = res2.json() or {}
         #         company_code = json_data["result"]["company"]["code"]
         #     except Exception as e:
-        #         print(f"renew_interest_stocks_close [info 요청 실패2]: {str(ticker)} {str(product_code)} {e}")
+        #         print(f"renew_interest_stocks_close [info 요청 실패2]: {str(ticker)} {str(product_name)} {e}")
         #         continue  # 오류
         #
         #     # 카테고리 조회
@@ -156,7 +157,7 @@ def renew_interest_stocks_close():
         #         json_data = res3.json() or {}
         #         category = json_data["result"]["majorList"][0]["title"]
         #     except Exception as e:
-        #         print(f"renew_interest_stocks_close [info 요청 실패3]: {str(ticker)} {str(company_code)} {e}")
+        #         print(f"renew_interest_stocks_close [info 요청 실패3]: {str(ticker)} {str(product_name)} {str(company_code)} {e}")
         #         continue  # 오류
         # else:
         #     category = None
@@ -172,7 +173,7 @@ def renew_interest_stocks_close():
             json_data = res4.json() or {}
             last_close = json_data["result"]["candles"][0]["close"]
         except Exception as e:
-            print(f"renew_interest_stocks_close [info 요청 실패4]: {str(ticker)} {str(product_code)} {e}")
+            print(f"renew_interest_stocks_close [info 요청 실패4]: {str(ticker)} {str(product_name)} {e}")
             continue  # 오류
 
         # print(f'{i+1}/{len(rows)} ticker : {ticker}, close : {last_close}')

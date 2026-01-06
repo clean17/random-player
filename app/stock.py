@@ -3,7 +3,7 @@ from flask_login import login_required
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, get_interest_low_stocks, update_interest_stock_graph, \
-    update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks
+    update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
@@ -142,7 +142,6 @@ def get_interesting_stocks():
 def get_interesting_stocks_info():
     data = request.json
     date = data.get("date")
-    target = data.get("target")
     stocks = get_interest_stocks_info(date)
     return stocks
 
@@ -172,12 +171,14 @@ def update_stocks():
         stock_name = data.get("stock_name") or None
         sector_code = data.get("sector_code") or None
         stock_market = data.get("stock_market") or None
+        category = data.get("category") or None
 
         stock = StockDTO(
             nation=nation,
             stock_code=stock_code,
             stock_name=stock_name,
             sector_code=sector_code,
+            category=category,
             stock_market=stock_market,
         )
         stocks.append(stock)
@@ -185,6 +186,7 @@ def update_stocks():
     try:
         update_stock_list(stocks)
     except Exception as e:
+        print(e)
         # 오류 발생시 JSON 반환
         return {
             "status": "error",
@@ -282,8 +284,21 @@ def get_favorite_stocks_data():
     data = request.json
     date = data.get("date")
     fetch_user = find_user_by_username(session["_user_id"])
+    if fetch_user is not None:
+        user_id = fetch_user.id
+    else:
+        user_id = None
 
-    stocks = get_interest_stocks_info(date, fetch_user.id)
+    stocks = get_interest_stocks_info(date, user_id)
+    return stocks
+
+
+@stock.route("/interest/data/favorite/schedule", methods=["POST"])
+def get_favorite_stocks_data_schedule():
+    data = request.json
+    date = data.get("date")
+
+    stocks = get_favorite_stocks_info_api(date)
     return stocks
 
 

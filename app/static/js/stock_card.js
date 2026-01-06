@@ -167,7 +167,7 @@ function renderTradingCardHtml(track, rows) {
           <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
-            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value_fmt ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · 시총 ${r.market_value_fmt ?? ""} · ${r.category ?? ""}</div>
           </div>
           <div class="fav-toggle">
             <button
@@ -230,7 +230,7 @@ function renderSummaryCardHtml(track, rows) {
           <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
-            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · 시총 ${r.market_value ?? ""} · ${r.category ?? ""}</div>
           </div>
           <div class="fav-toggle">
             <button
@@ -294,7 +294,7 @@ function renderFavoriteCardHtml(track, rows) {
           <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
-            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · 시총 ${r.market_value ?? ""} · ${r.category ?? ""}</div>
           </div>
           <div class="fav-toggle">
             <button
@@ -360,7 +360,7 @@ function renderLowCardHtml(track, rows) {
           <img class="trade-logo" src="${r.logo_image_url}" alt="로고"/>
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
-            <div class="trade-sub">${r.stock_code ?? ""} · ${r.category ?? ""} · 시총 ${r.market_value ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · 시총 ${r.market_value ?? ""} · ${r.category ?? ""}</div>
           </div>
           <div class="fav-toggle">
             <button
