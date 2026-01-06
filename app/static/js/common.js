@@ -106,7 +106,8 @@ function renderLoadingOverlay() {
         const overlay = document.createElement('div');
         overlay.id = 'overlay';
         overlay.style.display = 'none';
-        overlay.innerHTML = '<img src="/static/svg/loading4.svg" alt="Loading...">';
+        overlay.innerHTML = '<img src="/static/svg/loading2.svg" alt="Loading...">';  // dots
+        // overlay.innerHTML = '<img src="/static/svg/loading4.svg" alt="Loading...">';  // spinner
         document.body.appendChild(overlay);
     }
     document.getElementById('overlay').style.display = 'block';

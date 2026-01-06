@@ -201,6 +201,8 @@
         // console.log('filename', filename);
         if (dir === 'stock') return;
 
+        renderLoadingOverlay();
+
         // console.log(filename, index)
         fetch(`/image/move-image`, {
             method: 'POST',
@@ -232,6 +234,7 @@
                 console.error('Error:', error);
             }).finally(()=>{
                 isDelRunning = false;
+                removeLoadingOverlay();
             });
     }
 
