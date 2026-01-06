@@ -13,7 +13,7 @@ def toss_request_json(
         url: str,
         *,
         json_body=None,
-        timeout: int = 10,
+        timeout: int = 15,
         log_tag: str = "TOSS",
         timeout_code: str = "TOSS_TIMEOUT",
         error_code: str = "TOSS_REQUEST_ERROR",
