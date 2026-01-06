@@ -391,7 +391,8 @@ def find_low_stocks_us():
 
 def update_stocks_daily():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
-    py_script = r"C:\my-project\AutoSales.py\job\update_kor_stocks_periodically.py"
+    # py_script = r"C:\my-project\AutoSales.py\job\update_kor_stocks_periodically.py"   # pykrx는 더이상 종목 리스트를 가져올 수 없음
+    py_script = r"C:\my-project\AutoSales.py\job\update_kor_stocks_by_xls.py"
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
