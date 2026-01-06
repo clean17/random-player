@@ -126,7 +126,7 @@ def download_page_zip():
             return jsonify({"error": "Invalid or non-existent directory path"}), 400
 
         start = (page - 1) * LIMIT_PAGE_NUM
-        images = get_images(start, LIMIT_PAGE_NUM, target_directory)
+        images, page = get_images(start, LIMIT_PAGE_NUM, target_directory, page)
 
         if not images:
             return jsonify({"error": "No files found for the specified page"}), 404
