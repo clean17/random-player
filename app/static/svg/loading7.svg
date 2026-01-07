@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 96 96" role="img" aria-label="Loading">
+    <defs>
+        <!-- 기존 그라데이션 + 더 밝게 -->
+        <linearGradient id="rippleC" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#A5F3FC"/>
+            <stop offset="55%" stop-color="#C4B5FD"/>
+            <stop offset="100%" stop-color="#FECACA"/>
+        </linearGradient>
+
+        <!-- 화이트 하이라이트(밝기 보강) -->
+        <linearGradient id="whiteGlow" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0"/>
+        </linearGradient>
+
+        <!-- 글로우 더 강하게 -->
+        <filter id="glowUltra" x="-90%" y="-90%" width="280%" height="280%">
+            <feGaussianBlur stdDeviation="4.2" result="b"/>
+            <feColorMatrix in="b" type="matrix"
+                           values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 2.2 0" result="bb"/>
+            <feMerge>
+                <feMergeNode in="bb"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <filter id="coreGlow" x="-120%" y="-120%" width="340%" height="340%">
+            <feGaussianBlur stdDeviation="3.2" result="cb"/>
+            <feColorMatrix in="cb" type="matrix"
+                           values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 2.4 0" result="cbb"/>
+            <feMerge>
+                <feMergeNode in="cbb"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge><svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 96 96" role="img" aria-label="Loading">
+            <defs>
+                <linearGradient id="rippleC" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#67E8F9"/>
+                    <stop offset="55%" stop-color="#A78BFA"/>
+                    <stop offset="100%" stop-color="#FCA5A5"/>
+                </linearGradient>
+
+                <!-- 글로우 아주 약간만 강화 -->
+                <filter id="glowC" x="-45%" y="-45%" width="190%" height="190%">
+                    <feGaussianBlur stdDeviation="2.6" result="b"/>
+                    <feMerge>
+                        <feMergeNode in="b"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+
+            <g>
+                <animateTransform attributeName="transform" type="rotate"
+                                  from="0 48 48" to="360 48 48"
+                                  dur="3.2s" repeatCount="indefinite"/>
+
+                <circle cx="48" cy="48" r="10"
+                        fill="none"
+                        stroke="url(#rippleC)"
+                        stroke-width="6.5"
+                        opacity="0"
+                        filter="url(#glowC)">
+                    <animate attributeName="r" values="10;36" dur="1.3s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0;0.9;0" dur="1.3s" repeatCount="indefinite"/>
+                    <animate attributeName="stroke-width" values="6.5;3.2" dur="1.3s" repeatCount="indefinite"/>
+                </circle>
+
+                <circle cx="48" cy="48" r="10"
+                        fill="none"
+                        stroke="url(#rippleC)"
+                        stroke-width="6.5"
+                        opacity="0"
+                        filter="url(#glowC)">
+                    <animate attributeName="r" values="10;36" dur="1.3s" begin="0.65s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0;0.75;0" dur="1.3s" begin="0.65s" repeatCount="indefinite"/>
+                    <animate attributeName="stroke-width" values="6.5;3.2" dur="1.3s" begin="0.65s" repeatCount="indefinite"/>
+                </circle>
+            </g>
+        </svg>
+
+        </filter>
+    </defs>
+
+    <g>
+        <animateTransform attributeName="transform" type="rotate"
+                          from="0 48 48" to="360 48 48"
+                          dur="2.3s" repeatCount="indefinite"/>
+
+        <!-- 밝은 백라이트(배경이 어두울수록 더 튀게) -->
+        <circle cx="48" cy="48" r="22" fill="url(#rippleC)" opacity="0.18"/>
+
+        <!-- 중앙 코어: 화이트+컬러 겹치기 -->
+<!--        <circle cx="48" cy="48" r="8.2" fill="#FFFFFF" opacity="0.95" filter="url(#coreGlow)"/>-->
+<!--        <circle cx="48" cy="48" r="7.2" fill="url(#rippleC)" opacity="0.98" filter="url(#coreGlow)">-->
+<!--            <animate attributeName="r" values="6.8;8.0;6.8" dur="0.9s" repeatCount="indefinite"/>-->
+<!--            <animate attributeName="opacity" values="0.9;1;0.9" dur="0.9s" repeatCount="indefinite"/>-->
+<!--        </circle>-->
+
+        <!-- 링 1: 컬러 링 + 화이트 하이라이트 링(겹침) -->
+        <circle cx="48" cy="48" r="10" fill="none" stroke="url(#rippleC)" stroke-width="9"
+                opacity="0" filter="url(#glowUltra)" stroke-linecap="round">
+            <animate attributeName="r" values="10;42" dur="1.25s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;1;0" dur="1.25s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="10;2.8" dur="1.25s" repeatCount="indefinite"/>
+        </circle>
+
+        <circle cx="48" cy="48" r="10" fill="none" stroke="#FFFFFF" stroke-width="3.4"
+                opacity="0" filter="url(#glowUltra)" stroke-linecap="round">
+            <animate attributeName="r" values="10;42" dur="1.25s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;0.55;0" dur="1.25s" repeatCount="indefinite"/>
+        </circle>
+
+        <!-- 링 2: 반 박자 -->
+        <circle cx="48" cy="48" r="10" fill="none" stroke="url(#rippleC)" stroke-width="9"
+                opacity="0" filter="url(#glowUltra)" stroke-linecap="round">
+            <animate attributeName="r" values="10;42" dur="1.25s" begin="0.625s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;0.9;0" dur="1.25s" begin="0.625s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="10;2.8" dur="1.25s" begin="0.625s" repeatCount="indefinite"/>
+        </circle>
+
+        <circle cx="48" cy="48" r="10" fill="none" stroke="#FFFFFF" stroke-width="3.4"
+                opacity="0" filter="url(#glowUltra)" stroke-linecap="round">
+            <animate attributeName="r" values="10;42" dur="1.25s" begin="0.625s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;0.45;0" dur="1.25s" begin="0.625s" repeatCount="indefinite"/>
+        </circle>
+    </g>
+</svg>

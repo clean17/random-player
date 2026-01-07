@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 96 96" role="img" aria-label="Loading">
+    <defs>
+        <linearGradient id="rippleC" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#67E8F9"/>
+            <stop offset="55%" stop-color="#A78BFA"/>
+            <stop offset="100%" stop-color="#FCA5A5"/>
+        </linearGradient>
+
+        <!-- 어두운 배경에서 더 잘 보이게 글로우 강화 -->
+        <filter id="glowStrong" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="3.2" result="b"/>
+            <feColorMatrix in="b" type="matrix"
+                           values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 1.6 0" result="bb"/>
+            <feMerge>
+                <feMergeNode in="bb"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <!-- 중앙 코어용 살짝 부드러운 글로우 -->
+        <filter id="coreGlow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="2.6" result="cb"/>
+            <feMerge>
+                <feMergeNode in="cb"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+
+    <g>
+        <!-- 천천히 회전 -->
+        <animateTransform attributeName="transform" type="rotate"
+                          from="0 48 48" to="360 48 48"
+                          dur="2.6s" repeatCount="indefinite"/>
+
+        <!-- 뒤에 은은한 halo(가독성 보조) -->
+        <circle cx="48" cy="48" r="18" fill="url(#rippleC)" opacity="0.12"/>
+
+        <!-- 중앙 코어 -->
+<!--        <circle cx="48" cy="48" r="6.5" fill="url(#rippleC)" filter="url(#coreGlow)" opacity="0.95">-->
+<!--            <animate attributeName="r" values="6.2;7.2;6.2" dur="1.0s" repeatCount="indefinite"/>-->
+<!--            <animate attributeName="opacity" values="0.85;1;0.85" dur="1.0s" repeatCount="indefinite"/>-->
+<!--        </circle>-->
+
+        <!-- Ripple 1 -->
+        <circle cx="48" cy="48" r="10" fill="none" stroke="url(#rippleC)" stroke-width="7"
+                opacity="0" filter="url(#glowStrong)" stroke-linecap="round">
+            <animate attributeName="r" values="10;40" dur="1.35s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;0.95;0" dur="1.35s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="8;2.6" dur="1.35s" repeatCount="indefinite"/>
+        </circle>
+
+        <!-- Ripple 2 (반 박자) -->
+        <circle cx="48" cy="48" r="10" fill="none" stroke="url(#rippleC)" stroke-width="7"
+                opacity="0" filter="url(#glowStrong)" stroke-linecap="round">
+            <animate attributeName="r" values="10;40" dur="1.35s" begin="0.675s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0;0.8;0" dur="1.35s" begin="0.675s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="8;2.6" dur="1.35s" begin="0.675s" repeatCount="indefinite"/>
+        </circle>
+    </g>
+</svg>
