@@ -234,3 +234,5 @@
 /* ON: 노란 별/하트 */
 .fav-btn[data-favorited="false"]{ color:#b8b8b8; } /* 회색 테두리 */
 .fav-btn[data-favorited="true"]{  color:#f5c400; } /* 노란 채움 */
+.fav-icon-star{ color:#f5c400; }
+.fav-icon-heart{  color:#F54A00; }
