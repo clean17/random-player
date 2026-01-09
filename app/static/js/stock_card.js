@@ -727,6 +727,7 @@ async function requestToggleFavorite({ stockCode, next }) {
         const text = await res.text().catch(() => "");
         throw new Error(text || "Server request failed");
     }
+    showDebugToast("즐겨찾기 변경완료")
     return res.json().catch(() => ({}));
 
 

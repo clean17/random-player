@@ -1086,7 +1086,7 @@ function enterEvent(event) {
             if (chatInput.value.trim().length === 0) {
                 socket.emit("stop_typing", { room: roomName, username: username });
             }
-        }, 10)
+        }, 100)
 
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {

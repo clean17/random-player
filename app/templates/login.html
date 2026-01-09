@@ -149,7 +149,7 @@
                 }
             }).then(res => {
                 if (res.request.responseURL) {
-                    removeLoadingOverlay();
+                    // removeLoadingOverlay();
                     window.location.href = res.request.responseURL;
                 }
             })
