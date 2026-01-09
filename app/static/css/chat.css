@@ -1,10 +1,26 @@
 body {
+    /* 중앙 정렬 flex 제거 > 일반 문서 흐름으로 */
+    display: block;
+    justify-content: initial;
+    align-items: initial;
+    /* flex: 로그인 / 폼 / 단일 카드 화면용
+       ❌ body가 flex + center면 생기는 문제
+
+         iOS Safari에서 특히 심각함:
+         1. 키보드가 올라올 때
+         2. viewport 높이가 줄어듦
+         3. justify-content: center 때문에
+         → body 안 모든 요소가 다시 재배치
+         4. 이 과정에서 input 포커스가 끊기거나 무시됨
+
+         👉 결과:
+         - 탭했는데 포커스 안 잡힘
+         - 스크롤 한 번 해야 포커스 복구
+         - blur 이후 재포커스 불가
+    */
+
     background-color: #f4f4f4;
-    /*display: flex;*/
-    /*justify-content: center;*/
-    /*align-items: center;*/
-    touch-action: manipulation; /* 탭 허용, 더블 탭 차단 > button, a 반응속도 빠르게 하기 위해서 */
-    -webkit-overflow-scrolling: touch; /* iOS Safari에서 overflow: scroll 영역에 자연스러운 관성 스크롤을 적용, iOS Safari에서 반드시 필요 */
+    min-height: 100dvh;
     overflow-x: hidden;
 }
 
@@ -17,21 +33,25 @@ button:hover {
 /* body 내부의 container 선택자 */
 body .container {
     max-width: 500px; /* 브라우저 최소 가로폭 */
-    position: fixed;
+    /*position: fixed;*/ /* iOS에서 키보드가 올라오면 “뷰포트”가 바뀌는데, fixed는 그 변화를 안정적으로 못 따라감 */
+    position: relative;   /* fixed 제거, “문서 흐름 안에서” 배치되고, 고정 위치 계산을 iOS에게 맡기지 않는다 */
     top: 0; bottom: 0; left: 0; right: 0;
-    margin: auto; /* 좌우 정렬 */
+    margin: 0 auto; /* 좌우 정렬 */
 
     /*background: #9bbbd4; !* 노란색 *!*/
     background: #222222;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     /*border-radius: 8px;*/
     width: 100%;
-    height: 100%;
+    /*height: 100%;*/
+    height: 100dvh;       /* iOS 최신, iOS Safari는 키보드 등장 시 → body 높이를 동적으로 재계산 → fixed/flex 레이아웃 깨짐 */
     text-align: center;
     display: flex;
     flex-direction: column;
 }
 #chat-container {
+    /* iOS Safari에서 overflow: scroll 영역에 자연스러운 관성 스크롤을 적용, iOS Safari에서 반드시 필요 */
+    /*  iOS 13 이후부터는 기본적으로 적용되므로 더 이상 필요하지 않음 */
     -webkit-overflow-scrolling: touch;
 
     /* contain: 현재 요소에서 스크롤 바운스 등 "부모로 전파"를 막음 >> 확대 시 가로 스크롤 안됨 */
@@ -51,7 +71,8 @@ body .container {
 #chat-input {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch; /* iOS 자연스러운 스크롤 >> overflow: auto 관성 스크롤 */
-    touch-action: none; /* 모바일/태블릿/터치 지원 기기에서 제스처를 해석하는 방법; auto: 모두 허용, manipulation: 더블탭 확대 차단, pan-y: 세로 스크롤만 허용 */
+    /*touch-action: none; !* 모바일/태블릿/터치 지원 기기에서 제스처를 해석하는 방법; auto: 모두 허용, manipulation: 더블탭 확대 차단, pan-y: 세로 스크롤만 허용 *!*/
+    touch-action: manipulation; /* 탭 허용, 더블 탭 차단 > button, a 반응속도 빠르게 하기 위해서 */
     line-height: 1.5;
 }
 

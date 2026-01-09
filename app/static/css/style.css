@@ -105,6 +105,8 @@ button:hover {
     z-index: 9999;
     pointer-events: all; /* 모든 이벤트를 이 요소로 제한 */
 }
+#overlay { display:none; pointer-events:none; }
+#overlay.show { display:flex; pointer-events:all; }
 #overlay img {
     position: absolute;
     top: 45%;
