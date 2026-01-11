@@ -268,10 +268,9 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         """
         fire_condition = """
             where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
-            and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8
+            and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 7
             and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
-            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
-            --and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 10 -- 의미가 있나 ?
+            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.2
         """
         params = [date]
 
@@ -283,10 +282,12 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         ) as rn
         , b.* 
         , ROUND(last_i.last_trading_value_num / 100_000_000) || '억' as current_trading_value
-        , coalesce(b.graph_file, last_i.graph_file) as graph_file
+        , coalesce(b.s_graph_file, last_i.graph_file) as graph_file
     from (
-        select i.stock_code
-          , i.stock_name
+        select 
+          max(i.id) as id
+          , i.stock_code
+          , I.stock_name
           , count(i.stock_code)
           , to_char(min(current_price::numeric), 'FM999,999,999') as min
           , to_char(coalesce(s.close::numeric, max(i.current_price::numeric)), 'FM999,999,999') as last
@@ -307,10 +308,9 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
           , ROUND(avg(current_trading_value::numeric)/100000000)||'억' as avg_trading_value
           , min(i.created_at)::date as first_date
           , max(i.created_at)::date as last_date
-          , max(i.id) as id
           , s.logo_image_url
           , s.category
-          , s.graph_file
+          , s.graph_file as s_graph_file
         from interest_stocks i 
         join stocks s on s.stock_code = i.stock_code and s.flag = true
         {favorite_join}
