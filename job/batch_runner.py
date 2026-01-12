@@ -11,7 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
-    update_summary_stock_graph_daily, find_low_stocks_us
+    update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -366,6 +366,15 @@ def create_scheduler():
         update_summary_stock_graph_daily,
         trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute=10),
         id="update_summary_stocks_graph",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 16) 매일 10:00 full-chain.pem 생성
+    scheduler.add_job(
+        generate_fullchain_pem_daily,
+        trigger=CronTrigger(hour=10, minute=0),
+        id="generate_fullchain_pem_daily",
         executor="io",
         replace_existing=True,
     )

@@ -520,3 +520,41 @@ def update_summary_stock_graph_daily():
 
     if process.returncode != 0:
         print("returncode =", process.returncode)
+
+
+def generate_fullchain_pem_daily():
+    print('    ############################### generate_fullchain_pem_daily ###############################')
+
+    # subprocess 실행 (새로운 프로세스)
+    process = subprocess.Popen(
+        ["cmd", "/c", r"C:\nginx\nginx-1.26.2\ssl\make_fullchain.bat"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
+
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
