@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160" viewBox="0 0 240 160">
+    <defs>
+        <linearGradient id="shimmer" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#000" stop-opacity="0.08"/>
+            <stop offset="50%" stop-color="#000" stop-opacity="0.16"/>
+            <stop offset="100%" stop-color="#000" stop-opacity="0.08"/>
+            <animate attributeName="x1" values="-1;1" dur="1.2s" repeatCount="indefinite"/>
+            <animate attributeName="x2" values="0;2" dur="1.2s" repeatCount="indefinite"/>
+        </linearGradient>
+        <clipPath id="r">
+            <rect x="0" y="0" width="240" height="160" rx="12" ry="12"/>
+        </clipPath>
+    </defs>
+
+    <!-- 배경 -->
+    <g clip-path="url(#r)">
+        <rect width="240" height="160" fill="rgba(0,0,0,0.06)"/>
+        <rect width="240" height="160" fill="url(#shimmer)"/>
+    </g>
+
+    <!-- 가운데 '이미지' 아이콘 -->
+    <g fill="none" stroke="rgba(0,0,0,0.28)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="78" y="46" width="84" height="68" rx="10" ry="10" fill="rgba(255,255,255,0.18)"/>
+        <circle cx="105" cy="70" r="6" fill="rgba(0,0,0,0.12)"/>
+        <path d="M86 104l18-18 12 12 10-10 20 20"/>
+    </g>
+</svg>

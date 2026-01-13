@@ -118,14 +118,16 @@
                 {% if dir in ['trip', 'temp', 'refine'] %}
                 <button class="delete-btn" type="button">×</button>
                 {% endif %}
+                <!-- 이미지를 스켈레톤으로 변경 filename='no-image.png' >> filename='svg/image_skeleton.svg' -->
                 <img class="thumbnail {% if dir == 'stock' %}stock-graph{% endif %}"
                      src="{% if loop.index <= 5 %}
                             {{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}
                           {% else %}
-                            {{ url_for('static', filename='no-image.png') }}
+                            {{ url_for('static', filename='svg/image_skeleton.svg') }}
                           {% endif %}"
                      data-src="{{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
                      alt="{{ image|urlencode }}"
+                     onerror="this.onerror=null; this.src='/static/no-image.png';"
                      {% if dir not in ['trip', 'temp', 'refine'] %}
                      onclick="moveImage('{{ image|urlencode }}', {{ loop.index }})"
                      {% endif %}
