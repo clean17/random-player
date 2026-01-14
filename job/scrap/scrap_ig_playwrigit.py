@@ -257,6 +257,11 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
                 url = "https://chickchick.shop/func/scrap-posts?urls="+origin_href
                 res = requests.get(url)
                 data = res.json()
+                try:
+                    data = res.json()
+                except ValueError:  # JSONDecodeError도 ValueError 하위
+                    print("https://chickchick.shop 서버 응답없음")
+                    return []
                 if data["result"]: # 등록되어 있음
                     already_collected_count += 1
                     continue
@@ -339,7 +344,7 @@ def _sel(root: str, kind: str, rel_main: str, rel_dialog: Optional[str] = None) 
     rel = rel_main if kind == "main" else (rel_dialog if rel_dialog is not None else rel_main)
     return _under(root, rel)
 
-async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
+async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> Tuple[List[str], List[str]]:
     root, kind = await _resolve_root(page)
 
     # 루트/종류에 맞춰 모든 셀렉터 구성
@@ -432,6 +437,13 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
         )
         return urls
 
+    good_video_urls: Set[str] = set()
+
+    # 네트워크 응답에서 '좋은' 비디오만 즉시 선별 저장 (페이지에서 발생하는 모든 네트워크 응답(response)을 “이벤트로” 받아서 검사하는 패턴)
+    def on_response(resp):
+        if looks_like_good_video(resp):
+            good_video_urls.add(resp.url)
+
     # 2) 캐러셀
     if ul_found and IMG_SEL and NEXT_BTN_SEL:
         async def collect_from_main() -> None:
@@ -440,6 +452,8 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
                     seen.add(u)
 
         await collect_from_main()
+        page.on("response", on_response)
+
 
         # "다음" 클릭 반복 (클릭 전 수집 → 클릭 → 잠깐 대기)
         for _ in range(20):
@@ -449,6 +463,7 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
 
             # 클릭 전 수집(현재 화면)
             await collect_from_main()
+            page.on("response", on_response)
 
             # 클릭
             try:
@@ -464,6 +479,7 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
 
         # 마지막 한 번 더
         await collect_from_main()
+        page.on("response", on_response)
 
     # 3) Fallback
     if await page.locator(FALLBACK_IMG).count():
@@ -497,7 +513,7 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> None:
     # for i, u in enumerate(final_urls, 1):
     #     print(f"[IMG {i}] {u}")
 
-    return final_urls
+    return final_urls, list(good_video_urls)
 
 
 def looks_like_good_video(resp):
@@ -537,8 +553,7 @@ async def force_play_video_if_possible(page):
         play_btn = page.locator("button[aria-label*='Play'], button:has-text('Play')")
         if await play_btn.count():
             await play_btn.click()
-            # await asyncio.sleep(0.5)
-            await asyncio.sleep(0.7)
+            await asyncio.sleep(1)
     except:
         pass
     # JS로 강제 재생
@@ -559,7 +574,7 @@ async def extract_media_from_post(page, url: str):
     """
     good_video_urls: Set[str] = set()
 
-    # 네트워크 응답에서 '좋은' 비디오만 즉시 선별 저장
+    # 네트워크 응답에서 '좋은' 비디오만 즉시 선별 저장 (페이지에서 발생하는 모든 네트워크 응답(response)을 “이벤트로” 받아서 검사하는 패턴)
     def on_response(resp):
         if looks_like_good_video(resp):
             good_video_urls.add(resp.url)
@@ -570,7 +585,10 @@ async def extract_media_from_post(page, url: str):
 
     # 이미지 수집 (도우미 사용)
     seen = set()
-    images: List[str] = await extract_imgs_src_only(page, url, seen)
+    images, videos = await extract_imgs_src_only(page, url, seen)
+
+    for v in videos:
+        good_video_urls.add(v)
 
     # 비디오 수집: 보이게/재생 유도 → '좋은' 응답 대기
     await force_play_video_if_possible(page)
@@ -582,7 +600,7 @@ async def extract_media_from_post(page, url: str):
         await asyncio.sleep(0.75) # 시간 조정
 
     # 보조: DOM의 <video src>도 수집(있을 수 있음) → CDN 필터 적용
-    vids = page.locator("section main > div:nth-of-type(1) video")
+    vids = page.locator("section main > div:nth-of-type(1) video")   # div:nth-of-type(1): 자식인 div중 첫번째 요소
     n_vid = await vids.count()
     # 1) 비디오가 뜰 때까지 기다림
     try:
