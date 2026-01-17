@@ -312,15 +312,19 @@ button.delete-button:hover {
     background: rgba(18,20,26,0.96);
     z-index: 99999;
     justify-content: center;
-    /*align-items: center;*/
-    /*flex-direction: column;*/
+    align-items: center;
+    flex-direction: column;
 }
 #slideshow-modal img {
     max-width: 100vw;
     max-height: 100vh;
+    width: auto;                /* 부모에 맞춰 강제로 늘리지 않음 */
+    height: auto;               /* 비율 유지 */
+    object-fit: contain;        /* 비율 유지하면서 최대한 크게 */
     border-radius: 18px;
     box-shadow: 0 4px 32px #000a;
     margin: 0 auto;
+    margin-bottom: 10vh;
     display: block;
 }
 #slideshow-modal .close-modal {

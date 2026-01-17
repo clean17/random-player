@@ -167,7 +167,7 @@ function moveImageToPreviousStep(event, imageItem) {
             idx = imageItem.id.split('-')[1]
         }
 
-
+        renderLoadingOverlay();
         fetch(`/image/move-image`, {
             method: 'POST',
             headers: {
@@ -180,6 +180,7 @@ function moveImageToPreviousStep(event, imageItem) {
         })
             .then(response => response.json())
             .then(data => {
+                removeLoadingOverlay();
                 if (data.status === 'success') {
                     const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : imageItem;
                     const nextImageElement = imageElement?.nextElementSibling;
