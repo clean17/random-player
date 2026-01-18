@@ -292,7 +292,7 @@ def create_scheduler():
     # 8) 12~19 - 저점 매수 찾기
     scheduler.add_job(
         find_low_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="12-19", minute="5,35"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="5,35"),
         id="hourly_1505_find_low_stocks",
         executor="io",
         replace_existing=True,
@@ -300,7 +300,7 @@ def create_scheduler():
     # 8-1) 08:00 - 미장 저점 매수 찾기
     scheduler.add_job(
         find_low_stocks_us,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="8", minute="0"),
+        trigger=CronTrigger(day_of_week="mon-fri", minute="0"),
         id="daily_0800_find_low_stocks_us",
         executor="io",
         replace_existing=True,
@@ -364,7 +364,7 @@ def create_scheduler():
     # 15) 상승주 그래프 갱신
     scheduler.add_job(
         update_summary_stock_graph_daily,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute=10),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="10,40"),
         id="update_summary_stocks_graph",
         executor="io",
         replace_existing=True,
