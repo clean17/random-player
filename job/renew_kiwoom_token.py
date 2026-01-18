@@ -1,10 +1,12 @@
 import requests
 import json
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key, find_dotenv
 import os
 
-load_dotenv()  # .env 파일을 현재 환경변수로 로드
+dotenv_path = find_dotenv(usecwd=True) or ".env"
+load_dotenv(dotenv_path=dotenv_path)
+# load_dotenv()  # .env 파일을 현재 환경변수로 로드
 
 M_APP_KEY = os.environ.get('M_APP_KEY')
 M_SECRET_KEY = os.environ.get('M_SECRET_KEY')
@@ -33,6 +35,11 @@ def fn_au10001(data):
     token = data["token"]
     print('Body:', body)  # JSON 응답을 파싱하여 출력
     print('Token:', token)
+
+    # 5) 현재 프로세스 환경에도 반영 (즉시 사용 목적)
+    os.environ["MY_ACCESS_TOKEN"] = token
+    # 6) .env 파일에도 저장(없으면 추가, 있으면 값 업데이트)
+    set_key(dotenv_path, "MY_ACCESS_TOKEN", token)
 
 # 실행 구간
 if __name__ == '__main__':
