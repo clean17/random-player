@@ -268,9 +268,9 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         """
         fire_condition = """
             where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
-            and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 7
+            and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8.5
             and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
-            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.2
+            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 2.8
         """
         params = [date]
 
@@ -290,17 +290,31 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
           , I.stock_name
           , count(i.stock_code)
           , to_char(min(current_price::numeric), 'FM999,999,999') as min
-          , to_char(coalesce(s.close::numeric, max(i.current_price::numeric)), 'FM999,999,999') as last
+--           , to_char(max(i.current_price::numeric), 'FM999,999,999') as last
+          , to_char(
+              case when max(i.created_at)::date <> CURRENT_DATE then max(i.current_price::numeric)
+                   else s.close::numeric
+              end, 'FM999,999,999') as last
           , ROUND(
               AVG(
                 COALESCE(
                   NULLIF(REGEXP_REPLACE(today_price_change_pct, '%%', '', 'g'), '')::numeric, 0)
                )
             , 1)||'%%' AS avg_change_pct  
-          , ROUND(100.0 * (coalesce(coalesce(s.close::numeric, max(i.current_price::numeric)), 0) - MIN(current_price::numeric))
-               / NULLIF(MIN(current_price::numeric), 0),1)||'%%' AS total_rate_of_increase
-          , ROUND(100.0 * (coalesce(coalesce(s.close::numeric, max(i.current_price::numeric)), 0) - MIN(current_price::numeric))
-               / NULLIF(MIN(current_price::numeric), 0)  / count(i.stock_code), 1)||'%%' as increase_per_day
+          , ROUND(
+              100.0 * (
+                case when max(i.created_at)::date <> CURRENT_DATE then max(i.current_price::numeric)
+                     else s.close::numeric
+                end - MIN(current_price::numeric)
+                ) / NULLIF(MIN(current_price::numeric), 0)
+            , 1)||'%%' AS total_rate_of_increase
+          , ROUND(
+              100.0 * (
+                case when max(i.created_at)::date <> CURRENT_DATE then max(i.current_price::numeric)
+                     else s.close::numeric
+                end - MIN(current_price::numeric)
+              ) / NULLIF(MIN(current_price::numeric), 0) / count(i.stock_code)
+            , 1)||'%%' as increase_per_day
           , case when max(market_value::numeric) >= 1_000_000_000_000
           		 then ROUND(max(market_value::numeric)/1_000_000_000_000, 1)||'조'
                  else ROUND(max(market_value::numeric)/100_000_000)||'억'
@@ -322,10 +336,10 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         and i.created_at >= %s::date
         and today_price_change_pct is not null
         {target_condition}
-        group by i.stock_code, i.stock_name, s.close, s.logo_image_url, s.category, s.graph_file
+        group by i.stock_code, i.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
         having count(i.stock_code) >= 1
 --            and count(stock_code) <= 6
-        and max(i.created_at) >= (CURRENT_DATE - INTERVAL '7 days') -- x일 전부터 등록된 것
+        and max(i.created_at) >= (CURRENT_DATE - INTERVAL '6 days') -- x일 전부터 등록된 것
         order by count(i.stock_code) desc, max(i.created_at) desc
     ) as b
     left join lateral (
@@ -392,7 +406,7 @@ def get_interest_low_stocks(date: str, conn=None):
     and i.stock_code = s.stock_code
     and s.flag = True
     AND i.today_price_change_pct::numeric > 3.8
-    AND i.target = 'low'
+    AND i.target like 'low%%'
     ORDER BY i.today_price_change_pct::numeric DESC;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
