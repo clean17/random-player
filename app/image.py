@@ -42,12 +42,23 @@ DIRECTORY_MAP = {
 EXCLUDE_SUFFIXES: Final = (".zip", ".ini", ".Identifier")  # 불변 튜플
 
 # MOVE_DIR = os.path.join(os.getcwd(), 'move')
-def initialize_image_directories():
-    os.makedirs(IMAGE_DIR, exist_ok=True)
-    os.makedirs(MOVE_DIR, exist_ok=True)
 
-initialize_image_directories()
+# def initialize_image_directories():
+#     os.makedirs(IMAGE_DIR, exist_ok=True)
+#     os.makedirs(MOVE_DIR, exist_ok=True)
+#
+# initialize_image_directories()
 
+
+def initialize_sorted_images():
+    global shuffled_images
+    images = [
+        f for f in os.listdir(REF_IMAGE_DIR)
+        if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))
+           and not f.lower().endswith(EXCLUDE_SUFFIXES)
+    ]
+    images.sort(key=lambda x: x.lower())  # 이름순 정렬
+    shuffled_images = images
 
 
 def initialize_shuffle_images():
@@ -61,14 +72,12 @@ def initialize_shuffle_images():
     random.shuffle(images)
     shuffled_images = images
 
-def get_ref_images(start, count):
-    global shuffled_images
-    if shuffled_images is None:
-        initialize_shuffle_images()
-    return shuffled_images[start:start + count]
 
 # 애플리케이션 실행 시 한 번 셔플된 리스트를 초기화
-initialize_shuffle_images()
+# initialize_shuffle_images()
+
+# 최초에는 정렬
+initialize_sorted_images()
 
 
 # def get_images(start, count, dir):
@@ -297,9 +306,9 @@ def image_list():
 
 
     elif dir == 'refine':
-        firstRequst = request.args.get('firstRequst')
-        if firstRequst == 'True':
-            initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
+        # firstRequst = request.args.get('firstRequst')
+        # if firstRequst == 'True':
+        #     initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
         images_length = count_non_zip_files(REF_IMAGE_DIR)
 
         isSlide = request.args.get('slide', '')
