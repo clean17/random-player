@@ -19,16 +19,18 @@ ACCOUNTS = [
 
 ]
 
-USER_DATA_DIR = str(Path("./ig_profile-16").resolve())
-WAIT_SECOND = 13
+# USER_DATA_DIR = str(Path("./ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
+USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
+# USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
+WAIT_SECOND = 60
 
 
 async def ensure_login(page):
     await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
     await asyncio.sleep(4)
     # 로그인 폼 보이면 로그인
-    login_user = page.locator("input[name='username']")
-    login_pass = page.locator("input[name='password']")
+    login_user = page.locator("input[name='username'], input[name='email']")
+    login_pass = page.locator("input[name='password'], input[name='pass']")
     if await login_user.count() and await login_pass.count():
         await login_user.fill(SCRAP_USERNAME)
         await login_pass.fill(SCRAP_PASSWORD)
@@ -107,7 +109,7 @@ async def main():
         context = await pw.chromium.launch_persistent_context(
             USER_DATA_DIR,
             headless=False,
-            viewport={"width": 2560, "height": 1440},
+            viewport={"width": 2500, "height": 1250},
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
 
