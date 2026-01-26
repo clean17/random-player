@@ -10,6 +10,14 @@ import asyncio
 import requests
 import datetime
 
+today = datetime.datetime.now().strftime("%Y%m%d")
+filename = f"logs/scrap_ig_{today}.log"
+log_file = open(filename, "w", encoding="utf-8")
+sys.stdout = log_file
+sys.stderr = log_file
+# print("이건 파일로 감")
+# raise Exception("에러도 파일로 감")
+
 sys.stdout.reconfigure(line_buffering=True)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -21,13 +29,15 @@ BASE_SAVE_DIR = IMAGE_DIR2
 # BASE_SAVE_DIR = r"D:\temp"
 
 # ======== 설정 ========
-USER_DATA_DIR = str(Path("./ig_profile-0").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
+# USER_DATA_DIR = str(Path("./ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
 USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
 # USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
 HEADLESS = False
 
 USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
+# USERNAME = 'fkaus014'
 PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
+# PASSWORD = 'dlsdn317!'
 
 # USERNAME = ""   # 인스타 로그인 계정
 # PASSWORD = ""   # 비밀번호
@@ -169,8 +179,8 @@ async def ensure_login(page):
     await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
     await asyncio.sleep(4)
     # 로그인 폼 보이면 로그인
-    login_user = page.locator("input[name='username']")
-    login_pass = page.locator("input[name='password']")
+    login_user = page.locator("input[name='username'], input[name='email']")
+    login_pass = page.locator("input[name='password'], input[name='pass']")
     if await login_user.count() and await login_pass.count():
         await login_user.fill(USERNAME)
         await login_pass.fill(PASSWORD)
@@ -765,13 +775,13 @@ async def handle_account(context, account: str):
     cnt = 0
     for idx, link in enumerate(links, 1):
         today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-        # print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
+        print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
 
-        parsed = urlparse(link)
-        # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
-        qs_link = normalize_ig_post_url(parsed.path)
-        parsed = urlparse(qs_link)
-        print(f"[{account}] ({idx}/{len(links)}) {parsed.path}")
+        # parsed = urlparse(link)
+        # # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
+        # qs_link = normalize_ig_post_url(parsed.path)
+        # parsed = urlparse(qs_link)
+        # print(f"[{account}] ({idx}/{len(links)}) {parsed.path}")
 
         cnt += 1
         # None, False, 0, '', [], {}, 모두 여기로 들어옴
@@ -851,6 +861,7 @@ async def run_scrap():
                     await asyncio.sleep(30)
 
         await context.close()
+    log_file.close()
 
 def run_scrap_ig_job():
     # 이벤트 루프는 “스레드당 1개”가 원칙

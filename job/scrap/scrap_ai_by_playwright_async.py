@@ -9,6 +9,15 @@ from io import BytesIO
 import uuid, os, requests
 import json
 import asyncio
+import datetime
+
+today = datetime.datetime.now().strftime("%Y%m%d")
+filename = f"logs/scrap_ai_{today}.log"
+log_file = open(filename, "w", encoding="utf-8")
+sys.stdout = log_file
+sys.stderr = log_file
+# print("이건 파일로 감")
+# raise Exception("에러도 파일로 감")
 
 # 게시글 목록 페이지 URL 템플릿
 url_template = settings['CRAWL_URL']
@@ -125,6 +134,7 @@ async def async_crawl_images_from_page(page_num):
                 data = res.json()
                 # print(data)
                 if data["result"]: # 등록되어 있음
+                    print(f"##### Done: page {page_num} #####")
                     sys.exit(0)  # 여기서 프로그램 전체가 종료됨
 
 
@@ -204,7 +214,8 @@ async def async_crawl_ai():
     for page_num in range(1, 21):
         print(f"##### Start: page {page_num} #####")
         await async_crawl_images_from_page(page_num)
-        print(f"##### Done: page {page_num} #####")
+
+    log_file.close()
 
 def run_scrap_ai_job():
     # 이벤트 루프는 “스레드당 1개”가 원칙
