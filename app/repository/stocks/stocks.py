@@ -405,7 +405,7 @@ def get_interest_low_stocks(date: str, conn=None):
     WHERE i.created_at::date = %s
     and i.stock_code = s.stock_code
     and s.flag = True
-    AND i.today_price_change_pct::numeric > 3.8
+    AND i.today_price_change_pct::numeric > 3
     AND i.target like 'low%%'
     ORDER BY i.today_price_change_pct::numeric DESC;
     """
