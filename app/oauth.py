@@ -11,12 +11,22 @@ FACEBOOK_APP_ID = settings['FACEBOOK_APP_ID']
 @oauth.route('/policy', methods=['GET'])
 def get_personal_information_processing_policy():
     return render_template('policy.html')
+a
+@oauth.route('/eliminate', methods=['GET'])
+def eliminate():
+    print('삭제 콜백')
+
+@oauth.route('/remove', methods=['GET'])
+def remove():
+    print('제거 콜백')
 
 @oauth.route('/callback', methods=['GET'])
 def callback():
+    print('콜백')
     code = request.args.get("code")
     if not code:
         return "No code received", 400
+    print('code', code)
 
     # 코드 → 액세스 토큰 요청
     token_url = "https://graph.threads.net/oauth/access_token"
@@ -28,14 +38,22 @@ def callback():
         "code": code,
     }
 
-    response = requests.post(token_url, params=params)
+    # response = requests.post(token_url, params=params)
+    response = requests.post(token_url, data=params, timeout=15)
     token_data = response.json()
+    if "access_token" not in token_data:
+        return token_data, 400
     print('token_data', token_data)
     access_token = token_data.get("access_token")
     user_id = token_data.get("user_id")
 
-    exchange_token_url = "https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=" + THREADS_APP_SECRET + "&access_token=" + access_token
-    response = requests.get(exchange_token_url)
+    exchange_url = "https://graph.threads.net/access_token"
+    exchange_params = {
+        "grant_type": "th_exchange_token",
+        "client_secret": THREADS_APP_SECRET,
+        "access_token": access_token,
+    }
+    response = requests.get(exchange_url, params=exchange_params, timeout=15)
     long_term_token_data = response.json()
     # long_term_access_token = long_term_token_data.get("access_token")
 
