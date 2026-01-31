@@ -11,7 +11,7 @@ FACEBOOK_APP_ID = settings['FACEBOOK_APP_ID']
 @oauth.route('/policy', methods=['GET'])
 def get_personal_information_processing_policy():
     return render_template('policy.html')
-a
+
 @oauth.route('/eliminate', methods=['GET'])
 def eliminate():
     print('삭제 콜백')

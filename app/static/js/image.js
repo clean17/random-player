@@ -129,9 +129,11 @@ function previousImage() {
 // data-src: 원본 이미지 경로
 // 처음에는 스켈레톤 이미지만 보여준다
 function preloadImage(img) {
+    console.log('isConnected:', img.isConnected, 'index:', img.dataset.index);
     const src = img.getAttribute('data-src');
-    if (src && img.src !== src) {
-        img.src = src;
+    const cur = img.getAttribute('src'); // 속성값 기준
+    if (src && cur !== src) {
+        img.setAttribute('src', src);
         img.removeAttribute('data-src'); // 이미 로드된 이미지는 data-src 속성 제거
     }
 }
