@@ -100,6 +100,8 @@ def login():
                     raise ValueError(f"Unexpected type: {type(lockout_time)}")
 
                 lockout_time = dt.replace(tzinfo=kst)
+                print('now', now)
+                print('lockout_time', lockout_time)
                 if now < lockout_time:
                     # flash('Too many login attempts. Try again later')
                     print('Too many login attempts. Try again later')
@@ -150,8 +152,10 @@ def login():
             if fetch_user:
                 update_user_login_attempt(username, (fetch_user.login_attempt or 0) + 1)
 
+                print('fetch_user.login_attempt', fetch_user.login_attempt)
                 if int(fetch_user.login_attempt or 0) >= 5:
-                    update_user_lockout_time(username, (now + timedelta(days=1)).isoformat())
+                    # update_user_lockout_time(username, (now + timedelta(days=1)).isoformat())
+                    update_user_lockout_time(username, (now + timedelta(minutes=30)).isoformat())
                     return redirect(url_for('auth.lockout'))  # 로그인 제한 페이지로 리다이렉트
 
             # 로그인 아이디가 정보가 없음
@@ -165,7 +169,8 @@ def login():
 
                 # 로그인 실패가 5번이 되면 세션에 락아웃 타임 저장
                 if session['attempts'] >= 5 and not session['lockout_time']:
-                    session['lockout_time'] = (now + timedelta(days=1)).isoformat() # UTC 시간 저장
+                    # session['lockout_time'] = (now + timedelta(days=1)).isoformat() # UTC 시간 저장
+                    session['lockout_time'] = (now + timedelta(minutes=30)).isoformat() # UTC 시간 저장
 
                 # 세션에 락아웃이 걸렸을 경우
                 if 'lockout_time' in session and session['lockout_time']: # 키 있는지 + 키의 값이 falsy가 아닌지

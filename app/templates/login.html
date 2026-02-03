@@ -91,6 +91,11 @@
                 body: fd,                       // form-data로 전송
             });
 
+            if (res.redirected) {
+                window.location.href = res.url;   // /auth/lockout 같은 최종 URL로 이동
+                return;
+            }
+
             if (!res.ok) throw new Error("login failed");
 
             // 성공 후 이동
