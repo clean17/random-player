@@ -1,7 +1,7 @@
 /**
  *  WebRTC 연결 절차
  *
- * 1. Peer A: createOffer() → SDP 생성
+ * 1. Peer A: createOffer() → 세션 기술 프로토콜(SDP) 생성
  * 2. Peer A: setLocalDescription(offer)
  * 3. Peer A → Peer B: offer 전송 (socket.io 등 시그널링 서버 통해)
  *
@@ -49,7 +49,7 @@ let myDataChannel;
 let peerLeftTimeout;
 let cameraOn = true;
 let audioOn = false;
-let micOn = false;
+let micOn = true; // mic 항상 on 수정 - 2026-01-30
 let isDragging = false;
 let offsetX = 0;
 let offsetY = 0;
@@ -212,8 +212,8 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
     };*/
 
     let constraints = {
-        audio: true,
-        video: true
+        audio: true, // 오디오 사용하겠다
+        video: true  // 비디오 사용하겠다
     };
 
     try {
@@ -242,7 +242,7 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         if (!switchCamera) {
             myStream.getAudioTracks().forEach(track => {
                 // if (username !== 'nh824') {
-                    track.enabled = false;
+                    track.enabled = true;  // 최초 mic on 변경 - 2026.02.06
                 // }
             });
         }
@@ -652,7 +652,7 @@ opacitySlider.addEventListener('input', (e) => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
-    await getMedia(); // stream 초기화, RTCrtpSender에 stream track 추가
+    await getMedia(); // stream 초기화, RTCrtpSender에 stream track 추가, 카메라 설정, 마이크 설정
     await makeConnection();
     socket.emit('join_room', roomName, username);
     setSwitchCameraPos();
