@@ -583,6 +583,7 @@ function sendMessage() {
     chatInput.focus();
     // chatInput.setSelectionRange(0, 0);  // 커서 위치 맨 앞으로 다시 지정,  iOS Safari에서 포커스 후 스크롤 위치 이상 현상을 유발할 수도
     localStorage.setItem("#tempChat-250706", '');
+    updateChatSession();  // 채팅 세션 갱신
 }
 
 // url 미리보기 카드 렌더링
@@ -1100,7 +1101,7 @@ function enterEvent(event) {
 function renewChatSession() {
     let tempInterval = setInterval(() => {
         if (videoCallWindow) {
-            // updateChatSession();
+            updateChatSession();
         } else {
             clearInterval(tempInterval);
         }
