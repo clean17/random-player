@@ -834,7 +834,7 @@ function renderMessageDiv() {
     messageDiv.classList.add(
         "p-2",
         "rounded-lg",
-        "max-w-[75%]",  // 최대 너비 75%
+        "max-w-[82%]",  // 최대 너비 82%
         "w-fit",
         "block",        // 내용에 맞게 크기 조정
         "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
