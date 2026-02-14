@@ -223,10 +223,11 @@
                     const imageElement = document.getElementById(`image-${index}`);
                     const nextImageElement = imageElement?.nextElementSibling;
                     if (imageElement) {
+                        nextImage();
                         imageElement.remove();
-                        if (nextImageElement) {
-                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
+                        // if (nextImageElement) {
+                        //     nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // }
                     }
                     // const total = document.getElementById('total_count').textContent
                     // document.getElementById('total_count').textContent = Number(total) - 1;

@@ -112,6 +112,10 @@ function nextImage() {
         const nextImage = centerImage.nextElementSibling;
         if (nextImage && nextImage.classList.contains('image-item')) {
             nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
+            if (nextImage.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
+                const videoEl = nextImage.querySelector('video');
+                videoEl.currentTime = 0;
+            }
         }
     }
 }
