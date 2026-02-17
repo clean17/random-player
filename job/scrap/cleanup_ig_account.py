@@ -8,7 +8,7 @@ from pathlib import Path
 
 config = configparser.ConfigParser()
 
-cfg_path = Path(__file__).resolve().parent.parent / "config" / "config.ini"
+cfg_path = Path(__file__).resolve().parent.parent.parent / "config" / "config.ini"
 read_files = config.read(cfg_path, encoding="utf-8")
 # print("sections  =", config.sections())    # 올라온 섹션 이름들
 
@@ -20,8 +20,8 @@ ACCOUNTS = [
 ]
 
 # USER_DATA_DIR = str(Path("./ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
-USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
-# USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
+# USER_DATA_DIR = str(Path("./ig_profile-15").resolve())  # fx015
+USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
 WAIT_SECOND = 60
 
 

@@ -116,6 +116,8 @@ function nextImage() {
                 const videoEl = nextImage.querySelector('video');
                 videoEl.currentTime = 0;
             }
+        } else {
+            showDebugToast("마지막입니다.");
         }
     }
 }
