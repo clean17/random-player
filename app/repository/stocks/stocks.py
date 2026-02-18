@@ -1,6 +1,7 @@
 from typing import List, Sequence, Tuple
 from config.db_connect import db_transaction
 import psycopg
+from utils.wsgi_midleware import logger
 
 
 # 매일 아침 국장 종목 갱신
@@ -270,7 +271,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
             where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
             and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8.5
             and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
-            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 2.8
+            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
         """
         params = [date]
 
@@ -353,6 +354,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
     ;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
+        # logger.info("SQL=%s params=%s", sql, params)
         cur.execute(sql, tuple(params))
         # cur.execute(sql, (date,))
         # cur.execute(sql, )
