@@ -820,7 +820,7 @@ function renderMessageRow(isMine, chatId) {
     const messageRow = document.createElement("div");
     messageRow.style.display = "flex";
     messageRow.style.alignItems = "flex-end";
-    messageRow.style.marginBottom = "6px";
+    messageRow.style.marginBottom = "2px";
     messageRow.style.maxWidth = "100%";
     messageRow.style.justifyContent = isMine ? "flex-end" : "flex-start";
     messageRow.classList.add('messageRow')
