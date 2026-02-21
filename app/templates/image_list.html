@@ -139,7 +139,7 @@
         <div>
             total_count : <span id="total_count">{{ images_length }}</span>
         </div>
-        <div class="pagination">
+        <!--<div class="pagination">
             {% if page > 1 %}
             <a href="{{ url_for('image.image_list', market=market, title=title, page=1, dir=dir) }}">&laquo;</a>
             <a href="{{ url_for('image.image_list', market=market, title=title, page=page-1, dir=dir) }}">&lt;</a>
@@ -152,6 +152,24 @@
             {% if page < total_pages %}
             <a href="{{ url_for('image.image_list', market=market, title=title, page=page+1, dir=dir) }}">&gt;</a>
             <a href="{{ url_for('image.image_list', market=market, title=title, page=total_pages, dir=dir) }}">&raquo;</a>
+            {% endif %}
+        </div>-->
+        <div class="pagination"
+             data-market="{{ market|e }}"
+             data-title="{{ title|e }}"
+             data-dir="{{ dir|e }}">
+            {% if page > 1 %}
+            <a href="#" data-page="1">&laquo;</a>
+            <a href="#" data-page="{{ page-1 }}">&lt;</a>
+            {% endif %}
+
+            {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
+            <a href="#" data-page="{{ p }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            {% endfor %}
+
+            {% if page < total_pages %}
+            <a href="#" data-page="{{ page+1 }}">&gt;</a>
+            <a href="#" data-page="{{ total_pages }}">&raquo;</a>
             {% endif %}
         </div>
         {% if images_length != 0 and dir in ['image', 'image2', 'move'] %}
@@ -311,6 +329,32 @@
         videos.forEach(video => observer.observe(video));
     }
 
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('.pagination a[data-page]');
+        if (!a) return;
+
+        e.preventDefault();
+
+        const pager  = a.closest('.pagination');
+        console.log('pager', pager)
+        const market = pager.dataset.market;
+        const title  = pager.dataset.title;
+        const dir    = pager.dataset.dir;
+        const page   = Number(a.dataset.page);
+
+        goPage({ market, title, dir, page });
+    });
+
+    function goPage({ market, title, dir, page }) {
+        renderLoadingOverlay();
+        const url = new URL("{{ url_for('image.image_list') }}", window.location.origin);
+        url.searchParams.set("market", market);
+        url.searchParams.set("title", title);
+        url.searchParams.set("dir", dir);
+        url.searchParams.set("page", page);
+
+        window.location.href = url.toString(); // 그냥 링크 이동
+    }
 
     function initPage() {
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로

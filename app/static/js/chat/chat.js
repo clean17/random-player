@@ -839,7 +839,7 @@ function renderMessageDiv() {
     // - rounded-full → 완전한 원형
     messageDiv.classList.add(
         "px-[0.7rem]",
-        "py-[0.35rem]",
+        "py-[0.4rem]",
         "rounded-xl",
         "max-w-[82%]",     // 최대 너비 82%
         "w-fit",
@@ -850,6 +850,8 @@ function renderMessageDiv() {
         "border-gray-500", // 어두운 회색 border색
         "font-[400]",      // 폰트 크기
         "leading-[1.3]",   // 줄 간 거리
+        "flex",
+        "items-center",    // 세로 가운데
     );
     return messageDiv;
 }
