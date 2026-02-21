@@ -839,7 +839,7 @@ function renderMessageDiv() {
     // - rounded-full → 완전한 원형
     messageDiv.classList.add(
         "px-[0.7rem]",
-        "py-[0.325rem]",
+        "py-[0.35rem]",
         "rounded-xl",
         "max-w-[82%]",     // 최대 너비 82%
         "w-fit",
