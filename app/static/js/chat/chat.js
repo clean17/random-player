@@ -831,16 +831,25 @@ function renderMessageRow(isMine, chatId) {
 // 메시지 박스
 function renderMessageDiv() {
     const messageDiv = document.createElement("div");
+    // - rounded-md → 0.375rem
+    // - rounded-lg → 0.5rem
+    // - rounded-xl → 0.75rem
+    // - rounded-2xl → 1rem
+    // - rounded-3xl → 1.5rem
+    // - rounded-full → 완전한 원형
     messageDiv.classList.add(
-        "p-2",
-        "rounded-lg",
-        "max-w-[82%]",  // 최대 너비 82%
+        "px-[0.7rem]",
+        "py-[0.325rem]",
+        "rounded-xl",
+        "max-w-[82%]",     // 최대 너비 82%
         "w-fit",
-        "block",        // 내용에 맞게 크기 조정
-        "break-words",  // 긴 단어가 자동으로 줄바꿈되도록 설정
+        "block",           // 내용에 맞게 크기 조정
+        "break-words",     // 긴 단어가 자동으로 줄바꿈되도록 설정
         "messageDiv",
         "overflow-hidden", // 내부 이미지를 div의 border-radius 내부로 들어가도록
         "border-gray-500", // 어두운 회색 border색
+        "font-[400]",      // 폰트 크기
+        "leading-[1.3]",   // 줄 간 거리
     );
     return messageDiv;
 }
