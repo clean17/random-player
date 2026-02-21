@@ -6,6 +6,8 @@ from collections import defaultdict, deque
 from flask import Flask, session, send_file, render_template, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
 from flask_login import LoginManager, current_user, logout_user, login_required
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
+
+# from job.batch_runner import create_scheduler
 from .auth import auth, User, users, SESSION_EXPIRATION_TIME, GUEST_SESSION_EXPIRATION_TIME, SECOND_PASSWORD_SESSION_KEY, check_active_session, save_verified_time, get_verified_time
 from config.config import load_config
 from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프린트를 import
@@ -13,11 +15,13 @@ from .main import main
 from .video import video
 from .image import image_bp, environment
 from .function import func, socketio
+from .stock import stock
 from .upload import upload
 from .oauth import oauth
 from .rds import rds
 from .file import file_bp
 from .admin import admin
+from .api import api
 from .post import posts
 import fnmatch
 from datetime import datetime, timedelta
@@ -55,7 +59,7 @@ BLOCKED_PATHS = [
     "/image/shuffle/ref-images",
     # "/video/select-directory", # video는 화이트리스트 하나만 허용하니까 블랙리스트 추가할 필요 없음
     # "/video/video-player",
-    "/video/video-player/1", "/video/video-player/2", "/video/video-player/3", "/video/video-player/4", "/video/video-player/5",
+    "/video/video-player/1", "/video/video-player/2", "/video/video-player/3", "/video/video-player/4", "/video/video-player/5", "/video/video-player/7"
     # "/video/videos",
     # "/video/delete",
     # "/video/stream",
@@ -139,6 +143,9 @@ def format_hms(elapsed):
     return f"{h}시간 {m}분 {s}초"
 
 def create_app():
+    # scheduler = create_scheduler()
+    # scheduler.start()
+
     print("✅ create_app() called", uuid.uuid4())
     app = Flask(__name__, static_folder='static')
     app.config.update(load_config())
@@ -157,10 +164,12 @@ def create_app():
 
     app.register_blueprint(main, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/auth')
+    app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(video, url_prefix='/video')
     app.register_blueprint(m_ffmpeg, url_prefix='/ffmpeg')
     app.register_blueprint(image_bp, url_prefix='/image')
     app.register_blueprint(func, url_prefix='/func')
+    app.register_blueprint(stock, url_prefix='/stocks')
     app.register_blueprint(upload, url_prefix='/upload')
     app.register_blueprint(oauth, url_prefix='/oauth')
     app.register_blueprint(rds, url_prefix='/rds')
@@ -331,7 +340,7 @@ def create_app():
 
                 if elapsed > timeout:
                     print(f"    request.path - {request.path}")
-                    print(f"    before_request - ⏱ 경과 시간: {format_hms(elapsed)} redirect logout")
+                    print(f"    before_request - ⏱  경과 시간: {format_hms(elapsed)} redirect logout")
                     return redirect(url_for("auth.logout"))
 
                 session["last_active"] = now
