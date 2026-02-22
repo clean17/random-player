@@ -68,9 +68,9 @@ nginx -s reload
 ```
 절대 경로로 실행(git bash)
 ```bash
-C:/nginx/nginx-1.26.2/nginx.exe &
-C:/nginx/nginx-1.26.2/nginx.exe -s quit
-C:/nginx/nginx-1.26.2/nginx.exe -s reload
+/cnginx/nginx-1.26.2/nginx.exe &
+/c/nginx/nginx-1.26.2/nginx.exe -s quit
+/c/nginx/nginx-1.26.2/nginx.exe -s reload
 ```
 Git Bash `~` (home)에서 실행하면 안되므로 직접 경로 이동 후 실행
 ```bash
@@ -161,7 +161,7 @@ $ openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 
 
 인증서 확인 (인증서가 있는 디렉토리에서 git bash)
 ```bash
-$ openssl x509 -in /c/nginx/nginx-1.26.2/ssl/chickchick.shop-fullchain.pem -noout -dates
+$ openssl x509 -in /c/nginx/nginx-1.26.2/ssl/chickchick.kr-fullchain.pem -noout -dates
 ```
 
 
@@ -170,26 +170,43 @@ $ openssl x509 -in /c/nginx/nginx-1.26.2/ssl/chickchick.shop-fullchain.pem -noou
 사전 조건은 도메인을 등록해야 한다.
 - certbot (리눅스/WSL/유닉스 계열에서 많이 씀)
 ```bash
-sudo certbot certonly --webroot -w certbot -d www.chickchick.shop
+sudo certbot certonly --webroot -w certbot -d www.chickchick.kr
 ```
 - wacs.exe (Windows용 Let's Encrypt 클라이언트, win-acme)<br>
-wacs.exe 가 설치된 디렉토리에서 아래 명령어 실행
+
+아래 설정 파일을 먼저 `nginx.conf` 에 추가<br>
+그러면 인증서를 만들 때 `http://chickchick.kr/.well-known/acme-challenge/랜덤파일` 에 접근한다
+```conf
+    server {
+        listen       80;
+        server_name  chickchick.kr www.chickchick.kr;
+        
+        return 301 https://$host$request_uri;
+
+        location /.well-known/acme-challenge/ { # 인증서 생성 후 주석
+            root html;
+            allow all;
+            default_type "text/plain";
+            autoindex on;            
+        }
+```
+`wacs.exe` 가 설치된 디렉토리에서 아래 명령어 실행 `http-01 (FileSystem) 인증 방식`<br>
 ```bash
-wacs.exe --target manual --host "chickchick.shop, www.chickchick.shop" --webroot "C:\nginx\nginx-1.26.2\html" --accepttos --validation filesystem --store pemfiles --pemfilespath "C:\nginx\nginx-1.26.2\ssl"
+wacs.exe --target manual --host "chickchick.kr, www.chickchick.kr" --webroot "C:\nginx\nginx-1.26.2\html" --accepttos --validation filesystem --store pemfiles --pemfilespath "C:\nginx\nginx-1.26.2\ssl"
 ```
 아래 파일이 생성된다<br>
 ![img_13.png](app/static/readme/img_13.png)
 
 - fullchain 인증서를 생성한다(터미널)
 ```bash
-copy chickchick.shop-crt.pem + chickchick.shop-chain.pem chickchick.shop-fullchain.pem
+copy chickchick.kr-crt.pem + chickchick.kr-chain.pem chickchick.kr-fullchain.pem
 ```
 
 무료 인증서 기한 3개월이 지나면 인증서가 만료된다 > 갱신 필요
 
 bash창에서 서버가 보내는 인증서로 만료기한 확인
 ```bash
-$ openssl s_client -connect chickchick.shop:443 -servername chickchick.shop < /dev/null 2>/dev/null | openssl x509 -noout -dates
+$ openssl s_client -connect chickchick.kr:443 -servername chickchick.kr < /dev/null 2>/dev/null | openssl x509 -noout -dates
 
 notBefore=May 27 07:22:59 2025 GMT
 notAfter=Aug 25 07:22:58 2025 GMT
@@ -233,8 +250,9 @@ server {
 win-acme에서는 `crt.pem`, `chain.pem`이 따로 생성되므로
 `crt.pem`+`chain.pem`을 합쳐서 넣는다.
 ```bash
-$ copy chickchick.shop-crt.pem + chickchick.shop-chain.pem chickchick.shop-fullchain.pem
+$ copy chickchick.kr-crt.pem + chickchick.kr-chain.pem chickchick.kr-fullchain.pem
 ```
+
 <br>
 
 ---
