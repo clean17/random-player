@@ -129,7 +129,7 @@ async def async_crawl_images_from_page(page_num):
                 account = current_url.split('/')[-2]
 
                 # 수집한 적이 있는지 확인
-                url = "https://chickchick.shop/func/scrap-posts?urls="+current_url
+                url = "https://chickchick.kr/func/scrap-posts?urls="+current_url
                 res = requests.get(url)
                 data = res.json()
                 # print(data)
@@ -191,7 +191,7 @@ async def async_crawl_images_from_page(page_num):
                 # 수집 후 url을 등록한다
                 try:
                     requests.post(
-                        'https://chickchick.shop/func/scrap-posts',
+                        'https://chickchick.kr/func/scrap-posts',
                         json={
                             "account": str(account),
                             "post_urls": current_url,

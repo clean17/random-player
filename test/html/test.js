@@ -10,7 +10,7 @@ console.log(filename);  // 출력: 2024-06-26_03-30-20.mp4
 
 async function checkVerified() {
     try {
-        const response = await fetch("https://chickchick.shop/auth/check-verified", {
+        const response = await fetch("https://chickchick.kr/auth/check-verified", {
             method: "GET",
             headers: { "Content-Type": "application/json" }
         });

@@ -50,7 +50,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
 #
 #     try:
 #         res = requests.post(
-#             'https://chickchick.shop/stocks/info',
+#             'https://chickchick.kr/stocks/info',
 #             json={"stock_name": str(ticker)},
 #             timeout=10
 #         )
@@ -65,7 +65,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
 #     # 현재 종가 가져오기
 #     try:
 #         res = requests.post(
-#             'https://chickchick.shop/stocks/amount',
+#             'https://chickchick.kr/stocks/amount',
 #             json={
 #                 "product_code": str(product_code)
 #             },
@@ -113,7 +113,7 @@ def renew_interest_stocks_close():
 
         try:
             res = requests.post(
-                'https://chickchick.shop/stocks/info',
+                'https://chickchick.kr/stocks/info',
                 json={"stock_name": str(ticker)},
                 timeout=10
             )
@@ -136,7 +136,7 @@ def renew_interest_stocks_close():
         #     # company_code 조회
         #     try:
         #         res2 = requests.post(
-        #             'https://chickchick.shop/stocks/overview',
+        #             'https://chickchick.kr/stocks/overview',
         #             json={"product_code": str(product_code)},
         #             timeout=10
         #         )
@@ -149,7 +149,7 @@ def renew_interest_stocks_close():
         #     # 카테고리 조회
         #     try:
         #         res3 = requests.post(
-        #             'https://chickchick.shop/stocks/company',
+        #             'https://chickchick.kr/stocks/company',
         #             json={"company_code": str(company_code)},
         #             timeout=10
         #         )
@@ -166,7 +166,7 @@ def renew_interest_stocks_close():
         # 현재 종가 가져오기
         try:
             res4 = requests.post(
-                'https://chickchick.shop/stocks/amount',
+                'https://chickchick.kr/stocks/amount',
                 json={"product_code": str(product_code)},
                 timeout=10
             )
