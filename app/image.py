@@ -276,8 +276,10 @@ def image_list():
     # ?title=video-call&dir=temp
     # if current_user.username == settings['GUEST_USERNAME']:
     dir = request.args.get('dir')
-    selected_dir = request.args.get('title')
-    title_list = []
+    selected_dir = request.args.get('selected_dir')
+    if selected_dir in ("None", "null", "undefined", ""):
+        selected_dir = None
+    dir_list = []
     images = []
     images_length = 0
     page = int(request.args.get('page', 1))
@@ -289,12 +291,12 @@ def image_list():
         # images_length = count_non_zip_files(TEMP_IMAGE_DIR)
         # template_html = 'trip_image_list.html'
         template_html = 'image_list.html'
-        title_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
+        dir_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
 
         # 선택된 title 값 가져오기 (없다면 첫 번째 값 자동 선택)
-        if not selected_dir or selected_dir not in title_list:
-            # selected_dir = title_list[0] if title_list else ''  # 첫 번째 항목 자동 선택
-            selected_dir = title_list[0] if title_list else TEMP_IMAGE_DIR  # 첫 번째 항목 자동 선택
+        if not selected_dir or selected_dir not in dir_list:
+            # selected_dir = dir_list[0] if dir_list else ''  # 첫 번째 항목 자동 선택
+            selected_dir = dir_list[0] if dir_list else TEMP_IMAGE_DIR  # 첫 번째 항목 자동 선택
 
         target_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
         if selected_dir == 'video-call':
@@ -353,9 +355,9 @@ def image_list():
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
-    return render_template(template_html, images=images, page=page, title=selected_dir,
+    return render_template(template_html, images=images, page=page,
                            total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, title_list=title_list, version=int(time.time()))
+                           selected_dir=selected_dir, dir_list=dir_list, version=int(time.time()))
 
 
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
@@ -483,7 +485,7 @@ def delete_images():
     #
     #     return render_template('image_list.html', images=image2_arr[:LIMIT_PAGE_NUM], page=page, title=None,
     #                            total_pages=total_pages, images_length=len(image2_arr), dir=dir,
-    #                            selected_dir=None, title_list=[], version=int(time.time()))
+    #                            selected_dir=None, dir_list=[], version=int(time.time()))
     # else:
     #     return redirect(url_for('image.image_list', page=page, dir=dir))
 

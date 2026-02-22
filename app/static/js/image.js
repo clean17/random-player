@@ -7,7 +7,7 @@ let nextImageElement = null,
     lazyImages,
     selectedIndex,
     selectedOption,
-    titleText = undefined;
+    dirText = undefined;
 
 const nextBtn = document.getElementById('next-image-button'),
       previousBtn = document.getElementById('previous-image-button'),
@@ -20,14 +20,15 @@ const nextBtn = document.getElementById('next-image-button'),
       slideShowBtn = document.getElementById("slideshow-btn"),
       zipBtn = document.getElementById('download-zip-btn'),
       dropdownMenu = document.getElementById('dropdown-menu'),
-      $title = document.getElementById('title-select'),
+      $dir = document.getElementById('dir-select'),
       empty_variable = ''
 ;
 
 
-if ($title) {
-    selectedOption = $title.options[$title.selectedIndex];
-    titleText = selectedOption.text;
+if ($dir) {
+    selectedOption = $dir.options[$dir.selectedIndex];
+    console.log('selectedOption', selectedOption)
+    dirText = selectedOption.text;
 }
 
 // debounce
@@ -74,8 +75,8 @@ function pollProgress(stock) {
 }
 /******************************************  Procress  ****************************************/
 /******************************************  Image  ****************************************/
-nextBtn?.addEventListener('click', nextImage);
-delBtn?.addEventListener('click', deletePage)
+nextBtn?.addEventListener('click', () => nextImage());
+delBtn?.addEventListener('click', () => deletePage())
 
 // 다음 Element를 세팅
 /*function setNextImage(element) {
@@ -106,10 +107,21 @@ function getCenterImage(index= '') {
 }
 
 
-function nextImage() {
+function nextImage(nextImage) {
     const centerImage = getCenterImage();
-    if (centerImage) {
+    if (nextImage == null && centerImage) {
         const nextImage = centerImage.nextElementSibling;
+        if (nextImage && nextImage.classList.contains('image-item')) {
+            nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
+            if (nextImage.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
+                const videoEl = nextImage.querySelector('video');
+                videoEl.currentTime = 0;
+            }
+        } else {
+            showDebugToast("마지막입니다.");
+        }
+    }
+    if (nextImage) {
         if (nextImage && nextImage.classList.contains('image-item')) {
             nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
             if (nextImage.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
@@ -195,9 +207,10 @@ function moveImageToPreviousStep(event, imageItem) {
                     // const imageElement = document.getElementById(`image-${index}`);
                     if (imageElement) {
                         imageElement.remove();
-                        if (nextImageElement) {
-                            nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
+                        // if (nextImageElement) {
+                        //     nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // }
+                        nextImage(nextImageElement)
                     }
                 }
             })
@@ -374,20 +387,23 @@ function safePlay(video, { autoPlay = false, fromStart= false } = {}) {
 
 /******************************************  Video  ****************************************/
 /******************************************  Pagenation  ****************************************/
-document.getElementById("prevButton")?.addEventListener("click", () => {
+function goPrevPage () {
     if (page > 1) {
         const previousBtn = document.querySelector('.pagination').children[1]
         previousBtn.click();
     }
-});
+}
 
-document.getElementById("nextButton")?.addEventListener("click", () => {
+function goNextPage () {
     const btnCount = document.querySelector('.pagination').childElementCount
     const nextBtn = document.querySelector('.pagination').children[btnCount - 2];
     if (nextBtn.textContent === '>') {
         nextBtn.click();
     }
-});
+}
+
+document.getElementById("prevButton")?.addEventListener("click", goPrevPage);
+document.getElementById("nextButton")?.addEventListener("click", goNextPage);
 /******************************************  Pagenation  ****************************************/
 
 
@@ -456,13 +472,13 @@ function moveStockImage(event) {
 function downloadThisPage() {
     const today = new Date();
     const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
-    const titleName = $title.options[$title.selectedIndex].textContent.trim();
+    const dirName = $dir.options[$dir.selectedIndex].textContent.trim();
 
    renderLoadingOverlay();
 
     // ZIP 파일 요청
     // fetch(`/func/download-zip?dir=${encodeURIComponent(dir)}`, {
-    fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}&title=${encodeURIComponent(titleName)}`, {
+    fetch(`/func/download-zip/page?dir=${encodeURIComponent(dir)}&page=${page}&dir=${encodeURIComponent(dirName)}`, {
         method: 'GET'
     })
         .then(response => {
@@ -496,9 +512,9 @@ function downloadThisPage() {
 function downloadAllFiles() {
     const today = new Date();
     const formattedDate = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
-    const titleName = $title.options[$title.selectedIndex].textContent.trim();
+    const dirName = $dir.options[$dir.selectedIndex].textContent.trim();
 
-    const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}&title=${encodeURIComponent(titleName)}`;
+    const url = `/func/download-zip/all?dir=${encodeURIComponent(dir)}&dir=${encodeURIComponent(dirName)}`;
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
@@ -616,6 +632,7 @@ slideShowBtn?.addEventListener('click', slideShow)
 
 
 function shuffleImage() {
+    renderLoadingOverlay()
     fetch(`/image/shuffle/ref-images?dir=`+dir, { method: 'POST' })
         .then(response => response.json())
         .then(data => {

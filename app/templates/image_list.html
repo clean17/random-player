@@ -73,12 +73,12 @@
     {% if selected_dir %}
     <div class="dropdown-selector">
         <form>
-            <label for="title-select">Select Title:</label>
-            <select id="title-select" name="title" onchange="location = this.value;">
-                {% for title in title_list %}
-                <option value="{{ url_for('image.image_list', title=title, dir=dir) }}"
-                        {% if title == selected_dir %}selected{% endif %}>
-                    {{ title }}
+            <label for="dir-select">Select Dir:</label>
+            <select id="dir-select" name="dir" onchange="location = this.value;">
+                {% for dir in dir_list %}
+                <option value="{{ url_for('image.image_list', selected_dir=selected_dir, dir=dir) }}"
+                        {% if dir == selected_dir %}selected{% endif %}>
+                    {{ dir }}
                 </option>
                 {% endfor %}
             </select>
@@ -141,23 +141,20 @@
         </div>
         <!--<div class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('image.image_list', market=market, title=title, page=1, dir=dir) }}">&laquo;</a>
-            <a href="{{ url_for('image.image_list', market=market, title=title, page=page-1, dir=dir) }}">&lt;</a>
+            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=1, dir=dir) }}">&laquo;</a>
+            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=page-1, dir=dir) }}">&lt;</a>
             {% endif %}
 
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-            <a href="{{ url_for('image.image_list', market=market, title=title, page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
 
             {% if page < total_pages %}
-            <a href="{{ url_for('image.image_list', market=market, title=title, page=page+1, dir=dir) }}">&gt;</a>
-            <a href="{{ url_for('image.image_list', market=market, title=title, page=total_pages, dir=dir) }}">&raquo;</a>
+            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=page+1, dir=dir) }}">&gt;</a>
+            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=total_pages, dir=dir) }}">&raquo;</a>
             {% endif %}
         </div>-->
-        <div class="pagination"
-             data-market="{{ market|e }}"
-             data-title="{{ title|e }}"
-             data-dir="{{ dir|e }}">
+        <div class="pagination">
             {% if page > 1 %}
             <a href="#" data-page="1">&laquo;</a>
             <a href="#" data-page="{{ page-1 }}">&lt;</a>
@@ -187,6 +184,7 @@
 <script>
     const dir = '{{ dir }}',
           page = "{{ page }}",
+          selected_dir = '{{ selected_dir }}',
           currentUserName = '{{ current_user.get_id() }}',
           guestName = '{{ config.GUEST_USERNAME }}',
           stock_name = `{{ market }}`,
@@ -231,7 +229,7 @@
             },
             body: JSON.stringify({
                 imagepath: dir,
-                subpath: titleText,
+                subpath: dirText,
                 filename: filename
             })
         })
@@ -334,23 +332,18 @@
         if (!a) return;
 
         e.preventDefault();
-
-        const pager  = a.closest('.pagination');
-        console.log('pager', pager)
-        const market = pager.dataset.market;
-        const title  = pager.dataset.title;
-        const dir    = pager.dataset.dir;
-        const page   = Number(a.dataset.page);
-
-        goPage({ market, title, dir, page });
+        const page = Number(a.dataset.page);
+        goPage(page);
     });
 
-    function goPage({ market, title, dir, page }) {
+    function goPage(page) {
         renderLoadingOverlay();
         const url = new URL("{{ url_for('image.image_list') }}", window.location.origin);
-        url.searchParams.set("market", market);
-        url.searchParams.set("title", title);
-        url.searchParams.set("dir", dir);
+        url.searchParams.set("market", stock_name);
+        url.searchParams.set("selected_dir", selected_dir);
+        if (dir !== null && dir !== undefined && dir !== "") {
+            url.searchParams.set("dir", dir);
+        }
         url.searchParams.set("page", page);
 
         window.location.href = url.toString(); // 그냥 링크 이동
@@ -389,14 +382,22 @@
                 case 'ArrowDown':
                 case 'PageDown':
                     event.preventDefault();
-                    // nextImage();
-                    throttledNextImage();
+                    if (event.shiftKey) {
+                        goNextPage();
+                    } else {
+                        // nextImage();
+                        throttledNextImage();
+                    }
                     break;
                 case 'ArrowLeft':
                 case 'ArrowUp':
                 case 'PageUp':
                     event.preventDefault();
-                    previousImage();
+                    if (event.shiftKey) {
+                        goPrevPage();
+                    } else {
+                        previousImage();
+                    }
                     break;
                 case ' ': case 'Enter':
                     event.preventDefault();
@@ -404,6 +405,7 @@
                     if (dir === 'trip' || dir === 'temp')  playCenterVideo();
                     break;
                 case 'Delete':
+                case '`':
                     if (isDelRunning) return
                     isDelRunning = true;
                     event.preventDefault();
