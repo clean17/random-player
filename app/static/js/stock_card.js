@@ -157,7 +157,7 @@ function renderTradingCardHtml(track, rows) {
         const hasImg = !!r.graph_file;
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
         const imgHtml = hasImg
-            ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
+            ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
 
         return `
@@ -221,7 +221,7 @@ function renderSummaryCardHtml(track, rows) {
         const hasImg = !!r.graph_file;
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
         const imgHtml = hasImg
-            ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
+            ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
 
         return `
@@ -285,7 +285,7 @@ function renderFavoriteCardHtml(track, rows) {
         const hasImg = !!r.graph_file;
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
         const imgHtml = hasImg
-            ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
+            ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
 
         return `
@@ -351,7 +351,7 @@ function renderLowCardHtml(track, rows) {
         const hasImg = !!r.graph_file;
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
         const imgHtml = hasImg
-            ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/kospil/${encoded_url}" alt="미리보기" />`
+            ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/kospil/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
 
         return `

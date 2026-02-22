@@ -61,7 +61,7 @@ let candidateQueue = [];
 
 ///////////////////////// Socket Code /////////////////////////////////////
 
-const socket = io("https://chickchick.shop:3000", {
+const socket = io("https://chickchick.kr:3000", {
     secure: true, // HTTPS 사용
     transports: ["websocket", "polling"],
     reconnection: true,              // 자동 재연결 활성화

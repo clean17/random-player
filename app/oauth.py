@@ -33,7 +33,7 @@ def callback():
     params = {
         "client_id": THREADS_APP_ID,
         "client_secret": THREADS_APP_SECRET,
-        "redirect_uri": "https://chickchick.shop/oauth/callback",
+        "redirect_uri": "https://chickchick.kr/oauth/callback",
         "grant_type": "authorization_code",
         "code": code,
     }
@@ -131,7 +131,7 @@ def delete_callback():
 
     # 삭제 처리 로직 (DB에서 유저 데이터 제거 등)
     confirmation_code = 'abc123'  # 실제 구현 시 고유한 UUID 등으로 생성
-    status_url = f'https://chickchick.shop/delete-status/{confirmation_code}'
+    status_url = f'https://chickchick.kr/delete-status/{confirmation_code}'
 
     return jsonify({
         'url': status_url,

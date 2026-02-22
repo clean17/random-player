@@ -563,7 +563,7 @@ function showSlideshowModal(fileList) {
 
     // 확장자 판별용
     const videoExts = ['mp4', 'mov', 'mkv', 'avi']; // 필요시 webm 추가
-    const imageBase = "https://chickchick.shop/image/images";
+    const imageBase = "https://chickchick.kr/image/images";
     const videoBase = "/video/temp-video"; // 템플릿에서 쓰던 경로와 맞추기
 
     function isVideo(filename) {

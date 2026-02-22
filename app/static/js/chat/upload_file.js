@@ -70,11 +70,11 @@ function uploadFile(event) {
 
                     let url = '';
                     if (isImage) { // imageExts.includes(ext)
-                        url = "https://chickchick.shop/image/images?filename="+filename+"&dir=temp&selected_dir=chat";
+                        url = "https://chickchick.kr/image/images?filename="+filename+"&dir=temp&selected_dir=chat";
                     } else if (isVideo) { // videoExts.includes(ext)
-                        url = "https://chickchick.shop/video/temp-video/"+filename+"?dir=temp&selected_dir=chat";
+                        url = "https://chickchick.kr/video/temp-video/"+filename+"?dir=temp&selected_dir=chat";
                     } else { // 파일
-                        url = "https://chickchick.shop/file/files?filename="+filename+"&dir=temp&selected_dir=chat";
+                        url = "https://chickchick.kr/file/files?filename="+filename+"&dir=temp&selected_dir=chat";
                     }
 
                     const msg = url.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거

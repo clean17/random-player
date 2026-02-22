@@ -114,7 +114,7 @@ function isWithin1Min(openTimestamp, dataTimestamp) {
 
 function connectSocket() {
     // socket = io("https://192.168.60.205:3000", {
-    socket = io("https://chickchick.shop:3000", {
+    socket = io("https://chickchick.kr:3000", {
         secure: true, // HTTPS 사용
         transports: ["websocket", "polling"],
         reconnection: true,              // 자동 재연결 활성화
@@ -669,9 +669,9 @@ function addMessage(data, load = false) {
              return s.match(imageExtRegex);
         }
 
-        if (data.msg.trim().startsWith('https://chickchick.shop/image/images')) {
+        if (data.msg.trim().startsWith('https://chickchick.kr/image/images')) {
             imageRenderer();
-        } else if (data.msg.trim().startsWith('https://chickchick.shop/video/temp-video/')) {
+        } else if (data.msg.trim().startsWith('https://chickchick.kr/video/temp-video/')) {
             // 비디오 첨부
             const video = document.createElement('video');
             video.classList.add('thumbnail');
@@ -687,7 +687,7 @@ function addMessage(data, load = false) {
             messageDiv.classList.remove('bg-gray-200')
             messageDiv.classList.remove('bg-blue-200')
             messageDiv.classList.add('border');
-        } else if (data.msg.trim().startsWith('https://chickchick.shop/file/files')) {
+        } else if (data.msg.trim().startsWith('https://chickchick.kr/file/files')) {
             // 파일 첨부
             const link = document.createElement('a');
             link.href = data.msg;

@@ -314,7 +314,7 @@
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -361,7 +361,7 @@
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -416,7 +416,7 @@
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -462,7 +462,7 @@
         </tr>
         <tr id="${detailId}" class="detail-row" style="display:none;">
           <td colspan="${thCount}">
-            ${hasImg ? `<img class="preview" src="https://chickchick.shop/image/stock-graphs/kospil/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
+            ${hasImg ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/kospil/${encoded_url}" alt="미리보기" />` : `<span class="hint">그래프 없음</span>`}
           </td>
         </tr>`;
         }).join('');
@@ -500,10 +500,10 @@
         const input = document.getElementById('dateInput');
         const yyyymmdd = input.value?.replace(/-/g, '');
 
-        const url = 'https://chickchick.shop/stocks/interest/data/today';
-        const url2 = 'https://chickchick.shop/stocks/interest/data/fire';
-        const url3 = 'https://chickchick.shop/stocks/interest/data/low';
-        const url4 = 'https://chickchick.shop/stocks/interest/data/favorite';
+        const url = 'https://chickchick.kr/stocks/interest/data/today';
+        const url2 = 'https://chickchick.kr/stocks/interest/data/fire';
+        const url3 = 'https://chickchick.kr/stocks/interest/data/low';
+        const url4 = 'https://chickchick.kr/stocks/interest/data/favorite';
         const payload = { date: yyyymmdd };
 
         try {

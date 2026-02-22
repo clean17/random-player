@@ -264,13 +264,13 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
                     rev_links = links[::-1]   # slicing, 원본 보존
                     return rev_links
 
-                url = "https://chickchick.shop/func/scrap-posts?urls="+origin_href
+                url = "https://chickchick.kr/func/scrap-posts?urls="+origin_href
                 res = requests.get(url)
                 data = res.json()
                 try:
                     data = res.json()
                 except ValueError:  # JSONDecodeError도 ValueError 하위
-                    print("https://chickchick.shop 서버 응답없음")
+                    print("https://chickchick.kr 서버 응답없음")
                     return []
                 if data["result"]: # 등록되어 있음
                     already_collected_count += 1
@@ -804,7 +804,7 @@ async def handle_account(context, account: str):
             link_segment = extract_account_and_type(normalize_ig_post_url(link))
             try:
                 requests.post(
-                    'https://chickchick.shop/func/scrap-posts',
+                    'https://chickchick.kr/func/scrap-posts',
                     json={
                         "account": str(account),
                         "post_urls": link,
