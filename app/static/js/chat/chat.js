@@ -648,7 +648,7 @@ function addMessage(data, load = false) {
             img.style.width = '200px';
         };
         messageDiv.appendChild(img);
-        messageDiv.classList.remove('p-2');
+        messageDiv.classList.remove('px-[0.7rem]', 'py-[0.4rem]');
         messageDiv.classList.add('border');
     }
 
@@ -683,7 +683,7 @@ function addMessage(data, load = false) {
             video.appendChild(source);
             messageDiv.innerHTML = '';
             messageDiv.appendChild(video);
-            messageDiv.classList.remove('p-2');
+            messageDiv.classList.remove('px-[0.7rem]', 'py-[0.4rem]');
             messageDiv.classList.remove('bg-gray-200')
             messageDiv.classList.remove('bg-blue-200')
             messageDiv.classList.add('border');
@@ -693,7 +693,11 @@ function addMessage(data, load = false) {
             link.href = data.msg;
             link.innerText = getFilenameFromUrl(data.msg);
             link.target = '_blank';
-            link.style.color = 'blue';
+            link.style.color = '#4da3ff';
+            link.style.textDecoration = 'underline';
+            link.style.fontWeight = '500';
+            link.onmouseenter = () => link.style.color = '#82c7ff';
+            link.onmouseleave = () => link.style.color = '#4da3ff';
             messageDiv.innerHTML = '';
             messageDiv.appendChild(link);
         } else if (isImagePathUrl(data.msg.trim())) {
@@ -721,7 +725,7 @@ function addMessage(data, load = false) {
                             const previewEl = renderPreviewCard(preview);
                             messageDiv.innerHTML = '';
                             messageDiv.appendChild(previewEl);
-                            messageDiv.classList.remove('p-2');
+                            messageDiv.classList.remove('px-[0.7rem]', 'py-[0.4rem]');
                             if (isScrollAtTheBottom2()) {
                                 moveBottonScroll();
                             }
@@ -845,6 +849,7 @@ function renderMessageDiv() {
         "w-fit",
         "block",           // 내용에 맞게 크기 조정
         "break-words",     // 긴 단어가 자동으로 줄바꿈되도록 설정
+        "break-all",       // 공백 없는 긴 문자열도 강제 줄바꿈
         "messageDiv",
         "overflow-hidden", // 내부 이미지를 div의 border-radius 내부로 들어가도록
         "border-gray-500", // 어두운 회색 border색
