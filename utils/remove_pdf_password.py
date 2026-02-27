@@ -28,7 +28,7 @@ def remove_pdf_password(input_path: str, output_path: str, password: str) -> Non
 if __name__ == "__main__":
     # 예시
     remove_pdf_password(
-        input_path=r"C:\Users\user\Downloads\2026년 1월 kt M모바일 명세서(문서열기암호：주민번호 앞 6자리).pdf",
-        output_path=r"C:\Users\user\Downloads\2026년 1월 kt M모바일 명세서 (박인우).pdf",
+        input_path=r"C:\Users\piw94\Downloads\2026년 2월 kt M모바일 명세서(문서열기암호：주민번호 앞 6자리).pdf",
+        output_path=r"C:\Users\piw94\Downloads\2026년 2월 kt M모바일 명세서 (박인우).pdf",
         password="940317"
     )
