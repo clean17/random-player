@@ -649,3 +649,19 @@ function shuffleImage() {
         });
 }
 
+
+document.addEventListener("touchstart", (e) => {
+    startX = e.touches[0].clientX;
+});
+
+document.addEventListener("touchend", (e) => {
+    let endX = e.changedTouches[0].clientX;
+    let diffX = endX - startX;
+
+    if (diffX > 50) {
+        previousImage();
+    } else if (diffX < -50) {
+        throttledNextImage();
+    }
+});
+
