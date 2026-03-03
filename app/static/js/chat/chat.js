@@ -175,7 +175,7 @@ function connectSocket() {
 
     // enter_room >> room_user_list
     socket.on("room_user_list", (userList) => {
-        console.log('현재 접속 중인 유저 목록:', userList);
+        // console.log('현재 접속 중인 유저 목록:', userList);
         updateUserCount(userList.length);
         const tempUserList = [];
         userList.forEach(user => {
@@ -215,14 +215,14 @@ function connectSocket() {
 
 
 
-    // 채팅방에 들어오고 나서 진행중인 영상통화 소켓 데이터 받음
+    // 상대는 이미 영상통화를 연결함 + 채팅방이 늦게 들어와 영통소켓 정보를 받아옴
     socket.on("find_video_call", (data) => {
-        if (data.socketId && !data.userList.includes(username)) {
+        if (data.userList.length !== 0 && !data.userList.includes(username)) {
             videoCallBtn.style.backgroundColor = "green";
         }
     });
 
-    // 채팅방에 들어와있는데 상대가 영상통화를 시작하면 채팅방으로 알림을 보낸다
+    // 채팅방에 상대와 함께 들어와 있음 + 상대가 영상통화를 연결함
     socket.on("video_call_ready", (data) => {
         videoCallRoomName = data.videoCallRoomName;
         if (username !== data.username) {
@@ -230,8 +230,10 @@ function connectSocket() {
         }
     });
 
+    // socket.on("disconnect" 에서 video_call_ended 메세지를 날린다
     socket.on("video_call_ended", (data) => {
         videoCallRoomName = null;
+        // 상대가 다른 탭에 있어도 영상통화를 나간게 아니므로 신호는 끄지 않는다
         // if (username !== data.username) {
         //     videoCallBtn.style.backgroundColor = "";
         // }
@@ -942,9 +944,9 @@ function createDateDivider(dateStr) {
 // 참여중 인원 수 표기 변경
 function updateUserCount(number) {
     roomUserCount.textContent = number < 0 ? 1 : number;
-    if (number === 1) {
+    /*if (number === 1) {
         videoCallBtn.style.backgroundColor = "";
-    }
+    }*/
 }
 
 // 최하단으로 가는 버튼 생성

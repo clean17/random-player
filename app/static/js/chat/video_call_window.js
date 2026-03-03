@@ -58,6 +58,12 @@ function openVideoCallWindow() {
         if (videoCallWindow) {
             document.body.removeChild(videoCallWindow);
             videoCallWindow = null;
+
+            // const msg = '<span style="color:green;"><i class="fa-solid fa-phone-slash" style="color: red;"></i></span>  통화종료';
+            // if (msg !== "") {
+            //     socket.emit("new_msg", { username, msg, room: roomName });
+            //     socket.emit("stop_typing", {room: roomName, username: username });
+            // }
         }
     };
 

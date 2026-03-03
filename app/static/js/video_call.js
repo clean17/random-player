@@ -115,17 +115,18 @@ socket.on('ice', (ice) => {
     onIceCandidateReceived(ice);  // ICE(Interactive Connectivity Establishment); 서로 연결되는 경로를 찾아냄; 상대방의 후보 경로를 추가해서 연결을 시도
 });
 
-socket.on("peer_left", () => {
+// 상대 탭 비활성화 이벤트
+/*socket.on("peer_left", () => {
     // 비디오 정리만 하고 연결은 유지
     peerFace.srcObject = null;
     console.log("상대방이 나갔습니다");
 
     peerLeftTimeout = setTimeout(() => {
-        console.log("10초 지남, 연결 닫음");
+        console.log("60초 지남, 연결 닫음");
         myPeerConnection?.close();
         myPeerConnection = null;
-    }, 10000); // 10초 대기
-});
+    }, 1000 * 60); // 60초 대기
+});*/
 
 socket.on("force_disconnect", () => {
     console.log("⚠️ 다른 기기에서 로그인되어 연결 종료됨");
@@ -654,13 +655,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
     await getMedia(); // stream 초기화, RTCrtpSender에 stream track 추가, 카메라 설정, 마이크 설정
     await makeConnection();
-    socket.emit('join_room', roomName, username);
+    socket.emit('join_video_socket', roomName, username);
     setSwitchCameraPos();
 
 
     // console.log('sender', myPeerConnection.getSenders())
 })
 
+// beforeunload: 브라우저가 닫히거나 새로고침되기 직전
 window.addEventListener("beforeunload", () => {
     socket.emit("leave_room", roomName, username); // 서버에 방 나간다고 알림
     if (globalRecoder) globalRecoder.stop();
