@@ -213,7 +213,7 @@ button.delete-button:hover {
 /* 하단 이전/다음 페이지 바로가기 버튼 */
 .pagination-buttons {
     position: fixed;
-    bottom: 10px;
+    bottom: 70px;
     width: 100%;
     display: flex;
     justify-content: space-between;
