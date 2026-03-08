@@ -156,8 +156,8 @@
         </div>-->
         <div class="pagination">
             {% if page > 1 %}
-            <a href="#" data-page="1">&laquo;</a>
-            <a href="#" data-page="{{ page-1 }}">&lt;</a>
+            <a href="#" data-page="1" class="side">&laquo;</a>
+            <a href="#" data-page="{{ page-1 }}" class="side">&lt;</a>
             {% endif %}
 
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
@@ -165,8 +165,8 @@
             {% endfor %}
 
             {% if page < total_pages %}
-            <a href="#" data-page="{{ page+1 }}">&gt;</a>
-            <a href="#" data-page="{{ total_pages }}">&raquo;</a>
+            <a href="#" data-page="{{ page+1 }}" class="side">&gt;</a>
+            <a href="#" data-page="{{ total_pages }}" class="side">&raquo;</a>
             {% endif %}
         </div>
         {% if images_length != 0 and dir in ['image', 'image2', 'move'] %}
