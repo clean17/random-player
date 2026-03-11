@@ -124,12 +124,17 @@ log_queue = queue.Queue()
 formatting = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 def get_log_filename():
+    month_str = datetime.now().strftime("%y%m")   # 오늘 날짜를 YYMM 형식으로
     today_str = datetime.now().strftime("%y%m%d") # 오늘 날짜를 YYMMDD 형식으로
-    return f"logs/app_{today_str}.log"
+    return f"logs/{month_str}/app_{today_str}.log"
 
 def setup_logging():
     # 로그 디렉토리 생성
     os.makedirs("logs", exist_ok=True)
+
+    month_str = datetime.now().strftime("%y%m")
+    month_dir = f"logs/{month_str}"
+    os.makedirs(month_dir, exist_ok=True)
 
     global root_logger, file_handler, listener, log_queue, formatting
 
@@ -238,7 +243,7 @@ def check_logger():
 
 # 백그라운드에서 날짜 변경 감지
 def log_monitor():
-    time.sleep(60)
+    time.sleep(5)
     while True:
         check_logger()
         time.sleep(60)  # 매 60초마다 체크
