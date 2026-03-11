@@ -144,3 +144,8 @@ def on_exit():
             print(f"Error deleting {lock_file}: {e}")
 
 # atexit.register(on_exit) #  프로그램이 정상적으로 종료될 때 호출될 함수를 등록, 정상: main 종료, ctrl+c는 동작안함
+
+
+def open_folder(path):
+    # 윈도우 탐색기로 해당 경로 열기
+    os.startfile(path)

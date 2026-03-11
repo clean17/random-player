@@ -17,6 +17,7 @@ from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap
 from app.repository.users.users import find_user_by_username
 from job.batch_process import run_crawl_ai_image
 from job.buy_lotto import async_buy_lotto
+from utils.common import open_folder
 from utils.fetch_url_preview import fetch_url_preview_by_selenium
 from job.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
@@ -196,7 +197,8 @@ def get_log_filename(date=None):
     """주어진 날짜(yyMMdd)의 로그 파일 경로 반환. 날짜가 없으면 오늘 날짜 사용"""
     if date is None:
         date = datetime.now().strftime("%y%m%d")
-    return os.path.join(LOG_DIR, f"app_{date}.log")
+    month_str = datetime.now().strftime("%y%m")
+    return os.path.join(LOG_DIR, f"{month_str}/app_{date}.log")
 
 @func.route("/logs/view")
 @login_required
@@ -700,6 +702,13 @@ def insert_scrap_posts():
 def find_scrap_posts_func():
     post_urls = request.args.get("urls")  # ?urls=... 값을 가져옴
     return jsonify({"result": find_scrap_post(post_urls)})
+
+@func.route("/docker-file/", methods=['GET'])
+@login_required
+def open_file_explorer_docker():
+    folder_path = r"\\wsl.localhost\docker-desktop-data\data\docker\volumes\igdata\_data"  # 원하는 경로
+    open_folder(folder_path)
+    return jsonify({"result": "success"})
 
 
 
