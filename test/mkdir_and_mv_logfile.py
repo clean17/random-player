@@ -3,10 +3,10 @@ import shutil
 from pathlib import Path
 
 # logs 디렉토리
-logs_dir = Path("logs")
+logs_dir = Path("logs/a")
 
 # app_yymmdd.log 형식만 매칭
-pattern = re.compile(r"^app_(\d{6})\.log$")
+pattern = re.compile(r"^scrap_ai_(\d{8})\.log$")
 
 for file_path in logs_dir.iterdir():
     if not file_path.is_file():
@@ -17,7 +17,7 @@ for file_path in logs_dir.iterdir():
         continue
 
     yymmdd = match.group(1)   # 예: 260310
-    yymm = yymmdd[:4]         # 예: 2603
+    yymm = yymmdd[2:6]         # 예: 2603
 
     target_dir = logs_dir / yymm
     target_dir.mkdir(exist_ok=True)

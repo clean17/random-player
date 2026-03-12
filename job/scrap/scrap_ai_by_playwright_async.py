@@ -9,10 +9,13 @@ from io import BytesIO
 import uuid, os, requests
 import json
 import asyncio
-import datetime
+from datetime import datetime
 
-today = datetime.datetime.now().strftime("%Y%m%d")
-filename = f"logs/scrap_ai_{today}.log"
+today = datetime.now().strftime("%Y%m%d")
+month = datetime.now().strftime("%y%m")
+month_dir = f"logs/a/{month}"
+os.makedirs(month_dir, exist_ok=True)
+filename = f"{month_dir}/scrap_ai_{today}.log"
 log_file = open(filename, "w", encoding="utf-8")
 sys.stdout = log_file
 sys.stderr = log_file

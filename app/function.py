@@ -35,7 +35,7 @@ func = Blueprint('func', __name__)
 
 socketio = SocketIO() # __init__ 으로 전달
 
-LOG_DIR = "logs"
+LOG_DIR = "logs/app"
 DATA_DIR = "data"
 MEMO_FILE = 'memo.txt'
 CHAT_FILE = 'chat.txt'

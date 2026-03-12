@@ -8,7 +8,7 @@ import subprocess
 import shutil
 import asyncio
 import requests
-import datetime
+from datetime import datetime
 
 today = datetime.datetime.now().strftime("%Y%m%d")
 filename = f"logs/scrap_ig_{today}.log"
