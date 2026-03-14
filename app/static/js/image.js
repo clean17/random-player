@@ -26,15 +26,15 @@ const nextBtn = document.getElementById('next-image-button'),
 
 if ($dir) {
     selectedOption = $dir.options[$dir.selectedIndex];
-    console.log('selectedOption', selectedOption)
+    // console.log('selectedOption', selectedOption)
     dirText = selectedOption.text;
 }
 
 // debounce
 let lastScrollTop = 0;
 let lastScrollTime = Date.now();
-const SCROLL_DELAY = 100;
-const SCROLL_THRESHOLD = 100000;  // px per second
+const SCROLL_DELAY = 50;
+const SCROLL_THRESHOLD = 50_000;  // px per second
 const THROTTLE_NEXT_IMG_SEC = 400
 
 // slideShow
@@ -145,7 +145,7 @@ function previousImage() {
 // data-src: 원본 이미지 경로
 // 처음에는 스켈레톤 이미지만 보여준다
 function preloadImage(img) {
-    console.log('isConnected:', img.isConnected, 'index:', img.dataset.index);
+    // console.log('isConnected:', img.isConnected, 'index:', img.dataset.index);
     const src = img.getAttribute('data-src');
     const cur = img.getAttribute('src'); // 속성값 기준
     if (src && cur !== src) {
@@ -407,14 +407,12 @@ function handleScroll() {
     const scrollDelta = Math.abs(currentScrollTop - lastScrollTop);
     const timeDelta = currentTime - lastScrollTime;
     const scrollSpeed = scrollDelta / (timeDelta / 1000);
-    /*if (scrollSpeed> 10000) {
-        console.log('scrollSpeed', scrollSpeed);
-    }*/
+    // console.log('scrollSpeed', scrollSpeed);
 
-    if (scrollSpeed < SCROLL_THRESHOLD) {
+    // if (scrollSpeed < SCROLL_THRESHOLD) {
         let centerImageIndex = getCenterImage('index');
         loadImagesAroundIndex(centerImageIndex);
-    }
+    // }
 
     lastScrollTop = currentScrollTop;
     lastScrollTime = currentTime;
