@@ -165,3 +165,8 @@ function decodeHtmlEntities(str) {
 function forceAsciiSpaces(str) {
     return str.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF]/g, ' ');
 }
+
+function preventAll(e) {
+    e?.preventDefault();
+    e?.stopPropagation();
+}

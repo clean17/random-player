@@ -2,7 +2,6 @@ let nextImageElement = null,
     loading_size = 8,
     initialLoadComplete = false,
     startX, startY,
-    mouseStartX, mouseStartY,
     imageItems,
     lazyImages,
     selectedIndex,
@@ -21,7 +20,7 @@ const nextBtn = document.getElementById('next-image-button'),
       zipBtn = document.getElementById('download-zip-btn'),
       dropdownMenu = document.getElementById('dropdown-menu'),
       $dir = document.getElementById('dir-select'),
-      empty_variable = ''
+      empty_variable = ''  // 사용안함
 ;
 
 
@@ -76,12 +75,9 @@ function pollProgress(stock) {
 /******************************************  Procress  ****************************************/
 /******************************************  Image  ****************************************/
 nextBtn?.addEventListener('click', () => nextImage());
+previousBtn?.addEventListener('click', () => previousImage());
 delBtn?.addEventListener('click', () => deletePage())
 
-// 다음 Element를 세팅
-/*function setNextImage(element) {
-    nextImageElement = element.nextElementSibling;
-}*/
 
 // 화면 중앙의 이미지 Element, Index
 function getCenterImage(index= '') {
@@ -140,6 +136,8 @@ function previousImage() {
         const previousImage = centerImage.previousElementSibling;
         if (previousImage && previousImage.classList.contains('image-item')) {
             previousImage.scrollIntoView({ behavior: 'auto', block: 'center' });
+        } else {
+            showDebugToast("처음입니다.");
         }
     }
 }
@@ -232,7 +230,7 @@ function handelDelBtn() {
 
 
 function deletePage(e) {
-    e?.preventDefault();
+    preventAll(e);
 
     // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
     renderLoadingOverlay();
@@ -288,19 +286,14 @@ function playSingleVideo(targetVideo, init= '') {
     }
 }
 
-function preventAll(e) {
-    e.preventDefault();
-    e.stopPropagation();
-}
-
 // 탭/클릭 vs 드래그 구분
-function attachTapOnly(video, options = {}) {
+function attachTapEventOnly(video, options = {}) {
     let startX, startY, mouseStartX, mouseStartY;
 
     video.addEventListener('click', preventAll, true); // capture=true
 
     video.addEventListener('touchstart', e => {
-        if (e.touches.length === 1) {
+        if (e.touches.length === 1) {   // 화면에 손가락이 정확히 하나만 닿아 있는 상태
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
         }
@@ -652,15 +645,18 @@ function shuffleImage() {
 
 document.addEventListener("touchstart", (e) => {
     startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
 });
 
 document.addEventListener("touchend", (e) => {
     let endX = e.changedTouches[0].clientX;
+    let endY = e.changedTouches[0].clientY;
     let diffX = endX - startX;
+    let diffY = endY - startY;
 
-    if (diffX > 50) {
+    if (diffX > 50 && Math.abs(diffY) < 20) {
         previousImage();
-    } else if (diffX < -50) {
+    } else if (diffX < -50 && Math.abs(diffY) < 20) {
         throttledNextImage();
     }
 });

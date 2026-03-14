@@ -310,7 +310,7 @@
                         source.src = source.dataset.src;     // 실제 src 할당
                         source.removeAttribute('data-src');
                         if (video.dataset.poster) video.poster = video.dataset.poster; // 썸네일 이미지 세팅
-                        attachTapOnly(video, { autoPlay: true });
+                        attachTapEventOnly(video, { autoPlay: true });
                     }
                     safePlay(video, { autoPlay: true, fromStart: true });
 
@@ -371,10 +371,6 @@
             progressStatus.remove();
         }
 
-        /*imageItems.forEach(item => {
-            const img = item.querySelector('.thumbnail');
-            img?.addEventListener('click', () => setNextImage(item));
-        });*/
 
         document.addEventListener('keydown', function(event) {
             switch(event.key) {

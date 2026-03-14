@@ -109,10 +109,6 @@
         imageItems = document.querySelectorAll('.image-item');
         lazyImages = document.querySelectorAll("img[data-src]");
 
-        /*imageItems.forEach(item => {
-            const img = item.querySelector('.thumbnail');
-            img?.addEventListener('click', () => setNextImage(item));
-        });*/
 
         document.addEventListener('keydown', function(event) {
             switch(event.key) {
@@ -120,7 +116,7 @@
                 case 'ArrowDown':
                 case 'PageDown':
                     event.preventDefault();
-                    nextImage();
+                    goNextImage();
                     break;
                 case 'ArrowLeft':
                 case 'ArrowUp':
