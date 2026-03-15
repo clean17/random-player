@@ -7,6 +7,8 @@ import re
 from send2trash import send2trash, TrashPermissionError
 from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for, Response, abort
 from flask_login import login_required
+# from werkzeug.utils import secure_filename
+from urllib.parse import quote
 
 from config.config import settings
 
@@ -20,6 +22,8 @@ MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
 
 WIN_SHARING_VIOLATION = -2144927705  # 0x80270027
+
+
 
 @video.route('/select-directory', methods=['POST'], endpoint='select-directory')
 @login_required
@@ -55,14 +59,27 @@ def get_videos():
 @video.route('/videos/<path:filename>', methods=['GET'])
 @login_required
 def get_video(filename):
+    # basename() : ../../test.mp4 >> test.mp4 .. 경로 traversal 방지
+    filename = os.path.basename(filename)
     directory = request.args.get('dir')
-    video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
-    return send_file(os.path.join(video_directory, filename))
+
+    key = 'VIDEO_DIRECTORY' + directory
+    if key not in settings:
+        abort(404)
+
+    video_directory = settings[key]  # 딕셔너리 접근 방식으로 수정
+
+    return send_file(
+        os.path.join(video_directory, filename),
+        conditional=True
+    )
+
 
 # 이미지 리스트, 채팅 페이지에서 임시로 사용할 엔드포인트
 @video.route('/temp-video/<path:filename>', methods=['GET'])
 @login_required
 def get_temp_video(filename):
+    filename = os.path.basename(filename)
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir')
 
@@ -80,7 +97,10 @@ def get_temp_video(filename):
         dir = REF_IMAGE_DIR
 
 
-    return send_file(os.path.join(dir, filename))
+    return send_file(
+        os.path.join(dir, filename),
+        conditional=True
+    )
 
 
 def try_trash_with_backoff(path, attempts=5, base=0.2):

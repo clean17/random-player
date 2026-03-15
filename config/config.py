@@ -110,6 +110,7 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         'NODE_SERVER_PATH': directories.get('node_server_path'),
         'HTM_DIRECTORY': directories.get('htm_directory'),
         'LOW_KOSPI_DIR': directories.get('low_kospi_stocks_directory'),
+        'UNC_DIR': directories.get('unc_directory'),
 
         'CRAWL_URL': urls.get('crawl_url'),
         'MUD_VPN': urls.get('mud_vpn'),

@@ -45,7 +45,8 @@ CHAT_FILE_PATH = os.path.join(DATA_DIR, CHAT_FILE)
 CHAT_STATE_FILE_PATH = os.path.join(DATA_DIR, STATE_FILE)
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 MAX_FETCH_MESSAGE_SIZE = 100
-
+UNC_DIR = settings['UNC_DIR']
+VIDEO_DIRECTORY7 = settings['VIDEO_DIRECTORY7']
 
 
 # Windows API 상수
@@ -706,11 +707,14 @@ def find_scrap_posts_func():
 @func.route("/docker-file/", methods=['GET'])
 @login_required
 def open_file_explorer_docker():
-    folder_path = r"\\wsl.localhost\docker-desktop-data\data\docker\volumes\igdata\_data"  # 원하는 경로
-    open_folder(folder_path)
+    open_folder(UNC_DIR)
     return jsonify({"result": "success"})
 
-
+@func.route("/g-tr/", methods=['GET'])
+@login_required
+def open_file_explorer_tr():
+    open_folder(VIDEO_DIRECTORY7)
+    return jsonify({"result": "success"})
 
 
 # test axios timeout
