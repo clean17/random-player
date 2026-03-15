@@ -129,7 +129,7 @@
                      alt="{{ image|urlencode }}"
                      onerror="this.onerror=null; this.src='/static/no-image.png';"
                      {% if dir not in ['trip', 'temp', 'refine'] %}
-                     onclick="moveImage('{{ image|urlencode }}', {{ loop.index }})"
+                     data-filename="{{ image|urlencode }}" data-index="{{ loop.index }}"
                      {% endif %}
                      data-index="{{ loop.index }}">
                 {% endif %}
@@ -194,9 +194,15 @@
     let isDelRunning = false;
 
 
-    function clickCenterImage() {
-        const centerImage = getCenterImage();
+    function clickCenterImage(target) {
+        let centerImage;
+        if (target) {
+            centerImage = target
+        } else {
+            centerImage = getCenterImage();
+        }
         // console.log('center', centerImage)
+
         if (centerImage) {
             let filename;
             let index;
@@ -239,7 +245,7 @@
                     const imageElement = document.getElementById(`image-${index}`);
                     const nextImageElement = imageElement?.nextElementSibling;
                     if (imageElement) {
-                        nextImage();
+                        nextImage(nextImageElement);
                         imageElement.remove();
                         // if (nextImageElement) {
                         //     nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -365,7 +371,18 @@
                     }
                 });
             });
+        } else {
+            imageItems.forEach(item => {
+                const img = item.querySelector('.thumbnail');
+                img.addEventListener('click', () => {
+                    const filename = img.getAttribute('data-filename');
+                    const index = img.getAttribute('data-index');
+                    // console.log(filename, index)
+                    moveImage(filename, index);
+                }, { once: true });
+            });
         }
+
         if (stock_name === 'kospil') {
             progressBar.remove();
             progressStatus.remove();

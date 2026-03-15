@@ -12,11 +12,13 @@ import urllib.parse
 import shutil
 from urllib.parse import unquote
 from typing import Final
+from pathlib import Path
 
 image_bp = Blueprint('image', __name__)
 LIMIT_PAGE_NUM = 100
-shuffled_images = None
+ref_shuffled_images = None
 image2_arr = []
+moved_image_arr = []
 
 # 설정
 IMAGE_DIR = settings['IMAGE_DIR']
@@ -51,18 +53,18 @@ EXCLUDE_SUFFIXES: Final = (".zip", ".ini", ".Identifier")  # 불변 튜플
 
 
 def initialize_sorted_images():
-    global shuffled_images
+    global ref_shuffled_images
     images = [
         f for f in os.listdir(REF_IMAGE_DIR)
         if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))
            and not f.lower().endswith(EXCLUDE_SUFFIXES)
     ]
     images.sort(key=lambda x: x.lower())  # 이름순 정렬
-    shuffled_images = images
+    ref_shuffled_images = images
 
 
 def initialize_shuffle_images():
-    global shuffled_images
+    global ref_shuffled_images
     images = [
         f for f in os.listdir(REF_IMAGE_DIR)
         if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))
@@ -70,7 +72,7 @@ def initialize_shuffle_images():
     ]
     random.seed(time.time())
     random.shuffle(images)
-    shuffled_images = images
+    ref_shuffled_images = images
 
 
 # 애플리케이션 실행 시 한 번 셔플된 리스트를 초기화
@@ -82,7 +84,7 @@ initialize_sorted_images()
 
 # def get_images(start, count, dir):
 #     if dir == REF_IMAGE_DIR:
-#         images = shuffled_images
+#         images = ref_shuffled_images
 #     else:
 #         images = [
 #             f for f in os.listdir(dir)
@@ -91,9 +93,9 @@ initialize_sorted_images()
 #         images.sort()
 #     return images[start:start + count]
 
-def get_images(start, count, dir, page):
+def get_images(start, count, dir, page, image_arr=None):
     if dir == REF_IMAGE_DIR:
-        images = shuffled_images
+        images = ref_shuffled_images
     else:
         # .zip, .ini 파일 제외한 파일 리스트
         files = [
@@ -111,6 +113,10 @@ def get_images(start, count, dir, page):
         if start >= len(images) and len(images) > 0:
             start = max(0, start - LIMIT_PAGE_NUM)
             page = max(1, page - 1)
+        if image_arr is not None:
+            image_arr.clear()
+            image_arr.extend(images)
+
     return images[start:start + count], page
 
 def get_subdir_images(start, count, dirs):
@@ -131,8 +137,7 @@ def get_subdir_images(start, count, dirs):
     return images[start:start + count]
 
 
-def get_subdir_and_reels_images(start, count, parent_dir, page):
-    global image2_arr
+def get_subdir_and_reels_images(start, count, page, parent_dir, image_arr):
     images = []
     # subdir: 각 인스타그램 계정 폴더
     for subdir in os.listdir(parent_dir):
@@ -163,7 +168,10 @@ def get_subdir_and_reels_images(start, count, parent_dir, page):
         start = max(0, start - LIMIT_PAGE_NUM)
         page = max(1, page - 1)
     # 'account/p/{파일명}'
-    image2_arr = images
+
+    image_arr.clear()
+    image_arr.extend(images)
+
     return images[start:start + count], page
 
 
@@ -333,7 +341,7 @@ def image_list():
         if page != 1:
             images = image2_arr[start:start + LIMIT_PAGE_NUM]
         else:
-            images, page = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, IMAGE_DIR2, page)
+            images, page = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, image2_arr)
         if len(images) == 0:
             page = page - 1
             start = (page - 1) * LIMIT_PAGE_NUM
@@ -346,8 +354,18 @@ def image_list():
     #     images_length = count_non_zip_files(TRIP_IMAGE_DIR)
     #     template_html = 'trip_image_list.html'
     elif dir == 'move':
-        images, page = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR, page)
-        images_length = count_non_zip_files(MOVE_DIR)
+        # images, page = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR, page, moved_image_arr)
+        # images_length = count_non_zip_files(MOVE_DIR)
+        if page != 1:
+            images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
+        else:
+            images, page = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR, page, moved_image_arr)
+        if len(images) == 0:
+            page = page - 1
+            start = (page - 1) * LIMIT_PAGE_NUM
+            images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
+
+        images_length = len(moved_image_arr)
         template_html = 'image_list.html'
     elif dir == 'stock':
         market = request.args.get('market') or ''
@@ -476,6 +494,11 @@ def delete_images():
         to_delete = set(images_to_delete)
         # in-place 갱신(참조 유지)
         image2_arr[:] = [p for p in image2_arr if p not in to_delete]
+
+    if dir == 'move' and moved_image_arr:
+        to_delete = set(images_to_delete)
+        # in-place 갱신(참조 유지)
+        moved_image_arr[:] = [p for p in moved_image_arr if p not in to_delete]
 
     page = int(data.get("page", 1))
     # if dir == 'image2':

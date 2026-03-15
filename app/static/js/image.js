@@ -33,7 +33,7 @@ if ($dir) {
 // debounce
 let lastScrollTop = 0;
 let lastScrollTime = Date.now();
-const SCROLL_DELAY = 50;
+const SCROLL_DELAY = 40;
 const SCROLL_THRESHOLD = 50_000;  // px per second
 const THROTTLE_NEXT_IMG_SEC = 400
 
@@ -103,25 +103,25 @@ function getCenterImage(index= '') {
 }
 
 
-function nextImage(nextImage) {
+function nextImage(nextImg) {
     const centerImage = getCenterImage();
-    if (nextImage == null && centerImage) {
-        const nextImage = centerImage.nextElementSibling;
-        if (nextImage && nextImage.classList.contains('image-item')) {
-            nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
-            if (nextImage.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
-                const videoEl = nextImage.querySelector('video');
+    if (nextImg == null && centerImage) {
+        const nextImgEl = centerImage.nextElementSibling;
+        if (nextImgEl && nextImgEl.classList.contains('image-item')) {
+            nextImgEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+            if (nextImgEl.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
+                const videoEl = nextImgEl.querySelector('video');
                 videoEl.currentTime = 0;
             }
         } else {
             showDebugToast("마지막입니다.");
         }
     }
-    if (nextImage) {
-        if (nextImage && nextImage.classList.contains('image-item')) {
-            nextImage.scrollIntoView({ behavior: 'auto', block: 'center' });
-            if (nextImage.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
-                const videoEl = nextImage.querySelector('video');
+    if (nextImg) {
+        if (nextImg && nextImg.classList.contains('image-item')) {
+            nextImg.scrollIntoView({ behavior: 'auto', block: 'center' });
+            if (nextImg.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
+                const videoEl = nextImg.querySelector('video');
                 videoEl.currentTime = 0;
             }
         } else {
