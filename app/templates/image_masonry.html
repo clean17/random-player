@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Image Gallery</title>
+
+    <style>
+        body{
+            font-family: Arial;
+            background:#f5f5f5;
+            margin:0;
+        }
+
+        /* pinterest style container */
+        .gallery{
+            column-count: 5;
+            column-gap: 15px;
+            padding:20px;
+        }
+
+        /* image card */
+        .card{
+            break-inside: avoid;
+            margin-bottom:15px;
+            background:white;
+            border-radius:10px;
+            overflow:hidden;
+            box-shadow:0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        .card img{
+            width:100%;
+            display:block;
+        }
+
+        /* responsive */
+        @media (max-width:1400px){
+            .gallery{ column-count:4; }
+        }
+
+        @media (max-width:1100px){
+            .gallery{ column-count:3; }
+        }
+
+        @media (max-width:700px){
+            .gallery{ column-count:2; }
+        }
+
+        @media (max-width:500px){
+            .gallery{ column-count:1; }
+        }
+    </style>
+
+</head>
+<body>
+
+<div class="gallery">
+
+    {% for image in images %}
+    <div class="card">
+        <img src="{{ url_for('image.get_image',
+                market=market,
+                filename=image|urlencode,
+                dir=dir,
+                selected_dir=selected_dir if selected_dir else None) }}" loading="lazy">
+    </div>
+    {% endfor %}
+
+</div>
+
+</body>
+</html>
