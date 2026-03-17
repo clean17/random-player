@@ -150,13 +150,24 @@ socket.on("force_disconnect", () => {
 });
 
 // ICE 후보가 먼저 도착했을 경우, 큐에 넣고 대기, 시그널링 순서가 뒤죽박죽이어도 오류 없음
-function onIceCandidateReceived(candidate) {
+async function onIceCandidateReceived(candidate) {
     // if (remoteDescriptionSet) {
-    if (myPeerConnection.signalingState === "stable" || myPeerConnection.remoteDescription) {
-        myPeerConnection.addIceCandidate(candidate);
-    } else {
-        console.log("ICE 후보 대기열에 보관:", candidate);
-        candidateQueue.push(candidate);
+    console.log("RECEIVE ICE type:", candidateTypeOf(candidate), candidate);
+
+    if (!candidate) {
+        console.log("remote ICE gathering complete");
+        return;
+    }
+
+    try {
+        if (myPeerConnection.signalingState === "stable" || myPeerConnection.remoteDescription) {
+            await myPeerConnection.addIceCandidate(candidate);
+        } else {
+            console.log("ICE 후보 대기열에 보관:", candidate);
+            candidateQueue.push(candidate);
+        }
+    } catch (err) {
+        console.error("addIceCandidate failed:", err, candidate);
     }
 }
 
@@ -283,7 +294,8 @@ async function updatePeerConnection() {
  */
 async function makeConnection() { // 연결을 만든다.
     myPeerConnection = new RTCPeerConnection({
-        iceServers: [ // STUN; 내 외부 IP를 알려주는 서버 (ICE 후보 생성을 도와줌)
+        // STUN; 내 외부 IP를 알려주는 서버 (ICE 후보 생성을 도와줌)
+        /*iceServers: [
             {
                 urls: [
                     'stun:stun.l.google.com:19302',
@@ -292,13 +304,39 @@ async function makeConnection() { // 연결을 만든다.
                     'stun:stun3.l.google.com:19302'
                 ]
             }
-            /*{
-                urls: "turn:your.turn.server:3478",
-                username: "user",
-                credential: "pass"
-            }*/
+        ]*/
+
+        // 디버깅
+        /*iceTransportPolicy: "relay",
+        iceServers: [
+            {
+                urls: [
+                    // "turn:chickchick.kr:3478?transport=udp",
+                    // "turn:chickchick.kr:3478?transport=tcp",
+                    "turns:chickchick.kr:5349?transport=tcp"
+                ],
+                username: "test",
+                credential: "1234"
+            }
+        ]*/
+
+        // 안정적인 설계
+        iceServers: [
+            {
+                urls: "stun:chickchick.kr:3478"
+            },
+            {
+                urls: [
+                    "turn:chickchick.kr:3478?transport=udp",
+                    "turn:chickchick.kr:3478?transport=tcp",
+                    "turns:chickchick.kr:5349?transport=tcp"
+                ],
+                username: "test",
+                credential: "1234"
+            }
         ]
     });
+
     // icecandidate; 연결 가능한 네트워크 경로(ICE candidate; IP + 포트)가 발견되면 발생하는 이벤트
     myPeerConnection.addEventListener('icecandidate', handleIce); // 두 Peer사이의 가능한 모든 경로를 수집하고 다른 Peer에 전송
     // myPeerConnection.addEventListener('addstream', handleAddStream);
@@ -312,8 +350,21 @@ async function makeConnection() { // 연결을 만든다.
     }
 };
 
-function handleIce(data) {
-    socket.emit('ice', data.candidate, roomName); // data.candidate 안에는 이 브라우저가 사용할 수 있는 연결 정보가 들어 있음
+function candidateTypeOf(c) {
+    if (!c || !c.candidate) return "end";
+    const m = c.candidate.match(/ typ (\w+)/);
+    return m ? m[1] : "unknown";
+}
+
+function handleIce(event) {
+    if (event.candidate) {
+        console.log("SEND ICE type:", candidateTypeOf(event.candidate), event.candidate.candidate);
+        console.log("SEND ICE:", event.candidate);
+        socket.emit('ice', event.candidate, roomName); // data.candidate 안에는 이 브라우저가 사용할 수 있는 연결 정보가 들어 있음
+    } else {
+        console.log("SEND ICE: null");
+        socket.emit("ice", null);
+    }
 }
 
 /*function handleAddStream(data) {
