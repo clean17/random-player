@@ -10,9 +10,12 @@ import asyncio
 import requests
 from datetime import datetime
 
-today = datetime.datetime.now().strftime("%Y%m%d")
-filename = f"logs/scrap_ig_{today}.log"
-log_file = open(filename, "w", encoding="utf-8")
+today = datetime.now().strftime("%Y%m%d")
+month = datetime.now().strftime("%y%m")
+month_dir = f"logs/i/{month}"
+os.makedirs(month_dir, exist_ok=True)
+filename = f"{month_dir}/scrap_ig_{today}.log"
+log_file = open(filename, "a", encoding="utf-8")   # w: 덮어쓰기, a: 이어쓰기
 sys.stdout = log_file
 sys.stderr = log_file
 # print("이건 파일로 감")
@@ -29,9 +32,9 @@ BASE_SAVE_DIR = IMAGE_DIR2
 # BASE_SAVE_DIR = r"D:\temp"
 
 # ======== 설정 ========
-# USER_DATA_DIR = str(Path("./ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
-USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
-# USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
+USER_DATA_DIR = str(Path("./ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014 // dlsdn317!
+# USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
+# USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016.. 사용하지마_법무부_
 HEADLESS = False
 
 USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
@@ -610,13 +613,13 @@ async def extract_media_from_post(page, url: str):
         await asyncio.sleep(0.75) # 시간 조정
 
     # 보조: DOM의 <video src>도 수집(있을 수 있음) → CDN 필터 적용
-    vids = page.locator("section main > div:nth-of-type(1) video")   # div:nth-of-type(1): 자식인 div중 첫번째 요소
-    n_vid = await vids.count()
-    # 1) 비디오가 뜰 때까지 기다림
+    vids = page.locator("section main > div:nth-of-type(1) video")
+
     try:
         await vids.first.wait_for(state="attached", timeout=30000)
+        n_vid = await vids.count()
     except Exception:
-        n_vid=0 # 비디오가 불러와지지 않음
+        n_vid = 0
 
     dom_video_srcs = []
     for i in range(n_vid):
@@ -749,8 +752,7 @@ def log_targets(context, tag=""):
 
 
 # ======== 메인 플로우 ========
-async def handle_account(context, account: str):
-    page = await context.new_page()
+async def handle_account(page, account: str):
     await ensure_login(page)
     await go_to_profile(page, account)
 
@@ -774,7 +776,7 @@ async def handle_account(context, account: str):
     check_saved = []
     cnt = 0
     for idx, link in enumerate(links, 1):
-        today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+        today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
 
         # parsed = urlparse(link)
@@ -798,7 +800,7 @@ async def handle_account(context, account: str):
             all_saved.extend(saved or [])
             check_saved.extend(saved or [])
             if idx % 10 == 0:
-                today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+                today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
                 print(f"[{account}] [{today}] Interim check of number of saved files : {len(check_saved)}")
                 check_saved = []
             link_segment = extract_account_and_type(normalize_ig_post_url(link))
@@ -846,10 +848,20 @@ async def run_scrap():
         # await handle_account(context, 'test')
 
         for i, acc in enumerate(ACCOUNTS):
-            today = datetime.datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+            today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
             print(f"\n=== [{today}] Start account processing: {acc} ({i+1}/{len(ACCOUNTS)}) ===")
+
             try:
-                rs = await handle_account(context, acc)
+                page = await context.new_page()
+            except Exception:
+                context = await pw.chromium.launch_persistent_context(
+                    USER_DATA_DIR,
+                    args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                )
+                page = await context.new_page()
+
+            try:
+                rs = await handle_account(page, acc)
             except Exception as e:
                 print(f"[{acc}] Error in processing: {e}")
                 continue
