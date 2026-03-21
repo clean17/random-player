@@ -9,6 +9,7 @@
     <script src="https://cdn.quilljs.com/1.3.7/quill.js"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
+    <script src="/static/js/common.js?v={{ version }}"></script>
 </head>
 <body>
 <!--<div class="top-bar">
@@ -149,8 +150,6 @@
             quill.setSelection(range.index);
         }
     });
-;
-;
 
 
     async function uploadImage(file) {
@@ -159,10 +158,12 @@
         const formData = new FormData();
         formData.append('files[]', file);
 
+        renderLoadingOverlay();
         const res = await fetch('/upload', {
             method: 'POST',
             body: formData
         });
+        removeLoadingOverlay();
 
         if (!res.ok) {
             alert('이미지 업로드 실패');
