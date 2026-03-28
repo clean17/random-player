@@ -1205,6 +1205,8 @@ function moveMinusOneToEnd() {
 
 
 async function initPage() {
+    // console.log('현재 알림 상태 : ', isNotificationOn)
+
     const isValidSession = await checkVerified();
     if (!isValidSession) {
         console.log('return false');

@@ -3,11 +3,14 @@ let userInteracted = false;
 // 도메인 구입 전까지 서비스 워커 기능 비활성화 > PWA 기능 or FCM 추가해야함
 if ("serviceWorker" in navigator) {
     // http + localhost, https(공인 ssl) 환경에서만 기동
-    /*navigator.serviceWorker.register('/service-worker.js?v=2').then(registration => {
-        return registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: "BM3Xq3X-hbmCtGvoJv3Dl-WmW1nTYenl4tKQtE4pdcMTK0XDxjrECQSmtFgnPd1aqUoBINRCKrLqfqwIdemSXZs" // YOUR_PUBLIC_VAPID_KEY
-        });
+    navigator.serviceWorker.register('/service-worker.js?v={{ version }}')
+        .then(registration => {
+            // console.log('registered', registration)
+            // 현재 브라우저를 푸시 수신 대상으로 등록, 성공하면 subscription 객체를 반환
+            return registration.pushManager.subscribe({
+                userVisibleOnly: true,   // 푸시를 보내면 사용자에게 보이는 알림을 반드시 띄워야 한다
+                applicationServerKey: "BM3Xq3X-hbmCtGvoJv3Dl-WmW1nTYenl4tKQtE4pdcMTK0XDxjrECQSmtFgnPd1aqUoBINRCKrLqfqwIdemSXZs" // VAPID 공개키, 서버에는 대응되는 개인키가 있어야 함
+            });
     }).then(subscription => {
         console.log("Push Subscription:", JSON.stringify(subscription));
 
@@ -17,7 +20,6 @@ if ("serviceWorker" in navigator) {
             body: JSON.stringify(subscription)
         });
     }).catch(error => console.error("푸시 구독 실패:", error));
-    ;*/
 }
 
 function requestNotificationPermission() {
@@ -52,6 +54,10 @@ function vibrate() {
 function sendNotification(data) {
     if (document.hidden && Notification.permission === "granted") {
         if (!isMine && !isUnderline) {
+            navigator.serviceWorker.getRegistration().then(registration => {
+                console.log('서비스워커 등록 확인', registration);
+            });
+
             navigator.serviceWorker.ready.then(registration => { // 서비스 워커 알림
                 registration.showNotification("새 알림", {
                     // body: `${data.username}: ${data.msg}`,
