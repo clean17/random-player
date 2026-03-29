@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image List</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"> <!-- 아이콘, 체크 표시 -->
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/common.js?v={{ version }}"></script>
+
+    <style>
+        #masonry.image-container{
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: flex-start !important;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .image-item img {
+            max-width: 100%;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .thumbnail {
+            width: 100%;
+            height: auto;
+            max-height: none !important;  /* 🔥 중요 */
+            object-fit: contain;
+        }
+
+        body{
+            display: block !important;
+        }
+
+        /* 뷰포트가 2000px 이상일 때 max-width: 1000px 적용 */
+        @media (orientation: landscape) {
+            .container {
+                max-width: 100%;
+            }
+        }
+
+        .image-container{
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+
+        .masonry-column{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .image-item{
+            width: 100%;
+        }
+
+        .thumbnail{
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="top-bar">
+    <div class="logout">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        {% endif %}
+    </div>
+    <div class="back">
+        <a href="{{ url_for('main.home') }}">Back</a>
+    </div>
+</div>
+
+{% if dir in ['image', 'image2', 'move'] %}
+<button id="empty-bin-button" class="floating-button2">Empty</button>
+{% elif dir == 'refine' %}
+<button id="shuffle-button" class="floating-button2">Shuffle</button>
+<button id="slideshow-btn" class="floating-button2" style="top: 120px">Slide show</button>
+{% elif dir in ['temp', 'trip'] %}
+<button id="download-zip-btn" class="floating-button2">
+    <span class="icon">📂</span>
+</button>
+<ul id="dropdown-menu" class="dropdown-menu">
+    <li onclick="downloadThisPage()">Download This Page</li>
+    <li onclick="downloadAllFiles()">Download All Files</li>
+    <!-- <li>Another Action</li> -->
+</ul>
+{% else %}
+{% endif %}
+
+<!--<button id="next-image-button" class="floating-button-right">Next</button>-->
+
+<div class="floating-toolbar">
+    <div class="toolbar-group">
+        <button class="toolbar-btn" onclick="window.scrollTo({ top: 0, behavior: 'auto' })" title="맨 위">▲ top</button>
+        <button class="toolbar-btn" onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })" title="맨 아래">▼ bottom</button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-group">
+        {% if images_length != 0 and dir in ['trip', 'temp'] %}
+        <button id="previous-image-button" class="toolbar-btn" title="이전 이미지">Previous</button>
+        {% endif %}
+        <button id="next-image-button" class="toolbar-btn" title="다음 이미지">Next</button>
+    </div>
+</div>
+
+<div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
+    {% if dir == 'stock' %}
+    <div id="progress-bar" style="width:100%; border:1px solid #ccc;">
+        <div id="progress-fill" style="width:0; height:25px; background:#4caf50; color:#020202; text-align:center;">
+            <span id="progress-text"></span>
+        </div>
+    </div>
+    <div id="progress-status"></div>
+    <!-- 드롭다운 리스트 추가 -->
+    <div class="dropdown-selector">
+        <form id="market-form">
+            <label for="market-select">Select Market:</label>
+            <select id="market-select" name="market" onchange="location = this.value;">
+                <option value="{{ url_for('image.stock-graph-list', market='kospi', page=1) }}" {% if market == 'kospi' %}selected{% endif %}>KOSPI</option>
+                <option value="{{ url_for('image.stock-graph-list', market='nasdaq', page=1) }}" {% if market == 'nasdaq' %}selected{% endif %}>NASDAQ</option>
+                <option value="{{ url_for('image.stock-graph-list', market='kospil', page=1) }}" {% if market == 'kospil' %}selected{% endif %}>KOSPI_LOW</option>
+            </select>
+        </form>
+    </div>
+    {% else %}
+    {% endif %}
+    {% if selected_dir %}
+    <div class="dropdown-selector">
+        <form>
+            <label for="dir-select">Select Dir:</label>
+            <select id="dir-select" name="dir" onchange="location = this.value;">
+                {% for dir in dir_list %}
+                <option value="{{ url_for('image.image_list', selected_dir=selected_dir, dir=dir) }}"
+                        {% if dir == selected_dir %}selected{% endif %}>
+                    {{ dir }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    {% endif %}
+
+    <!--    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images', dir=dir) }}">-->
+    <div id="delete-form">
+        <div class="pagination">
+            {% if page >= 4 %}
+            <a href="#" data-page="1" class="side">1</a>
+            {% endif %}
+            {% if page > 4 %}
+            <a href="#" data-page="{{ page-1 }}" class="side">&lt;</a>
+            {% endif %}
+
+            <!--            {% if page >= 6 %}-->
+            <!--            <a href="#" data-page="{{ page - 5 }}">{{ page - 5 }}</a>-->
+            <!--            <a href="#">...</a>-->
+            <!--            {% endif %}-->
+
+            {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
+            <a href="#" data-page="{{ p }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            {% endfor %}
+
+            <!--            {% if page <= total_pages - 6 %}-->
+            <!--            <a href="#">...</a>-->
+            <!--            <a href="#" data-page="{{ page + 5 }}">{{ page + 5 }}</a>-->
+            <!--            {% endif %}-->
+
+            {% if page < total_pages - 3 %}
+            <a href="#" data-page="{{ page+1 }}" class="side">&gt;</a>
+            {% endif %}
+            {% if page <= total_pages - 3 and page < total_pages %}
+            <a href="#" data-page="{{ total_pages }}" class="side">{{ total_pages }}</a>
+            {% endif %}
+        </div>
+        <input type="hidden" name="page" value="{{ page }}">
+
+        <!-- JS가 column 생성 -->
+        <div id="image-data" style="display:none;">
+            {% for image in images %}
+            <div class="image-item" id="image-{{ loop.index }}">
+                {% set video_extensions = ['mp4', 'mov', 'mkv', 'avi'] %}
+                {% set image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'jfif'] %}
+                {% set file_extension = image.split('.')[-1].lower() %}
+
+                <input type="hidden" name="images[]" value="{{ image }}">
+
+                {% if file_extension in video_extensions %}
+                <!-- 비디오 파일인 경우 -->
+                <button class="delete-btn" type="button">×</button>
+                <!--data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"-->
+                <video class="thumbnail"
+                       muted playsinline controls loop
+                       data-index="{{ loop.index }}"
+                       alt="{{ image|urlencode }}"
+                >
+                    <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
+                            type="video/mp4"
+                            data-filename="{{ image|urlencode }}">
+                </video>
+                <!--<button class="play-btn" onclick="event.preventDefault();">▶</button>-->
+                {% elif file_extension in image_extensions %}
+
+                <!-- 이미지 파일인 경우 -->
+                {% if dir in ['trip', 'temp', 'refine'] %}
+                <button class="delete-btn" type="button">×</button>
+                {% endif %}
+                <!-- 이미지를 스켈레톤으로 변경 filename='no-image.png' >> filename='svg/image_skeleton.svg' -->
+                <img class="thumbnail {% if dir == 'stock' %}stock-graph{% endif %}"
+                     src="{% if loop.index <= 5 %}
+                            {{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}
+                          {% else %}
+                            {{ url_for('static', filename='svg/image_skeleton.svg') }}
+                          {% endif %}"
+                     data-src="{{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
+                     alt="{{ image|urlencode }}"
+                     onerror="this.onerror=null; this.src='/static/no-image.png';"
+                     {% if dir not in ['trip', 'temp', 'refine'] %}
+                data-filename="{{ image|urlencode }}" data-index="{{ loop.index }}"
+                {% endif %}
+                data-index="{{ loop.index }}">
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="image-container" id="masonry">
+
+        </div>
+        <div>
+            total_count : <span id="total_count">{{ images_length }}</span>
+        </div>
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="#" data-page="1" class="side">&laquo;</a>
+            <a href="#" data-page="{{ page-1 }}" class="side">&lt;</a>
+            {% endif %}
+
+            {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
+            <a href="#" data-page="{{ p }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            {% endfor %}
+
+            {% if page < total_pages %}
+            <a href="#" data-page="{{ page+1 }}" class="side">&gt;</a>
+            <a href="#" data-page="{{ total_pages }}" class="side">&raquo;</a>
+            {% endif %}
+        </div>
+        {% if images_length != 0 and dir in ['image', 'image2', 'move'] %}
+        <button type="button" class="delete-button">Delete</button>
+        {% endif %}
+    </div>
+</div>
+
+<script src="/static/js/image.js?v={{ version }}"></script>
+<script>
+    const dir = '{{ dir }}',
+          page = "{{ page }}",
+          selected_dir = '{{ selected_dir }}',
+          currentUserName = '{{ current_user.get_id() }}',
+          guestName = '{{ config.GUEST_USERNAME }}',
+          stock_name = `{{ market }}`,
+          progressBar = document.getElementById('progress-bar'),
+          progressStatus = document.getElementById('progress-status');
+
+    let isDelRunning = false;
+
+    let columns = [];
+    let allItems = [];
+    let currentIndex = 0;
+
+    // “추정 높이 + 로딩 후 보정” 방식
+    function getColumnHeight(col) {
+        return col.scrollHeight || col.getBoundingClientRect().height;
+    }
+
+    // column 높이 기반 판단
+    function getMaxColumnHeight() {
+        return Math.max(...columns.map(col => col.scrollHeight));
+    }
+
+    // 빈 영역 감지 로직
+    function shouldLoadMore() {
+        const scrollBottom = window.innerHeight + window.scrollY;
+        const maxHeight = getMaxColumnHeight();
+
+        return scrollBottom > maxHeight - 2000; // 🔥 기존 300 → 800~1200
+    }
+
+    // while로 "빈 공간 채울 때까지 계속"
+    function fillViewport() {
+        let maxHeight = getMaxColumnHeight();
+        let viewportBottom = window.innerHeight + window.scrollY;
+
+        // 🔥 빈 공간이 있는 동안 계속 채움
+        while (viewportBottom > maxHeight - 200 && currentIndex < allItems.length) {
+            renderBatch();
+            maxHeight = getMaxColumnHeight();
+        }
+    }
+
+    // column height 정확도 개선 (중요)
+    function appendToShortestColumn(el) {
+        const img = el.querySelector("img");
+
+        if (img && img.dataset.src) {
+            // 이미지 먼저 로드
+            const tempImg = new Image();
+            tempImg.src = img.dataset.src;
+
+            tempImg.onload = () => {
+                const col = getShortestColumn();
+                col.appendChild(el);
+            };
+        } else {
+            const col = getShortestColumn();
+            col.appendChild(el);
+        }
+    }
+
+    function createColumns() {
+        const container = document.getElementById("masonry");
+        container.innerHTML = "";
+
+        const count = getColumnCount();
+        columns = [];
+
+        for (let i = 0; i < count; i++) {
+            const col = document.createElement("div");
+            col.className = "masonry-column";
+            container.appendChild(col);
+            columns.push(col);
+        }
+    }
+
+    // 가장 짧은 column 찾기
+    function getShortestColumn() {
+        return columns.reduce((prev, curr) => {
+            return getColumnHeight(prev) < getColumnHeight(curr) ? prev : curr;
+        });
+    }
+
+    // column 개수 (반응형)
+    function getColumnCount() {
+        const width = window.innerWidth;
+
+        if (width > 1400) return 5;
+        if (width > 1100) return 4;
+        if (width > 800) return 3;
+        if (width > 500) return 2;
+        return 1;
+    }
+
+
+
+    function initData() {
+        allItems = Array.from(document.querySelectorAll("#image-data .image-item"));
+    }
+
+    function renderBatch() {
+        if (currentIndex >= allItems.length) return;
+
+        const batchSize = columns.length * 3;
+        const end = currentIndex + batchSize;
+
+        for (let i = currentIndex; i < end && i < allItems.length; i++) {
+            const item = allItems[i];
+            const clone = item.cloneNode(true);
+
+            observeImages(clone);
+
+            clone.querySelectorAll("source[data-src]").forEach(s => {
+                s.src = s.dataset.src;
+            });
+
+            appendToShortestColumn(clone);
+        }
+
+        currentIndex = end;
+    }
+
+    function initMasonry() {
+        createColumns();
+        initData();
+
+        currentIndex = 0;   // 🔥 중요
+        renderBatch();
+    }
+
+    window.addEventListener("load", initMasonry);
+    window.addEventListener("resize", () => {
+        initMasonry(); // 다시 계산
+    });
+
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const img = entry.target;
+
+                if (img.dataset.src) {
+                    img.src = img.dataset.src;
+                    img.removeAttribute("data-src");
+                    observer.unobserve(img);
+                }
+            }
+        });
+    }, {
+        rootMargin: "300px"
+    });
+
+    function observeImages(container) {
+        const imgs = container.querySelectorAll("img[data-src]");
+        imgs.forEach(img => observer.observe(img));
+    }
+
+    let loading = false;
+
+    let isRendering = false;
+
+    window.addEventListener("scroll", () => {
+        if (isRendering) return;
+
+        if (shouldLoadMore()) {
+            isRendering = true;
+
+            requestAnimationFrame(() => {
+                renderBatch();
+                isRendering = false;
+            });
+        }
+    });
+
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            initMasonry();
+        }, 300);
+    });
+
+
+
+
+
+
+
+    function initPage() {
+        // 'X' 버튼 이벤트 추가
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const imageItem = e.target.closest('.image-item');
+                if (dir == 'refine') {
+                    deleteItem(imageItem);
+                } else {
+                    let filename = imageItem.querySelector('.thumbnail')?.alt;
+                    if (imageItem) {
+                        if (!filename) {
+                            filename = imageItem.querySelector('source').dataset.filename;
+                        }
+                        let idx = 0;
+                        if (imageItem.hasAttribute("id")) {
+                            idx = imageItem.id.split('-')[1]
+                        }
+                        if (currentUserName === guestName) {
+                            if (confirm('Delete the file ?')) {
+                                moveImage(filename, idx);
+                            }
+                        } else {
+                            moveImage(filename, idx);
+                        }
+                    }
+                }
+            });
+        });
+
+        // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
+        imageItems = document.querySelectorAll('.image-item');
+        lazyImages = document.querySelectorAll("img[data-src]");
+
+        if (dir === 'stock' && stock_name !== 'kospil') {
+            pollProgress(stock_name);
+
+            imageItems.forEach(item => {
+                const img = item.querySelector('.thumbnail');
+                img.addEventListener('click', (event) => {
+                    if (confirm('Delete the file ?')) {
+                        moveStockImage(event);
+                    }
+                });
+            });
+        } else {
+            imageItems.forEach(item => {
+                const img = item.querySelector('.thumbnail');
+                img?.addEventListener('click', () => {
+                    const filename = img.getAttribute('data-filename');
+                    const index = img.getAttribute('data-index');
+                    // console.log(filename, index)
+                    moveImage(filename, index);
+                }, { once: true });
+            });
+        }
+
+        if (stock_name === 'kospil') {
+            progressBar.remove();
+            progressStatus.remove();
+        }
+
+
+        document.addEventListener('keydown', function (event) {
+            switch (event.key) {
+                case 'ArrowRight':
+                case 'ArrowDown':
+                case 'PageDown':
+                    event.preventDefault();
+                    if (event.shiftKey) {
+                        goNextPage();
+                    } else {
+                        // nextImage();
+                        throttledNextImage();
+                    }
+                    break;
+                case 'ArrowLeft':
+                case 'ArrowUp':
+                case 'PageUp':
+                    event.preventDefault();
+                    if (event.shiftKey) {
+                        goPrevPage();
+                    } else {
+                        previousImage();
+                    }
+                    break;
+                case ' ':
+                case 'Enter':
+                    event.preventDefault();
+                    if (dir === 'image' || dir === 'image2' || dir === 'move') clickCenterImage();
+                    if (dir === 'trip' || dir === 'temp') playCenterVideo();
+                    break;
+                case 'Delete':
+                case '`':
+                    if (isDelRunning) return
+                    isDelRunning = true;
+                    event.preventDefault();
+                    if (dir === 'refine') {
+                        handelDelBtn();
+                    } else if (dir === 'trip' || dir === 'temp') {
+                        if (currentUserName === guestName) {
+                            if (confirm('Delete the file ?')) {
+                                clickCenterImage();
+                            }
+                        } else {
+                            clickCenterImage();
+                        }
+                    } else {
+                        if (confirm('Delete the file ?')) {
+                            if (dir === 'stock') {
+                                const centerImage = getCenterImage();
+                                if (centerImage) {
+                                    moveStockImage({ target: centerImage.querySelector('img') }); // 키보드 이벤트로 삭제
+                                }
+                            } else {
+                                // document.querySelector('.delete-button')?.click()
+                                deletePage()
+                            }
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        emptyBinBtn?.removeEventListener('click', emptyTrash);
+        emptyBinBtn?.addEventListener('click', emptyTrash);
+
+        /**************************************************************/
+
+        // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
+        /*form.addEventListener('submit', (event) => {
+            renderLoadingOverlay();
+            delBtn.disabled = true;
+            delBtn.style.background = 'gray';
+        });*/
+
+        /*****************************************************************/
+
+
+        zipBtn?.addEventListener('click', () => {
+            const rect = zipBtn.getBoundingClientRect();
+            dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+
+            if (dropdownMenu.style.display === 'block') {
+                // 기본 위치 설정 (버튼 아래에 표시)
+                let dropdownLeft = rect.left + window.scrollX;
+                let dropdownTop = rect.bottom + window.scrollY;
+
+                // 화면 너비를 기준으로 드롭다운 메뉴가 우측 화면 밖으로 나가지 않도록 조정
+                const viewportWidth = window.innerWidth; // 현재 화면 너비
+                const dropdownWidth = dropdownMenu.offsetWidth; // 드롭다운 메뉴의 너비
+                if (dropdownLeft + dropdownWidth > viewportWidth) {
+                    dropdownLeft = viewportWidth - dropdownWidth - 10;
+                }
+
+                // 위치 설정
+                dropdownMenu.style.left = `${dropdownLeft}px`;
+                dropdownMenu.style.top = `${dropdownTop}px`;
+            }
+        });
+
+        // 외부 클릭 시 드롭다운 숨기기
+        document.addEventListener('click', (event) => {
+            if (dropdownMenu && zipBtn && !zipBtn.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.style.display = 'none';
+            }
+        });
+
+        // 뷰에 비디오가 보이면 로드
+        lazyLoadVideos();
+
+        shuffleBtn?.removeEventListener('click', shuffleImage);
+        shuffleBtn?.addEventListener('click', shuffleImage);
+    }
+
+    document.addEventListener("DOMContentLoaded", initPage)
+</script>
+</body>
+</html>
