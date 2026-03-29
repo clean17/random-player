@@ -35,7 +35,7 @@ let lastScrollTop = 0;
 let lastScrollTime = Date.now();
 const SCROLL_DELAY = 40;
 const SCROLL_THRESHOLD = 50_000;  // px per second
-const THROTTLE_NEXT_IMG_SEC = 400
+const THROTTLE_NEXT_IMG_SEC = 300
 
 // slideShow
 let slideShowTimer = null;
@@ -196,10 +196,15 @@ function moveImageToPreviousStep(event, imageItem) {
                 filename: `${decodeURIComponent(filename)}`
             })
         })
-            .then(response => response.json())
+            .then(response => {
+                if (response.status === 404) {
+                    return { status: '404' };
+                }
+                return response.json();
+            })
             .then(data => {
                 removeLoadingOverlay();
-                if (data.status === 'success') {
+                if (data.status === 'success' || '404') {
                     const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : imageItem;
                     const nextImageElement = imageElement?.nextElementSibling;
                     // const imageElement = document.getElementById(`image-${index}`);
