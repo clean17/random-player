@@ -69,8 +69,8 @@ def issue_token():
 def login():
 
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form['username'].strip()
+        password = request.form['password'].strip()
         remember = request.form.get('remember_username', False)
 
         # 현재 시간을 UTC로 설정
