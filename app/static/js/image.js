@@ -48,6 +48,8 @@ const throttledNextImage = throttle(() => nextImage(), THROTTLE_NEXT_IMG_SEC);
 const debouncedScrollEvent = debounce(handleScroll, SCROLL_DELAY);
 
 /******************************************  Procress  ****************************************/
+// 주식 예측 진행도
+
 function updateProgressBar(data) {
     // console.log(data)
     const fill = document.getElementById('progress-fill');
@@ -74,6 +76,76 @@ function pollProgress(stock) {
 }
 /******************************************  Procress  ****************************************/
 /******************************************  Image  ****************************************/
+
+function clickCenterImage(target) {
+    let centerImage;
+    if (target) {
+        centerImage = target
+    } else {
+        centerImage = getCenterImage();
+    }
+    // console.log('center', centerImage)
+
+    if (centerImage) {
+        let filename;
+        let index;
+        const imgTag = centerImage.querySelector('img');
+        if (imgTag) {
+            filename = imgTag.getAttribute('alt');
+            index = imgTag.getAttribute('data-index');
+        } else {
+            const videoTag = centerImage.querySelector('video');
+            filename = videoTag.getAttribute('alt');
+            index = videoTag.getAttribute('data-index');
+        }
+        if (filename && index) {
+            moveImage(filename, index);
+        }
+    }
+}
+
+function moveImage(filename, index) {
+    // console.log('filename', filename);
+    if (dir === 'stock') return;
+
+    renderLoadingOverlay();
+
+    // console.log(filename, index)
+    fetch(`/image/move-image`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            imagepath: dir,
+            subpath: dirText,
+            filename: filename
+        })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const imageElement = document.getElementById(`image-${index}`);
+                const nextImageElement = imageElement?.nextElementSibling;
+                if (imageElement) {
+                    nextImage(nextImageElement);
+                    imageElement.remove();
+                    // if (nextImageElement) {
+                    //     nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // }
+                }
+                // const total = document.getElementById('total_count').textContent
+                // document.getElementById('total_count').textContent = Number(total) - 1;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        }).finally(()=>{
+        isDelRunning = false;
+        removeLoadingOverlay();
+    });
+}
+
 nextBtn?.addEventListener('click', () => nextImage());
 previousBtn?.addEventListener('click', () => previousImage());
 delBtn?.addEventListener('click', () => deletePage())
@@ -381,10 +453,73 @@ function safePlay(video, { autoPlay = false, fromStart= false } = {}) {
     }
 }
 
+// IntersectionObserver를 통해 화면에 video태그가 보이면 실행
+function lazyLoadVideos() {
+    const videos = document.querySelectorAll("video.thumbnail");
+
+    // 옵저버 정의
+    /**
+     * IntersectionObserver
+     * 브라우저에서 어떤 요소가 뷰포트(화면) 안에 들어왔는지 자동으로 감지하는 API
+     * >> 스크롤을 감지해서 이미지 로딩, 애니메이션 트리거, 광고 노출 등을 실행
+     *
+     * observe(element); 관찰 대상 등록
+     * unobserve(element); 관찰 대상 해제
+     * disconnect(); 모든 관찰 중단
+     */
+    const observer = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            const video = entry.target;
+            const source = video.querySelector("source");
+
+            if (entry.isIntersecting) { // 화면에 보이면 실행
+                if (source && source.dataset.src && !source.src) {
+                    source.src = source.dataset.src;     // 실제 src 할당
+                    source.removeAttribute('data-src');
+                    if (video.dataset.poster) video.poster = video.dataset.poster; // 썸네일 이미지 세팅
+                    attachTapEventOnly(video, { autoPlay: true });
+                }
+                safePlay(video, { autoPlay: true, fromStart: true });
+
+                // observer.unobserve(video); // 한 번 로딩되면 더 이상 감시 안 함, 주석 처리하여 다시 뷰포트로 들어오면 이벤트 동작하도록 함
+            } else { // 화면 이탈
+                safePause(video);
+            }
+        });
+    }, {
+        rootMargin: "0px 0px 1500px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 전에 미리 감지 → 미리 로드 가능)
+        // threshold: 0.1 // 요소가 10% 보일 때 트리거
+    });
+
+    videos.forEach(video => observer.observe(video));
+}
 
 
 /******************************************  Video  ****************************************/
 /******************************************  Pagenation  ****************************************/
+function goPage(page) {
+    renderLoadingOverlay();
+    const url = new URL("/image/pages", window.location.origin);
+    url.searchParams.set("market", stock_name);
+    url.searchParams.set("selected_dir", selected_dir);
+    if (dir !== null && dir !== undefined && dir !== "") {
+        url.searchParams.set("dir", dir);
+    }
+    url.searchParams.set("page", page);
+
+    window.location.href = url.toString(); // 그냥 링크 이동
+}
+
+// 페이지 네이션
+document.addEventListener('click', (e) => {
+    const a = e.target.closest('.pagination a[data-page]');
+    if (!a) return;
+
+    e.preventDefault();
+    const page = Number(a.dataset.page);
+    goPage(page);
+});
+
 function goPrevPage () {
     if (page > 1) {
         const previousBtn = document.querySelector('.pagination').children[1]
