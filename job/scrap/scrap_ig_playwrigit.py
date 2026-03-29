@@ -15,15 +15,7 @@ month = datetime.now().strftime("%y%m")
 month_dir = f"logs/i/{month}"
 os.makedirs(month_dir, exist_ok=True)
 filename = f"{month_dir}/scrap_ig_{today}.log"
-log_file = open(filename, "a", encoding="utf-8")   # w: 덮어쓰기, a: 이어쓰기
-sys.stdout = log_file
-sys.stderr = log_file
-# print("이건 파일로 감")
-# raise Exception("에러도 파일로 감")
 
-sys.stdout.reconfigure(line_buffering=True)
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
 
 IMAGE_DIR2 = settings['IMAGE_DIR2']
@@ -836,6 +828,17 @@ async def handle_account(page, account: str):
     return len(links)
 
 async def run_scrap():
+    account_length = len(ACCOUNTS)
+    if account_length > 0:
+        log_file = open(filename, "a", encoding="utf-8")   # w: 덮어쓰기, a: 이어쓰기
+        sys.stdout = log_file
+        sys.stderr = log_file
+        # print("이건 파일로 감")
+        # raise Exception("에러도 파일로 감")
+
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
     async with async_playwright() as pw:
         context = await pw.chromium.launch_persistent_context(
             USER_DATA_DIR,
@@ -873,7 +876,9 @@ async def run_scrap():
                     await asyncio.sleep(30)
 
         await context.close()
-    log_file.close()
+
+    if account_length > 0:
+        log_file.close()
 
 def run_scrap_ig_job():
     # 이벤트 루프는 “스레드당 1개”가 원칙
