@@ -129,7 +129,7 @@ button.delete-button:hover {
 
 
 /* NextImage */
-.floating-button-right {
+/*.floating-button-right {
     position: fixed;
     z-index: 9999;
     bottom: 150px;
@@ -142,30 +142,15 @@ button.delete-button:hover {
     border: none;
     font-size: 16px;
     max-width: 120px;
-    /*height: 50px;*/
+    !*height: 50px;*!
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     cursor: pointer;
     transition: background-color 0.3s ease;
 }
-/* PreviousImage */
-.floating-button-left {
-    position: fixed;
-    z-index: 5;
-    bottom: 150px;
-    left: 5px;
-    padding: 15px 0px;
-    cursor: pointer;
-    background-color: #007bff;
-    opacity: 0.3;
-    color: white;
-    border: none;
-    font-size: 16px;
-    max-width: 120px;
-    /*height: 50px;*/
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
+.floating-button2:hover {
+    background-color: #0056b3;
+}*/
+
 /* empty-trash-bin */
 .floating-button2 {
     position: fixed;
@@ -179,6 +164,8 @@ button.delete-button:hover {
     color: white;
     border: none;
     font-size: 16px;
+    display: inline-block;   /* 내용 크기에 맞게 */
+    width: auto;             /* 고정 폭 제거 */
     max-width: 130px;
     /*height: 50px;*/
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -189,53 +176,81 @@ button.delete-button:hover {
     background-color: #0056b3;
 }
 
-.scroll-buttons {
+
+.floating-toolbar{
     position: fixed;
-    top: 8%;
-    left: 15px;
+    right: 24px;
+    bottom: 10vh;
+    z-index: 9999;
+
+    opacity: 0.35;
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    z-index: 9999;
-    opacity: 0.2;
+    gap: 10px;
+
+    padding: 10px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+    border: 1px solid rgba(0,0,0,0.08);
 }
-.scroll-buttons button {
-    width: 50px;
-    height: 50px;
-    font-size: 20px;
-    cursor: pointer;
-    background-color: #007BFF;
-    color: white;
+.toolbar-group{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.toolbar-divider{
+    height: 1px;
+    background: rgba(0,0,0,0.08);
+    margin: 2px 0;
+}
+.toolbar-btn{
+    min-width: 52px;
+    height: 44px;
+    padding: 0 14px;
+
     border: none;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #222;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.toolbar-btn:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+    background: #f7f7f7;
+}
+.toolbar-btn:active{
+    transform: translateY(0);
+}
+
+/* 모바일 */
+@media (max-width: 768px){
+    .floating-toolbar{
+        right: 10px;
+        bottom: 10vh;
+        padding: 6px;
+        border-radius: 16px;
+    }
+
+    .toolbar-btn{
+        min-width: 46px;
+        height: 40px;
+        font-size: 13px;
+        padding: 0 12px;
+    }
 }
 
 
-/* 하단 이전/다음 페이지 바로가기 버튼 */
-.pagination-buttons {
-    position: fixed;
-    bottom: 70px;
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    padding: 0 20px;
-    z-index: 1000;
-    pointer-events: none;
-}
-.pagination-button {
-    background-color: #007BFF;
-    color: white;
-    border: none;
-    opacity: 0.3;
-    width: 50px;
-    height: 50px;
-    font-size: 1.5em;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-    pointer-events: auto;
-}
+
 .pagination-button:hover {
     background-color: #0056b3
 }

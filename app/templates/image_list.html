@@ -15,7 +15,7 @@
 <div class="top-bar">
     <div class="logout">
         {% if current_user.is_authenticated %}
-            <a href="{{ url_for('auth.logout') }}">Logout</a>
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
         {% endif %}
     </div>
     <div class="back">
@@ -30,7 +30,7 @@
 <button id="slideshow-btn" class="floating-button2" style="top: 120px">Slide show</button>
 {% elif dir in ['temp', 'trip'] %}
 <button id="download-zip-btn" class="floating-button2">
-    <span class="icon">📂</span> Download
+    <span class="icon">📂</span>
 </button>
 <ul id="dropdown-menu" class="dropdown-menu">
     <li onclick="downloadThisPage()">Download This Page</li>
@@ -40,13 +40,22 @@
 {% else %}
 {% endif %}
 
-<div class="pagination-buttons">
-    <button class="pagination-button prev-button" id="prevButton">&lt;</button>
-    <button class="pagination-button next-button" id="nextButton">&gt;</button>
-</div>
-<div class="scroll-buttons">
-    <button onclick="window.scrollTo({ top: 0, behavior: 'auto' })">⬆</button>
-    <button onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })">⬇</button>
+<!--<button id="next-image-button" class="floating-button-right">Next</button>-->
+
+<div class="floating-toolbar">
+    <div class="toolbar-group">
+        <button class="toolbar-btn" onclick="window.scrollTo({ top: 0, behavior: 'auto' })" title="맨 위">▲ top</button>
+        <button class="toolbar-btn" onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })" title="맨 아래">▼ bottom</button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-group">
+        {% if images_length != 0 and dir in ['trip', 'temp'] %}
+        <button id="previous-image-button" class="toolbar-btn" title="이전 이미지">Previous</button>
+        {% endif %}
+        <button id="next-image-button" class="toolbar-btn" title="다음 이미지">Next</button>
+    </div>
 </div>
 
 <div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
@@ -88,6 +97,21 @@
 
 <!--    <form id="delete-form" method="POST" action="{{ url_for('image.delete-images', dir=dir) }}">-->
     <div id="delete-form">
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="#" data-page="1" class="side">&laquo;</a>
+            <a href="#" data-page="{{ page-1 }}" class="side">&lt;</a>
+            {% endif %}
+
+            {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
+            <a href="#" data-page="{{ p }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            {% endfor %}
+
+            {% if page < total_pages %}
+            <a href="#" data-page="{{ page+1 }}" class="side">&gt;</a>
+            <a href="#" data-page="{{ total_pages }}" class="side">&raquo;</a>
+            {% endif %}
+        </div>
         <input type="hidden" name="page" value="{{ page }}">
         <div class="image-container">
             {% for image in images %}
@@ -106,7 +130,7 @@
                        muted playsinline controls loop
                        data-index="{{ loop.index }}"
                        alt="{{ image|urlencode }}"
-                       >
+                >
                     <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
                             type="video/mp4"
                             data-filename="{{ image|urlencode }}">
@@ -129,9 +153,9 @@
                      alt="{{ image|urlencode }}"
                      onerror="this.onerror=null; this.src='/static/no-image.png';"
                      {% if dir not in ['trip', 'temp', 'refine'] %}
-                     data-filename="{{ image|urlencode }}" data-index="{{ loop.index }}"
-                     {% endif %}
-                     data-index="{{ loop.index }}">
+                data-filename="{{ image|urlencode }}" data-index="{{ loop.index }}"
+                {% endif %}
+                data-index="{{ loop.index }}">
                 {% endif %}
             </div>
             {% endfor %}
@@ -139,21 +163,6 @@
         <div>
             total_count : <span id="total_count">{{ images_length }}</span>
         </div>
-        <!--<div class="pagination">
-            {% if page > 1 %}
-            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=1, dir=dir) }}">&laquo;</a>
-            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=page-1, dir=dir) }}">&lt;</a>
-            {% endif %}
-
-            {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
-            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=p, dir=dir) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
-            {% endfor %}
-
-            {% if page < total_pages %}
-            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=page+1, dir=dir) }}">&gt;</a>
-            <a href="{{ url_for('image.image_list', market=market, selected_dir=selected_dir, page=total_pages, dir=dir) }}">&raquo;</a>
-            {% endif %}
-        </div>-->
         <div class="pagination">
             {% if page > 1 %}
             <a href="#" data-page="1" class="side">&laquo;</a>
@@ -174,11 +183,6 @@
         {% endif %}
     </div>
 </div>
-
-{% if images_length != 0 and dir in ['trip', 'temp']%}
-<button id="previous-image-button" class="floating-button-left">Previous</button>
-{% endif %}
-<button id="next-image-button" class="floating-button-right">Next</button>
 
 <script src="/static/js/image.js?v={{ version }}"></script>
 <script>
@@ -326,7 +330,7 @@
                 }
             });
         }, {
-            rootMargin: "0px 0px 1200px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 전에 미리 감지 → 미리 로드 가능)
+            rootMargin: "0px 0px 1500px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 전에 미리 감지 → 미리 로드 가능)
             // threshold: 0.1 // 요소가 10% 보일 때 트리거
         });
 
@@ -374,7 +378,7 @@
         } else {
             imageItems.forEach(item => {
                 const img = item.querySelector('.thumbnail');
-                img.addEventListener('click', () => {
+                img?.addEventListener('click', () => {
                     const filename = img.getAttribute('data-filename');
                     const index = img.getAttribute('data-index');
                     // console.log(filename, index)
@@ -389,8 +393,8 @@
         }
 
 
-        document.addEventListener('keydown', function(event) {
-            switch(event.key) {
+        document.addEventListener('keydown', function (event) {
+            switch (event.key) {
                 case 'ArrowRight':
                 case 'ArrowDown':
                 case 'PageDown':
@@ -412,10 +416,11 @@
                         previousImage();
                     }
                     break;
-                case ' ': case 'Enter':
+                case ' ':
+                case 'Enter':
                     event.preventDefault();
                     if (dir === 'image' || dir === 'image2' || dir === 'move') clickCenterImage();
-                    if (dir === 'trip' || dir === 'temp')  playCenterVideo();
+                    if (dir === 'trip' || dir === 'temp') playCenterVideo();
                     break;
                 case 'Delete':
                 case '`':
