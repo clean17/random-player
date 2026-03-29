@@ -56,11 +56,12 @@ def get_videos():
     random.shuffle(videos)
     return jsonify(videos)
 
-@video.route('/videos/<path:filename>', methods=['GET'])
+@video.route('/videos/<path:filepath>', methods=['GET'])
 @login_required
-def get_video(filename):
+def get_video(filepath):
     # basename() : ../../test.mp4 >> test.mp4 .. 경로 traversal 방지
-    filename = os.path.basename(filename)
+    file_dir = os.path.dirname(filepath)
+    filename = os.path.basename(filepath)
     directory = request.args.get('dir')
 
     key = 'VIDEO_DIRECTORY' + directory
@@ -70,7 +71,7 @@ def get_video(filename):
     video_directory = settings[key]  # 딕셔너리 접근 방식으로 수정
 
     return send_file(
-        os.path.join(video_directory, filename),
+        os.path.join(video_directory, file_dir, filename),
         conditional=True
     )
 

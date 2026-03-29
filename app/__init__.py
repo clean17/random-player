@@ -288,9 +288,9 @@ def create_app():
                     (weekday == 4 and hour <= 20) ):        # 금요일 20시 이전
                 check_date_conditions = False
 
-            # if check_date_conditions: # 평일에만 추가인증 안함
+            if check_date_conditions: # 평일에만 추가인증 안함
             # if False: # 추가인증 안함
-            if True: # 추가인증 필수
+            # if True: # 추가인증 필수
                 url = request.path
                 parts = url.split("/")
                 base_path = "/" + "/".join(parts[1:3])
