@@ -17,8 +17,11 @@ from pathlib import Path
 image_bp = Blueprint('image', __name__)
 LIMIT_PAGE_NUM = 100
 ref_shuffled_images = None
-image2_arr = []
+
+ai_image_arr = []
+ig_image_arr = []
 moved_image_arr = []
+refined_image_arr = []
 
 # 설정
 IMAGE_DIR = settings['IMAGE_DIR']
@@ -45,6 +48,7 @@ EXCLUDE_SUFFIXES: Final = (".zip", ".ini", ".Identifier")  # 불변 튜플
 
 # MOVE_DIR = os.path.join(os.getcwd(), 'move')
 
+# 디렉토리 추가하면
 # def initialize_image_directories():
 #     os.makedirs(IMAGE_DIR, exist_ok=True)
 #     os.makedirs(MOVE_DIR, exist_ok=True)
@@ -82,20 +86,16 @@ def initialize_shuffle_images():
 initialize_sorted_images()
 
 
-# def get_images(start, count, dir):
-#     if dir == REF_IMAGE_DIR:
-#         images = ref_shuffled_images
-#     else:
-#         images = [
-#             f for f in os.listdir(dir)
-#             if not f.lower().endswith(EXCLUDE_SUFFIXES)  # ✅ .zip 파일 제외
-#         ]
-#         images.sort()
-#     return images[start:start + count]
 
-def get_images(start, count, dir, page, image_arr=None):
+def get_images(start, count, page, dir, image_arr=None):
     if dir == REF_IMAGE_DIR:
         images = ref_shuffled_images
+        if start >= len(images) and len(images) > 0:
+            start = max(0, start - LIMIT_PAGE_NUM)
+            page = max(1, page - 1)
+        if image_arr is not None:
+            image_arr.clear()
+            image_arr.extend(images)
     else:
         # .zip, .ini 파일 제외한 파일 리스트
         files = [
@@ -119,25 +119,8 @@ def get_images(start, count, dir, page, image_arr=None):
 
     return images[start:start + count], page
 
-def get_subdir_images(start, count, dirs):
-    if isinstance(dirs, str):
-        dirs = [dirs]
 
-    images = []
-    for dir_path in dirs:
-        for subdir in os.listdir(dir_path):
-            subdir_path = os.path.join(dir_path, subdir)
-            if os.path.isdir(subdir_path):
-                for f in os.listdir(subdir_path):
-                    full_path = os.path.join(subdir_path, f)
-                    if os.path.isfile(full_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
-                        # 내부 디렉토리명과 파일명을 붙임 (ex: data1/filename.jpg)
-                        images.append(f"{subdir}/{f}")
-    images.sort()
-    return images[start:start + count]
-
-
-def get_subdir_and_reels_images(start, count, page, parent_dir, image_arr):
+def get_subdir_and_reels_images(start, page, count, parent_dir, image_arr):
     images = []
     # subdir: 각 인스타그램 계정 폴더
     for subdir in os.listdir(parent_dir):
@@ -182,6 +165,32 @@ def get_reverse_images(start, count, dir):
     )
     return images[start:start + count]
 
+
+def fetch_images(start, limit, page, dir_path, image_arr, source_type=None):
+    if source_type == "ig":
+        return get_subdir_and_reels_images(start, limit, page, dir_path, image_arr)
+    elif source_type == None:
+        return get_images(start, limit, page, dir_path, image_arr)
+    else:
+        raise ValueError("Unknown source_type")
+
+
+# 첫 페이지가 아니면 이미지 배열을 재사용
+def get_image_page(page, start, limit, target_dir, image_arr, html, source_type=None):
+    if page != 1:
+        images = image_arr[start:start + limit]
+    else:
+        images, page = fetch_images(start, limit, page, target_dir, image_arr, source_type)
+
+    if len(images) == 0:
+        page = page - 1
+        start = (page - 1) * limit
+        images = image_arr[start:start + limit]
+
+    images_length = len(image_arr)
+    template_html = html
+
+    return images, page, start, images_length, template_html
 
 def get_stock_graphs(dir, start, count):
     all_items = os.listdir(dir)
@@ -232,46 +241,6 @@ def count_non_zip_files(directory):
     ])
 
 
-def count_non_zip_files_in_subfolders(parent_dir):
-    count = 0
-    for entry in os.listdir(parent_dir):
-        sub_path = os.path.join(parent_dir, entry)
-        if os.path.isdir(sub_path):
-            # 하위 디렉토리 내부 파일만 카운트
-            for f in os.listdir(sub_path):
-                file_path = os.path.join(sub_path, f)
-                if os.path.isfile(file_path) and not f.lower().endswith('.zip'):
-                    count += 1
-    return count
-
-
-def count_non_zip_files_in_subfolders_and_reels(parent_dir):
-    count = 0
-    for subdir in os.listdir(parent_dir):
-        subdir_path = os.path.join(parent_dir, subdir)
-        if os.path.isdir(subdir_path):
-            # 1. dirA, dirB 바로 아래 파일
-            for f in os.listdir(subdir_path):
-                file_path = os.path.join(subdir_path, f)
-                if os.path.isfile(file_path) and not f.lower().endswith('.zip'):
-                    count += 1
-            # 2. reels 서브디렉토리의 파일도 포함
-            reels_path = os.path.join(subdir_path, "reels")
-            if os.path.isdir(reels_path):
-                for f in os.listdir(reels_path):
-                    reels_file_path = os.path.join(reels_path, f)
-                    if os.path.isfile(reels_file_path) and not f.lower().endswith('.zip'):
-                        count += 1
-            # 3. images 서브디렉토리의 파일
-            images_path = os.path.join(subdir_path, "images")
-            if os.path.isdir(images_path):
-                for f in os.listdir(images_path):
-                    img_file_path = os.path.join(images_path, f)
-                    if os.path.isfile(img_file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
-                        count += 1
-    return count
-
-
 def clean_filename(filename):
     # Windows에서 허용되지 않는 문자(: * ? " < > | / \)를 _로 변경
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
@@ -283,6 +252,7 @@ def clean_filename(filename):
 def image_list():
     # ?title=video-call&dir=temp
     # if current_user.username == settings['GUEST_USERNAME']:
+
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir')
     if selected_dir in ("None", "null", "undefined", ""):
@@ -293,11 +263,8 @@ def image_list():
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
 
-
+    # 게스트
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
-        # images, page = get_images(start, LIMIT_PAGE_NUM, TEMP_IMAGE_DIR, page)
-        # images_length = count_non_zip_files(TEMP_IMAGE_DIR)
-        # template_html = 'trip_image_list.html'
         template_html = 'image_list.html'
         dir_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
 
@@ -310,63 +277,49 @@ def image_list():
         if selected_dir == 'video-call':
             images = get_reverse_images(start, LIMIT_PAGE_NUM, target_dir)
         else:
-            images, page = get_images(start, LIMIT_PAGE_NUM, target_dir, page)
+            images, page = get_images(start, LIMIT_PAGE_NUM, page, target_dir)
         images_length = count_non_zip_files(target_dir)
         dir = 'temp'
 
+    # elif dir == 'trip':
+    #     images, page = get_images(start, LIMIT_PAGE_NUM, page, TRIP_IMAGE_DIR)
+    #     images_length = count_non_zip_files(TRIP_IMAGE_DIR)
+    #     template_html = 'trip_image_list.html'
+
+
+    # 공통 기능 : 첫번째 페이지에서만 풀 스캔
+    elif dir == 'image':
+        # template_html = 'image_masonry.html'
+        images, page, start, images_length, template_html = get_image_page(
+            page, start, LIMIT_PAGE_NUM, IMAGE_DIR, ai_image_arr, 'image_list.html'
+        )
+
+    elif dir == 'image2':
+        images, page, start, images_length, template_html = get_image_page(
+            page, start, LIMIT_PAGE_NUM, IMAGE_DIR2, ig_image_arr, 'image_list.html', 'ig'
+        )
+
+    elif dir == 'move':
+        # template_html = 'image_masonry.html'
+        images, page, start, images_length, template_html = get_image_page(
+            page, start, LIMIT_PAGE_NUM, MOVE_DIR, moved_image_arr, 'image_list.html'
+        )
 
     elif dir == 'refine':
         # firstRequst = request.args.get('firstRequst')
         # if firstRequst == 'True':
         #     initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
-        images_length = count_non_zip_files(REF_IMAGE_DIR)
 
-        isSlide = request.args.get('slide', '')
-        if isSlide == 'y':
-            images, page = get_images(0, images_length, REF_IMAGE_DIR, page)
-            return jsonify({"slide_show_images": images})
-        else:
-            images, page = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR, page)
-        if len(images) == 0:
-            page = page - 1
-            start = (page - 1) * LIMIT_PAGE_NUM
-            images, page = get_images(start, LIMIT_PAGE_NUM, REF_IMAGE_DIR, page)
-        # template_html = 'ref_image_list.html'
-        template_html = 'image_list.html'
-    elif dir == 'image':
-        images, page = get_images(start, LIMIT_PAGE_NUM, IMAGE_DIR, page)
-        images_length = count_non_zip_files(IMAGE_DIR)
-        template_html = 'image_list.html'
-    elif dir == 'image2':
-        if page != 1:
-            images = image2_arr[start:start + LIMIT_PAGE_NUM]
-        else:
-            images, page = get_subdir_and_reels_images(start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, image2_arr)
-        if len(images) == 0:
-            page = page - 1
-            start = (page - 1) * LIMIT_PAGE_NUM
-            images = image2_arr[start:start + LIMIT_PAGE_NUM]
-            # images_length = count_non_zip_files_in_subfolders_and_reels(IMAGE_DIR2)
-        images_length = len(image2_arr)
-        template_html = 'image_list.html'
-    # elif dir == 'trip':
-    #     images, page = get_images(start, LIMIT_PAGE_NUM, TRIP_IMAGE_DIR, page)
-    #     images_length = count_non_zip_files(TRIP_IMAGE_DIR)
-    #     template_html = 'trip_image_list.html'
-    elif dir == 'move':
-        # images, page = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR, page, moved_image_arr)
-        # images_length = count_non_zip_files(MOVE_DIR)
-        if page != 1:
-            images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
-        else:
-            images, page = get_images(start, LIMIT_PAGE_NUM, MOVE_DIR, page, moved_image_arr)
-        if len(images) == 0:
-            page = page - 1
-            start = (page - 1) * LIMIT_PAGE_NUM
-            images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
+        # isSlide = request.args.get('slide', '')
+        # if isSlide == 'y':
+        #     print('sliedddddddddddddddd')
+        #     images, page = get_images(0, images_length, page, REF_IMAGE_DIR)
+        #     return jsonify({"slide_show_images": images})
 
-        images_length = len(moved_image_arr)
-        template_html = 'image_list.html'
+        images, page, start, images_length, template_html = get_image_page(
+            page, start, LIMIT_PAGE_NUM, REF_IMAGE_DIR, refined_image_arr, 'image_list.html'
+        )
+
     elif dir == 'stock':
         market = request.args.get('market') or ''
         return redirect(url_for("image.stock-graph-list", market=market, page=page))
@@ -489,25 +442,35 @@ def delete_images():
             # 다른 문제(권한, path traversal 등)
             print(f"[ERROR] delete failed: {image} -> {e}")
 
-    # 루프가 끝난 뒤, image2_arr에서 한 번에 삭제(모든 중복 제거)
-    if dir == 'image2' and image2_arr:
+    # 루프가 끝난 뒤, ig_image_arr에서 한 번에 삭제(모든 중복 제거)
+    if dir == 'image' and ai_image_arr:
         to_delete = set(images_to_delete)
         # in-place 갱신(참조 유지)
-        image2_arr[:] = [p for p in image2_arr if p not in to_delete]
+        ai_image_arr[:] = [p for p in ai_image_arr if p not in to_delete]
+        
+    if dir == 'image2' and ig_image_arr:
+        to_delete = set(images_to_delete)
+        # in-place 갱신(참조 유지)
+        ig_image_arr[:] = [p for p in ig_image_arr if p not in to_delete]
 
     if dir == 'move' and moved_image_arr:
         to_delete = set(images_to_delete)
         # in-place 갱신(참조 유지)
         moved_image_arr[:] = [p for p in moved_image_arr if p not in to_delete]
 
+    if dir == 'refine' and refined_image_arr:
+        to_delete = set(images_to_delete)
+        # in-place 갱신(참조 유지)
+        refined_image_arr[:] = [p for p in refined_image_arr if p not in to_delete]
+
     page = int(data.get("page", 1))
     # if dir == 'image2':
-    #     global image2_arr
-    #     image2_arr = image2_arr[LIMIT_PAGE_NUM:]
-    #     total_pages = (len(image2_arr) + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+    #     global ig_image_arr
+    #     ig_image_arr = ig_image_arr[LIMIT_PAGE_NUM:]
+    #     total_pages = (len(ig_image_arr) + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
     #
-    #     return render_template('image_list.html', images=image2_arr[:LIMIT_PAGE_NUM], page=page, title=None,
-    #                            total_pages=total_pages, images_length=len(image2_arr), dir=dir,
+    #     return render_template('image_list.html', images=ig_image_arr[:LIMIT_PAGE_NUM], page=page, title=None,
+    #                            total_pages=total_pages, images_length=len(ig_image_arr), dir=dir,
     #                            selected_dir=None, dir_list=[], version=int(time.time()))
     # else:
     #     return redirect(url_for('image.image_list', page=page, dir=dir))
