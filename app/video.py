@@ -80,7 +80,7 @@ def get_video(filepath):
 @video.route('/temp-video/<path:filename>', methods=['GET'])
 @login_required
 def get_temp_video(filename):
-    filename = os.path.basename(filename)
+    filename = filename.replace("\\", "/")
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir')
 
