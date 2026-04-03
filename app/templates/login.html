@@ -131,8 +131,8 @@
         try {
             renderLoadingOverlay();
             const response = await axios.post("/auth/api/token", {
-                username: document.getElementById("username").value,
-                password: document.getElementById("password").value
+                username: document.getElementById("username").value.trim(),
+                password: document.getElementById("password").value.trim(),
             }, {
                 headers: {
                     "Content-Type": "application/json",
@@ -146,8 +146,8 @@
             axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
             await axios.post("/auth/login", {
-                username: document.getElementById("username").value,
-                password: document.getElementById("password").value
+                username: document.getElementById("username").value.trim(),
+                password: document.getElementById("password").value.trim(),
             }, {
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
