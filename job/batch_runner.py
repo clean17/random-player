@@ -1,9 +1,7 @@
 import os
 import datetime
 from config.config import settings
-import asyncio
 # import sched ++ 서버/운영용보다는 테스트·학습용
-import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
@@ -33,20 +31,9 @@ TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
 
 # 전역 루프
-_loop = None
 executors = None
 
-def start_async_loop_in_background():
-    """별도 스레드에서 asyncio 이벤트 루프를 영구 실행"""
-    global _loop
-    _loop = asyncio.new_event_loop()   # 새로운 이벤트 루프 생성
 
-    def runner():
-        asyncio.set_event_loop(_loop)   # 이벤트 루프 설정
-        _loop.run_forever()
-
-    t = threading.Thread(target=runner, daemon=True)
-    t.start()
 
 
 def should_predict(market):
