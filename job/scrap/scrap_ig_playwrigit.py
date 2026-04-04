@@ -16,6 +16,8 @@ month_dir = f"logs/i/{month}"
 os.makedirs(month_dir, exist_ok=True)
 filename = f"{month_dir}/scrap_ig_{today}.log"
 
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
 
 IMAGE_DIR2 = settings['IMAGE_DIR2']
