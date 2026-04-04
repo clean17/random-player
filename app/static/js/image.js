@@ -324,7 +324,10 @@ function deletePage(e) {
             window.location.replace(url); // 또는 window.location.href = url
         })
         .catch(err => console.error("삭제 실패", err))
-        .finally(()=>{isDelRunning = false;});
+        .finally(()=>{
+            isDelRunning = false;
+            removeLoadingOverlay();
+        });
 
 }
 
@@ -507,6 +510,7 @@ function goPage(page) {
     }
     url.searchParams.set("page", page);
 
+    removeLoadingOverlay();
     window.location.href = url.toString(); // 그냥 링크 이동
 }
 
@@ -798,4 +802,5 @@ document.addEventListener("touchend", (e) => {
         throttledNextImage();
     }
 });
+
 

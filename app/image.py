@@ -15,7 +15,7 @@ from typing import Final
 from pathlib import Path
 
 image_bp = Blueprint('image', __name__)
-LIMIT_PAGE_NUM = 100
+LIMIT_PAGE_NUM = 300
 ref_shuffled_images = None
 
 ai_image_arr = []
@@ -120,7 +120,7 @@ def get_images(start, count, page, dir, image_arr=None):
     return images[start:start + count], page
 
 
-def get_subdir_and_reels_images(start, page, count, parent_dir, image_arr):
+def get_subdir_and_reels_images(start, limit, page, parent_dir, image_arr):
     images = []
     # subdir: 각 인스타그램 계정 폴더
     for subdir in os.listdir(parent_dir):
@@ -155,7 +155,7 @@ def get_subdir_and_reels_images(start, page, count, parent_dir, image_arr):
     image_arr.clear()
     image_arr.extend(images)
 
-    return images[start:start + count], page
+    return images[start:start + limit], page
 
 
 def get_reverse_images(start, count, dir):
@@ -176,7 +176,7 @@ def fetch_images(start, limit, page, dir_path, image_arr, source_type=None):
 
 
 # 첫 페이지가 아니면 이미지 배열을 재사용
-def get_image_page(page, start, limit, target_dir, image_arr, html, source_type=None):
+def get_image_page(start, limit, page, target_dir, image_arr, html, source_type=None):
     if page != 1:
         images = image_arr[start:start + limit]
     else:
@@ -291,18 +291,18 @@ def image_list():
     elif dir == 'image':
         # template_html = 'image_masonry.html'
         images, page, start, images_length, template_html = get_image_page(
-            page, start, LIMIT_PAGE_NUM, IMAGE_DIR, ai_image_arr, 'image_list.html'
+            start, LIMIT_PAGE_NUM, page, IMAGE_DIR, ai_image_arr, 'image_list_masonry.html'
         )
 
     elif dir == 'image2':
         images, page, start, images_length, template_html = get_image_page(
-            page, start, LIMIT_PAGE_NUM, IMAGE_DIR2, ig_image_arr, 'image_list.html', 'ig'
+            start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, ig_image_arr, 'image_list_masonry.html', 'ig'
         )
 
     elif dir == 'move':
         # template_html = 'image_masonry.html'
         images, page, start, images_length, template_html = get_image_page(
-            page, start, LIMIT_PAGE_NUM, MOVE_DIR, moved_image_arr, 'image_list.html'
+            start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, 'image_list.html'
         )
 
     elif dir == 'refine':
@@ -317,7 +317,7 @@ def image_list():
         #     return jsonify({"slide_show_images": images})
 
         images, page, start, images_length, template_html = get_image_page(
-            page, start, LIMIT_PAGE_NUM, REF_IMAGE_DIR, refined_image_arr, 'image_list.html'
+            start, LIMIT_PAGE_NUM, page, REF_IMAGE_DIR, refined_image_arr, 'image_list.html'
         )
 
     elif dir == 'stock':
@@ -447,7 +447,7 @@ def delete_images():
         to_delete = set(images_to_delete)
         # in-place 갱신(참조 유지)
         ai_image_arr[:] = [p for p in ai_image_arr if p not in to_delete]
-        
+
     if dir == 'image2' and ig_image_arr:
         to_delete = set(images_to_delete)
         # in-place 갱신(참조 유지)
