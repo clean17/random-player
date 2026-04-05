@@ -16,7 +16,7 @@
             flex-direction: row !important;
             align-items: flex-start !important;
             justify-content: center;
-            gap: 15px;
+            gap: 10px;
         }
 
         .image-item img {
@@ -30,6 +30,8 @@
             height: auto;
             max-height: none !important;  /* 🔥 중요 */
             object-fit: contain;
+            border-radius: 10px;
+
         }
 
         body{
@@ -43,28 +45,16 @@
             }
         }
 
-        .image-container{
-            display: flex;
-            gap: 15px;
-            align-items: flex-start;
-        }
-
         .masonry-column{
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 5px;
         }
 
         .image-item{
             width: 100%;
-        }
-
-        .thumbnail{
-            width: 100%;
-            height: auto;
-            display: block;
-            border-radius: 10px;
+            margin-bottom: 2px;
         }
     </style>
 </head>
@@ -241,18 +231,32 @@
             total_count : <span id="total_count">{{ images_length }}</span>
         </div>
         <div class="pagination">
-            {% if page > 1 %}
-            <a href="#" data-page="1" class="side">&laquo;</a>
+            {% if page >= 4 %}
+            <a href="#" data-page="1" class="side">1</a>
+            {% endif %}
+            {% if page > 4 %}
             <a href="#" data-page="{{ page-1 }}" class="side">&lt;</a>
             {% endif %}
+
+            <!--            {% if page >= 6 %}-->
+            <!--            <a href="#" data-page="{{ page - 5 }}">{{ page - 5 }}</a>-->
+            <!--            <a href="#">...</a>-->
+            <!--            {% endif %}-->
 
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
             <a href="#" data-page="{{ p }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
 
-            {% if page < total_pages %}
+            <!--            {% if page <= total_pages - 6 %}-->
+            <!--            <a href="#">...</a>-->
+            <!--            <a href="#" data-page="{{ page + 5 }}">{{ page + 5 }}</a>-->
+            <!--            {% endif %}-->
+
+            {% if page < total_pages - 3 %}
             <a href="#" data-page="{{ page+1 }}" class="side">&gt;</a>
-            <a href="#" data-page="{{ total_pages }}" class="side">&raquo;</a>
+            {% endif %}
+            {% if page <= total_pages - 3 and page < total_pages %}
+            <a href="#" data-page="{{ total_pages }}" class="side">{{ total_pages }}</a>
             {% endif %}
         </div>
         {% if images_length != 0 and dir in ['image', 'image2', 'move'] %}
@@ -277,6 +281,11 @@
     let columns = [];
     let allItems = [];
     let currentIndex = 0;
+    let rebalanceTimer;
+
+    /* =========================
+       Height 계산
+    ========================= */
 
     // “추정 높이 + 로딩 후 보정” 방식
     function getColumnHeight(col) {
@@ -288,52 +297,36 @@
         return Math.max(...columns.map(col => col.scrollHeight));
     }
 
-    // 빈 영역 감지 로직
+    /* =========================
+       Load 조건
+    ========================= */
+
+    // 빈 영역 감지 로직 (기존 그대로)
     function shouldLoadMore() {
         const scrollBottom = window.innerHeight + window.scrollY;
         const maxHeight = getMaxColumnHeight();
-
-        return scrollBottom > maxHeight - 2000; // 🔥 기존 300 → 800~1200
+        return scrollBottom > maxHeight - 2500;
     }
 
-    // while로 "빈 공간 채울 때까지 계속"
-    function fillViewport() {
-        let maxHeight = getMaxColumnHeight();
-        let viewportBottom = window.innerHeight + window.scrollY;
+    /* =========================
+       Column 처리
+    ========================= */
 
-        // 🔥 빈 공간이 있는 동안 계속 채움
-        while (viewportBottom > maxHeight - 200 && currentIndex < allItems.length) {
-            renderBatch();
-            maxHeight = getMaxColumnHeight();
-        }
+    // 가장 짧은 column 찾기
+    function getShortestColumn() {
+        return columns.reduce((prev, curr) =>
+            getColumnHeight(prev) < getColumnHeight(curr) ? prev : curr
+        );
     }
 
-    // column height 정확도 개선 (중요)
-    function appendToShortestColumn(el) {
-        const img = el.querySelector("img");
-
-        if (img && img.dataset.src) {
-            // 이미지 먼저 로드
-            const tempImg = new Image();
-            tempImg.src = img.dataset.src;
-
-            tempImg.onload = () => {
-                const col = getShortestColumn();
-                col.appendChild(el);
-            };
-        } else {
-            const col = getShortestColumn();
-            col.appendChild(el);
-        }
-    }
-
+    // column 생성
     function createColumns() {
         const container = document.getElementById("masonry");
         container.innerHTML = "";
 
-        const count = getColumnCount();
         columns = [];
 
+        const count = getColumnCount();
         for (let i = 0; i < count; i++) {
             const col = document.createElement("div");
             col.className = "masonry-column";
@@ -342,28 +335,45 @@
         }
     }
 
-    // 가장 짧은 column 찾기
-    function getShortestColumn() {
-        return columns.reduce((prev, curr) => {
-            return getColumnHeight(prev) < getColumnHeight(curr) ? prev : curr;
-        });
-    }
-
-    // column 개수 (반응형)
+    // 반응형 column 개수
     function getColumnCount() {
         const width = window.innerWidth;
 
-        if (width > 1400) return 5;
-        if (width > 1100) return 4;
-        if (width > 800) return 3;
-        if (width > 500) return 2;
+        if (width > 2500) return 5;
+        if (width > 1900) return 4;
+        if (width > 1200) return 3;
+        if (width > 800) return 2;
         return 1;
     }
 
+    /* =========================
+       Append
+    ========================= */
 
+    // column height 정확도 개선 (기존 로직 그대로 유지)
+    function appendToShortestColumn(el) {
+        const img = el.querySelector("img");
+
+        if (img && img.dataset.src) {
+            const tempImg = new Image();
+            tempImg.src = img.dataset.src;
+
+            tempImg.onload = () => {
+                getShortestColumn().appendChild(el);
+            };
+        } else {
+            getShortestColumn().appendChild(el);
+        }
+    }
+
+    /* =========================
+       Data & Render
+    ========================= */
 
     function initData() {
-        allItems = Array.from(document.querySelectorAll("#image-data .image-item"));
+        allItems = Array.from(
+            document.querySelectorAll("#image-data .image-item")
+        );
     }
 
     function renderBatch() {
@@ -373,10 +383,10 @@
         const end = currentIndex + batchSize;
 
         for (let i = currentIndex; i < end && i < allItems.length; i++) {
-            const item = allItems[i];
-            const clone = item.cloneNode(true);
+            const clone = allItems[i].cloneNode(true);
 
             observeImages(clone);
+            observeVideos(clone);
 
             clone.querySelectorAll("source[data-src]").forEach(s => {
                 s.src = s.dataset.src;
@@ -388,42 +398,100 @@
         currentIndex = end;
     }
 
+
+    function rebalanceFromBottom() {
+        if (columns.length < 2) return;
+
+        const MAX_MOVES = columns.length * 3; // 안전장치
+
+        for (let i = 0; i < MAX_MOVES; i++) {
+            const tallest = columns.reduce((a, b) =>
+                a.scrollHeight > b.scrollHeight ? a : b
+            );
+
+            const shortest = columns.reduce((a, b) =>
+                a.scrollHeight < b.scrollHeight ? a : b
+            );
+
+            if (tallest === shortest) break;
+
+            const diff = tallest.scrollHeight - shortest.scrollHeight;
+            if (diff < 150) break;
+
+            const items = tallest.querySelectorAll('.image-item');
+            if (items.length === 0) break;
+
+            const lastItem = items[items.length - 1];
+            if (!lastItem) break;
+
+            shortest.appendChild(lastItem);
+
+            const newDiff = tallest.scrollHeight - shortest.scrollHeight;
+            if (newDiff >= diff) break; // 이동해도 개선 안 되면 중단
+        }
+    }
+
+    /* =========================
+       Init
+    ========================= */
+
     function initMasonry() {
         createColumns();
         initData();
 
-        currentIndex = 0;   // 🔥 중요
+        currentIndex = 0;
         renderBatch();
     }
 
     window.addEventListener("load", initMasonry);
-    window.addEventListener("resize", () => {
-        initMasonry(); // 다시 계산
-    });
 
+    /* =========================
+       Lazy Load
+    ========================= */
 
-    const observer = new IntersectionObserver((entries) => {
+    const observer = new IntersectionObserver((entries, observer) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const img = entry.target;
+            const video = entry.target;
+            const source = video.querySelector("source");
 
-                if (img.dataset.src) {
-                    img.src = img.dataset.src;
-                    img.removeAttribute("data-src");
-                    observer.unobserve(img);
+            if (entry.isIntersecting) { // 화면에 보이면 실행
+                if (video.dataset.src) {
+                    video.src = video.dataset.src;
+                    video.removeAttribute("data-src");
+                    observer.unobserve(video);
                 }
+
+                if (source && source.dataset.src && !source.src) {
+                    source.src = source.dataset.src;     // 실제 src 할당
+                    source.removeAttribute('data-src');
+                    if (video.dataset.poster) video.poster = video.dataset.poster; // 썸네일 이미지 세팅
+                    attachTapEventOnly(video, { autoPlay: true });
+                }
+                safePlay(video, { autoPlay: true, fromStart: true });
+
+                // observer.unobserve(video); // 한 번 로딩되면 더 이상 감시 안 함, 주석 처리하여 다시 뷰포트로 들어오면 이벤트 동작하도록 함
+            } else { // 화면 이탈
+                safePause(video);
             }
         });
     }, {
-        rootMargin: "300px"
+        // rootMargin: "300px"
+        threshold: 0.05     // 5%만 보이면 isIntersecting = true
     });
 
     function observeImages(container) {
-        const imgs = container.querySelectorAll("img[data-src]");
-        imgs.forEach(img => observer.observe(img));
+        container.querySelectorAll("img[data-src]")
+            .forEach(img => observer.observe(img));
     }
 
-    let loading = false;
+    function observeVideos(container) {
+        const videos = container.querySelectorAll("video");
+        videos.forEach(video => observer.observe(video));
+    }
+
+    /* =========================
+       Scroll
+    ========================= */
 
     let isRendering = false;
 
@@ -438,17 +506,46 @@
                 isRendering = false;
             });
         }
+
+        // 균형 맞추기
+        clearTimeout(rebalanceTimer);
+
+        rebalanceTimer = setTimeout(() => {
+            rebalanceFromBottom();
+        }, 100);
     });
+
+    /* =========================
+       Resize (debounce)
+    ========================= */
 
     let resizeTimer;
+
     window.addEventListener("resize", () => {
         clearTimeout(resizeTimer);
+
         resizeTimer = setTimeout(() => {
             initMasonry();
-        }, 300);
+        }, 3);
     });
 
 
+
+
+    // 삭제 + 재정렬 함수
+    function moveAndRemove(imageItem, filename, idx) {
+        // 현재 스크롤 위치 저장
+        const prevScrollY = window.scrollY;
+
+        moveImage(filename, idx);
+        imageItem.remove();
+
+        // 스크롤 복원
+        window.scrollTo(0, prevScrollY);
+
+        // 균형 맞추기
+        rebalanceFromBottom();
+    }
 
 
 
@@ -456,31 +553,59 @@
 
     function initPage() {
         // 'X' 버튼 이벤트 추가
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', e => {
-                const imageItem = e.target.closest('.image-item');
-                if (dir == 'refine') {
-                    deleteItem(imageItem);
-                } else {
-                    let filename = imageItem.querySelector('.thumbnail')?.alt;
-                    if (imageItem) {
-                        if (!filename) {
-                            filename = imageItem.querySelector('source').dataset.filename;
-                        }
-                        let idx = 0;
-                        if (imageItem.hasAttribute("id")) {
-                            idx = imageItem.id.split('-')[1]
-                        }
-                        if (currentUserName === guestName) {
-                            if (confirm('Delete the file ?')) {
-                                moveImage(filename, idx);
-                            }
-                        } else {
-                            moveImage(filename, idx);
-                        }
-                    }
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.delete-btn');
+            if (!btn) return;
+
+            const imageItem = btn.closest('.image-item');
+            if (!imageItem) return;
+
+            if (dir == 'refine') {
+                deleteItem(imageItem);
+            } else {
+                let filename = imageItem.querySelector('.thumbnail')?.alt;
+
+                if (!filename) {
+                    filename = imageItem.querySelector('source')?.dataset.filename;
                 }
-            });
+
+                let idx = 0;
+                if (imageItem.id) {
+                    idx = imageItem.id.split('-')[1];
+                }
+
+                if (currentUserName === guestName) {
+                    if (confirm('Delete the file ?')) {
+                        moveAndRemove(imageItem, filename, idx);
+                    }
+                } else {
+                    moveAndRemove(imageItem, filename, idx);
+                }
+            }
+        });
+
+        // 이미지 클릭 (수정)
+        document.addEventListener('click', function (e) {
+            const img = e.target.closest('img.thumbnail');
+            if (!img) return;
+
+            if (dir === 'trip' || dir === 'temp') return;
+
+            const imageItem = img.closest('.image-item');
+            if (!imageItem) return;
+
+            if (dir === 'stock' && stock_name !== 'kospil') {
+                if (confirm('Delete the file ?')) {
+                    moveStockImage({ target: img });
+                    imageItem.remove();
+                }
+                return;
+            }
+
+            const filename = img.getAttribute('data-filename');
+            const index = img.getAttribute('data-index');
+
+            moveAndRemove(imageItem, filename, index);
         });
 
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
@@ -516,83 +641,8 @@
         }
 
 
-        document.addEventListener('keydown', function (event) {
-            switch (event.key) {
-                case 'ArrowRight':
-                case 'ArrowDown':
-                case 'PageDown':
-                    event.preventDefault();
-                    if (event.shiftKey) {
-                        goNextPage();
-                    } else {
-                        // nextImage();
-                        throttledNextImage();
-                    }
-                    break;
-                case 'ArrowLeft':
-                case 'ArrowUp':
-                case 'PageUp':
-                    event.preventDefault();
-                    if (event.shiftKey) {
-                        goPrevPage();
-                    } else {
-                        previousImage();
-                    }
-                    break;
-                case ' ':
-                case 'Enter':
-                    event.preventDefault();
-                    if (dir === 'image' || dir === 'image2' || dir === 'move') clickCenterImage();
-                    if (dir === 'trip' || dir === 'temp') playCenterVideo();
-                    break;
-                case 'Delete':
-                case '`':
-                    if (isDelRunning) return
-                    isDelRunning = true;
-                    event.preventDefault();
-                    if (dir === 'refine') {
-                        handelDelBtn();
-                    } else if (dir === 'trip' || dir === 'temp') {
-                        if (currentUserName === guestName) {
-                            if (confirm('Delete the file ?')) {
-                                clickCenterImage();
-                            }
-                        } else {
-                            clickCenterImage();
-                        }
-                    } else {
-                        if (confirm('Delete the file ?')) {
-                            if (dir === 'stock') {
-                                const centerImage = getCenterImage();
-                                if (centerImage) {
-                                    moveStockImage({ target: centerImage.querySelector('img') }); // 키보드 이벤트로 삭제
-                                }
-                            } else {
-                                // document.querySelector('.delete-button')?.click()
-                                deletePage()
-                            }
-                        }
-                    }
-                    break;
-                default:
-                    break;
-            }
-        });
-
         emptyBinBtn?.removeEventListener('click', emptyTrash);
         emptyBinBtn?.addEventListener('click', emptyTrash);
-
-        /**************************************************************/
-
-        // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
-        /*form.addEventListener('submit', (event) => {
-            renderLoadingOverlay();
-            delBtn.disabled = true;
-            delBtn.style.background = 'gray';
-        });*/
-
-        /*****************************************************************/
-
 
         zipBtn?.addEventListener('click', () => {
             const rect = zipBtn.getBoundingClientRect();
