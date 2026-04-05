@@ -764,7 +764,8 @@ async def handle_account(page, account: str):
         await asyncio.sleep(60 * 30)  # 과도한 요청 방지
 
     # 저장 디렉토리 준비
-    dirs = ensure_dirs(BASE_SAVE_DIR, account)
+    if len(links) > 0:
+        dirs = ensure_dirs(BASE_SAVE_DIR, account)
 
     all_saved = []
     check_saved = []
@@ -793,7 +794,7 @@ async def handle_account(page, account: str):
             # print('saved', saved)
             all_saved.extend(saved or [])
             check_saved.extend(saved or [])
-            if idx % 10 == 0:
+            if idx % 10 == 0 or idx+1 == len(links):
                 today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
                 print(f"[{account}] [{today}] Interim check of number of saved files : {len(check_saved)}")
                 check_saved = []

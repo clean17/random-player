@@ -90,14 +90,13 @@
 
 <!--<button id="next-image-button" class="floating-button-right">Next</button>-->
 
+<!-- 네이게이션 v1.1 -->
 <div class="floating-toolbar">
     <div class="toolbar-group">
         <button class="toolbar-btn" onclick="window.scrollTo({ top: 0, behavior: 'auto' })" title="맨 위">▲ top</button>
         <button class="toolbar-btn" onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })" title="맨 아래">▼ bottom</button>
     </div>
-
     <div class="toolbar-divider"></div>
-
     <div class="toolbar-group">
         {% if images_length != 0 and dir in ['trip', 'temp'] %}
         <button id="previous-image-button" class="toolbar-btn" title="이전 이미지">Previous</button>
@@ -301,7 +300,7 @@
        Load 조건
     ========================= */
 
-    // 빈 영역 감지 로직 (기존 그대로)
+    // 빈 영역 감지 로직
     function shouldLoadMore() {
         const scrollBottom = window.innerHeight + window.scrollY;
         const maxHeight = getMaxColumnHeight();
@@ -350,7 +349,7 @@
        Append
     ========================= */
 
-    // column height 정확도 개선 (기존 로직 그대로 유지)
+    // column height 정확도 개선
     function appendToShortestColumn(el) {
         const img = el.querySelector("img");
 

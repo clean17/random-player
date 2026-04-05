@@ -254,6 +254,7 @@ def image_list():
     # ?title=video-call&dir=temp
     # if current_user.username == settings['GUEST_USERNAME']:
 
+    template_html = 'image_list.html'
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir')
     if selected_dir in ("None", "null", "undefined", ""):
@@ -263,7 +264,6 @@ def image_list():
     images_length = 0
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
-    template_html = 'image_list.html'
 
     # 게스트
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
@@ -291,7 +291,6 @@ def image_list():
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
     elif dir == 'image':
-        # template_html = 'image_masonry.html'
         images, page, start, images_length, template_html = get_image_page(
             start, LIMIT_PAGE_NUM, page, IMAGE_DIR, ai_image_arr, 'image_list_masonry.html'
         )
@@ -325,6 +324,8 @@ def image_list():
     elif dir == 'stock':
         market = request.args.get('market') or ''
         return redirect(url_for("image.stock-graph-list", market=market, page=page))
+    else:
+        template_html = 'image_list.html'
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
