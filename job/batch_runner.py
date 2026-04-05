@@ -30,7 +30,8 @@ TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
 
-# 전역 루프
+
+scheduler = None
 executors = None
 
 
@@ -168,7 +169,7 @@ def debug_scheduler():
 
 
 def create_scheduler():
-    global executors
+    global scheduler, executors
     print("🕒 Scheduler start.... ")
 
     # I/O는 스레드, CPU는 프로세스
@@ -366,6 +367,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
+    scheduler.start()
     return scheduler
 
 

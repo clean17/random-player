@@ -12,10 +12,11 @@ import urllib.parse
 import shutil
 from urllib.parse import unquote
 from typing import Final
-from pathlib import Path
+from datetime import datetime
+import job.batch_runner as batch_runner
 
 image_bp = Blueprint('image', __name__)
-LIMIT_PAGE_NUM = 300
+LIMIT_PAGE_NUM = 1000
 ref_shuffled_images = None
 
 ai_image_arr = []
@@ -262,6 +263,7 @@ def image_list():
     images_length = 0
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
+    template_html = 'image_list.html'
 
     # 게스트
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
@@ -402,19 +404,7 @@ def safe_path_join(base_dir, rel_path):
     return nor_path
 
 
-
-# @image_bp.route('/delete-images/<path:filename>', methods=['POST'], endpoint='delete-images')
-# 어디서 사용하는지 확인 필요
-@image_bp.route('/delete-images', methods=['POST'], endpoint='delete-images')
-@login_required
-def delete_images():
-    # images_to_delete = request.form.getlist('images[]')
-    dir = request.args.get('dir')
-    data = request.get_json()
-    # 'account/p/{파일명}'
-    images_to_delete = data.get("images", [])
-
-    # delete_images_background(images_to_delete, dir_key=dir)
+def delete_images_task(images_to_delete, dir):
     for image in images_to_delete:
         try:
             if dir == 'move':
@@ -441,6 +431,28 @@ def delete_images():
         except Exception as e:
             # 다른 문제(권한, path traversal 등)
             print(f"[ERROR] delete failed: {image} -> {e}")
+
+
+# @image_bp.route('/delete-images/<path:filename>', methods=['POST'], endpoint='delete-images')
+# 어디서 사용하는지 확인 필요
+@image_bp.route('/delete-images', methods=['POST'], endpoint='delete-images')
+@login_required
+def delete_images():
+    # images_to_delete = request.form.getlist('images[]')
+    dir = request.args.get('dir')
+    data = request.get_json()
+    # 'account/p/{파일명}'
+    images_to_delete = data.get("images", [])
+
+    batch_runner.scheduler.add_job(
+        delete_images_task,
+        trigger='date',
+        run_date=datetime.now(),
+        args=[images_to_delete, dir],
+        executor='io',
+        id=f"delete_images_{time.time_ns()}",
+        replace_existing=False
+    )
 
     # 루프가 끝난 뒤, ig_image_arr에서 한 번에 삭제(모든 중복 제거)
     if dir == 'image' and ai_image_arr:

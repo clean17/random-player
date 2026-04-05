@@ -26,7 +26,6 @@ if __name__ == '__main__':
     # start_background_tasks() # thread
 
     scheduler = create_scheduler()
-    scheduler.start()
 
     # 'npm run dev' 실행 (백그라운드 실행)
     node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
