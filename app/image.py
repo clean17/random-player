@@ -267,7 +267,8 @@ def image_list():
 
     # 게스트
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
-        template_html = 'image_list.html'
+        # template_html = 'image_list.html'
+        template_html = 'image_list_masonry.html' # 개발중
         dir_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
 
         # 선택된 title 값 가져오기 (없다면 첫 번째 값 자동 선택)
@@ -296,9 +297,19 @@ def image_list():
         )
 
     elif dir == 'image2':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, ig_image_arr, 'image_list_masonry.html', 'ig'
-        )
+        if len(ig_image_arr) == 0:
+            images, page, start, images_length, template_html = get_image_page(
+                start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, ig_image_arr, 'image_list_masonry.html', 'ig'
+            )
+        else:
+            images = ig_image_arr[start:start + LIMIT_PAGE_NUM]
+            if len(images) == 0:
+                page = page - 1
+                start = (page - 1) * LIMIT_PAGE_NUM
+                images = ig_image_arr[start:start + LIMIT_PAGE_NUM]
+
+            images_length = len(ig_image_arr)
+            template_html = 'image_list_masonry.html'
 
     elif dir == 'move':
         # template_html = 'image_masonry.html'
