@@ -600,8 +600,21 @@ def stock_graph_list(market):
 def get_stock_graph(market, filename):
     directory = DIRECTORY_MAP.get(market.lower())
 
-    if directory is not None:
-        return send_from_directory(directory, filename)
+    if market.lower() == 'interest':
+        # URL 인코딩된 파일명 대응
+        filename = unquote(filename)
+
+        match = re.match(r"^(\d{4})(\d{2})(\d{2})", filename)
+        if not match:
+            abort(404)
+
+        year, month, day = match.groups()
+        target_dir = os.path.join(directory, year, month, day)
+    else:
+        target_dir = directory
+
+    if target_dir is not None:
+        return send_from_directory(target_dir, filename)
     else:
         abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
 
