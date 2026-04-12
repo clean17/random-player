@@ -84,10 +84,10 @@
         <form>
             <label for="dir-select">Select Dir:</label>
             <select id="dir-select" name="dir" onchange="location = this.value;">
-                {% for dir in dir_list %}
-                <option value="{{ url_for('image.image_list', selected_dir=selected_dir, dir=dir) }}"
-                        {% if dir == selected_dir %}selected{% endif %}>
-                    {{ dir }}
+                {% for subdir in subdir_list %}
+                <option value="{{ url_for('image.image_list', selected_dir=subdir, dir=dir) }}"
+                        {% if subdir == selected_dir %}selected{% endif %}>
+                    {{ subdir }}
                 </option>
                 {% endfor %}
             </select>

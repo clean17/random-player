@@ -96,6 +96,7 @@
         <button class="toolbar-btn" onclick="window.scrollTo({ top: 0, behavior: 'auto' })" title="맨 위">▲ top</button>
         <button class="toolbar-btn" onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })" title="맨 아래">▼ bottom</button>
     </div>
+    {% if dir in ['move', 'refine'] %}
     <div class="toolbar-divider"></div>
     <div class="toolbar-group">
         {% if images_length != 0 and dir in ['trip', 'temp'] %}
@@ -103,6 +104,8 @@
         {% endif %}
         <button id="next-image-button" class="toolbar-btn" title="다음 이미지">Next</button>
     </div>
+    {% else %}
+    {% endif %}
 </div>
 
 <div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
@@ -131,10 +134,10 @@
         <form>
             <label for="dir-select">Select Dir:</label>
             <select id="dir-select" name="dir" onchange="location = this.value;">
-                {% for dir in dir_list %}
-                <option value="{{ url_for('image.image_list', selected_dir=selected_dir, dir=dir) }}"
-                        {% if dir == selected_dir %}selected{% endif %}>
-                    {{ dir }}
+                {% for subdir in subdir_list %}
+                <option value="{{ url_for('image.image_list', selected_dir=subdir, dir=dir) }}"
+                        {% if subdir == selected_dir %}selected{% endif %}>
+                    {{ subdir }}
                 </option>
                 {% endfor %}
             </select>

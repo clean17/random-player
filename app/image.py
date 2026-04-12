@@ -257,9 +257,10 @@ def image_list():
     template_html = 'image_list.html'
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir')
+    # print('selected_dir', selected_dir)
     if selected_dir in ("None", "null", "undefined", ""):
         selected_dir = None
-    dir_list = []
+    subdir_list = []
     images = []
     images_length = 0
     page = int(request.args.get('page', 1))
@@ -269,12 +270,12 @@ def image_list():
     if (hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']) or dir == 'temp' or dir == 'trip':
         # template_html = 'image_list.html'
         template_html = 'image_list_masonry.html' # 개발중
-        dir_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
+        subdir_list = sorted([d for d in os.listdir(TEMP_IMAGE_DIR) if os.path.isdir(os.path.join(TEMP_IMAGE_DIR, d))])
 
         # 선택된 title 값 가져오기 (없다면 첫 번째 값 자동 선택)
-        if not selected_dir or selected_dir not in dir_list:
-            # selected_dir = dir_list[0] if dir_list else ''  # 첫 번째 항목 자동 선택
-            selected_dir = dir_list[0] if dir_list else TEMP_IMAGE_DIR  # 첫 번째 항목 자동 선택
+        if not selected_dir or selected_dir not in subdir_list:
+            # selected_dir = subdir_list[0] if subdir_list else ''  # 첫 번째 항목 자동 선택
+            selected_dir = subdir_list[0] if subdir_list else TEMP_IMAGE_DIR  # 첫 번째 항목 자동 선택
 
         target_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
         if selected_dir == 'video-call':
@@ -312,7 +313,6 @@ def image_list():
             template_html = 'image_list_masonry.html'
 
     elif dir == 'move':
-        # template_html = 'image_masonry.html'
         images, page, start, images_length, template_html = get_image_page(
             start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, 'image_list.html'
         )
@@ -342,7 +342,7 @@ def image_list():
 
     return render_template(template_html, images=images, page=page,
                            total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, dir_list=dir_list, version=int(time.time()))
+                           selected_dir=selected_dir, subdir_list=subdir_list, version=int(time.time()))
 
 
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
