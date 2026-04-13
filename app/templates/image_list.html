@@ -178,18 +178,32 @@
             total_count : <span id="total_count">{{ images_length }}</span>
         </div>
         <div class="pagination">
-            {% if page > 1 %}
-            <a href="#" data-page="1" class="side">&laquo;</a>
+            {% if page >= 4 %}
+            <a href="#" data-page="1" class="side">1</a>
+            {% endif %}
+            {% if page > 4 %}
             <a href="#" data-page="{{ page-1 }}" class="side">&lt;</a>
             {% endif %}
+
+            <!--            {% if page >= 6 %}-->
+            <!--            <a href="#" data-page="{{ page - 5 }}">{{ page - 5 }}</a>-->
+            <!--            <a href="#">...</a>-->
+            <!--            {% endif %}-->
 
             {% for p in range(max(1, page - 2), min(total_pages, page + 2) + 1) %}
             <a href="#" data-page="{{ p }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
             {% endfor %}
 
-            {% if page < total_pages %}
+            <!--            {% if page <= total_pages - 6 %}-->
+            <!--            <a href="#">...</a>-->
+            <!--            <a href="#" data-page="{{ page + 5 }}">{{ page + 5 }}</a>-->
+            <!--            {% endif %}-->
+
+            {% if page < total_pages - 3 %}
             <a href="#" data-page="{{ page+1 }}" class="side">&gt;</a>
-            <a href="#" data-page="{{ total_pages }}" class="side">&raquo;</a>
+            {% endif %}
+            {% if page <= total_pages - 3 and page < total_pages %}
+            <a href="#" data-page="{{ total_pages }}" class="side">{{ total_pages }}</a>
             {% endif %}
         </div>
         {% if images_length != 0 and dir in ['image', 'image2', 'move'] %}

@@ -106,7 +106,7 @@ function clickCenterImage(target) {
 
 function moveImage(filename, index) {
     // console.log('filename', filename);
-    if (dir === 'stock') return;
+    if (dir === 'stock' || dir === 'temp') return;
 
     renderLoadingOverlay();
 
