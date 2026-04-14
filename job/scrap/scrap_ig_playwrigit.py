@@ -21,7 +21,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from config.config import settings
 
 IMAGE_DIR2 = settings['IMAGE_DIR2']
-# print(IMAGE_DIR2)
 BASE_SAVE_DIR = IMAGE_DIR2
 # BASE_SAVE_DIR = r"D:\temp"
 
@@ -53,7 +52,6 @@ MIN_GOOD_VIDEO_BYTES = 500_000        # 0.5MB 이상만 후보
 
 # 동시 다운로드 제한
 MAX_CONCURRENCY = 4
-
 ACCOUNTS = [
 
 ]
@@ -239,7 +237,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
     for _ in range(max_scrolls):
         anchors = await page.locator('a[href*="/p/"], a[href*="/reel/"]').element_handles()
         if len(anchors) == 0:
-            print('  ★★★★★★★★★★★★★★★★★★★★★★★ Account is not valid ★★★★★★★★★★★★★★★★★★★★★★★ ')
+            print('[ERROR-1] ★★★★★★★★★★★★★★★★★★★★★★★ Account is not valid ★★★★★★★★★★★★★★★★★★★★★★★ ')
         for a in anchors:
             href = await a.get_attribute("href")
             if not href:
@@ -267,7 +265,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
                 try:
                     data = res.json()
                 except ValueError:  # JSONDecodeError도 ValueError 하위
-                    print("https://chickchick.kr 서버 응답없음")
+                    print("[WARN] https://chickchick.kr 서버 응답없음")
                     return []
                 if data["result"]: # 등록되어 있음
                     already_collected_count += 1
@@ -733,17 +731,6 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
         # 삭제되지 않은 경로만 반환
         return [p for p in ok_paths if p not in deleted]
 
-def log_targets(context, tag=""):
-    pages = context.pages
-    bgs = context.background_pages
-    sws = context.service_workers
-    print(f"[DEBUG]{tag} pages={len(pages)} bg_pages={len(bgs)} service_workers={len(sws)}")
-    for p in pages:
-        try:
-            print("  - page:", p.url)
-        except Exception:
-            pass
-
 
 # ======== 메인 플로우 ========
 async def handle_account(page, account: str):
@@ -759,7 +746,7 @@ async def handle_account(page, account: str):
 
 
     if len(links) > 5:
-        print(f"[{account}] Collect Postlinks: {len(links)}")
+        print(f"[INFO] [{account}] Collect Postlinks: {len(links)}")
     if len(links) > 300:
         await asyncio.sleep(60 * 30)  # 과도한 요청 방지
 
@@ -772,7 +759,7 @@ async def handle_account(page, account: str):
     cnt = 0
     for idx, link in enumerate(links, 1):
         today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-        print(f"[{today}] [{account}] ({idx}/{len(links)}) {link}")
+        print(f"[INFO] [{today}] [{account}] ({idx}/{len(links)}) {link}")
 
         # parsed = urlparse(link)
         # # ParseResult(scheme='https', netloc='www.instagram.com', path='/fkaus014/p/DO27U_DDw63/')
@@ -786,47 +773,60 @@ async def handle_account(page, account: str):
         #     break
         try:
             media = await extract_media_from_post(page, link)
+        except Exception as e:
+            print(f"[ERROR-2] media 추출 실패 {e}")
             # print('media', media)
             # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
+
+        try:
             saved = await download_media(
                 media["images"], media["videos"], media["video_cdn"], dirs, account
             )
-            # print('saved', saved)
-            all_saved.extend(saved or [])
-            check_saved.extend(saved or [])
-            if idx % 10 == 0 or idx+1 == len(links):
-                today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-                print(f"[{account}] [{today}] Interim check of number of saved files : {len(check_saved)}")
-                check_saved = []
-            link_segment = extract_account_and_type(normalize_ig_post_url(link))
+        except Exception as e:
+            print(f"[ERROR-3] 다운로드 실패 {e}")
+
+        # print('saved', saved)
+        all_saved.extend(saved or [])
+        check_saved.extend(saved or [])
+        if idx % 10 == 0 or idx+1 == len(links):
+            today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+            print(f"[INFO] [{account}] [{today}] Interim check of number of saved files : {len(check_saved)}")
+            check_saved = []
+        link_segment = extract_account_and_type(normalize_ig_post_url(link))
+
+        payload = {
+            "account": str(account),
+            "post_urls": link,
+            "type": link_segment["type"],
+        }
+        url = 'https://chickchick.kr/func/scrap-posts'
+
+        for attempt in range(2):  # 총 2번 시도
             try:
                 requests.post(
-                    'https://chickchick.kr/func/scrap-posts',
-                    json={
-                        "account": str(account),
-                        "post_urls": link,
-                        "type": link_segment["type"],
-                    },
-                    # timeout=5
-                    timeout=(3, 20)  # (connect_timeout=3초, read_timeout=20초)
+                    url,
+                    json=payload,
+                    timeout=(3, 20)
                 )
+                break
             except Exception as e:
-                # logging.warning(f"progress-update 요청 실패: {e}")
-                print(f"progress-update 요청 실패-1: {e}")
-                pass  # 오류
-            await asyncio.sleep(DELAY_SECOND)  # 과도한 요청 방지
-            if cnt % 300 == 0:
-                await asyncio.sleep(60 * 30)  # 과도한 요청 방지
-            elif cnt % 100 == 0:
-                await asyncio.sleep(DELAY_MINUTE)  # 과도한 요청 방지
-        except Exception as e:
-            print(f"  -> 에러: {e}")
+                print(f"[WARN] progress-update 요청 실패-{attempt + 1}: {e}")
+                if attempt < 1:  # 첫 실패면 10초 대기 후 재시도
+                    time.sleep(10)
+                else:  # 두 번째도 실패하면 그냥 무시
+                    pass
+
+        await asyncio.sleep(DELAY_SECOND)  # 과도한 요청 방지
+        if cnt % 300 == 0:
+            await asyncio.sleep(60 * 30)  # 과도한 요청 방지
+        elif cnt % 100 == 0:
+            await asyncio.sleep(DELAY_MINUTE)  # 과도한 요청 방지
+
 
     await page.close()
-#     log_targets(context, tag=f" after {account}")
 
     if len(links) > 0:
-        print(f"[{account}] Number of files saved: {len(all_saved)}")
+        print(f"[INFO] [{account}] Number of files saved: {len(all_saved)}")
 
     return len(links)
 
@@ -855,7 +855,7 @@ async def run_scrap():
 
         for i, acc in enumerate(ACCOUNTS):
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"\n=== [{today}] Start account processing: {acc} ({i+1}/{len(ACCOUNTS)}) ===")
+            print(f"\n[INFO] === [{today}] Start account processing: {acc} ({i+1}/{len(ACCOUNTS)}) ===")
 
             try:
                 page = await context.new_page()
@@ -869,7 +869,7 @@ async def run_scrap():
             try:
                 rs = await handle_account(page, acc)
             except Exception as e:
-                print(f"[{acc}] Error in processing: {e}")
+                print(f"[ERROR-4] [{acc}] Error in processing: {e}")
                 continue
 
             if i < len(ACCOUNTS) - 1:
