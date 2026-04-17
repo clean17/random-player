@@ -7,6 +7,13 @@ OVERVIEW_URL = "https://wts-info-api.tossinvest.com/api/v2/stock-infos/PRODUCTCO
 AMOUNT_URL = "https://wts-info-api.tossinvest.com/api/v1/c-chart/kr-s/PRODUCTCODE/day:1"
 CATEGORY_URL = "https://wts-info-api.tossinvest.com/api/v2/companies/COMPANYCODE/tics"
 
+DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json, text/plain, */*",
+    "Content-Type": "application/json",
+    "Origin": "https://tossinvest.com",
+    "Referer": "https://tossinvest.com/",
+}
 
 def toss_request_json(
         method: str,
@@ -20,13 +27,14 @@ def toss_request_json(
         timeout_msg: str = "토스 서버 응답이 지연되고 있습니다.",
         error_msg: str = "토스 서버에 연결할 수 없습니다.",
 ):
-    """
-    토스 API 공통 호출 래퍼
-    - 성공: res.json() 그대로 리턴
-    - 실패: {success: False, error: ..., message: ...} 리턴
-    """
     try:
-        res = requests.request(method, url, json=json_body, timeout=timeout)
+        res = requests.request(
+            method,
+            url,
+            json=json_body,
+            headers=DEFAULT_HEADERS,
+            timeout=timeout
+        )
         res.raise_for_status()
         return res.json()
     except requests.exceptions.Timeout as e:
