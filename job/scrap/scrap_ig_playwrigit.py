@@ -308,6 +308,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
     return rev_links
 
 # 컨테이너: section > main > div:first-child > div:first-child > div[role="presentation"] > ul > li > img
+"""
 UL_SEL   = "section main > div:nth-of-type(1) > div:nth-of-type(1) div[role='presentation'] ul"
 LI_SEL   = UL_SEL + " > li"
 IMG_SEL  = UL_SEL + " > li img"
@@ -317,6 +318,7 @@ NEXT_BTN_SEL  = (
     "button[aria-label*='다음'], :has(button:has-text('다음')), "
     "button[aria-label*='Next'], :has(button:has-text('Next'))"
 )
+"""
 
 # 공통 루트
 ROOT_MAIN   = "section main > div:nth-of-type(1) > div:nth-of-type(1)"
@@ -442,6 +444,31 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> Tuple[Li
         )
         return urls
 
+    async def collect_video_srcs(selector: str) -> List[str]:
+        urls = await page.evaluate(
+            """
+            (sel) => {
+              const vids = Array.from(document.querySelectorAll(sel));
+              const out = [];
+    
+              for (const v of vids) {
+                let src = v.getAttribute('src') || v.currentSrc;
+                if (!src) {
+                  const source = v.querySelector('source');
+                  if (source) {
+                    src = source.getAttribute('src');
+                  }
+                }
+                if (src) out.push(src);
+              }
+    
+              return out;
+            }
+            """,
+            selector
+        )
+        return urls
+
     good_video_urls: Set[str] = set()
 
     # 네트워크 응답에서 '좋은' 비디오만 즉시 선별 저장 (페이지에서 발생하는 모든 네트워크 응답(response)을 “이벤트로” 받아서 검사하는 패턴)
@@ -451,10 +478,15 @@ async def extract_imgs_src_only(page, post_url: str, seen: Set[str]) -> Tuple[Li
 
     # 2) 캐러셀
     if ul_found and IMG_SEL and NEXT_BTN_SEL:
+        VIDEO_SEL = _sel(root, kind, "div[role='presentation'] ul > li video")
         async def collect_from_main() -> None:
             for u in await collect_max_images(IMG_SEL):
                 if u:
                     seen.add(u)
+
+            for v in await collect_video_srcs(VIDEO_SEL):
+                if v:
+                    good_video_urls.add(v)
 
         await collect_from_main()
         page.on("response", on_response)
@@ -608,7 +640,7 @@ async def extract_media_from_post(page, url: str):
     vids = page.locator("section main > div:nth-of-type(1) video")
 
     try:
-        await vids.first.wait_for(state="attached", timeout=30000)
+        await vids.first.wait_for(state="attached", timeout=60000)
         n_vid = await vids.count()
     except Exception:
         n_vid = 0
@@ -771,13 +803,23 @@ async def handle_account(page, account: str):
         # None, False, 0, '', [], {}, 모두 여기로 들어옴
         # if idx == 5: # 디버깅 테스트용
         #     break
-        try:
-            media = await extract_media_from_post(page, link)
-        except Exception as e:
-            print(f"[ERROR-2] media 추출 실패 {e}")
+        media = None
+        for attempt in range(3):
+            try:
+                media = await extract_media_from_post(page, link)
+                break
+            except Exception as e:
+                print(f"[ERROR-2] media 추출 실패-{attempt + 1}: {e}")
+
+                if attempt < 2:
+                    await asyncio.sleep(2)
+                else:
+                    media = None
+
             # print('media', media)
             # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
 
+        saved = None
         try:
             saved = await download_media(
                 media["images"], media["videos"], media["video_cdn"], dirs, account
