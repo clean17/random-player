@@ -192,7 +192,7 @@
                 <!-- 비디오 파일인 경우 -->
                 <button class="delete-btn" type="button">×</button>
                 <!--data-poster="{{ url_for('image.get_image', filename=image|to_jpg, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"-->
-                <video class="thumbnail"
+                <video class="video-thumbnail"
                        muted playsinline controls loop
                        data-index="{{ loop.index }}"
                        alt="{{ image|urlencode }}"
@@ -307,7 +307,7 @@
     function shouldLoadMore() {
         const scrollBottom = window.innerHeight + window.scrollY;
         const maxHeight = getMaxColumnHeight();
-        return scrollBottom > maxHeight - 2500;
+        return scrollBottom > maxHeight - 1000;
     }
 
     /* =========================
@@ -361,6 +361,10 @@
             tempImg.src = img.dataset.src;
 
             tempImg.onload = () => {
+                getShortestColumn().appendChild(el);
+            };
+
+            tempImg.onerror = () => {
                 getShortestColumn().appendChild(el);
             };
         } else {
@@ -418,7 +422,7 @@
             if (tallest === shortest) break;
 
             const diff = tallest.scrollHeight - shortest.scrollHeight;
-            if (diff < 150) break;
+            if (diff < 800) break;
 
             const items = tallest.querySelectorAll('.image-item');
             if (items.length === 0) break;
@@ -500,21 +504,24 @@
     window.addEventListener("scroll", () => {
         if (isRendering) return;
 
-        if (shouldLoadMore()) {
+        requestAnimationFrame(() => {
+            if (!shouldLoadMore()) return;
+
             isRendering = true;
 
-            requestAnimationFrame(() => {
-                renderBatch();
+            renderBatch();
+
+            setTimeout(() => {
                 isRendering = false;
-            });
-        }
+            }, 100);
 
-        // 균형 맞추기
-        clearTimeout(rebalanceTimer);
+            // 균형 맞추기
+            clearTimeout(rebalanceTimer);
 
-        rebalanceTimer = setTimeout(() => {
-            rebalanceFromBottom();
-        }, 100);
+            rebalanceTimer = setTimeout(() => {
+                rebalanceFromBottom();
+            }, 100);
+        });
     });
 
     /* =========================
