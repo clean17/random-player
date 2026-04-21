@@ -30,8 +30,7 @@
             height: auto;
             max-height: none !important;  /* 🔥 중요 */
             object-fit: contain;
-            border-radius: 10px;
-
+            border-radius: 15px;
         }
 
         body{
@@ -410,7 +409,7 @@
             if (tallest === shortest) break;
 
             const diff = tallest.scrollHeight - shortest.scrollHeight;
-            if (diff < 800) break;
+            if (diff < 1000) break;
 
             const items = tallest.querySelectorAll('.image-item');
             if (items.length === 0) break;
@@ -452,15 +451,9 @@
         }
     }
 
-    const observer = new IntersectionObserver((entries, observer) => {
+    const imageObserver = new IntersectionObserver((entries, observer) => {
         entries.forEach(async entry => {
             const targetEl = entry.target;
-            const source = targetEl.querySelector("source");
-
-            if (!entry.isIntersecting) {
-                safePause(targetEl);
-                return;
-            }
 
             // -------------------
             // ✅ 이미지 처리
@@ -471,6 +464,21 @@
                     targetEl.removeAttribute("data-src");
                     observer.unobserve(targetEl);
                 }
+                return;
+            }
+        });
+    }, {
+        // rootMargin: "300px"
+        threshold: 0.05     // 5%만 보이면 isIntersecting = true
+    });
+
+    const videoObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(async entry => {
+            const targetEl = entry.target;
+            const source = targetEl.querySelector("source");
+
+            if (!entry.isIntersecting) {
+                safePause(targetEl);
                 return;
             }
 
@@ -501,18 +509,19 @@
             }
         });
     }, {
-        // rootMargin: "300px"
-        threshold: 0.05     // 5%만 보이면 isIntersecting = true
+        rootMargin: "0px 0px 1500px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 전에 미리 감지 → 미리 로드 가능)
+        // threshold: 0.1 // 요소가 10% 보일 때 트리거
     });
+
 
     function observeImages(container) {
         container.querySelectorAll("img[data-src]")
-            .forEach(img => observer.observe(img));
+            .forEach(img => imageObserver.observe(img));
     }
 
     function observeVideos(container) {
         const videos = container.querySelectorAll("video");
-        videos.forEach(video => observer.observe(video));
+        videos.forEach(video => videoObserver.observe(video));
     }
 
     /* =========================
