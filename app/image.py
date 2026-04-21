@@ -105,6 +105,7 @@ def get_images(start, count, page, dir, image_arr=None):
         ]
         # 전체 경로로 변환
         full_paths = [os.path.join(dir, f) for f in files]
+        full_paths = [p for p in full_paths if os.path.isfile(p)] # 파일 존재 검증
         # 생성시간(ctime) 기준으로 정렬
         # full_paths.sort(key=lambda x: os.path.getctime(x)) # 생성시간 오름차순
         # full_paths.sort(key=lambda x: os.path.getmtime(x), reverse=True) # 수정시간 내림차순
@@ -293,9 +294,19 @@ def image_list():
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
     elif dir == 'image':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, IMAGE_DIR, ai_image_arr, 'image_list_masonry.html'
-        )
+        if len(ai_image_arr) == 0:
+            images, page, start, images_length, template_html = get_image_page(
+                start, LIMIT_PAGE_NUM, page, IMAGE_DIR, ai_image_arr, 'image_list_masonry.html',
+            )
+        else:
+            images = ai_image_arr[start:start + LIMIT_PAGE_NUM]
+            if len(images) == 0:
+                page = page - 1
+                start = (page - 1) * LIMIT_PAGE_NUM
+                images = ai_image_arr[start:start + LIMIT_PAGE_NUM]
+
+            images_length = len(ai_image_arr)
+            template_html = 'image_list_masonry.html'
 
     elif dir == 'image2':
         if len(ig_image_arr) == 0:
