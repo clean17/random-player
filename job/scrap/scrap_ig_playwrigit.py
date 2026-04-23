@@ -778,7 +778,8 @@ async def handle_account(page, account: str):
 
 
     if len(links) > 5:
-        print(f"[INFO] [{account}] Collect Postlinks: {len(links)}")
+        today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+        print(f"[INFO] [{today}] [{account}] Collect Postlinks: {len(links)}")
     if len(links) > 300:
         await asyncio.sleep(60 * 30)  # 과도한 요청 방지
 
@@ -832,7 +833,7 @@ async def handle_account(page, account: str):
         check_saved.extend(saved or [])
         if idx % 10 == 0 or idx+1 == len(links):
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"[INFO] [{account}] [{today}] Interim check of number of saved files : {len(check_saved)}")
+            print(f"[INFO] [{today}] [{account}] Interim check of number of saved files : {len(check_saved)}")
             check_saved = []
         link_segment = extract_account_and_type(normalize_ig_post_url(link))
 
@@ -897,7 +898,7 @@ async def run_scrap():
 
         for i, acc in enumerate(ACCOUNTS):
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"\n[INFO] === [{today}] Start account processing: {acc} ({i+1}/{len(ACCOUNTS)}) ===")
+            print(f"\n[INFO] [{today}] Start account processing: {acc} ({i+1}/{len(ACCOUNTS)})")
 
             try:
                 page = await context.new_page()
