@@ -30,7 +30,7 @@
             height: auto;
             max-height: none !important;  /* 🔥 중요 */
             object-fit: contain;
-            border-radius: 15px;
+            border-radius: 20px;
         }
 
         body{
@@ -383,7 +383,7 @@
         const minH = getMinColumnHeight();
         const maxH = getMaxColumnHeight();
         if (window.scrollY === 0 && (maxH - minH > 300)) {
-            console.log(maxH-minH);
+            // console.log(maxH-minH);
             rebalanceFromBottom();
             renderBatch();
         }
@@ -538,7 +538,7 @@
             const maxH = getMaxColumnHeight();
 
             if (maxH - minH > 300) {
-                console.log(maxH-minH);
+                // console.log(maxH-minH);
                 rebalanceFromBottom();
             }
 
