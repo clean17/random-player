@@ -1,8 +1,13 @@
 import os
 import shutil
 
+DEL_CNT = 5
+
 def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
     empty_dirs = []
+    pass_dirs = [
+
+    ]
 
     # 1. a_dir의 자식 디렉토리 중, 내부에 파일이 하나도 없는 디렉토리 찾기
     for name in os.listdir(a_dir):
@@ -16,6 +21,8 @@ def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
 
             if not has_file:
                 empty_dirs.append(name)
+
+    empty_dirs = [d for d in empty_dirs if d not in pass_dirs]
 
     # 2. b_dir의 "파일만" 가져오기
     b_files = [
@@ -40,11 +47,11 @@ def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
     # 4. x개인 디렉토리는 a_dir에서 삭제
     deleted_dirs = []
     for d, count in result.items():
-        if count <= 1:
+        if count <= DEL_CNT:
             dir_path = os.path.join(a_dir, d)
             if os.path.exists(dir_path) and os.path.isdir(dir_path):
                 shutil.rmtree(dir_path)
-                print(f"https://www.instagram.com/{d}: {count}")
+                # print(f"https://www.instagram.com/{d}: {count}")
                 deleted_dirs.append(d)
 
     # 5. 삭제 후 남은 결과만 내림차순 정렬
@@ -53,7 +60,7 @@ def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
 
     # 6. 출력
     for d, count in sorted_result:
-        if count < 5:
+        if count <= DEL_CNT:
             print(f"https://www.instagram.com/{d}: {count}")
         else:
             print(f"{d}: {count}")
@@ -61,12 +68,10 @@ def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
     if deleted_dirs:
         print("\n삭제된 디렉토리:")
         for d in deleted_dirs:
-            print(d)
+            print('\''+d+'\',')
 
     return dict(sorted_result), deleted_dirs
 
 
-a = r''
-b =  r''
-c =  r''
+
 count_files_by_empty_dirs(a, b, c)
