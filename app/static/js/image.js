@@ -14,6 +14,7 @@ const nextBtn = document.getElementById('next-image-button'),
       delBtn = document.querySelector('.delete-button'),
       form = document.getElementById('delete-form'),
       emptyBinBtn = document.getElementById('empty-bin-button'),
+      fetchImageBtn = document.getElementById('fetch-image-button'),
       TAP_THRESHOLD = 10, // 픽셀, 이 이하 이동이면 '탭'으로 간주
       delImages = [...document.querySelectorAll('input[name="images[]"]')].map(el => el.value),
       slideShowBtn = document.getElementById("slideshow-btn"),
@@ -599,6 +600,25 @@ function moveStockImage(event) {
         });
 }
 
+async function fetchImage() {
+    renderLoadingOverlay();
+    const url = new URL("/image/fetch", window.location.origin);
+    if (dir !== null && dir !== undefined && dir !== "") {
+        url.searchParams.set("dir", dir);
+    }
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("이미지 요청 실패");
+
+        removeLoadingOverlay();
+
+        window.location.href = url.toString(); // 그냥 링크 이동
+    } catch (error) {
+        console.error(error);
+        removeLoadingOverlay();
+    }
+}
 
 
 
