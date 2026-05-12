@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
-    update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily
+    update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -278,10 +278,19 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 8) 12~19 - 저점 매수 찾기
+    # 7) 종목 데이터 파일 갱신
+    scheduler.add_job(
+        fetch_stock_data,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="09-15", minute="10,30,50"),
+        id="minutely_20_fetch_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 8) 저점 매수 찾기 >> 10:05 - 19:55 (매 시각의 5분부터 59분까지, 10분 간격으로 실행)
     scheduler.add_job(
         find_low_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="5,35"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="5-59/10"),
         id="hourly_1505_find_low_stocks",
         executor="io",
         replace_existing=True,
@@ -295,10 +304,10 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 9) 월~금 5분마다 - run_cumtom_time_only(update_interest_stocks)
+    # 9) 월~금 5분마다 오늘 급상승 종목 데이터 파일 갱신  (update_interest_stocks)
     scheduler.add_job(
         run_cumtom_time_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/5"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/7"),
         id="weekday_every_5min_update_interest_stocks",
         executor="io",
         replace_existing=True,

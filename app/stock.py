@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, get_interest_low_stocks, update_interest_stock_graph, \
@@ -88,7 +88,7 @@ def upsert_interesting_stocks():
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
     target = data.get("target") or None
-    last_close = data.get("last_close") or None
+    last_close = data.get("last_close") or current_price
 
     # 종가만 수정
     close_list = []
@@ -283,6 +283,10 @@ def fetch_favorite_stocks():
 def get_favorite_stocks_data():
     data = request.json
     date = data.get("date")
+
+    # print("_user_id =", session.get("_user_id"))
+    # print("current_user.id =", getattr(current_user, "id", None))
+
     fetch_user = find_user_by_username(session["_user_id"])
     if fetch_user is not None:
         user_id = fetch_user.id
