@@ -69,7 +69,7 @@ def issue_token():
 def login():
 
     if request.method == 'POST':
-        username = request.form['username'].strip()
+        username = request.form['username'].strip().lower()
         password = request.form['password'].strip()
         remember = request.form.get('remember_username', False)
 
