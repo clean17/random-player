@@ -72,6 +72,7 @@
 
 {% if dir in ['image', 'image2', 'move'] %}
 <button id="empty-bin-button" class="floating-button2">Empty</button>
+<button id="fetch-image-button" class="floating-button2" style="top: 120px">Fetch</button>
 {% elif dir == 'refine' %}
 <button id="shuffle-button" class="floating-button2">Shuffle</button>
 <button id="slideshow-btn" class="floating-button2" style="top: 120px">Slide show</button>
@@ -275,7 +276,9 @@
           guestName = '{{ config.GUEST_USERNAME }}',
           stock_name = `{{ market }}`,
           progressBar = document.getElementById('progress-bar'),
-          progressStatus = document.getElementById('progress-status');
+          progressStatus = document.getElementById('progress-status'),
+          msr_container = document.getElementById("masonry");
+
 
     let isDelRunning = false;
 
@@ -326,8 +329,7 @@
 
     // column 생성
     function createColumns() {
-        const container = document.getElementById("masonry");
-        container.innerHTML = "";
+        msr_container.innerHTML = "";
 
         columns = [];
 
@@ -335,7 +337,7 @@
         for (let i = 0; i < count; i++) {
             const col = document.createElement("div");
             col.className = "masonry-column";
-            container.appendChild(col);
+            msr_container.appendChild(col);
             columns.push(col);
         }
     }
@@ -359,15 +361,18 @@
         allItems = Array.from(
             document.querySelectorAll("#image-data .image-item")
         );
+        console.log('allItems.length', allItems.length);
     }
 
     function renderBatch() {
         if (currentIndex >= allItems.length) return;
 
         const batchSize = columns.length * 3;
-        const end = currentIndex + batchSize;
+        const startIndex = currentIndex;
+        const end = Math.min(currentIndex + batchSize, allItems.length);
+        currentIndex = end;
 
-        for (let i = currentIndex; i < end && i < allItems.length; i++) {
+        for (let i = startIndex; i < end; i++) {
             const clone = allItems[i].cloneNode(true);
 
             observeImages(clone);
@@ -382,13 +387,19 @@
 
         const minH = getMinColumnHeight();
         const maxH = getMaxColumnHeight();
-        if (window.scrollY === 0 && (maxH - minH > 300)) {
-            // console.log(maxH-minH);
-            rebalanceFromBottom();
+
+        const msr_cnt = msr_container.querySelectorAll('.image-item').length
+        // console.log('msr_cnt', msr_cnt, columns.length * 2.2)
+        if (msr_cnt <= columns.length * 3) {
             renderBatch();
         }
 
-        currentIndex = end;
+        if (window.scrollY === 0 && (maxH - minH > 300)) {
+            // console.warn('diff', maxH-minH);
+            rebalanceFromBottom();
+        }
+
+        // console.log('currentIndex', currentIndex);
     }
 
 
@@ -419,8 +430,9 @@
 
             shortest.appendChild(lastItem);
 
-            const newDiff = tallest.scrollHeight - shortest.scrollHeight;
-            if (newDiff >= diff) break; // 이동해도 개선 안 되면 중단
+            // const newDiff = tallest.scrollHeight - shortest.scrollHeight;
+            // console.log('newDiff', newDiff);
+            // if (newDiff >= diff) break; // 이동해도 개선 안 되면 중단
         }
     }
 
@@ -589,8 +601,14 @@
 
     // 삭제 + 재정렬 함수
     function moveAndRemove(imageItem, filename, idx) {
+        console.log('moveAndRemove', idx, filename);
         // 현재 스크롤 위치 저장
         const prevScrollY = window.scrollY;
+        const minH = getMinColumnHeight();
+
+        if (prevScrollY - minH > 200) {
+            renderBatch();
+        }
 
         moveImage(filename, idx);
         imageItem.remove();
@@ -698,6 +716,9 @@
 
         emptyBinBtn?.removeEventListener('click', emptyTrash);
         emptyBinBtn?.addEventListener('click', emptyTrash);
+
+        fetchImageBtn?.removeEventListener('click', fetchImage);
+        fetchImageBtn?.addEventListener('click', fetchImage);
 
         zipBtn?.addEventListener('click', () => {
             const rect = zipBtn.getBoundingClientRect();
