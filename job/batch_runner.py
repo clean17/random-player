@@ -13,7 +13,7 @@ from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks,
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
-from job.renew_stock_close import renew_interest_stocks_close
+from job.renew_stock_close import renew_interest_stocks_close, verify_low_stock_data
 
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
@@ -189,6 +189,7 @@ def create_scheduler():
         job_defaults=job_defaults
     )
 
+
     # 0) 스케줄러 동작 확인용
     scheduler.add_job(
         debug_scheduler,
@@ -340,7 +341,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 14) 데이터 갱신
+    # 14) 데이터 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)
     scheduler.add_job(
         update_stock_data_daily,
         trigger=CronTrigger(day_of_week="mon-fri", hour=1, minute=0),
@@ -363,6 +364,15 @@ def create_scheduler():
         generate_fullchain_pem_daily,
         trigger=CronTrigger(hour=10, minute=0),
         id="generate_fullchain_pem_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 17) 저점 신뢰도 검증 (계속해서 조건 만족하는것만 남기려는 의도)
+    scheduler.add_job(
+        verify_low_stock_data,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/1"),
+        id="verify_low_stock_data",
         executor="io",
         replace_existing=True,
     )

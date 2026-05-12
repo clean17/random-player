@@ -8,7 +8,26 @@ from datetime import datetime, time as dtime
 
 from pathlib import Path
 import sys
+
+from utils.wsgi_midleware import logger
+
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
+
+
+def is_valid_number_value(value):
+    if value is None:
+        return False
+
+    value = str(value).strip()
+
+    if value in ("", "None", "null", "undefined", "NaN"):
+        return False
+
+    try:
+        float(value.replace(",", ""))
+        return True
+    except ValueError:
+        return False
 
 # def dict_from_env() -> Dict[str, Dict[str, str]]:
 #     db = {}
@@ -102,6 +121,7 @@ def renew_interest_stocks_close():
 
     start = time.time()   # 시작 시간(초)
     rows = get_interest_stock_list()
+    # rows = [{'stock_code':'215790'}]
     nowTime = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
     print(f'{nowTime} - 🕒 running renew_interest_stocks_close: {len(rows)}')
 
@@ -131,37 +151,6 @@ def renew_interest_stocks_close():
             print(f"renew_interest_stocks_close [info 요청 실패1]: {str(ticker)} {str(product_name)} {e}")
             continue  # 오류
 
-        # now = datetime.now().time()
-        # if now < dtime(10, 0):  # 10:00 이전만
-        #     # company_code 조회
-        #     try:
-        #         res2 = requests.post(
-        #             'https://chickchick.kr/stocks/overview',
-        #             json={"product_code": str(product_code)},
-        #             timeout=10
-        #         )
-        #         json_data = res2.json() or {}
-        #         company_code = json_data["result"]["company"]["code"]
-        #     except Exception as e:
-        #         print(f"renew_interest_stocks_close [info 요청 실패2]: {str(ticker)} {str(product_name)} {e}")
-        #         continue  # 오류
-        #
-        #     # 카테고리 조회
-        #     try:
-        #         res3 = requests.post(
-        #             'https://chickchick.kr/stocks/company',
-        #             json={"company_code": str(company_code)},
-        #             timeout=10
-        #         )
-        #         res3.raise_for_status() # HTTP 에러(4xx/5xx)를 바로 잡아서 예외 처리
-        #         json_data = res3.json() or {}
-        #         category = json_data["result"]["majorList"][0]["title"]
-        #     except Exception as e:
-        #         print(f"renew_interest_stocks_close [info 요청 실패3]: {str(ticker)} {str(product_name)} {str(company_code)} {e}")
-        #         continue  # 오류
-        # else:
-        #     category = None
-
 
         # 현재 종가 가져오기
         try:
@@ -177,9 +166,12 @@ def renew_interest_stocks_close():
             continue  # 오류
 
         # print(f'{i+1}/{len(rows)} ticker : {ticker}, close : {last_close}')
-        if last_close is not None:
+        if is_valid_number_value(last_close):
             # close_list.append((str(last_close), category, logo_image_url, ticker))    # 순서: (값, 키)
-            close_list.append((str(last_close), None, logo_image_url, ticker))    # 순서: (값, 키)
+            close_list.append((str(last_close).replace(",", ""), None, logo_image_url, ticker))    # 순서: (값, 키)
+        else:
+            print(f"invalid last_close: {ticker} {product_name} last_close={last_close!r}")
+            continue
         # update_interest_stock_list_close(close_list)   # 급하게 데이터 넣을 때
         # close_list.clear()
 
@@ -192,6 +184,22 @@ def renew_interest_stocks_close():
     hours, remainder = divmod(int(elapsed), 3600)
     minutes, seconds = divmod(remainder, 60)
 
-    if elapsed > 20:
-        print(f"총 소요 시간: {hours}시간 {minutes}분 {seconds}초")
-    print(f'complete renew_interest_stocks_close: {len(rows)}')
+    # if elapsed > 20:
+    #     print(f"총 소요 시간: {hours}시간 {minutes}분 {seconds}초")
+    # print(f'complete renew_interest_stocks_close: {len(rows)}')
+    logger.info(f'Complete : renew_interest_stocks_close: {len(rows)}, 총 소요 시간: {hours}시간 {minutes}분 {seconds}초')
+
+
+def verify_low_stock_data():
+    from app.repository.stocks.stocks import get_today_low_stocks, update_stocks_low_away
+
+    stocks = get_today_low_stocks()
+    for stock in stocks:
+        try:
+            update_stocks_low_away(stock)
+        except Exception as e:
+            print(f"Failed to update stock {stock}: {e}")
+
+
+# if __name__ == '__main__':
+#     renew_interest_stocks_close()

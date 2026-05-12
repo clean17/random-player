@@ -354,7 +354,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
     ;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
-        # logger.info("SQL=%s params=%s", sql, params)
+        # logger.info("SQL=%s params=%s", sql, params)  # 쿼리 콘솔 출력
         cur.execute(sql, tuple(params))
         # cur.execute(sql, (date,))
         # cur.execute(sql, )
@@ -415,3 +415,39 @@ def get_interest_low_stocks(date: str, conn=None):
         cur.execute(sql, (date,))
         rows = cur.fetchall()
     return rows
+
+
+@db_transaction
+def get_today_low_stocks(conn=None):
+    sql = """
+    select id, updated_at, nation, stock_code, stock_name, target 
+    from interest_stocks 
+    where "target" = 'low'
+      and updated_at::date = now()::date
+      and updated_at <= now() - interval '20 minutes'
+    """
+
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(sql)
+        rows = cur.fetchall()
+
+    return rows
+
+
+@db_transaction
+def update_stocks_low_away(stock, conn=None):
+    sql = """
+    update interest_stocks
+    set 
+        target = 'break_away',
+        updated_at = now()
+    where stock_code = %s
+      and updated_at::date = now()::date
+    returning stock_code;
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql, (stock["stock_code"],))
+        row = cur.fetchone()
+
+    return row[0] if row else None
