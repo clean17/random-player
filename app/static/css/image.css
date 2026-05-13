@@ -41,7 +41,7 @@ body {
     align-items: center;
 }
 .image-item {
-    margin-bottom: 5px;
+    margin-bottom: 2px;
     position: relative;
     width: 100%;
     /*display: inline-block;*/
@@ -53,11 +53,13 @@ body {
 }
 .thumbnail {
     height: auto;
-    max-height: 100%;
-    border-radius: 5px;
+    border-radius: 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     width: 100%;
     object-fit: contain;
+    max-width: 100%;
+    max-height: 100vh;
+    /*max-height: none !important;  !* 🔥 중요 *!*/
 }
 .video-thumbnail {
     min-height: 500px;

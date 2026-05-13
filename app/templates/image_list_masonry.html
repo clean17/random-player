@@ -19,20 +19,6 @@
             gap: 10px;
         }
 
-        .image-item img {
-            max-width: 100%;
-            height: auto;
-            object-fit: contain;
-        }
-
-        .thumbnail {
-            width: 100%;
-            height: auto;
-            max-height: none !important;  /* 🔥 중요 */
-            object-fit: contain;
-            border-radius: 20px;
-        }
-
         body{
             display: block !important;
         }
@@ -49,11 +35,6 @@
             display: flex;
             flex-direction: column;
             gap: 5px;
-        }
-
-        .image-item{
-            width: 100%;
-            margin-bottom: 2px;
         }
     </style>
 </head>
@@ -96,16 +77,21 @@
         <button class="toolbar-btn" onclick="window.scrollTo({ top: 0, behavior: 'auto' })" title="맨 위">▲ top</button>
         <button class="toolbar-btn" onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' })" title="맨 아래">▼ bottom</button>
     </div>
-    {% if dir in ['move', 'refine'] %}
+<!--    {% if dir in ['move', 'refine'] %}-->
+<!--    <div class="toolbar-divider"></div>-->
+<!--    <div class="toolbar-group">-->
+<!--        {% if images_length != 0 and dir in ['trip', 'temp'] %}-->
+<!--        <button id="previous-image-button" class="toolbar-btn" title="이전 이미지">Previous</button>-->
+<!--        {% endif %}-->
+<!--        <button id="next-image-button" class="toolbar-btn" title="다음 이미지">Next</button>-->
+<!--    </div>-->
+<!--    {% else %}-->
+<!--    {% endif %}-->
     <div class="toolbar-divider"></div>
     <div class="toolbar-group">
-        {% if images_length != 0 and dir in ['trip', 'temp'] %}
-        <button id="previous-image-button" class="toolbar-btn" title="이전 이미지">Previous</button>
-        {% endif %}
+<!--        <button id="previous-image-button" class="toolbar-btn" title="이전 이미지">Previous</button>-->
         <button id="next-image-button" class="toolbar-btn" title="다음 이미지">Next</button>
     </div>
-    {% else %}
-    {% endif %}
 </div>
 
 <div class="container" data-user-id="{{ current_user.get_id() }}" data-guestname="{{ config.GUEST_USERNAME }}">
@@ -400,6 +386,7 @@
         }
 
         // console.log('currentIndex', currentIndex);
+        imageItems = document.querySelectorAll('#masonry > .masonry-column:first-child .image-item');
     }
 
 
@@ -682,31 +669,7 @@
         });
 
         // 이미지 클릭 & 다음 버튼 > 다음 이미지를 센터로
-        imageItems = document.querySelectorAll('.image-item');
         lazyImages = document.querySelectorAll("img[data-src]");
-
-        if (dir === 'stock' && stock_name !== 'kospil') {
-            pollProgress(stock_name);
-
-            imageItems.forEach(item => {
-                const img = item.querySelector('.thumbnail');
-                img.addEventListener('click', (event) => {
-                    if (confirm('Delete the file ?')) {
-                        moveStockImage(event);
-                    }
-                });
-            });
-        } else {
-            imageItems.forEach(item => {
-                const img = item.querySelector('.thumbnail');
-                img?.addEventListener('click', () => {
-                    const filename = img.getAttribute('data-filename');
-                    const index = img.getAttribute('data-index');
-                    // console.log(filename, index)
-                    moveImage(filename, index);
-                }, { once: true });
-            });
-        }
 
         if (stock_name === 'kospil') {
             progressBar.remove();
