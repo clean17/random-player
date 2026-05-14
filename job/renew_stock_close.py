@@ -117,12 +117,15 @@ def is_valid_number_value(value):
 
 
 def renew_interest_stocks_close():
-    from app.repository.stocks.stocks import get_interest_stock_list, update_interest_stock_list_close
+    from app.repository.stocks.stocks import get_interest_stock_list, get_interest_low_stocks, update_interest_stock_list_close
 
     start = time.time()   # 시작 시간(초)
     rows = get_interest_stock_list()
     # rows = [{'stock_code':'215790'}]
     nowTime = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+    today = datetime.now().strftime("%Y%m%d")
+    rows2 = get_interest_low_stocks(today)
+    rows.update(rows2)
     print(f'{nowTime} - 🕒 running renew_interest_stocks_close: {len(rows)}')
 
     close_list = []
