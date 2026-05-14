@@ -527,17 +527,16 @@ document.addEventListener('click', (e) => {
 
 function goPrevPage () {
     if (page > 1) {
-        const previousBtn = document.querySelector('.pagination').children[1]
-        previousBtn.click();
+        const currentPageBtn = document.querySelector('.pagination .active')
+        const previousBtn = currentPageBtn.previousElementSibling;
+        previousBtn?.click();
     }
 }
 
 function goNextPage () {
-    const btnCount = document.querySelector('.pagination').childElementCount
-    const nextBtn = document.querySelector('.pagination').children[btnCount - 2];
-    if (nextBtn.textContent === '>') {
-        nextBtn.click();
-    }
+    const currentPageBtn = document.querySelector('.pagination .active')
+    const nextBtn = currentPageBtn.nextElementSibling;
+    nextBtn?.click();
 }
 
 document.getElementById("prevButton")?.addEventListener("click", goPrevPage);
