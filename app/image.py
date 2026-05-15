@@ -87,6 +87,14 @@ def initialize_shuffle_images():
 initialize_sorted_images()
 
 
+def safe_mtime(path):
+    try:
+        return os.path.getmtime(path)  # 수정시간 (초 단위)
+    except FileNotFoundError:
+        print(f"[WARN] File missing: {path}")
+        return 0  # 또는 float('-inf')
+
+
 
 def get_images(start, count, page, dir, image_arr=None):
     if dir == REF_IMAGE_DIR:
@@ -106,6 +114,7 @@ def get_images(start, count, page, dir, image_arr=None):
         # 전체 경로로 변환
         full_paths = [os.path.join(dir, f) for f in files]
         full_paths = [p for p in full_paths if os.path.isfile(p)] # 파일 존재 검증
+        full_paths.sort(key=safe_mtime)
         # 생성시간(ctime) 기준으로 정렬
         # full_paths.sort(key=lambda x: os.path.getctime(x)) # 생성시간 오름차순
         # full_paths.sort(key=lambda x: os.path.getmtime(x), reverse=True) # 수정시간 내림차순
