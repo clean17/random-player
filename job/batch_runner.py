@@ -229,24 +229,24 @@ def create_scheduler():
     )
 
     # 4) 매일 07:00 나스닥 예측 (CPU 3시간)
-    scheduler.add_job(
-        predict_stock_graph_scheduled,
-        trigger=CronTrigger(hour=7, minute=0),
-        id="predict_nasdaq_0700",
-        executor="cpu",
-        replace_existing=True,
-        args=["nasdaq"],
-    )
+    # scheduler.add_job(
+    #     predict_stock_graph_scheduled,
+    #     trigger=CronTrigger(hour=7, minute=0),
+    #     id="predict_nasdaq_0700",
+    #     executor="cpu",
+    #     replace_existing=True,
+    #     args=["nasdaq"],
+    # )
 
     # 5) 매일 20:00 코스피 예측 (CPU 3시간)
-    scheduler.add_job(
-        predict_stock_graph_scheduled,
-        trigger=CronTrigger(hour=20, minute=0),
-        id="predict_kospi_2000",
-        executor="cpu",
-        replace_existing=True,
-        args=["kospi"],
-    )
+    # scheduler.add_job(
+    #     predict_stock_graph_scheduled,
+    #     trigger=CronTrigger(hour=20, minute=0),
+    #     id="predict_kospi_2000",
+    #     executor="cpu",
+    #     replace_existing=True,
+    #     args=["kospi"],
+    # )
 
     # 6) 국장 시작 - 2_finding_stocks_with_increased_volume.py (09:05, 09:30~20:00, 30분마다)
     scheduler.add_job(
@@ -307,7 +307,7 @@ def create_scheduler():
     # 9) 월~금 5분마다 오늘 급상승 종목 데이터 파일 갱신  (update_interest_stocks)
     scheduler.add_job(
         run_cumtom_time_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/7"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/9"),
         id="weekday_every_5min_update_interest_stocks",
         executor="io",
         replace_existing=True,
@@ -350,7 +350,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 14) 데이터 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)
+    # 14) 데이터 파일 전체 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)
     scheduler.add_job(
         update_stock_data_daily,
         trigger=CronTrigger(day_of_week="mon-fri", hour=1, minute=0),
