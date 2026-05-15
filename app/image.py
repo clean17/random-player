@@ -303,39 +303,37 @@ def image_list():
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
     elif dir == 'image':
-        if len(ai_image_arr) == 0:
-            images, page, start, images_length, template_html = get_image_page(
-                start, LIMIT_PAGE_NUM, page, IMAGE_DIR, ai_image_arr, 'image_list_masonry.html',
-            )
-        else:
+        images = ai_image_arr[start:start + LIMIT_PAGE_NUM]
+        if len(images) == 0:
+            page = page - 1
+            start = (page - 1) * LIMIT_PAGE_NUM
             images = ai_image_arr[start:start + LIMIT_PAGE_NUM]
-            if len(images) == 0:
-                page = page - 1
-                start = (page - 1) * LIMIT_PAGE_NUM
-                images = ai_image_arr[start:start + LIMIT_PAGE_NUM]
 
-            images_length = len(ai_image_arr)
-            template_html = 'image_list_masonry.html'
+        images_length = len(ai_image_arr)
+        template_html = 'image_list_masonry.html'
 
     elif dir == 'image2':
-        if len(ig_image_arr) == 0:
-            images, page, start, images_length, template_html = get_image_page(
-                start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, ig_image_arr, 'image_list_masonry.html', 'ig'
-            )
-        else:
+        images = ig_image_arr[start:start + LIMIT_PAGE_NUM]
+        if len(images) == 0:
+            page = page - 1
+            start = (page - 1) * LIMIT_PAGE_NUM
             images = ig_image_arr[start:start + LIMIT_PAGE_NUM]
-            if len(images) == 0:
-                page = page - 1
-                start = (page - 1) * LIMIT_PAGE_NUM
-                images = ig_image_arr[start:start + LIMIT_PAGE_NUM]
 
-            images_length = len(ig_image_arr)
-            template_html = 'image_list_masonry.html'
+        images_length = len(ig_image_arr)
+        template_html = 'image_list_masonry.html'
 
     elif dir == 'move':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, 'image_list.html'
-        )
+        # images, page, start, images_length, template_html = get_image_page(
+        #     start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, 'image_list.html'
+        # )
+        images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
+        if len(images) == 0:
+            page = page - 1
+            start = (page - 1) * LIMIT_PAGE_NUM
+            images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
+
+        images_length = len(moved_image_arr)
+        template_html = 'image_list_masonry.html'
 
     elif dir == 'refine':
         # firstRequst = request.args.get('firstRequst')
@@ -357,6 +355,43 @@ def image_list():
         return redirect(url_for("image.stock-graph-list", market=market, page=page))
     else:
         template_html = 'image_list.html'
+
+    total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
+
+    return render_template(template_html, images=images, page=page,
+                           total_pages=total_pages, images_length=images_length, dir=dir,
+                           selected_dir=selected_dir, subdir_list=subdir_list, version=int(time.time()))
+
+
+@image_bp.route('/fetch', methods=['GET'])
+@login_required
+def fetch_image_list():
+    template_html = 'image_list_masonry.html'
+    dir = request.args.get('dir')
+    selected_dir = request.args.get('selected_dir')
+    if selected_dir in ("None", "null", "undefined", ""):
+        selected_dir = None
+    subdir_list = []
+    images = []
+    images_length = 0
+    page = int(request.args.get('page', 1))
+    start = (page - 1) * LIMIT_PAGE_NUM
+
+    # 공통 기능 : 첫번째 페이지에서만 풀 스캔
+    if dir == 'image':
+        images, page, start, images_length, template_html = get_image_page(
+            start, LIMIT_PAGE_NUM, page, IMAGE_DIR, ai_image_arr, template_html,
+        )
+    elif dir == 'image2':
+        images, page, start, images_length, template_html = get_image_page(
+            start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, ig_image_arr, template_html, 'ig'
+        )
+    elif dir == 'move':
+        images, page, start, images_length, template_html = get_image_page(
+            start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, template_html
+        )
+    else:
+        pass
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
