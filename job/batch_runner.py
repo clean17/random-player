@@ -368,7 +368,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 16) 매일 10:00 full-chain.pem 생성
+    # 16) 매일 10:00 full-chain.pem 생성 (인증서)
     scheduler.add_job(
         generate_fullchain_pem_daily,
         trigger=CronTrigger(hour=10, minute=0),
