@@ -36,7 +36,7 @@ let lastScrollTop = 0;
 let lastScrollTime = Date.now();
 const SCROLL_DELAY = 40;
 const SCROLL_THRESHOLD = 50_000;  // px per second
-const THROTTLE_NEXT_IMG_SEC = 300
+const THROTTLE_NEXT_IMG_SEC = 400
 
 // slideShow
 let slideShowTimer = null;
