@@ -21,8 +21,8 @@ encoded_password = quote(config['settings']['mudfish_password'])
 
 # 프록시 설정 (미꾸라지 SOCKS5 프록시 서버 주소와 포트)
 proxies = {
-    'http': f'socks5://{encoded_username}:{encoded_password}@{mud_vpn}',
-    'https': f'socks5://{encoded_username}:{encoded_password}@{mud_vpn}'
+    'http': f'socks5h://{encoded_username}:{encoded_password}@{mud_vpn}',
+    'https': f'socks5h://{encoded_username}:{encoded_password}@{mud_vpn}'
 }
 
 # 헤더 설정 (예시: 브라우저의 User-Agent)

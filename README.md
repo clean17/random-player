@@ -180,15 +180,26 @@ sudo certbot certonly --webroot -w certbot -d www.chickchick.kr
     server {
         listen       80;
         server_name  chickchick.kr www.chickchick.kr;
-        
-        return 301 https://$host$request_uri;
 
-        location /.well-known/acme-challenge/ { # 인증서 생성 후 주석
-            root html;
+        # 인증서 생성 후 주석
+        # Let's Encrypt 인증 경로는 HTTPS 리다이렉트하지 않음
+        location ^~ /.well-known/acme-challenge/ {
+            root C:/nginx/nginx-1.26.2/html;
+            default_type text/plain;
+            try_files $uri =404;
             allow all;
-            default_type "text/plain";
-            autoindex on;            
         }
+
+        # 나머지 요청만 HTTPS로 리다이렉트
+        location / {
+            root   html;
+            index  index.html index.htm;
+            return 301 https://$host$request_uri; # 인증서 생성 후 넣었음
+        }
+        
+        # 인증서 테스트 200 응답 받아야 함
+        # curl -i http://chickchick.kr/.well-known/acme-challenge/test.txt
+        # curl -k -i https://chickchick.kr/.well-known/acme-challenge/test.txt
 ```
 `wacs.exe` 가 설치된 디렉토리에서 아래 명령어 실행 `http-01 (FileSystem) 인증 방식`<br>
 ```bash
