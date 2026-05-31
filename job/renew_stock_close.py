@@ -14,6 +14,65 @@ from utils.wsgi_midleware import logger
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
 
 
+
+from datetime import datetime
+import pytz
+from pykrx import stock
+
+
+KST = pytz.timezone("Asia/Seoul")
+
+
+def is_korean_stock_business_day(date=None, verbose=False):
+    if date is None:
+        date = datetime.now(KST).strftime("%Y%m%d")
+    elif isinstance(date, datetime):
+        date = date.strftime("%Y%m%d")
+    else:
+        date = str(date).replace("-", "")
+
+    dt = datetime.strptime(date, "%Y%m%d")
+
+    if dt.weekday() >= 5:
+        if verbose:
+            print(f"[market-day-check] date={date}, weekend=True")
+        return False
+
+    test_tickers = {
+        "005930": "삼성전자",
+        "000660": "SK하이닉스",
+        "035420": "NAVER",
+    }
+
+    success_count = 0
+
+    for ticker, name in test_tickers.items():
+        try:
+            df = stock.get_market_ohlcv_by_date(date, date, ticker)
+
+            has_data = df is not None and not df.empty
+
+            if verbose:
+                print(
+                    f"[market-day-check] {name}({ticker}) "
+                    f"rows={0 if df is None else len(df)}, has_data={has_data}"
+                )
+
+            if has_data:
+                success_count += 1
+
+        except Exception as e:
+            if verbose:
+                print(f"[market-day-check] {name}({ticker}) failed: {repr(e)}")
+
+    is_open = success_count > 0
+
+    if verbose:
+        print(f"[market-day-check] date={date}, success_count={success_count}, is_open={is_open}")
+
+    return is_open
+
+
 def is_valid_number_value(value):
     if value is None:
         return False
@@ -117,6 +176,9 @@ def is_valid_number_value(value):
 
 
 def renew_interest_stocks_close():
+    if not is_korean_stock_business_day(verbose=False):
+        return
+
     from app.repository.stocks.stocks import get_interest_stock_list, get_interest_low_stocks, update_interest_stock_list_close
 
     start = time.time()   # 시작 시간(초)
@@ -125,7 +187,7 @@ def renew_interest_stocks_close():
     nowTime = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
     today = datetime.now().strftime("%Y%m%d")
     rows2 = get_interest_low_stocks(today)
-    rows.update(rows2)
+    rows.extend(rows2)
     print(f'{nowTime} - 🕒 running renew_interest_stocks_close: {len(rows)}')
 
     close_list = []

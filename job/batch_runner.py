@@ -341,11 +341,11 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 13) 매일 09:01 주식 종목 갱신
+    # 13) 월요일 09:01 주식 종목 갱신
     scheduler.add_job(
         update_stocks_daily,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=1),
-        id="renewal_stocks_daily",
+        trigger=CronTrigger(day_of_week="mon", hour=9, minute=1),
+        id="renewal_stocks_weekly",
         executor="io",
         replace_existing=True,
     )
