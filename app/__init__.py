@@ -392,7 +392,7 @@ def create_app():
             dq = ip_404_log[ip] # 키에 해당하는 10칸 짜리 deque를 가져온다, 없으면 생성, 있으면 반환
             dq.append(now)      # 요청이 들어올 때마다 해당 시간을 넣는다.
 
-            # 5초 이내 404가 5회 이상?
+            # 404가 5회 이상?
             # 파이썬 리스트 컴프리헨션을 사용한 “필터링” > for t in dq
             recent = [t for t in dq if now - t <= BLOCK_THRESHOLD] # 지금부터 BLOCK_THRESHOLD 이내인 값만 리스트로 반환
             # recent = [t for t in dq] # 5회 누적으로 수정, 새로운 list 타입 생성

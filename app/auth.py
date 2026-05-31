@@ -7,6 +7,7 @@ from utils.my_jwt import create_access_token
 from .rds import redis_client
 import time
 import pytz
+from urllib.parse import urlparse, urljoin
 
 from config.config import settings
 from .repository.users.users import find_user_by_username, update_user_login_attempt, update_user_lockout_time
@@ -51,6 +52,22 @@ def save_verified_time(username):
 def get_verified_time(username):
     return redis_client.get(f"second_password_verified:{username}")
 
+
+def is_safe_url(target):
+    """
+    ?next=/dashboard는 OK
+    ?next=http://evil.com은 차단
+    """
+    if not target:
+        return False
+
+    host_url = request.host_url
+    redirect_url = urljoin(host_url, target)
+
+    return (
+            urlparse(redirect_url).scheme in ("http", "https")
+            and urlparse(redirect_url).netloc == urlparse(host_url).netloc
+    )
 
 
 @auth.route('/api/token', methods=['POST'])
@@ -214,8 +231,10 @@ def verify_password():
             # session['second_password_verified_at'] = datetime.now().isoformat()
             save_verified_time(current_user.get_id()) # redis 동기화
 
-            next_page = request.args.get("next", "/func/memo")
-            return redirect(next_page)
+            next_url = request.args.get("next", "/func/memo")
+            if next_url and is_safe_url(next_url):
+                return redirect(next_url)
+            return redirect(url_for("auth.logout"))
         else:
             return redirect(url_for("auth.logout"))
 
