@@ -11,17 +11,25 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
 </head>
-<body>
-<!--<div class="top-bar">
-    <div class="logout">
-        {% if current_user.is_authenticated %}
-        <a href="{{ url_for('auth.logout') }}">Logout</a>
-        {% endif %}
+<body class="page-post app-page page-post-view">
+
+<div class="top-bar" data-auto-hide="true">
+    <div class="back app-header__left">
+        <a href="/posts" class="app-back">Back</a>
     </div>
-    <div class="back">
-        <a href="{{ url_for('main.home') }}">Back</a>
+    <div class="app-title">Post</div>
+    <div class="logout app-user-menu app-header__right post-view-actions">
+        <button type="button" class="app-menu-button" aria-label="사용자 메뉴" aria-expanded="false">☰</button>
+        <div class="app-menu-panel" role="menu">
+            {% if current_user.is_authenticated %}
+            <span class="app-menu-name">{{ current_user.get_id() }}</span>
+            <a href="#" class="app-menu-info is-disabled" role="menuitem" aria-disabled="true" onclick="return false;">내 정보 <small>준비중</small></a>
+            <a href="{{ url_for('auth.logout') }}" class="danger" role="menuitem">Logout</a>
+            {% endif %}
+        </div>
     </div>
-</div>-->
+</div>
+
 
 <div class="container">
     <div class="form-group">
@@ -43,14 +51,15 @@
         </div>
 
     </div>
-    <div class="form-actions">
-        {% if post.user_id == user.id %}
-        <button type="button" class="btn btn-danger" id="delete-post">삭제</button>
-        <button type="submit" class="btn btn-main" onclick="window.location.href='/posts/{{ post.id }}/edit'">수정</button>
-        {% endif %}
+    <div class="form-actions post-bottom-actions">
         <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
+        {% if post.user_id == user.id %}
+        <button type="button" class="post-action-btn post-action-edit" onclick="window.location.href='/posts/{{ post.id }}/edit'">수정</button>
+        <button type="button" class="post-action-btn post-action-delete" id="delete-post">삭제</button>
+        {% endif %}
     </div>
 </div>
+<script src="/static/js/ui_chrome.js?v={{ version }}"></script>
 </body>
 <script>
     const deletePostBtn = document.getElementById('delete-post');
