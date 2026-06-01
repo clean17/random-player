@@ -39,15 +39,21 @@
     </style>
 </head>
 
-<body>
-<div class="top-bar">
-    <div class="logout">
-        {% if current_user.is_authenticated %}
-        <a href="{{ url_for('auth.logout') }}">Logout</a>
-        {% endif %}
+<body class="page-image app-page">
+<div class="top-bar" data-auto-hide="true">
+    <div class="back app-header__left">
+        <a href="{{ url_for('main.home') }}" class="app-back">Back</a>
     </div>
-    <div class="back">
-        <a href="{{ url_for('main.home') }}">Back</a>
+    <div class="app-title">Images</div>
+    <div class="logout app-user-menu app-header__right">
+        {% if current_user.is_authenticated %}
+        <button type="button" class="app-menu-button" aria-label="사용자 메뉴" aria-expanded="false">☰</button>
+        <div class="app-menu-panel" role="menu">
+            <span class="app-menu-name">{{ current_user.get_id() }}</span>
+            <a href="#" class="app-menu-info is-disabled" role="menuitem" aria-disabled="true" onclick="return false;">내 정보 <small>준비중</small></a>
+            <a href="{{ url_for('auth.logout') }}" class="danger" role="menuitem">Logout</a>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -566,22 +572,143 @@
 
     let resizeTimer;
     let lastWidth = window.innerWidth;
+    let lastColumnCount = getColumnCount();
+    let isRestoringLayout = false;
+
+    function getItemIndex(item) {
+        const media = item.querySelector("[data-index]");
+        if (media?.dataset?.index) {
+            return Number(media.dataset.index);
+        }
+
+        if (item.id && item.id.startsWith("image-")) {
+            return Number(item.id.replace("image-", ""));
+        }
+
+        return null;
+    }
+
+    function getViewportAnchor() {
+        const items = Array.from(
+            msr_container.querySelectorAll(".image-item")
+        );
+
+        if (!items.length) return null;
+
+        const targetY = window.innerHeight * 0.30;
+
+        let best = null;
+        let bestDistance = Infinity;
+
+        for (const item of items) {
+            const rect = item.getBoundingClientRect();
+
+            if (rect.bottom < 0 || rect.top > window.innerHeight) {
+                continue;
+            }
+
+            const index = getItemIndex(item);
+            if (!index) continue;
+
+            const distance = Math.abs(rect.top - targetY);
+
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = {
+                    index,
+                    top: rect.top
+                };
+            }
+        }
+
+        return best;
+    }
+
+    function findRenderedItemByIndex(index) {
+        return msr_container
+            .querySelector(`[data-index="${index}"]`)
+            ?.closest(".image-item") || null;
+    }
+
+    function renderUntilIndex(index) {
+        if (!index) return;
+
+        while (
+            currentIndex < allItems.length &&
+            currentIndex < index + columns.length * 6
+            ) {
+            renderBatch();
+        }
+    }
+
+    function rebuildMasonryKeepingScroll() {
+        const anchor = getViewportAnchor();
+        const prevScrollY = window.scrollY;
+
+        isRestoringLayout = true;
+
+        createColumns();
+        initData();
+
+        currentIndex = 0;
+
+        if (anchor?.index) {
+            renderUntilIndex(anchor.index);
+        } else {
+            renderBatch();
+        }
+
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (!anchor?.index) {
+                    window.scrollTo(0, prevScrollY);
+                    isRestoringLayout = false;
+                    return;
+                }
+
+                const item = findRenderedItemByIndex(anchor.index);
+
+                if (!item) {
+                    window.scrollTo(0, prevScrollY);
+                    isRestoringLayout = false;
+                    return;
+                }
+
+                const newTop = item.getBoundingClientRect().top;
+                const diff = newTop - anchor.top;
+
+                window.scrollTo({
+                    top: window.scrollY + diff,
+                    behavior: "auto"
+                });
+
+                isRestoringLayout = false;
+            });
+        });
+    }
 
     window.addEventListener("resize", () => {
-        if (isRendering) return;
+        if (isRendering || isRestoringLayout) return;
+
         const currentWidth = window.innerWidth;
 
-        // height만 바뀐 경우 (모바일 scroll)
         if (currentWidth === lastWidth) return;
 
         lastWidth = currentWidth;
 
+        const currentColumnCount = getColumnCount();
+
+        if (currentColumnCount === lastColumnCount) return;
+
+        lastColumnCount = currentColumnCount;
+
         clearTimeout(resizeTimer);
 
         resizeTimer = setTimeout(() => {
-            initMasonry();
-        }, 3);
+            rebuildMasonryKeepingScroll();
+        }, 120);
     });
+
 
 
 
@@ -589,11 +716,19 @@
     // 삭제 + 재정렬 함수
     function moveAndRemove(imageItem, filename, idx) {
         console.log('moveAndRemove', idx, filename);
+        const imageItemEls = msr_container.querySelectorAll('.image-item');
+        const lastEl = imageItemEls[imageItemEls.length - 1];
+        const lastId = lastEl.id.replace('image-', '');
+        const count = getColumnCount();
+
         // 현재 스크롤 위치 저장
         const prevScrollY = window.scrollY;
         const minH = getMinColumnHeight();
 
         if (prevScrollY - minH > 200) {
+            renderBatch();
+        }
+        if ((lastId - idx) / count < 2) {
             renderBatch();
         }
 
@@ -609,6 +744,80 @@
 
 
 
+    function clickCenterImage2 () {
+        const centerImageItem = getCenterImage();
+        const imageEl = centerImageItem.querySelector("img")
+        const filename = imageEl.getAttribute('data-filename');
+        const index = imageEl.getAttribute('data-index');
+
+        moveAndRemove(centerImageItem, filename, index);
+    }
+
+    document.addEventListener('keydown', function (event) {
+        switch (event.key) {
+            case 'ArrowRight':
+            case 'ArrowDown':
+            case 'PageDown':
+                event.preventDefault();
+                if (event.shiftKey) {
+                    goNextPage();
+                } else {
+                    // nextImage();
+                    throttledNextImage();
+                }
+                break;
+            case 'ArrowLeft':
+            case 'ArrowUp':
+            case 'PageUp':
+                event.preventDefault();
+                if (event.shiftKey) {
+                    goPrevPage();
+                } else {
+                    previousImage();
+                }
+                break;
+            case ' ':
+            case 'Enter':
+                event.preventDefault();
+                const count = getColumnCount();
+                if (count === 1) {
+                    if (dir === 'image' || dir === 'image2' || dir === 'move') clickCenterImage2();
+                    if (dir === 'trip' || dir === 'temp') playCenterVideo();
+                }
+                break;
+            case 'Delete':
+            case '`':
+                if (isDelRunning) return
+                isDelRunning = true;
+                event.preventDefault();
+                if (dir === 'refine') {
+                    handelDelBtn();
+                } else if (dir === 'trip' || dir === 'temp') {
+                    if (currentUserName === guestName) {
+                        if (confirm('Delete the file ?')) {
+                            clickCenterImage();
+                        }
+                    } else {
+                        clickCenterImage();
+                    }
+                } else {
+                    if (confirm('Delete the file ?')) {
+                        if (dir === 'stock') {
+                            const centerImage = getCenterImage();
+                            if (centerImage) {
+                                moveStockImage({ target: centerImage.querySelector('img') }); // 키보드 이벤트로 삭제
+                            }
+                        } else {
+                            // document.querySelector('.delete-button')?.click()
+                            deletePage()
+                        }
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+    });
 
 
     function initPage() {
@@ -721,5 +930,6 @@
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
+<script src="/static/js/ui_chrome.js?v={{ version }}"></script>
 </body>
 </html>
