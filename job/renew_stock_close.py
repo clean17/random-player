@@ -179,15 +179,15 @@ def renew_interest_stocks_close():
     if not is_korean_stock_business_day(verbose=False):
         return
 
-    from app.repository.stocks.stocks import get_interest_stock_list, get_interest_low_stocks, update_interest_stock_list_close
+    from app.repository.stocks.stocks import get_interest_stock_list, get_interest_stocks, update_interest_stock_list_close
 
     start = time.time()   # 시작 시간(초)
     rows = get_interest_stock_list()
     # rows = [{'stock_code':'215790'}]
     nowTime = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-    today = datetime.now().strftime("%Y%m%d")
-    rows2 = get_interest_low_stocks(today)
-    rows.extend(rows2)
+    # today = datetime.now().strftime("%Y%m%d")
+    # rows2 = get_interest_stocks(today, "low")  # 이미 get_interest_stock_list 에도 저점이 포함되어 있음
+    # rows.extend(rows2)
     print(f'{nowTime} - 🕒 running renew_interest_stocks_close: {len(rows)}')
 
     close_list = []
@@ -256,10 +256,13 @@ def renew_interest_stocks_close():
 
 
 def verify_low_stock_data():
-    from app.repository.stocks.stocks import get_today_low_stocks, update_stocks_low_away
+    from app.repository.stocks.stocks import get_today_low_stocks, get_today_fire_stocks, update_stocks_low_away
 
     stocks = get_today_low_stocks()
-    for stock in stocks:
+    stocks2 = get_today_fire_stocks()
+    combined = stocks + stocks2
+
+    for stock in combined:
         try:
             update_stocks_low_away(stock)
         except Exception as e:

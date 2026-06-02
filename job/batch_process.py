@@ -522,7 +522,7 @@ def update_summary_stock_graph_daily():
         print("returncode =", process.returncode)
 
 
-# 전체 종목 데이터 파일을 갱신
+# 전체 종목 데이터 파일(pkl)을 갱신
 def fetch_stock_data():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\0_periodically_fetch_stock_data.py"

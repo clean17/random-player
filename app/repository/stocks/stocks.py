@@ -86,6 +86,7 @@ def get_interest_stock_list(conn=None):
     sql = """
     select stock_code
     from interest_stocks is2 
+    where updated_at > now() - interval '30 days'
     group by stock_code
     having count(stock_code) >= 1;
     """
@@ -205,10 +206,11 @@ def update_interest_stock_graph(stock: "StockDTO", conn=None) -> None:
         row = cur.fetchone()
         return row[0] if row else None
 
-# 오늘의 실시간 등락
+
+# 실시간, 저점 데이터 조회
 @db_transaction
-def get_interest_stocks(date: str, conn=None):
-    sql = """
+def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None):
+    base_sql = """
     SELECT i.id
          , i.created_at
          , i.stock_code
@@ -223,31 +225,47 @@ def get_interest_stocks(date: str, conn=None):
          , i.graph_file
          , i.updated_at
          , i.market_value
-         , case when market_value::numeric >= 1_000_000_000_000
-      		 then ROUND(market_value::numeric/1_000_000_000_000, 1)||'조'
-             else ROUND(market_value::numeric/100_000_000)||'억'
-             end as market_value_fmt
          , s.category
          , s.close
          , s.logo_image_url
-    FROM interest_stocks i, stocks s
-    WHERE i.created_at::date = %s
-    and i.stock_code = s.stock_code
-    and s.flag = True
-    AND i.today_price_change_pct::float >= 4
-    AND i.current_trading_value::numeric > 5_000_000_000
-    AND i.target is null
-    ORDER BY i.today_price_change_pct::numeric DESC, i.current_trading_value::numeric DESC;   
+    FROM interest_stocks i
+    JOIN stocks s ON i.stock_code = s.stock_code
+    WHERE i.created_at::date >= %s
+      AND i.created_at::date <= %s
+      AND s.flag = TRUE
     """
-    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
-        cur.execute(sql, (date,))
+
+    params = [date, endDate]
+
+    if mode == "normal":
+        base_sql += """
+          AND i.today_price_change_pct::float >= 4
+          AND i.current_trading_value::numeric > 5_000_000_000
+          AND i.target IS NULL
+        ORDER BY i.today_price_change_pct::numeric DESC,
+                 i.current_trading_value::numeric DESC
+        """
+
+    elif mode == "low":
+        base_sql += """
+          AND i.today_price_change_pct::numeric > 3.3
+          AND i.target LIKE 'low%%'
+        ORDER BY i.today_price_change_pct::numeric DESC
+        """
+
+    else:
+        raise ValueError(f"Invalid mode: {mode}")
+
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:   # namedtuple_row는 컬럼명을 속성명으로 쓴다
+        cur.execute(base_sql, params)
         rows = cur.fetchall()
+
     return rows
 
 
 # 최근 상승주 검색
 @db_transaction
-def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
+def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=None):
     # user_id 있을 때만: favorite join + current_trading_value 컬럼 추가
     favorite_join = ""
     target_condition = ""
@@ -259,7 +277,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         favorite_join = """
             join favorite_stocks f on f.stock_code = s.stock_code and f.flag = true and f.user_id = %s
         """
-        params = [user_id, date]
+        params = [user_id, date, endDate]
     else:
         trading_value_condition = """
             and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
@@ -271,9 +289,9 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
             where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
             and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8.5
             and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
-            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.5
+            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.8
         """
-        params = [date]
+        params = [date, endDate]
 
     sql = f"""
     select row_number() over (
@@ -282,7 +300,7 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
         , REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric desc
         ) as rn
         , b.* 
-        , ROUND(last_i.last_trading_value_num / 100_000_000) || '억' as current_trading_value
+        , last_i.last_trading_value_num as current_trading_value
         , coalesce(b.s_graph_file, last_i.graph_file) as graph_file
     from (
         select 
@@ -291,11 +309,13 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
           , I.stock_name
           , count(i.stock_code)
           , to_char(min(current_price::numeric), 'FM999,999,999') as min
---           , to_char(max(i.current_price::numeric), 'FM999,999,999') as last
           , to_char(
-              case when max(i.created_at)::date <> CURRENT_DATE then max(i.current_price::numeric)
-                   else s.close::numeric
-              end, 'FM999,999,999') as last
+              case 
+                when max(i.created_at)::date <> CURRENT_DATE 
+                  then max(i.current_price::numeric)
+                else s.close::numeric
+              end, 'FM999,999,999'
+            ) as last
           , ROUND(
               AVG(
                 COALESCE(
@@ -304,43 +324,47 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
             , 1)||'%%' AS avg_change_pct  
           , ROUND(
               100.0 * (
-                case when max(i.created_at)::date <> CURRENT_DATE then max(i.current_price::numeric)
+                case when max(i.created_at)::date <> CURRENT_DATE 
+                     then max(i.current_price::numeric)
                      else s.close::numeric
-                end - MIN(current_price::numeric)
+                end 
+                - MIN(current_price::numeric)
                 ) / NULLIF(MIN(current_price::numeric), 0)
             , 1)||'%%' AS total_rate_of_increase
           , ROUND(
               100.0 * (
-                case when max(i.created_at)::date <> CURRENT_DATE then max(i.current_price::numeric)
+                case when max(i.created_at)::date <> CURRENT_DATE 
+                     then max(i.current_price::numeric)
                      else s.close::numeric
-                end - MIN(current_price::numeric)
+                end 
+                - MIN(current_price::numeric)
               ) / NULLIF(MIN(current_price::numeric), 0) / count(i.stock_code)
             , 1)||'%%' as increase_per_day
-          , case when max(market_value::numeric) >= 1_000_000_000_000
-          		 then ROUND(max(market_value::numeric)/1_000_000_000_000, 1)||'조'
-                 else ROUND(max(market_value::numeric)/100_000_000)||'억'
-                 end as market_value
-          , ROUND(avg(current_trading_value::numeric)/100000000)||'억' as avg_trading_value
+          , (select market_value from interest_stocks is2
+            	where is2.created_at = max(i.created_at)
+            ) as market_value
+          , avg(current_trading_value::numeric) as avg_trading_value
           , min(i.created_at)::date as first_date
           , max(i.created_at)::date as last_date
           , s.logo_image_url
           , s.category
           , s.graph_file as s_graph_file
+          , s.close
         from interest_stocks i 
         join stocks s on s.stock_code = i.stock_code and s.flag = true
         {favorite_join}
         where 1=1
-        and i.market_value::numeric > 50_000_000_000
+        and i.market_value::numeric > 70_000_000_000 -- 시총 700억 이상만
         {trading_value_condition}
         --and i.created_at >= NOW() - INTERVAL '1 month'
         --and i.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
         and i.created_at >= %s::date
+        and i.created_at < %s::date + interval '1 day'
         and today_price_change_pct is not null
+        and target is null
         {target_condition}
         group by i.stock_code, i.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
         having count(i.stock_code) >= 1
---            and count(stock_code) <= 6
-        and max(i.created_at) >= (CURRENT_DATE - INTERVAL '6 days') -- x일 전부터 등록된 것
         order by count(i.stock_code) desc, max(i.created_at) desc
     ) as b
     left join lateral (
@@ -364,67 +388,37 @@ def get_interest_stocks_info(date: str, user_id: int = None, conn=None):
 
 # 사용자와 상관없이 즐겨찾기가 되어 있는 종목 리스트 리턴
 @db_transaction
-def get_favorite_stocks_info_api(date: str, user_id: int = None, conn=None):
-    sql = f"""
-    select i.stock_code
-         , i.stock_name
-    from interest_stocks i 
-    join favorite_stocks f on f.stock_code = i.stock_code and f.flag = true
-    where 1=1
-    and i.created_at >= %s::date
-    group by i.stock_code, i.stock_name
-    ;
+def get_favorite_stocks_info_api(date: str = None, user_id: int = None, conn=None):
+    base_sql = """
+        select i.stock_code
+             , i.stock_name
+        from interest_stocks i 
+        join favorite_stocks f on f.stock_code = i.stock_code and f.flag = true
+        where 1=1
     """
-    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
-        cur.execute(sql, (date,))
+    params = []
+    if date is not None:
+        base_sql += " and i.created_at >= %s::date"
+        params.append(date)
+
+    base_sql += " group by i.stock_code, i.stock_name;"
+
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(base_sql, params)
         rows = cur.fetchall()
     return rows
 
 
-# 저점 매수 검색
-@db_transaction
-def get_interest_low_stocks(date: str, conn=None):
-    sql = """
-    SELECT i.id
-         , i.graph_file
-         , i.stock_name
-         , i.stock_code        
-         , i.created_at
-         , i.yesterday_close
-         , i.current_price
-         , i.today_price_change_pct
-         , i.avg5d_trading_value
-         , i.current_trading_value
-         , i.trading_value_change_pct
-         , case when market_value::numeric >= 1_000_000_000_000
-      		 then ROUND(market_value::numeric/1_000_000_000_000, 1)||'조'
-             else ROUND(market_value::numeric/100_000_000)||'억'
-             end as market_value  
-         , s.close
-         , s.logo_image_url
-         , s.category
-    FROM interest_stocks i, stocks s
-    WHERE i.created_at::date = %s
-    and i.stock_code = s.stock_code
-    and s.flag = True
-    AND i.today_price_change_pct::numeric > 3
-    AND i.target like 'low%%'
-    ORDER BY i.today_price_change_pct::numeric DESC;
-    """
-    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다
-        cur.execute(sql, (date,))
-        rows = cur.fetchall()
-    return rows
 
-
+# 저점 데이터 중에서 갱신이 되지 않은 데이터를 반환 (타겟 아웃)
 @db_transaction
 def get_today_low_stocks(conn=None):
     sql = """
     select id, updated_at, nation, stock_code, stock_name, target 
     from interest_stocks 
-    where "target" = 'low'
+    where target = 'low'
       and updated_at::date = now()::date
-      and updated_at <= now() - interval '20 minutes'
+      and updated_at <= now() - interval '25 minutes'
     """
 
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
@@ -433,7 +427,24 @@ def get_today_low_stocks(conn=None):
 
     return rows
 
+# 실시간 데이터 중에서 갱신이 되지 않은 데이터를 반환 (타겟 아웃)
+@db_transaction
+def get_today_fire_stocks(conn=None):
+    sql = """
+    select id, updated_at, nation, stock_code, stock_name, target 
+    from interest_stocks 
+    where target is null
+      and updated_at::date = now()::date
+      and updated_at <= now() - interval '35 minutes'
+    """
 
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(sql)
+        rows = cur.fetchall()
+
+    return rows
+
+# 데이터 중에서 타겟에서 아웃된 종목을 target = 'break_away' 처리
 @db_transaction
 def update_stocks_low_away(stock, conn=None):
     sql = """

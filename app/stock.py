@@ -1,8 +1,10 @@
+from datetime import datetime
+
 from flask import Blueprint, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
 from flask_login import login_required, current_user
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
-    update_stock_list, get_stock_list, delete_delisted_stock, get_interest_low_stocks, update_interest_stock_graph, \
+    update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api
 from app.repository.users.users import find_user_by_username
 import time
@@ -135,22 +137,24 @@ def get_interesting_stocks():
     data = request.json
     date = data.get("date")
     target = data.get("target")
-    stocks = get_interest_stocks(date)
+    stocks = get_interest_stocks(date, date,"normal")
     return stocks
 
 @stock.route("/interest/data/fire", methods=["POST"])
 def get_interesting_stocks_info():
     data = request.json
     date = data.get("date")
-    stocks = get_interest_stocks_info(date)
+    endDate = data.get("endDate", datetime.today())
+    stocks = get_interest_stocks_info(date, endDate)
     return stocks
 
 @stock.route("/interest/data/low", methods=["POST"])
 def get_low_stocks():
     data = request.json
     date = data.get("date")
+    endDate = data.get("endDate") or date
     # target = data.get("target")
-    stocks = get_interest_low_stocks(date)
+    stocks = get_interest_stocks(date, endDate, "low")
     return stocks
 
 @stock.route("/interest/view", methods=["GET"])
@@ -283,6 +287,7 @@ def fetch_favorite_stocks():
 def get_favorite_stocks_data():
     data = request.json
     date = data.get("date")
+    endDate = data.get("endDate")
 
     # print("_user_id =", session.get("_user_id"))
     # print("current_user.id =", getattr(current_user, "id", None))
@@ -293,16 +298,16 @@ def get_favorite_stocks_data():
     else:
         user_id = None
 
-    stocks = get_interest_stocks_info(date, user_id)
+    stocks = get_interest_stocks_info(date, endDate, user_id)
     return stocks
 
 
 @stock.route("/interest/data/favorite/schedule", methods=["POST"])
 def get_favorite_stocks_data_schedule():
     data = request.json
-    date = data.get("date")
+    # date = data.get("date")
 
-    stocks = get_favorite_stocks_info_api(date)
+    stocks = get_favorite_stocks_info_api(None)
     return stocks
 
 

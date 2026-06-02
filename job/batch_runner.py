@@ -278,7 +278,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 7) 종목 데이터 파일 갱신
+    # 7) 종목 데이터 파일(pkl) 갱신 > 저점 계산
     scheduler.add_job(
         fetch_stock_data,
         trigger=CronTrigger(day_of_week="mon-fri", hour="09-15", minute="10,30,50"),
@@ -304,7 +304,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 9) 월~금 5분마다 오늘 급상승 종목 데이터 파일 갱신  (update_interest_stocks)
+    # 9) 월~금 9분마다 오늘 급상승 종목 데이터 파일 갱신  (update_interest_stocks)
     scheduler.add_job(
         run_cumtom_time_only,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/9"),
