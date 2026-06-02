@@ -302,3 +302,3459 @@ hr {
     cursor: default;           /* I자 대신 기본 화살표 커서 */
     caret-color: transparent;  /* 깜빡이는 입력 막대기 색을 투명으로 */
 }
+/* ===== Post page refresh ===== */
+body.page-post {
+    display: block !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    min-height: 100dvh !important;
+    height: auto !important;
+    background: var(--app-bg, #f6f7f9) !important;
+    color: var(--app-text, #111827);
+    overflow-x: hidden;
+}
+body.page-post > .container,
+body.page-post form.container {
+    width: min(980px, calc(100% - 24px)) !important;
+    max-width: 980px !important;
+    min-width: 0 !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 22px) !important;
+    height: auto !important;
+    margin: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 12px) auto 12px !important;
+    padding: 14px !important;
+    border-radius: 20px !important;
+    background: #fff !important;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .08) !important;
+    box-sizing: border-box !important;
+}
+body.page-post .post-top-bar {
+    margin: 0 0 12px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+body.page-post .post-list-heading {
+    color: #111827;
+    font-size: 18px;
+    font-weight: 850;
+    letter-spacing: -0.03em;
+}
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger,
+body.page-post .post-action-btn {
+    border-radius: 999px !important;
+    min-height: 38px !important;
+    padding: 0 14px !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+}
+body.page-post .btn-main,
+body.page-post .post-write-btn,
+body.page-post .post-action-edit {
+    background: #111827 !important;
+    color: #fff !important;
+    border: 1px solid #111827 !important;
+}
+body.page-post .btn-secondary {
+    background: #fff !important;
+    color: #374151 !important;
+    border: 1px solid #e5e7eb !important;
+}
+body.page-post .btn-danger,
+body.page-post .post-action-delete {
+    background: #fef2f2 !important;
+    color: #dc2626 !important;
+    border: 1px solid #fecaca !important;
+}
+body.page-post .post-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+body.page-post .post-box {
+    margin: 0 !important;
+    border-radius: 16px !important;
+    border: 1px solid #eef2f7 !important;
+    box-shadow: none !important;
+    overflow: hidden;
+    cursor: pointer;
+}
+body.page-post .post-box:hover {
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .08) !important;
+    border-color: #dbe4f0 !important;
+}
+body.page-post .thumbnail {
+    margin-left: 8px !important;
+    border-radius: 12px !important;
+}
+body.page-post .post-title {
+    font-size: 1.08rem !important;
+    letter-spacing: -0.03em;
+}
+body.page-post .post-meta {
+    color: #6b7280 !important;
+    font-size: .88rem !important;
+}
+body.page-post-view > .container,
+body.page-post-edit > .container,
+body.page-post-edit form.container {
+    width: min(1120px, calc(100% - 16px)) !important;
+    max-width: 1120px !important;
+    padding: 16px !important;
+}
+body.page-post-view .form-group:first-child,
+body.page-post-edit .form-group:first-child {
+    flex: 0 0 auto;
+}
+body.page-post-view .post-info,
+body.page-post-edit .post-info {
+    padding: 4px 2px 12px !important;
+    margin: 0 !important;
+}
+body.page-post-view .view-post-title,
+body.page-post-edit .edit-post-title input {
+    font-size: clamp(1.7rem, 4vw, 2.35rem) !important;
+    line-height: 1.16 !important;
+    letter-spacing: -0.055em;
+}
+body.page-post-view hr {
+    margin: 8px 0 12px !important;
+}
+body.page-post-view .textarea-wrapper,
+body.page-post-edit .textarea-wrapper {
+    padding-bottom: 0 !important;
+}
+body.page-post-view .post-content-wrapper {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - 150px);
+    height: auto !important;
+}
+body.page-post-view .post-content.ql-editor {
+    padding: 14px 2px 32px !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - 190px);
+}
+body.page-post-view .copy-btn {
+    top: 4px !important;
+    right: 4px !important;
+    font-size: 13px !important;
+    padding: 0 12px !important;
+    height: 34px !important;
+}
+body.page-post-view .form-actions {
+    position: static !important;
+    justify-content: flex-end !important;
+    padding: 8px 0 0 !important;
+}
+body.page-post-view .post-view-actions {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+body.page-post-view .post-action-btn {
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 12px !important;
+}
+body.page-post-edit form.container {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px;
+}
+body.page-post-edit .edit-post-title {
+    margin: 0 !important;
+}
+body.page-post-edit .edit-post-title input {
+    width: 100%;
+    background: transparent;
+}
+body.page-post-edit #editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - 230px) !important;
+    border-radius: 0 0 14px 14px;
+}
+body.page-post-edit .ql-toolbar.ql-snow {
+    border-radius: 14px 14px 0 0;
+    border-color: #e5e7eb;
+}
+body.page-post-edit .ql-container.ql-snow {
+    border-color: #e5e7eb;
+}
+body.page-post-edit .form-actions {
+    position: sticky !important;
+    bottom: 0 !important;
+    left: auto !important;
+    right: auto !important;
+    padding: 10px 0 0 !important;
+    background: linear-gradient(to top, #fff 78%, rgba(255,255,255,0)) !important;
+}
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: calc(100% - 12px) !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 6px) !important;
+        padding: 10px !important;
+        border-radius: 16px !important;
+    }
+    body.page-post .post-info {
+        padding: 10px !important;
+    }
+    body.page-post .post-view-actions .post-action-btn {
+        width: 38px;
+        padding: 0 !important;
+        overflow: hidden;
+    }
+}
+
+
+/* ===== Post layout cleanup: tighter app spacing + bottom actions ===== */
+body.page-post > .container,
+body.page-post form.container {
+    margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) !important;
+    padding: 12px !important;
+}
+
+body.page-post .post-top-bar {
+    margin-top: 0 !important;
+}
+
+body.page-post-view {
+    padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-view .logout.post-view-actions .post-action-btn {
+    display: none !important;
+}
+
+body.page-post-view > .container {
+    margin-bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-view .form-actions.post-bottom-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: 0 !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - 24px)) !important;
+    z-index: 980 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom)) !important;
+    background: rgba(246, 247, 249, .92) !important;
+    backdrop-filter: blur(12px);
+}
+
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary:first-child {
+    margin-right: auto !important;
+}
+
+body.page-post-edit {
+    padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-edit .form-group.textarea-wrapper {
+    position: sticky !important;
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) !important;
+    z-index: 20;
+    background: #fff;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-edit .ql-toolbar.ql-snow {
+    position: sticky !important;
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) !important;
+    z-index: 25;
+    background: #fff !important;
+}
+
+body.page-post-edit #editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 160px) !important;
+}
+
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: 0 !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - 24px)) !important;
+    z-index: 980 !important;
+    margin: 0 !important;
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom)) !important;
+    background: rgba(246, 247, 249, .92) !important;
+    backdrop-filter: blur(12px);
+}
+
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: calc(100% - 24px) !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) !important;
+        padding: 12px !important;
+        border-radius: 16px !important;
+    }
+
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: calc(100% - 24px) !important;
+    }
+
+    body.page-post-view .post-info,
+    body.page-post-edit .post-info {
+        padding: 4px 0 10px !important;
+    }
+}
+
+/* ===== Final post alignment pass ===== */
+body.page-post {
+    padding-top: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    background: var(--app-bg, #f6f7f9) !important;
+}
+
+body.page-post > .container,
+body.page-post form.container {
+    width: min(1120px, calc(100% - 28px)) !important;
+    max-width: 1120px !important;
+    min-width: 0 !important;
+    margin: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) auto 16px !important;
+    padding: 18px !important;
+    border-radius: 24px !important;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .06) !important;
+    border: 1px solid #e5e7eb !important;
+}
+
+body.page-post .post-top-bar {
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+}
+
+body.page-post .post-list-heading {
+    margin: 0 !important;
+}
+
+/* Match write/edit buttons to the light list-button tone instead of black. */
+body.page-post .btn-main,
+body.page-post .post-write-btn,
+body.page-post .post-action-edit {
+    background: #fff !important;
+    color: #374151 !important;
+    border: 1px solid #e5e7eb !important;
+    box-shadow: none !important;
+}
+body.page-post .btn-main:hover,
+body.page-post .post-write-btn:hover,
+body.page-post .post-action-edit:hover,
+body.page-post .btn-secondary:hover {
+    background: #f8fafc !important;
+    border-color: #d1d5db !important;
+    color: #111827 !important;
+}
+
+/* Detail bottom actions: keep only the buttons visible, no blur/glass strip. */
+body.page-post-view .form-actions.post-bottom-actions {
+    width: min(1120px, calc(100% - 28px)) !important;
+    padding: 0 0 calc(10px + env(safe-area-inset-bottom)) !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none;
+}
+body.page-post-view .form-actions.post-bottom-actions > * {
+    pointer-events: auto;
+}
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary:first-child {
+    margin-right: auto !important;
+}
+
+/* Edit/create bottom actions order is controlled by template; keep it compact and clean. */
+body.page-post-edit .form-actions {
+    width: min(1120px, calc(100% - 28px)) !important;
+    padding: 0 0 calc(10px + env(safe-area-inset-bottom)) !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    pointer-events: none;
+}
+body.page-post-edit .form-actions > * {
+    pointer-events: auto;
+}
+body.page-post-edit .form-actions a {
+    margin-right: 0 !important;
+}
+body.page-post-edit .form-actions .btn-secondary:first-child {
+    margin-right: auto !important;
+}
+
+/* Title scrolls away; editor stays available near the top. */
+body.page-post-edit .form-group.textarea-wrapper {
+    position: sticky !important;
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) !important;
+    z-index: 20 !important;
+    background: #fff !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-edit .ql-toolbar.ql-snow {
+    position: sticky !important;
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) !important;
+    z-index: 25 !important;
+    background: #fff !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: min(100% - 20px, 1120px) !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 4px) !important;
+        padding: 12px !important;
+        border-radius: 24px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: min(100% - 20px, 1120px) !important;
+    }
+}
+
+
+/* ===== Final requested post spacing/sticky pass ===== */
+:root {
+    --post-page-gap: 8px;
+    --post-mobile-x: 16px;
+    --post-action-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+
+body.page-post > .container,
+body.page-post form.container {
+    width: min(1120px, calc(100% - 32px)) !important;
+    max-width: 1120px !important;
+    margin: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + var(--post-page-gap)) auto 14px !important;
+    padding: 16px !important;
+    border-radius: 22px !important;
+}
+
+body.page-post .post-top-bar {
+    margin: 0 0 10px !important;
+    padding: 0 !important;
+}
+
+body.page-post .post-count-heading {
+    color: #6b7280 !important;
+    font-size: 14px !important;
+    font-weight: 750 !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Bottom buttons only: no glass strip, less vertical whitespace. */
+body.page-post-view {
+    padding-bottom: calc(54px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-view > .container {
+    margin-bottom: calc(58px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-view .form-actions.post-bottom-actions {
+    bottom: var(--post-action-bottom) !important;
+    padding: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    align-items: center !important;
+}
+
+body.page-post-edit {
+    padding-bottom: calc(54px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-edit .form-actions {
+    bottom: var(--post-action-bottom) !important;
+    padding: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    align-items: center !important;
+}
+
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+body.page-post-edit .form-actions .btn {
+    min-height: 36px !important;
+    height: 36px !important;
+    padding: 0 13px !important;
+}
+
+/* Editor should move only with the visible app bar; otherwise no phantom top gap. */
+body.page-post-edit .form-group.textarea-wrapper,
+body.page-post-edit .ql-toolbar.ql-snow {
+    top: 8px !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .form-group.textarea-wrapper,
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+}
+
+body.page-post-edit #editor {
+    min-height: calc(100dvh - 170px) !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form #editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 170px) !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: calc(100% - (var(--post-mobile-x) * 2)) !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 6px) !important;
+        padding: 12px !important;
+        border-radius: 20px !important;
+    }
+    body.page-post .post-top-bar {
+        margin-bottom: 8px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: calc(100% - (var(--post-mobile-x) * 2)) !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn {
+        min-height: 34px !important;
+        height: 34px !important;
+        padding: 0 11px !important;
+        font-size: 13px !important;
+    }
+}
+
+
+/* ===== Final post spacing/button cleanup pass ===== */
+:root {
+    --post-shell-x: 28px;
+    --post-shell-mobile-x: 28px;
+    --post-top-gap-hidden: 6px;
+    --post-top-gap-visible: 6px;
+}
+body.page-post {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: var(--app-bg, #f6f7f9) !important;
+}
+body.page-post > .container,
+body.page-post form.container {
+    width: min(1120px, calc(100% - var(--post-shell-x))) !important;
+    max-width: 1120px !important;
+    min-width: 0 !important;
+    margin: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + var(--post-top-gap-visible)) auto 14px !important;
+    padding: 14px !important;
+    border-radius: 22px !important;
+    box-sizing: border-box !important;
+}
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container {
+    margin-top: var(--post-top-gap-hidden) !important;
+}
+body.page-post .post-top-bar {
+    margin: 0 0 8px !important;
+    padding: 0 !important;
+}
+body.page-post .post-list {
+    gap: 8px !important;
+}
+body.page-post-view {
+    padding-bottom: calc(48px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-view > .container {
+    margin-bottom: 12px !important;
+}
+body.page-post-view .post-content.ql-editor {
+    padding-bottom: 18px !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - var(--post-shell-x))) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    z-index: 980 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    pointer-events: none !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+}
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger,
+body.page-post .post-action-btn,
+body.page-post-edit .form-actions .btn {
+    min-height: 40px !important;
+    height: 40px !important;
+    padding: 0 16px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04) !important;
+}
+body.page-post .btn-main,
+body.page-post .post-write-btn,
+body.page-post .post-action-edit,
+body.page-post .btn-secondary {
+    background: #f3f4f6 !important;
+    color: #263241 !important;
+    border: 1px solid #d5dbe3 !important;
+}
+body.page-post .btn-main:hover,
+body.page-post .post-write-btn:hover,
+body.page-post .post-action-edit:hover,
+body.page-post .btn-secondary:hover {
+    background: #e9edf3 !important;
+    border-color: #c4ccd7 !important;
+    color: #111827 !important;
+}
+body.page-post .btn-danger,
+body.page-post .post-action-delete {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    border: 1px solid #fecaca !important;
+}
+body.page-post .btn-danger:hover,
+body.page-post .post-action-delete:hover {
+    background: #fecaca !important;
+    color: #991b1b !important;
+}
+body.page-post-edit .form-group.textarea-wrapper,
+body.page-post-edit .ql-toolbar.ql-snow {
+    top: var(--post-top-gap-hidden) !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .form-group.textarea-wrapper,
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + var(--post-top-gap-visible)) !important;
+}
+body.page-post-edit #editor {
+    min-height: calc(100dvh - 156px) !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form #editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 156px) !important;
+}
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: calc(100% - var(--post-shell-mobile-x)) !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 6px) !important;
+        padding: 12px !important;
+        border-radius: 20px !important;
+    }
+    body.page-post .top-bar.chrome-hidden ~ .container,
+    body.page-post .top-bar.chrome-hidden ~ form.container {
+        margin-top: 6px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: calc(100% - var(--post-shell-mobile-x)) !important;
+        bottom: calc(7px + env(safe-area-inset-bottom)) !important;
+    }
+    body.page-post .post-write-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger,
+    body.page-post .post-action-btn,
+    body.page-post-edit .form-actions .btn {
+        min-height: 39px !important;
+        height: 39px !important;
+        padding: 0 14px !important;
+        font-size: 14px !important;
+    }
+}
+
+
+/* ===== Final requested post layout cleanup ===== */
+:root {
+    --post-shell-x-final: 28px;
+    --post-shell-mobile-x-final: 28px;
+    --post-card-pad-final: 18px;
+}
+body.page-post {
+    display: block !important;
+    align-items: initial !important;
+    justify-content: initial !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 100dvh !important;
+    background: var(--app-bg, #f6f7f9) !important;
+}
+body.page-post > .container,
+body.page-post form.container {
+    width: min(1120px, calc(100% - var(--post-shell-x-final))) !important;
+    max-width: 1120px !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) auto 16px !important;
+    padding: var(--post-card-pad-final) !important;
+    border-radius: 30px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container {
+    margin-top: 8px !important;
+}
+body.page-post .post-top-bar {
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+}
+body.page-post .post-count-heading {
+    color: #64748b !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+}
+body.page-post-view {
+    padding-bottom: calc(48px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-view > .container {
+    margin-bottom: 12px !important;
+    padding-bottom: var(--post-card-pad-final) !important;
+}
+body.page-post-view .form-group,
+body.page-post-view .textarea-wrapper,
+body.page-post-edit .form-group,
+body.page-post-edit .textarea-wrapper {
+    margin-bottom: 8px !important;
+}
+body.page-post-view .post-content.ql-editor {
+    padding-bottom: 10px !important;
+    margin-bottom: 0 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - var(--post-shell-x-final))) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 0 !important;
+    z-index: 980 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    pointer-events: none !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+}
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger,
+body.page-post .post-action-btn,
+body.page-post-edit .form-actions .btn {
+    min-height: 42px !important;
+    height: 42px !important;
+    padding: 0 18px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+    line-height: 1 !important;
+    box-shadow: 0 2px 6px rgba(15,23,42,.06) !important;
+}
+body.page-post .btn-secondary,
+body.page-post .post-action-btn,
+body.page-post-edit .form-actions .btn-secondary {
+    background: #eef2f7 !important;
+    color: #243041 !important;
+    border: 1px solid #cfd8e3 !important;
+}
+body.page-post .btn-secondary:hover,
+body.page-post .post-action-btn:hover,
+body.page-post-edit .form-actions .btn-secondary:hover {
+    background: #e4eaf2 !important;
+    border-color: #b8c4d2 !important;
+}
+body.page-post .btn-main,
+body.page-post .post-write-btn,
+body.page-post .post-action-edit {
+    background: #e8f1ff !important;
+    color: #1d4f91 !important;
+    border: 1px solid #bdd4f6 !important;
+}
+body.page-post .btn-main:hover,
+body.page-post .post-write-btn:hover,
+body.page-post .post-action-edit:hover {
+    background: #dceaff !important;
+    border-color: #9fbfee !important;
+    color: #173f73 !important;
+}
+body.page-post .btn-danger,
+body.page-post .post-action-delete {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    border: 1px solid #fecaca !important;
+}
+body.page-post-edit #post-form {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-edit .form-group.textarea-wrapper {
+    position: static !important;
+    top: auto !important;
+}
+body.page-post-edit .ql-toolbar.ql-snow {
+    position: sticky !important;
+    top: 8px !important;
+    z-index: 30 !important;
+    background: #fff !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+}
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-edit #editor {
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - 188px) !important;
+    overflow: visible !important;
+}
+body.page-post-edit .ql-editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - 226px) !important;
+    overflow: visible !important;
+}
+@media (max-width: 560px) {
+    :root {
+        --post-shell-mobile-x-final: 28px;
+        --post-card-pad-final: 18px;
+    }
+    body.page-post > .container,
+    body.page-post form.container {
+        width: calc(100% - var(--post-shell-mobile-x-final)) !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+        padding: var(--post-card-pad-final) !important;
+        border-radius: 30px !important;
+    }
+    body.page-post .top-bar.chrome-hidden ~ .container,
+    body.page-post .top-bar.chrome-hidden ~ form.container {
+        margin-top: 8px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: calc(100% - var(--post-shell-mobile-x-final)) !important;
+        bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    }
+    body.page-post .post-write-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger,
+    body.page-post .post-action-btn,
+    body.page-post-edit .form-actions .btn {
+        min-height: 42px !important;
+        height: 42px !important;
+        padding: 0 16px !important;
+        font-size: 14px !important;
+    }
+}
+
+
+/* ===== 2026-05 final post shell/button correction ===== */
+body.page-post {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: var(--app-bg, #f6f7f9) !important;
+}
+body.page-post > .container,
+body.page-post form.container {
+    width: min(1120px, calc(100% - 28px)) !important;
+    max-width: 1120px !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+    margin-bottom: 14px !important;
+    padding: 18px !important;
+    border-radius: 30px !important;
+    box-sizing: border-box !important;
+}
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container {
+    margin-top: 8px !important;
+}
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: min(1120px, calc(100% - 20px)) !important;
+        padding: 12px !important;
+        border-radius: 24px !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+    }
+    body.page-post .top-bar.chrome-hidden ~ .container,
+    body.page-post .top-bar.chrome-hidden ~ form.container {
+        margin-top: 8px !important;
+    }
+}
+
+body.page-post .post-count-heading {
+    color: #334155 !important;
+    font-size: 16px !important;
+    font-weight: 850 !important;
+}
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .post-action-edit,
+body.page-post-edit .form-actions .btn-main {
+    min-height: 46px !important;
+    height: 46px !important;
+    padding: 0 22px !important;
+    font-size: 15px !important;
+    font-weight: 850 !important;
+    background: #dbeafe !important;
+    color: #1e3a8a !important;
+    border: 1px solid #93c5fd !important;
+}
+body.page-post .btn-secondary,
+body.page-post .post-action-btn,
+body.page-post-edit .form-actions .btn-secondary {
+    min-height: 46px !important;
+    height: 46px !important;
+    padding: 0 22px !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    background: #eef2f7 !important;
+    color: #243041 !important;
+    border: 1px solid #cbd5e1 !important;
+}
+body.page-post .btn-danger,
+body.page-post .post-action-delete {
+    min-height: 46px !important;
+    height: 46px !important;
+    padding: 0 22px !important;
+    font-size: 15px !important;
+    font-weight: 850 !important;
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fca5a5 !important;
+}
+body.page-post-edit .form-actions {
+    gap: 10px !important;
+}
+@media (max-width: 560px) {
+    body.page-post .post-write-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger,
+    body.page-post .post-action-btn,
+    body.page-post-edit .form-actions .btn {
+        min-height: 46px !important;
+        height: 46px !important;
+        padding: 0 18px !important;
+        font-size: 15px !important;
+    }
+}
+
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-edit #editor {
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - 172px) !important;
+    overflow: visible !important;
+}
+body.page-post-edit .ql-editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - 220px) !important;
+    overflow: visible !important;
+}
+
+/* ===== 2026-05-30 post detail/editor bottom cleanup ===== */
+body.page-post-view {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-view .post-content-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+body.page-post-view .post-content.ql-editor {
+    height: auto !important;
+    min-height: 0 !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-view .form-group.textarea-wrapper {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    min-height: 0 !important;
+}
+body.page-post-view > .container {
+    margin-bottom: 8px !important;
+    padding-bottom: 14px !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    bottom: calc(4px + env(safe-area-inset-bottom)) !important;
+    gap: 10px !important;
+}
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+body.page-post-edit .form-actions .btn,
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger,
+body.page-post .post-action-btn {
+    min-height: 48px !important;
+    height: 48px !important;
+    padding: 0 22px !important;
+    border-radius: 999px !important;
+    font-size: 15.5px !important;
+    font-weight: 850 !important;
+    line-height: 1 !important;
+}
+body.page-post-edit .form-actions .btn,
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+body.page-post-view .form-actions.post-bottom-actions .post-action-btn {
+    min-width: 88px !important;
+}
+body.page-post-edit .ql-toolbar.ql-snow {
+    top: 8px !important;
+    transition: none !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+}
+body.page-post-edit .form-group.textarea-wrapper {
+    padding-bottom: 0 !important;
+}
+body.page-post-edit #post-form {
+    padding-bottom: calc(62px + env(safe-area-inset-bottom)) !important;
+}
+@media (max-width: 560px) {
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: calc(100% - 20px) !important;
+        bottom: calc(4px + env(safe-area-inset-bottom)) !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn,
+    body.page-post .post-write-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger,
+    body.page-post .post-action-btn {
+        min-height: 48px !important;
+        height: 48px !important;
+        padding: 0 18px !important;
+        font-size: 15px !important;
+    }
+}
+
+/* ===== 2026-05-30 final post detail/write stability reset ===== */
+body.page-post {
+    display: block !important;
+    align-items: initial !important;
+    justify-content: initial !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 100dvh !important;
+    background: var(--app-bg, #f6f7f9) !important;
+    overflow-x: hidden !important;
+}
+body.page-post > .container,
+body.page-post form.container {
+    width: min(1120px, calc(100% - 32px)) !important;
+    max-width: 1120px !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) auto 12px !important;
+    padding: 18px !important;
+    border-radius: 30px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container {
+    margin-top: 8px !important;
+}
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: calc(100% - 24px) !important;
+        padding: 14px !important;
+        border-radius: 24px !important;
+    }
+}
+
+/* Detail view: content must stay inside the card and end with the card */
+body.page-post-view {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-view > .container {
+    padding-bottom: 14px !important;
+    margin-bottom: 8px !important;
+}
+body.page-post-view .form-group,
+body.page-post-view .form-group.textarea-wrapper {
+    flex: initial !important;
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 0 8px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-view .post-content-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-view .post-content.ql-editor {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 14px 4px 6px !important;
+    overflow: visible !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    box-sizing: border-box !important;
+}
+body.page-post-view .post-content.ql-editor * {
+    max-width: 100% !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+body.page-post-view .post-content.ql-editor img,
+body.page-post-view .post-content.ql-editor video,
+body.page-post-view .post-content.ql-editor iframe {
+    max-width: 100% !important;
+    height: auto !important;
+}
+body.page-post-view .post-content.ql-editor pre {
+    white-space: pre-wrap !important;
+    overflow-x: auto !important;
+}
+
+/* Bottom actions: match write button size and never overflow the screen */
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: calc(6px + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - 24px)) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    z-index: 2147482000 !important;
+    pointer-events: none !important;
+    box-sizing: border-box !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 1 auto !important;
+}
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger,
+body.page-post .post-action-btn,
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+body.page-post-edit .form-actions .btn {
+    min-height: 48px !important;
+    height: 48px !important;
+    padding: 0 22px !important;
+    border-radius: 999px !important;
+    font-size: 15.5px !important;
+    font-weight: 850 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+}
+@media (max-width: 420px) {
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        gap: 6px !important;
+        width: calc(100% - 16px) !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn {
+        min-height: 46px !important;
+        height: 46px !important;
+        padding: 0 14px !important;
+        font-size: 14.5px !important;
+    }
+}
+
+/* Write/edit screen: remove sticky editor jitter; let the page scroll once naturally */
+body.page-post-edit {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom)) !important;
+}
+body.page-post-edit #post-form {
+    padding-bottom: 14px !important;
+}
+body.page-post-edit .form-group.textarea-wrapper {
+    position: static !important;
+    flex: initial !important;
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 8px !important;
+    overflow: visible !important;
+}
+body.page-post-edit .ql-toolbar.ql-snow {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+    transition: none !important;
+    transform: none !important;
+    border-radius: 16px 16px 0 0 !important;
+    background: #fff !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: auto !important;
+}
+body.page-post-edit #editor,
+body.page-post-edit .ql-container.ql-snow {
+    height: auto !important;
+    min-height: clamp(420px, calc(100dvh - 190px), 760px) !important;
+    overflow: visible !important;
+}
+body.page-post-edit .ql-editor {
+    min-height: clamp(360px, calc(100dvh - 250px), 700px) !important;
+    height: auto !important;
+    overflow: visible !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+
+/* ===== 2026-05-30 post stable shell/editor/detail final pass ===== */
+:root {
+    --post-shell-width: min(1120px, calc(100% - 28px));
+    --post-shell-width-mobile: calc(100% - 20px);
+    --post-card-padding: 18px;
+    --post-card-padding-mobile: 12px;
+}
+
+body.page-post {
+    display: block !important;
+    justify-content: initial !important;
+    align-items: initial !important;
+    width: 100% !important;
+    min-height: 100dvh !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+    background: var(--app-bg, #f6f7f9) !important;
+}
+
+body.page-post > .container,
+body.page-post form.container {
+    width: var(--post-shell-width) !important;
+    max-width: 1120px !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) auto 12px !important;
+    padding: var(--post-card-padding) !important;
+    border-radius: 30px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container {
+    margin-top: 8px !important;
+}
+
+body.page-post .post-list {
+    gap: 7px !important;
+}
+
+body.page-post .post-box {
+    border-radius: 15px !important;
+}
+
+body.page-post .thumbnail {
+    margin-left: 6px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+}
+
+body.page-post .post-info {
+    padding: 10px 11px !important;
+    margin-left: 2px !important;
+}
+
+/* Detail view should behave like the edit view: content remains inside the card and ends with it. */
+body.page-post-view {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-view > .container {
+    margin-bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-view .form-group,
+body.page-post-view .form-group.textarea-wrapper,
+body.page-post-view .post-content-wrapper {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 0 8px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+
+body.page-post-view .post-content.ql-editor {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 12px 2px 4px !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+
+body.page-post-view .post-content.ql-editor * {
+    max-width: 100% !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+
+body.page-post-view .post-content.ql-editor img,
+body.page-post-view .post-content.ql-editor video,
+body.page-post-view .post-content.ql-editor iframe {
+    max-width: 100% !important;
+    height: auto !important;
+}
+
+/* Write/create: initial editor fits the viewport; content can grow naturally. */
+body.page-post-edit #post-form {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-edit .form-group.textarea-wrapper {
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-edit .ql-toolbar.ql-snow {
+    position: sticky !important;
+    top: 8px !important;
+    z-index: 35 !important;
+    background: #fff !important;
+    transition: none !important;
+    transform: none !important;
+}
+
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+}
+
+body.page-post-edit #editor,
+body.page-post-edit .ql-container.ql-snow {
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 196px) !important;
+    overflow: visible !important;
+}
+
+body.page-post-edit .ql-editor {
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 246px) !important;
+    overflow: visible !important;
+}
+
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    width: var(--post-shell-width) !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    box-sizing: border-box !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: var(--post-shell-width-mobile) !important;
+        padding: var(--post-card-padding-mobile) !important;
+        border-radius: 24px !important;
+    }
+
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: var(--post-shell-width-mobile) !important;
+        bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    }
+
+    body.page-post .post-info {
+        padding: 8px 9px !important;
+    }
+
+    body.page-post .thumbnail {
+        min-width: 66px !important;
+        max-width: 66px !important;
+    }
+}
+
+
+/* ===== 2026-05-30 final post editor/detail bottom alignment ===== */
+:root {
+    --post-shell-width-final: min(1120px, calc(100% - 32px));
+    --post-shell-width-final-mobile: calc(100% - 24px);
+    --post-action-height-final: 50px;
+    --post-action-bottom-final: 10px;
+}
+body.page-post {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+}
+body.page-post > .container,
+body.page-post form.container {
+    width: var(--post-shell-width-final) !important;
+    max-width: 1120px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+    padding: 18px !important;
+    box-sizing: border-box !important;
+}
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container {
+    margin-top: 8px !important;
+}
+body.page-post .post-list {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    gap: 8px !important;
+}
+body.page-post .post-box {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+body.page-post .post-info {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+}
+body.page-post-view {
+    padding-bottom: 0 !important;
+}
+body.page-post-view > .container {
+    margin-bottom: calc(var(--post-action-height-final) + var(--post-action-bottom-final) + env(safe-area-inset-bottom) + 12px) !important;
+    padding-bottom: 14px !important;
+}
+body.page-post-view .post-content-wrapper,
+body.page-post-view .form-group.textarea-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-view .post-content.ql-editor {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    bottom: calc(var(--post-action-bottom-final) + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important;
+    width: var(--post-shell-width-final) !important;
+    max-width: 1120px !important;
+    height: var(--post-action-height-final) !important;
+    min-height: var(--post-action-height-final) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    z-index: 1200 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+body.page-post-edit .form-actions .btn,
+body.page-post .post-write-btn,
+body.page-post .btn-main {
+    min-height: 50px !important;
+    height: 50px !important;
+    padding: 0 22px !important;
+    border-radius: 999px !important;
+    font-size: 15.5px !important;
+}
+body.page-post-edit {
+    padding-bottom: 0 !important;
+}
+body.page-post-edit #post-form {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-height-final) - var(--post-action-bottom-final) - env(safe-area-inset-bottom) - 28px) !important;
+    margin-bottom: calc(var(--post-action-height-final) + var(--post-action-bottom-final) + env(safe-area-inset-bottom) + 12px) !important;
+    padding-bottom: 12px !important;
+}
+body.page-post-edit .form-group.textarea-wrapper {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-edit .ql-toolbar.ql-snow {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 40 !important;
+    transition: none !important;
+    transform: none !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top)) !important;
+}
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-edit #editor {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-height-final) - var(--post-action-bottom-final) - 190px) !important;
+    overflow: visible !important;
+}
+body.page-post-edit .ql-editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-height-final) - var(--post-action-bottom-final) - 250px) !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: var(--post-shell-width-final-mobile) !important;
+        padding: 12px !important;
+        border-radius: 24px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: var(--post-shell-width-final-mobile) !important;
+        gap: 7px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn {
+        flex: 1 1 0 !important;
+        padding: 0 10px !important;
+        min-width: 0 !important;
+        font-size: 14.5px !important;
+    }
+    body.page-post .post-info {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+}
+
+
+/* ===== 2026-05-30 final post action/content non-overlap fix ===== */
+:root {
+    --post-shell-x-lock: 28px;
+    --post-shell-mobile-x-lock: 20px; /* same visible side gap as current main mobile shell */
+    --post-card-pad-lock: 18px;
+    --post-card-pad-mobile-lock: 12px;
+    --post-action-h-lock: 46px;
+    --post-action-bottom-lock: calc(8px + env(safe-area-inset-bottom));
+    --post-action-reserve-lock: calc(var(--post-action-h-lock) + var(--post-action-bottom-lock) + 14px);
+}
+body.page-post {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: var(--app-bg, #f6f7f9) !important;
+    overflow-x: hidden !important;
+}
+body.page-post > .container,
+body.page-post form.container {
+    width: min(1120px, calc(100% - var(--post-shell-x-lock))) !important;
+    max-width: 1120px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+    margin-bottom: 14px !important;
+    padding: var(--post-card-pad-lock) !important;
+    border-radius: 30px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container {
+    margin-top: 8px !important;
+}
+body.page-post .post-top-bar {
+    margin: 0 0 10px !important;
+    padding: 0 !important;
+}
+body.page-post .post-list {
+    gap: 8px !important;
+}
+body.page-post .post-box {
+    margin: 0 !important;
+}
+body.page-post .post-info {
+    padding: 10px !important;
+}
+
+/* Fixed post action buttons never cover the final content: reserve exactly button space. */
+body.page-post-view,
+body.page-post-edit {
+    padding-bottom: var(--post-action-reserve-lock) !important;
+}
+body.page-post-view > .container,
+body.page-post-edit form.container {
+    margin-bottom: var(--post-action-reserve-lock) !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: var(--post-action-bottom-lock) !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - var(--post-shell-x-lock))) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    z-index: 980 !important;
+    pointer-events: none !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+}
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary:first-child,
+body.page-post-edit .form-actions .btn-secondary:first-child {
+    margin-right: auto !important;
+}
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger,
+body.page-post .post-action-btn,
+body.page-post-edit .form-actions .btn {
+    min-height: var(--post-action-h-lock) !important;
+    height: var(--post-action-h-lock) !important;
+    padding: 0 20px !important;
+    border-radius: 999px !important;
+    font-size: 15px !important;
+    font-weight: 850 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
+
+/* Detail content ends naturally; the reserved margin above protects it from buttons. */
+body.page-post-view .post-content-wrapper,
+body.page-post-view .post-content.ql-editor {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 10px !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+}
+
+/* Create/edit editor: initial box ends above bottom actions; long content grows page naturally. */
+body.page-post-edit form.container {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-lock) - 22px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+body.page-post-edit .form-group.textarea-wrapper {
+    position: static !important;
+    top: auto !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    margin-bottom: 0 !important;
+}
+body.page-post-edit .ql-toolbar.ql-snow {
+    position: sticky !important;
+    top: 8px !important;
+    z-index: 30 !important;
+    background: #fff !important;
+}
+body.page-post-edit .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+}
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-edit #editor {
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-lock) - 142px) !important;
+    overflow: visible !important;
+}
+body.page-post-edit .ql-editor {
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-lock) - 184px) !important;
+    overflow: visible !important;
+}
+@media (max-width: 560px) {
+    body.page-post > .container,
+    body.page-post form.container {
+        width: min(1120px, calc(100% - var(--post-shell-mobile-x-lock))) !important;
+        padding: var(--post-card-pad-mobile-lock) !important;
+        border-radius: 24px !important;
+        margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+    }
+    body.page-post .top-bar.chrome-hidden ~ .container,
+    body.page-post .top-bar.chrome-hidden ~ form.container {
+        margin-top: 8px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: min(1120px, calc(100% - var(--post-shell-mobile-x-lock))) !important;
+        bottom: var(--post-action-bottom-lock) !important;
+    }
+    body.page-post .post-write-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger,
+    body.page-post .post-action-btn,
+    body.page-post-edit .form-actions .btn {
+        min-height: 44px !important;
+        height: 44px !important;
+        padding: 0 16px !important;
+        font-size: 14px !important;
+    }
+}
+
+/* ===== 2026-05-30 final requested post bottom action alignment ===== */
+body.page-post-view,
+body.page-post-edit {
+    --post-action-h-lock: 44px !important;
+    --post-action-bottom-lock: calc(8px + env(safe-area-inset-bottom)) !important;
+    --post-action-reserve-lock: calc(var(--post-action-h-lock) + var(--post-action-bottom-lock) + 10px) !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-view > .container,
+body.page-post-edit form.container {
+    margin-bottom: 0 !important;
+    padding-bottom: var(--post-action-reserve-lock) !important;
+    overflow: visible !important;
+}
+body.page-post-view .post-content-wrapper,
+body.page-post-edit .textarea-wrapper {
+    margin-bottom: 8px !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-view .post-content.ql-editor,
+body.page-post-view .post-content-wrapper {
+    overflow: visible !important;
+    max-width: 100% !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+}
+body.page-post-view .post-content-wrapper img,
+body.page-post-view .post-content.ql-editor img,
+body.page-post-view .post-content-wrapper video,
+body.page-post-view .post-content.ql-editor video,
+body.page-post-view .post-content-wrapper iframe,
+body.page-post-view .post-content.ql-editor iframe {
+    max-width: 100% !important;
+    height: auto !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: var(--post-action-bottom-lock) !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - var(--post-shell-x-lock, 28px))) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    z-index: 980 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > :first-child,
+body.page-post-edit .form-actions > :first-child {
+    margin-right: auto !important;
+}
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+body.page-post-edit .form-actions .btn,
+body.page-post .post-action-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger {
+    min-height: var(--post-action-h-lock) !important;
+    height: var(--post-action-h-lock) !important;
+    padding: 0 18px !important;
+    border-radius: 999px !important;
+    font-size: 14.5px !important;
+    line-height: 1 !important;
+    flex: 0 0 auto !important;
+}
+@media (max-width: 560px) {
+    body.page-post-view,
+    body.page-post-edit {
+        --post-action-h-lock: 42px !important;
+        --post-action-bottom-lock: calc(7px + env(safe-area-inset-bottom)) !important;
+        --post-action-reserve-lock: calc(var(--post-action-h-lock) + var(--post-action-bottom-lock) + 9px) !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: min(1120px, calc(100% - var(--post-shell-mobile-x-lock, 20px))) !important;
+        gap: 6px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn,
+    body.page-post .post-action-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger {
+        min-height: var(--post-action-h-lock) !important;
+        height: var(--post-action-h-lock) !important;
+        padding: 0 11px !important;
+        font-size: 13.5px !important;
+        flex: 0 0 auto !important;
+    }
+}
+
+/* ===== 2026-05-30 ql-container / bottom action overlap correction ===== */
+body.page-post {
+    --post-action-height-final: 42px;
+    --post-action-bottom-final: calc(10px + env(safe-area-inset-bottom));
+    --post-action-gap-final: 12px;
+    --post-action-reserve-final: calc(var(--post-action-height-final) + var(--post-action-bottom-final) + var(--post-action-gap-final));
+}
+
+/* Bottom actions float over the reserved bottom area, not over content. */
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: var(--post-action-bottom-final) !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - 32px)) !important;
+    max-width: min(1120px, calc(100% - 32px)) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    z-index: 980 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > :first-child,
+body.page-post-edit .form-actions > :first-child {
+    margin-right: auto !important;
+}
+
+/* Reserve space under the actual content box. Do not put this margin on ql-editor. */
+body.page-post-view .post-content-wrapper {
+    margin-bottom: var(--post-action-reserve-final) !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-edit .ql-container.ql-snow {
+    margin-bottom: var(--post-action-reserve-final) !important;
+}
+body.page-post-edit .ql-editor,
+body.page-post-edit .ql-editor.ql-blank {
+    margin-bottom: 0 !important;
+    padding-bottom: 12px !important;
+}
+body.page-post-view > .container,
+body.page-post-edit form.container {
+    padding-bottom: 14px !important;
+    margin-bottom: 0 !important;
+}
+body.page-post-edit .form-group.textarea-wrapper {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* Mobile: keep left button on the left, two action buttons on the right, with breathing room from screen edges. */
+@media (max-width: 560px) {
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: calc(100% - 32px) !important;
+        max-width: calc(100% - 32px) !important;
+        gap: 6px !important;
+        bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn,
+    body.page-post .post-write-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger,
+    body.page-post .post-action-btn {
+        min-height: 42px !important;
+        height: 42px !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+        font-size: 13.5px !important;
+        border-radius: 999px !important;
+    }
+    body.page-post .post-write-btn {
+        margin-right: 2px !important;
+    }
+}
+
+
+/* ===== 2026-05-30 requested editor/action final correction ===== */
+body.page-post {
+    --post-action-height-final-v2: 42px;
+    --post-action-bottom-final-v2: calc(12px + env(safe-area-inset-bottom));
+    --post-action-gap-final-v2: 12px;
+    --post-action-reserve-final-v2: calc(var(--post-action-height-final-v2) + var(--post-action-bottom-final-v2) + var(--post-action-gap-final-v2));
+}
+
+/* Fixed actions get real side margin and sit only over the reserved bottom gap. */
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: var(--post-action-bottom-final-v2) !important;
+    transform: translateX(-50%) !important;
+    width: min(1120px, calc(100% - 40px)) !important;
+    max-width: min(1120px, calc(100% - 40px)) !important;
+    height: var(--post-action-height-final-v2) !important;
+    min-height: var(--post-action-height-final-v2) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    z-index: 980 !important;
+    box-sizing: border-box !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > :first-child,
+body.page-post-edit .form-actions > :first-child {
+    margin-right: auto !important;
+}
+
+/* Do not let the fixed actions cover post/editor content. Reserve space on the outer content box. */
+body.page-post-view > .container,
+body.page-post-edit form.container {
+    padding-bottom: 14px !important;
+    margin-bottom: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-view .post-content-wrapper {
+    min-height: min(80dvh, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final-v2) - 130px)) !important;
+    margin-bottom: var(--post-action-reserve-final-v2) !important;
+    padding-bottom: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-view .post-content.ql-editor {
+    min-height: inherit !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 0 !important;
+    overflow: visible !important;
+}
+
+/* Create: keep the initial editor short enough to avoid first-screen scroll jitter. */
+body.page-post-create form.container {
+    min-height: 0 !important;
+    display: block !important;
+    padding-bottom: 14px !important;
+}
+body.page-post-create .form-group.textarea-wrapper {
+    display: block !important;
+    min-height: 0 !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-create .ql-toolbar.ql-snow {
+    position: static !important;
+    top: auto !important;
+    transition: none !important;
+}
+body.page-post-create .ql-container.ql-snow,
+body.page-post-create #editor {
+    height: auto !important;
+    min-height: clamp(260px, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final-v2) - 210px), 520px) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-final-v2) !important;
+}
+body.page-post-create .ql-editor {
+    min-height: clamp(220px, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final-v2) - 252px), 480px) !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 12px !important;
+}
+
+/* Update: short content still gets a stable viewport-sized editing area, but ends above the action bar. */
+body.page-post-update form.container {
+    min-height: 0 !important;
+    display: block !important;
+    padding-bottom: 14px !important;
+}
+body.page-post-update .form-group.textarea-wrapper {
+    display: block !important;
+    min-height: 0 !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-update .ql-toolbar.ql-snow {
+    position: sticky !important;
+    top: 8px !important;
+    z-index: 35 !important;
+    background: #fff !important;
+    transition: none !important;
+}
+body.page-post-update .top-bar:not(.chrome-hidden) ~ form .ql-toolbar.ql-snow {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px) !important;
+}
+body.page-post-update .ql-container.ql-snow,
+body.page-post-update #editor {
+    height: auto !important;
+    min-height: min(80dvh, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final-v2) - 145px)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-final-v2) !important;
+}
+body.page-post-update .ql-editor {
+    min-height: min(72dvh, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final-v2) - 190px)) !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 12px !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        width: calc(100% - 36px) !important;
+        max-width: calc(100% - 36px) !important;
+        bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+        gap: 6px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn,
+    body.page-post .post-write-btn {
+        min-height: var(--post-action-height-final-v2) !important;
+        height: var(--post-action-height-final-v2) !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+        font-size: 13.5px !important;
+    }
+}
+
+
+/* ===== 2026-05-30 final post keyboard/action/content correction ===== */
+body.page-post {
+    --post-action-side-margin: 20px;
+    --post-action-height-fixed: 42px;
+    --post-action-bottom-fixed: calc(12px + env(safe-area-inset-bottom));
+    --post-action-reserve-fixed: calc(var(--post-action-height-fixed) + var(--post-action-bottom-fixed) + 14px);
+}
+
+/* keep side margin on all fixed action bars */
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: var(--post-action-side-margin) !important;
+    right: var(--post-action-side-margin) !important;
+    bottom: var(--post-action-bottom-fixed) !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: none !important;
+    height: var(--post-action-height-fixed) !important;
+    min-height: var(--post-action-height-fixed) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    box-sizing: border-box !important;
+    z-index: 980 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: auto !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > :first-child,
+body.page-post-edit .form-actions > :first-child {
+    margin-right: auto !important;
+}
+
+/* view: no fake 80vh height. Only reserve the action gap below the real content. */
+body.page-post-view .post-content-wrapper {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-fixed) !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-view .post-content.ql-editor {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 8px !important;
+}
+
+/* create/update: reserve space on ql-container, not ql-editor; initial editor must fit above buttons. */
+body.page-post-edit .form-group.textarea-wrapper {
+    min-height: 0 !important;
+    height: auto !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    overflow: visible !important;
+}
+body.page-post-create .ql-container.ql-snow,
+body.page-post-create #editor {
+    min-height: clamp(190px, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-fixed) - 250px), 420px) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-fixed) !important;
+}
+body.page-post-create .ql-editor,
+body.page-post-create .ql-editor.ql-blank {
+    min-height: clamp(150px, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-fixed) - 292px), 380px) !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 10px !important;
+}
+body.page-post-update .ql-container.ql-snow,
+body.page-post-update #editor {
+    min-height: clamp(300px, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-fixed) - 150px), 720px) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-fixed) !important;
+}
+body.page-post-update .ql-editor {
+    min-height: clamp(250px, calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-fixed) - 195px), 680px) !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 10px !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post {
+        --post-action-side-margin: 18px;
+        --post-action-height-fixed: 40px;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        left: var(--post-action-side-margin) !important;
+        right: var(--post-action-side-margin) !important;
+        width: auto !important;
+        max-width: none !important;
+        gap: 6px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn,
+    body.page-post .post-write-btn {
+        height: var(--post-action-height-fixed) !important;
+        min-height: var(--post-action-height-fixed) !important;
+        padding-left: 11px !important;
+        padding-right: 11px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* ===== Final post create/update layout from user spec ===== */
+body.page-post {
+    --post-action-side-margin-final: max(18px, calc((100vw - 1120px) / 2 + 16px));
+    --post-action-height-final: 42px;
+    --post-action-bottom-final: calc(12px + env(safe-area-inset-bottom));
+    --post-action-reserve-final: calc(var(--post-action-height-final) + var(--post-action-bottom-final) + 14px);
+}
+
+/* Top bar must not change document layout when it shows/hides. */
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container,
+body.page-post .top-bar.chrome-visible ~ .container,
+body.page-post .top-bar.chrome-visible ~ form.container {
+    margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 12px) !important;
+}
+
+/* Fixed action bar: same visual width as post content, not squeezed in the center. */
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: var(--post-action-side-margin-final) !important;
+    right: var(--post-action-side-margin-final) !important;
+    bottom: var(--post-action-bottom-final) !important;
+    width: auto !important;
+    max-width: none !important;
+    height: var(--post-action-height-final) !important;
+    min-height: var(--post-action-height-final) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    z-index: 980 !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: auto !important;
+    min-height: var(--post-action-height-final) !important;
+    height: var(--post-action-height-final) !important;
+    padding: 0 14px !important;
+    font-size: 14px !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > :first-child,
+body.page-post-edit .form-actions > :first-child {
+    margin-right: auto !important;
+}
+
+/* View: content ends naturally, then leaves only the fixed button reserve. */
+body.page-post-view .post-content-wrapper {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-final) !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-view .post-content.ql-editor {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 8px !important;
+}
+
+/* Create: container may fill the screen, but ql-container ends above action bar. */
+body.page-post-create {
+    overflow: hidden !important;
+}
+body.page-post-create form.container {
+    height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 24px) !important;
+    min-height: 0 !important;
+    max-height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 24px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-create form.container > .form-group:first-child {
+    flex: 0 0 auto !important;
+}
+body.page-post-create .form-group.textarea-wrapper {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+body.page-post-create .ql-toolbar.ql-snow {
+    flex: 0 0 auto !important;
+    position: static !important;
+}
+body.page-post-create .ql-container.ql-snow,
+body.page-post-create #editor {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    margin-bottom: var(--post-action-reserve-final) !important;
+}
+body.page-post-create .ql-editor,
+body.page-post-create .ql-editor.ql-blank {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: auto !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 10px !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Update: keep editing area above fixed actions and toolbar visible. */
+body.page-post-update .ql-container.ql-snow,
+body.page-post-update #editor {
+    min-height: min(72svh, calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final) - 145px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-final) !important;
+}
+body.page-post-update .ql-editor {
+    min-height: min(64svh, calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final) - 190px)) !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 10px !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post {
+        --post-action-side-margin-final: 18px;
+        --post-action-height-final: 40px;
+        --post-action-bottom-final: calc(10px + env(safe-area-inset-bottom));
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        left: var(--post-action-side-margin-final) !important;
+        right: var(--post-action-side-margin-final) !important;
+        gap: 6px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions > *,
+    body.page-post-edit .form-actions > * {
+        padding: 0 11px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* ===== 2026-05-31 final requested post list scale + edit focus stability ===== */
+/* Web post list was visually too small. Enlarge only desktop/tablet widths; keep mobile spacing intact. */
+@media (min-width: 900px) {
+    body.page-post:not(.page-post-view):not(.page-post-edit) > .container {
+        width: min(1280px, calc(100% - 44px)) !important;
+        max-width: 1280px !important;
+        padding: 24px !important;
+        border-radius: 32px !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-top-bar {
+        margin-bottom: 18px !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-list {
+        gap: 12px !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-box {
+        min-height: 92px !important;
+        border-radius: 20px !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .thumbnail {
+        min-width: 96px !important;
+        max-width: 96px !important;
+        height: 72px !important;
+        margin-left: 12px !important;
+        border-radius: 16px !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .thumbnail img {
+        width: 96px !important;
+        height: 72px !important;
+        object-fit: cover !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-info {
+        padding: 16px 18px !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-title {
+        font-size: 1.22rem !important;
+        line-height: 1.28 !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-meta {
+        margin-top: 7px !important;
+        font-size: .96rem !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-count-heading {
+        font-size: 16px !important;
+    }
+    body.page-post:not(.page-post-view):not(.page-post-edit) .post-write-btn {
+        min-height: 46px !important;
+        height: 46px !important;
+        padding: 0 22px !important;
+        font-size: 15px !important;
+    }
+}
+
+/* Remove programmatic-looking jumps when focusing Quill in the update screen. */
+body.page-post-update {
+    scroll-behavior: auto !important;
+}
+body.page-post-update .ql-container.ql-snow,
+body.page-post-update .ql-editor {
+    scroll-margin-top: 0 !important;
+    scroll-margin-bottom: 0 !important;
+    overscroll-behavior: contain !important;
+}
+
+
+/* ===== 2026-05-31 create post title/editor final adjustment ===== */
+/* Create page: keep the container layout, but do not let an empty Quill area consume the whole card. */
+body.page-post-create #post-form {
+    padding-bottom: calc(74px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-create .form-group.textarea-wrapper {
+    margin-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+body.page-post-create .ql-container.ql-snow,
+body.page-post-create #editor {
+    height: auto !important;
+    min-height: clamp(220px, 38svh, 360px) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+}
+
+body.page-post-create .ql-editor,
+body.page-post-create #editor .ql-editor {
+    height: auto !important;
+    min-height: clamp(220px, 38svh, 360px) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 18px !important;
+}
+
+/* When content grows, the page may grow naturally; keep the bottom action overlap space below the Quill container. */
+body.page-post-create .ql-container.ql-snow:has(.ql-editor:not(.ql-blank)),
+body.page-post-create #editor:has(.ql-editor:not(.ql-blank)) {
+    margin-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-create #post-form {
+        padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    }
+    body.page-post-create .form-group.textarea-wrapper {
+        margin-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    }
+    body.page-post-create .ql-container.ql-snow,
+    body.page-post-create #editor,
+    body.page-post-create .ql-editor,
+    body.page-post-create #editor .ql-editor {
+        min-height: clamp(190px, 34svh, 300px) !important;
+    }
+}
+
+/* ===== 2026-05-31 create editor focus/height correction =====
+   The create page container may fill the screen, but the Quill field itself
+   must stop above the fixed action buttons. The focus background should fill
+   the whole input area, not only the upper part of .ql-editor. */
+body.page-post-create {
+    overflow: hidden !important;
+}
+
+body.page-post-create #post-form,
+body.page-post-create form.container {
+    height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 24px) !important;
+    min-height: 0 !important;
+    max-height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 24px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-create #post-form > .form-group:first-child,
+body.page-post-create form.container > .form-group:first-child {
+    flex: 0 0 auto !important;
+}
+
+body.page-post-create .form-group.textarea-wrapper {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    margin-bottom: var(--post-action-reserve-final) !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-create .ql-toolbar.ql-snow {
+    flex: 0 0 auto !important;
+    position: static !important;
+}
+
+body.page-post-create .ql-container.ql-snow,
+body.page-post-create #editor {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    margin-bottom: 0 !important;
+    background: #f8fbff !important;
+}
+
+body.page-post-create .ql-container.ql-snow:focus-within,
+body.page-post-create #editor:focus-within {
+    background: #f8fbff !important;
+}
+
+body.page-post-create .ql-container.ql-snow .ql-editor,
+body.page-post-create #editor .ql-editor,
+body.page-post-create .ql-container.ql-snow .ql-editor.ql-blank,
+body.page-post-create #editor .ql-editor.ql-blank {
+    min-height: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    background: #f8fbff !important;
+    box-sizing: border-box !important;
+    padding-bottom: 18px !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 560px) {
+    body.page-post-create #post-form,
+    body.page-post-create form.container {
+        height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 18px) !important;
+        max-height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 18px) !important;
+    }
+
+    body.page-post-create .form-group.textarea-wrapper {
+        margin-bottom: var(--post-action-reserve-final) !important;
+    }
+}
+
+/* ===== 2026-05-31 unify create/update post editor layout =====
+   등록과 수정은 edit_post.html 하나를 같이 사용한다.
+   수정 화면 레이아웃을 기준으로 등록 화면의 별도 height/overflow 보정을 되돌려
+   두 화면이 같은 크기, 같은 스크롤 흐름, 같은 하단 액션 여백을 갖도록 한다. */
+body.page-post-create {
+    overflow: auto !important;
+}
+
+body.page-post-create #post-form,
+body.page-post-create form.container {
+    height: auto !important;
+    min-height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 22px) !important;
+    max-height: none !important;
+    display: block !important;
+    overflow: visible !important;
+    padding-bottom: var(--post-action-reserve-final, 72px) !important;
+}
+
+body.page-post-create .form-group.textarea-wrapper {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-create .ql-toolbar.ql-snow {
+    position: static !important;
+    top: auto !important;
+}
+
+body.page-post-create .ql-container.ql-snow,
+body.page-post-create #editor {
+    min-height: min(72svh, calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final, 72px) - 145px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: var(--post-action-reserve-final, 72px) !important;
+    background: #fff !important;
+}
+
+body.page-post-create .ql-container.ql-snow .ql-editor,
+body.page-post-create #editor .ql-editor,
+body.page-post-create .ql-container.ql-snow .ql-editor.ql-blank,
+body.page-post-create #editor .ql-editor.ql-blank {
+    min-height: min(64svh, calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - var(--post-action-reserve-final, 72px) - 190px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 10px !important;
+    background: transparent !important;
+}
+
+body.page-post-create .form-actions,
+body.page-post-update .form-actions {
+    width: min(1120px, calc(100% - 40px)) !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-create #post-form,
+    body.page-post-create form.container {
+        min-height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 18px) !important;
+        padding-bottom: var(--post-action-reserve-final, 72px) !important;
+    }
+    body.page-post-create .ql-container.ql-snow,
+    body.page-post-create #editor {
+        margin-bottom: var(--post-action-reserve-final, 72px) !important;
+    }
+    body.page-post-create .form-actions,
+    body.page-post-update .form-actions {
+        width: auto !important;
+        left: var(--post-action-side-margin-final, 18px) !important;
+        right: var(--post-action-side-margin-final, 18px) !important;
+    }
+}
+
+/* ===== 2026-05-31 final requested Quill/container/action alignment =====
+   - ql-container and ql-editor use the same visual height/background.
+   - fixed actions stay inside the post shell and never overflow right.
+   - post card/container reaches the viewport bottom; editor stops above actions.
+   - bottom reserve is compact, not overly large. */
+body.page-post {
+    --post-shell-max-final2: 1120px;
+    --post-shell-gap-final2: 28px;
+    --post-card-top-final2: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px);
+    --post-card-bottom-final2: 10px;
+    --post-card-pad-final2: 18px;
+    --post-action-h-final2: 42px;
+    --post-action-bottom-final2: calc(10px + env(safe-area-inset-bottom));
+    --post-action-reserve-final2: calc(var(--post-action-h-final2) + var(--post-action-bottom-final2) + 8px);
+    --post-action-side-final2: max(18px, calc((100vw - var(--post-shell-max-final2)) / 2 + var(--post-card-pad-final2)));
+}
+
+body.page-post > .container,
+body.page-post form.container {
+    width: min(var(--post-shell-max-final2), calc(100% - var(--post-shell-gap-final2))) !important;
+    max-width: var(--post-shell-max-final2) !important;
+    margin: var(--post-card-top-final2) auto var(--post-card-bottom-final2) !important;
+    padding: var(--post-card-pad-final2) !important;
+    border-radius: 30px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+
+body.page-post .top-bar.chrome-hidden ~ .container,
+body.page-post .top-bar.chrome-visible ~ .container,
+body.page-post .top-bar.chrome-hidden ~ form.container,
+body.page-post .top-bar.chrome-visible ~ form.container {
+    margin-top: var(--post-card-top-final2) !important;
+}
+
+/* The fixed bottom actions align with the inner post card, so they cannot leak off-screen. */
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    position: fixed !important;
+    left: var(--post-action-side-final2) !important;
+    right: var(--post-action-side-final2) !important;
+    bottom: var(--post-action-bottom-final2) !important;
+    width: auto !important;
+    max-width: none !important;
+    height: var(--post-action-h-final2) !important;
+    min-height: var(--post-action-h-final2) !important;
+    transform: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    z-index: 980 !important;
+    box-sizing: border-box !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+body.page-post-view .form-actions.post-bottom-actions > :first-child,
+body.page-post-edit .form-actions > :first-child {
+    margin-right: auto !important;
+}
+body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+body.page-post-edit .form-actions .btn,
+body.page-post .post-write-btn,
+body.page-post .btn-main,
+body.page-post .btn-secondary,
+body.page-post .btn-danger,
+body.page-post .post-action-btn {
+    min-height: var(--post-action-h-final2) !important;
+    height: var(--post-action-h-final2) !important;
+    padding: 0 16px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+}
+
+/* Short detail posts: the white container reaches the bottom, while content itself stays natural. */
+body.page-post-view > .container {
+    min-height: calc(100svh - var(--post-card-top-final2) - var(--post-card-bottom-final2)) !important;
+    padding-bottom: calc(var(--post-card-pad-final2) + var(--post-action-reserve-final2)) !important;
+    margin-bottom: var(--post-card-bottom-final2) !important;
+}
+body.page-post-view .post-content-wrapper,
+body.page-post-view .post-content.ql-editor {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 8px !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+
+/* Create/update: container fills the viewport, but the Quill field ends above the bottom actions. */
+body.page-post-edit form.container,
+body.page-post-create form.container,
+body.page-post-update form.container,
+body.page-post-edit #post-form,
+body.page-post-create #post-form,
+body.page-post-update #post-form {
+    min-height: calc(100svh - var(--post-card-top-final2) - var(--post-card-bottom-final2)) !important;
+    height: calc(100svh - var(--post-card-top-final2) - var(--post-card-bottom-final2)) !important;
+    max-height: calc(100svh - var(--post-card-top-final2) - var(--post-card-bottom-final2)) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    padding-bottom: var(--post-card-pad-final2) !important;
+    margin-bottom: var(--post-card-bottom-final2) !important;
+    box-sizing: border-box !important;
+}
+body.page-post-edit form.container > .form-group:first-child,
+body.page-post-create form.container > .form-group:first-child,
+body.page-post-update form.container > .form-group:first-child {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+}
+body.page-post-edit .form-group.textarea-wrapper,
+body.page-post-create .form-group.textarea-wrapper,
+body.page-post-update .form-group.textarea-wrapper {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+body.page-post-edit .ql-toolbar.ql-snow,
+body.page-post-create .ql-toolbar.ql-snow,
+body.page-post-update .ql-toolbar.ql-snow {
+    flex: 0 0 auto !important;
+    position: static !important;
+    top: auto !important;
+    transform: none !important;
+    z-index: auto !important;
+    background: #fff !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-create .ql-container.ql-snow,
+body.page-post-update .ql-container.ql-snow,
+body.page-post-edit #editor,
+body.page-post-create #editor,
+body.page-post-update #editor {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    margin: 0 0 var(--post-action-reserve-final2) !important;
+    background: #f8fbff !important;
+    box-sizing: border-box !important;
+    border-radius: 0 0 16px 16px !important;
+}
+body.page-post-edit .ql-container.ql-snow .ql-editor,
+body.page-post-create .ql-container.ql-snow .ql-editor,
+body.page-post-update .ql-container.ql-snow .ql-editor,
+body.page-post-edit #editor .ql-editor,
+body.page-post-create #editor .ql-editor,
+body.page-post-update #editor .ql-editor,
+body.page-post-edit .ql-container.ql-snow .ql-editor.ql-blank,
+body.page-post-create .ql-container.ql-snow .ql-editor.ql-blank,
+body.page-post-update .ql-container.ql-snow .ql-editor.ql-blank {
+    min-height: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    margin: 0 !important;
+    padding: 16px 18px 12px !important;
+    background: #f8fbff !important;
+    box-sizing: border-box !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 560px) {
+    body.page-post {
+        --post-shell-gap-final2: 20px;
+        --post-card-pad-final2: 12px;
+        --post-card-bottom-final2: 8px;
+        --post-action-h-final2: 40px;
+        --post-action-bottom-final2: calc(10px + env(safe-area-inset-bottom));
+        --post-action-side-final2: 16px;
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions {
+        gap: 6px !important;
+    }
+    body.page-post-view .form-actions.post-bottom-actions .btn-secondary,
+    body.page-post-view .form-actions.post-bottom-actions .post-action-btn,
+    body.page-post-edit .form-actions .btn,
+    body.page-post .post-write-btn,
+    body.page-post .btn-main,
+    body.page-post .btn-secondary,
+    body.page-post .btn-danger,
+    body.page-post .post-action-btn {
+        min-height: var(--post-action-h-final2) !important;
+        height: var(--post-action-h-final2) !important;
+        padding: 0 11px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* ===== 2026-05-30 final Quill editor no-inner-scroll correction =====
+   The Quill content area must grow with content. The page/container scrolls;
+   ql-container and ql-editor must not create their own inner scrollbar. */
+body.page-post-edit form.container {
+    /* The card may grow with long content; buttons float above the reserved inner space. */
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 20px) !important;
+    overflow: visible !important;
+    padding-bottom: calc(var(--post-action-height-final, 42px) + var(--post-action-bottom-final, calc(10px + env(safe-area-inset-bottom))) + 18px) !important;
+    margin-bottom: 0 !important;
+}
+
+body.page-post-edit .form-group.textarea-wrapper {
+    display: block !important;
+    flex: initial !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-edit #editor,
+body.page-post-edit .ql-container.ql-snow {
+    display: block !important;
+    height: auto !important;
+    min-height: 420px !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    margin-bottom: 0 !important;
+    box-sizing: border-box !important;
+}
+
+body.page-post-edit .ql-container.ql-snow .ql-editor,
+body.page-post-edit .ql-editor,
+body.page-post-edit .ql-editor.ql-blank {
+    height: auto !important;
+    min-height: 420px !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    margin: 0 !important;
+    padding-bottom: 18px !important;
+    box-sizing: border-box !important;
+}
+
+/* Preserve inner breathing room between editor content and the card/buttons,
+   without creating an outside gap under the card. */
+body.page-post-edit .ql-container.ql-snow::after {
+    content: "";
+    display: block;
+    height: calc(var(--post-action-height-final, 42px) + var(--post-action-bottom-final, calc(10px + env(safe-area-inset-bottom))) + 10px);
+    pointer-events: none;
+}
+
+body.page-post-edit .form-actions {
+    width: min(1120px, calc(100% - 32px)) !important;
+    max-width: min(1120px, calc(100% - 32px)) !important;
+    bottom: var(--post-action-bottom-final, calc(10px + env(safe-area-inset-bottom))) !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-edit form.container {
+        min-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 16px) !important;
+        padding-bottom: calc(var(--post-action-height-final, 42px) + var(--post-action-bottom-final, calc(10px + env(safe-area-inset-bottom))) + 16px) !important;
+    }
+    body.page-post-edit #editor,
+    body.page-post-edit .ql-container.ql-snow,
+    body.page-post-edit .ql-container.ql-snow .ql-editor,
+    body.page-post-edit .ql-editor,
+    body.page-post-edit .ql-editor.ql-blank {
+        min-height: 360px !important;
+    }
+    body.page-post-edit .form-actions {
+        width: calc(100% - 32px) !important;
+        max-width: calc(100% - 32px) !important;
+    }
+}
+
+/* ===== 2026-05-30 Quill grow-with-content final correction =====
+   - Quill editor never has its own scrollbar.
+   - The post card/container grows with the editor content.
+   - Bottom action buttons stay inside the same horizontal bounds as the card.
+   - The card reserves only the button height at the bottom; no excessive outside gap. */
+body.page-post {
+    --post-final-max: 1120px;
+    --post-final-gap: 28px;
+    --post-final-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 8px);
+    --post-final-bottom: 8px;
+    --post-final-pad: 18px;
+    --post-final-action-h: 42px;
+    --post-final-action-bottom: calc(10px + env(safe-area-inset-bottom));
+    --post-final-action-reserve: calc(var(--post-final-action-h) + var(--post-final-action-bottom) + 12px);
+    --post-final-editor-min: clamp(360px, calc(100svh - var(--post-final-top) - 180px), 720px);
+}
+
+body.page-post > .container,
+body.page-post form.container {
+    width: min(var(--post-final-max), calc(100% - var(--post-final-gap))) !important;
+    max-width: var(--post-final-max) !important;
+    margin: var(--post-final-top) auto var(--post-final-bottom) !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+
+body.page-post-edit form.container,
+body.page-post-create form.container,
+body.page-post-update form.container,
+body.page-post-edit #post-form,
+body.page-post-create #post-form,
+body.page-post-update #post-form {
+    min-height: calc(100svh - var(--post-final-top) - var(--post-final-bottom)) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    padding-bottom: calc(var(--post-final-pad) + var(--post-final-action-reserve)) !important;
+    margin-bottom: var(--post-final-bottom) !important;
+}
+
+body.page-post-edit .form-group.textarea-wrapper,
+body.page-post-create .form-group.textarea-wrapper,
+body.page-post-update .form-group.textarea-wrapper {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.page-post-edit .ql-toolbar.ql-snow,
+body.page-post-create .ql-toolbar.ql-snow,
+body.page-post-update .ql-toolbar.ql-snow {
+    position: static !important;
+    top: auto !important;
+    transform: none !important;
+    flex: none !important;
+    background: #fff !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+
+body.page-post-edit #editor,
+body.page-post-create #editor,
+body.page-post-update #editor,
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-create .ql-container.ql-snow,
+body.page-post-update .ql-container.ql-snow {
+    display: block !important;
+    height: auto !important;
+    min-height: var(--post-final-editor-min) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    margin: 0 !important;
+    background: #f8fbff !important;
+    border-radius: 0 0 16px 16px !important;
+    box-sizing: border-box !important;
+}
+
+body.page-post-edit #editor .ql-editor,
+body.page-post-create #editor .ql-editor,
+body.page-post-update #editor .ql-editor,
+body.page-post-edit .ql-container.ql-snow .ql-editor,
+body.page-post-create .ql-container.ql-snow .ql-editor,
+body.page-post-update .ql-container.ql-snow .ql-editor,
+body.page-post-edit .ql-editor.ql-blank,
+body.page-post-create .ql-editor.ql-blank,
+body.page-post-update .ql-editor.ql-blank {
+    display: block !important;
+    min-height: var(--post-final-editor-min) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    margin: 0 !important;
+    padding: 16px 18px 18px !important;
+    background: #f8fbff !important;
+    box-sizing: border-box !important;
+}
+
+/* Keep a small inner breathing space between the end of Quill content and the card/actions.
+   This grows inside the editor area, not as an external gap below the card. */
+body.page-post-edit .ql-container.ql-snow::after,
+body.page-post-create .ql-container.ql-snow::after,
+body.page-post-update .ql-container.ql-snow::after {
+    content: "" !important;
+    display: block !important;
+    height: var(--post-final-action-reserve) !important;
+    pointer-events: none !important;
+}
+
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions,
+body.page-post-create .form-actions,
+body.page-post-update .form-actions {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: var(--post-final-action-bottom) !important;
+    width: min(var(--post-final-max), calc(100% - var(--post-final-gap))) !important;
+    max-width: var(--post-final-max) !important;
+    height: var(--post-final-action-h) !important;
+    min-height: var(--post-final-action-h) !important;
+    transform: translateX(-50%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    padding: 0 var(--post-final-pad) !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    z-index: 980 !important;
+}
+
+body.page-post-view .form-actions.post-bottom-actions > *,
+body.page-post-edit .form-actions > *,
+body.page-post-create .form-actions > *,
+body.page-post-update .form-actions > * {
+    pointer-events: auto !important;
+    flex: 0 0 auto !important;
+}
+
+body.page-post-view .form-actions.post-bottom-actions > :first-child,
+body.page-post-edit .form-actions > :first-child,
+body.page-post-create .form-actions > :first-child,
+body.page-post-update .form-actions > :first-child {
+    margin-right: auto !important;
+}
+
+body.page-post-view > .container {
+    min-height: calc(100svh - var(--post-final-top) - var(--post-final-bottom)) !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding-bottom: calc(var(--post-final-pad) + var(--post-final-action-reserve)) !important;
+}
+
+body.page-post-view .post-content-wrapper,
+body.page-post-view .post-content.ql-editor {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post {
+        --post-final-gap: 20px;
+        --post-final-pad: 12px;
+        --post-final-action-h: 40px;
+        --post-final-editor-min: clamp(300px, calc(100svh - var(--post-final-top) - 160px), 560px);
+    }
+    body.page-post-view .form-actions.post-bottom-actions,
+    body.page-post-edit .form-actions,
+    body.page-post-create .form-actions,
+    body.page-post-update .form-actions {
+        gap: 6px !important;
+        padding-left: var(--post-final-pad) !important;
+        padding-right: var(--post-final-pad) !important;
+    }
+}
+
+/* ===== 2026-05-30 final Quill editor/container height alignment =====
+   Goal: #editor(.ql-container) and .ql-editor must visually occupy the same area.
+   The breathing space belongs after #editor, not inside a shorter .ql-editor. */
+body.page-post-edit,
+body.page-post-create,
+body.page-post-update {
+    --post-quill-bottom-gap: 100px;
+    --post-quill-min: clamp(420px, calc(100svh - var(--post-final-top, 72px) - 260px), 860px);
+}
+
+body.page-post-edit .form-group.textarea-wrapper,
+body.page-post-create .form-group.textarea-wrapper,
+body.page-post-update .form-group.textarea-wrapper {
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+body.page-post-edit #editor,
+body.page-post-create #editor,
+body.page-post-update #editor,
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-create .ql-container.ql-snow,
+body.page-post-update .ql-container.ql-snow {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: var(--post-quill-min) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    margin: 0 0 var(--post-quill-bottom-gap) 0 !important;
+    padding: 0 !important;
+    background: #f8fbff !important;
+    border-radius: 0 0 16px 16px !important;
+    box-sizing: border-box !important;
+}
+
+body.page-post-edit #editor::after,
+body.page-post-create #editor::after,
+body.page-post-update #editor::after,
+body.page-post-edit .ql-container.ql-snow::after,
+body.page-post-create .ql-container.ql-snow::after,
+body.page-post-update .ql-container.ql-snow::after {
+    content: none !important;
+    display: none !important;
+    height: 0 !important;
+}
+
+body.page-post-edit #editor > .ql-editor,
+body.page-post-create #editor > .ql-editor,
+body.page-post-update #editor > .ql-editor,
+body.page-post-edit .ql-container.ql-snow > .ql-editor,
+body.page-post-create .ql-container.ql-snow > .ql-editor,
+body.page-post-update .ql-container.ql-snow > .ql-editor,
+body.page-post-edit .ql-editor.ql-blank,
+body.page-post-create .ql-editor.ql-blank,
+body.page-post-update .ql-editor.ql-blank {
+    flex: 1 1 auto !important;
+    display: block !important;
+    min-height: var(--post-quill-min) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    margin: 0 !important;
+    padding: 16px 18px 18px !important;
+    background: #f8fbff !important;
+    box-sizing: border-box !important;
+}
+
+body.page-post-edit #editor > .ql-editor.ql-blank,
+body.page-post-create #editor > .ql-editor.ql-blank,
+body.page-post-update #editor > .ql-editor.ql-blank {
+    min-height: var(--post-quill-min) !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-edit,
+    body.page-post-create,
+    body.page-post-update {
+        --post-quill-bottom-gap: 88px;
+        --post-quill-min: clamp(300px, calc(100svh - var(--post-final-top, 64px) - 230px), 620px);
+    }
+}
+
+/* ===== 2026-05-30 final post editor bottom gap correction =====
+   The editor/wrapper should extend close to the fixed bottom action buttons.
+   Keep only a small breathing gap above the buttons, not a large empty area. */
+body.page-post-edit,
+body.page-post-create,
+body.page-post-update {
+    --post-quill-bottom-gap: 48px !important;
+    --post-quill-min: clamp(520px, calc(100svh - var(--post-final-top, 72px) - 188px), 980px) !important;
+}
+
+body.page-post-edit .form-group.textarea-wrapper,
+body.page-post-create .form-group.textarea-wrapper,
+body.page-post-update .form-group.textarea-wrapper {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-edit #editor,
+body.page-post-create #editor,
+body.page-post-update #editor,
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-create .ql-container.ql-snow,
+body.page-post-update .ql-container.ql-snow {
+    margin-bottom: var(--post-quill-bottom-gap) !important;
+}
+
+body.page-post-edit #editor > .ql-editor,
+body.page-post-create #editor > .ql-editor,
+body.page-post-update #editor > .ql-editor,
+body.page-post-edit .ql-container.ql-snow > .ql-editor,
+body.page-post-create .ql-container.ql-snow > .ql-editor,
+body.page-post-update .ql-container.ql-snow > .ql-editor {
+    min-height: var(--post-quill-min) !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-edit,
+    body.page-post-create,
+    body.page-post-update {
+        --post-quill-bottom-gap: 42px !important;
+        --post-quill-min: clamp(360px, calc(100svh - var(--post-final-top, 64px) - 172px), 720px) !important;
+    }
+}
+
+/* ===== 2026-05-30 tighter editor-to-actions spacing =====
+   Keep Quill inner editor and outer container the same visual height,
+   but let the editor reach much closer to the fixed bottom actions.
+   Content still grows the page; no inner editor scroll. */
+body.page-post-edit,
+body.page-post-create,
+body.page-post-update {
+    --post-quill-bottom-gap: 10px !important;
+    --post-quill-min: max(420px, calc(100svh - var(--post-final-top, 72px) - 145px)) !important;
+}
+
+body.page-post-edit > form.container,
+body.page-post-create > form.container,
+body.page-post-update > form.container,
+body.page-post-edit .container,
+body.page-post-create .container,
+body.page-post-update .container {
+    min-height: calc(100svh - var(--post-final-top, 72px) - var(--post-final-bottom, 8px)) !important;
+    padding-bottom: calc(var(--post-final-action-h, 42px) + var(--post-final-action-bottom, 10px) + 8px) !important;
+}
+
+body.page-post-edit .form-group.textarea-wrapper,
+body.page-post-create .form-group.textarea-wrapper,
+body.page-post-update .form-group.textarea-wrapper {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-edit #editor,
+body.page-post-create #editor,
+body.page-post-update #editor,
+body.page-post-edit .ql-container.ql-snow,
+body.page-post-create .ql-container.ql-snow,
+body.page-post-update .ql-container.ql-snow {
+    min-height: var(--post-quill-min) !important;
+    height: auto !important;
+    max-height: none !important;
+    margin-bottom: var(--post-quill-bottom-gap) !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+}
+
+body.page-post-edit #editor > .ql-editor,
+body.page-post-create #editor > .ql-editor,
+body.page-post-update #editor > .ql-editor,
+body.page-post-edit .ql-container.ql-snow > .ql-editor,
+body.page-post-create .ql-container.ql-snow > .ql-editor,
+body.page-post-update .ql-container.ql-snow > .ql-editor,
+body.page-post-edit .ql-editor.ql-blank,
+body.page-post-create .ql-editor.ql-blank,
+body.page-post-update .ql-editor.ql-blank {
+    min-height: var(--post-quill-min) !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-edit,
+    body.page-post-create,
+    body.page-post-update {
+        --post-quill-bottom-gap: 8px !important;
+        --post-quill-min: max(340px, calc(100svh - var(--post-final-top, 64px) - 130px)) !important;
+    }
+    body.page-post-edit > form.container,
+    body.page-post-create > form.container,
+    body.page-post-update > form.container,
+    body.page-post-edit .container,
+    body.page-post-create .container,
+    body.page-post-update .container {
+        padding-bottom: calc(var(--post-final-action-h, 40px) + var(--post-final-action-bottom, 10px) + 6px) !important;
+    }
+}
+
+/* ===== Final post detail short-content fill fix =====
+   Short posts should still have the white container reach the bottom area.
+   The content stays at the top, while the card/body area fills the viewport. */
+body.page-post-view {
+    min-height: 100svh !important;
+    padding-bottom: 0 !important;
+}
+
+body.page-post-view > .container {
+    min-height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 10px) !important;
+    margin-bottom: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+}
+
+body.page-post-view .form-group.textarea-wrapper {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    margin-bottom: 0 !important;
+}
+
+body.page-post-view .post-content-wrapper {
+    flex: 1 1 auto !important;
+    min-height: 100% !important;
+    padding-bottom: calc(var(--post-final-action-h, 42px) + var(--post-final-action-bottom, 10px) + 14px) !important;
+    box-sizing: border-box !important;
+}
+
+body.page-post-view .post-content.ql-editor {
+    min-height: 0 !important;
+}
+
+body.page-post-view .form-actions.post-bottom-actions {
+    margin-bottom: 0 !important;
+}
+
+@media (max-width: 560px) {
+    body.page-post-view > .container {
+        min-height: calc(100svh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 8px) !important;
+    }
+    body.page-post-view .post-content-wrapper {
+        padding-bottom: calc(var(--post-final-action-h, 40px) + var(--post-final-action-bottom, 10px) + 10px) !important;
+    }
+}
