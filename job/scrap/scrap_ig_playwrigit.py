@@ -57,11 +57,10 @@ ACCOUNTS = [
 ]
 # ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
 
-TEST_LINKS = [
+
+ERROR_LINKS = [
 
 ]
-
-
 
 
 
@@ -192,7 +191,7 @@ async def ensure_login(page):
 async def go_to_profile(page, handle: str):
     url = f"https://www.instagram.com/{handle.strip('/')}/"
     await page.goto(url, wait_until="domcontentloaded")
-    await page.wait_for_selector("main", timeout=15000)
+    await page.wait_for_selector("main", timeout=30000)
 
 
 POST_PREFIXES = {"p", "reel", "tv", "stories"}  # IGTV 포함(필요 없으면 제거)
@@ -261,7 +260,6 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
 
                 url = "https://chickchick.kr/func/scrap-posts?urls="+origin_href
                 res = requests.get(url)
-                data = res.json()
                 try:
                     data = res.json()
                 except ValueError:  # JSONDecodeError도 ValueError 하위
@@ -647,17 +645,22 @@ async def extract_media_from_post(page, url: str):
 
     dom_video_srcs = []
     for i in range(n_vid):
-        v = vids.nth(i)
-        # 2) video src가 안 박히는 경우가 많아서 두 군데를 봄
-        vsrc = await v.get_attribute("src")
-        if not vsrc or vsrc.startswith("blob:"):
-            # <video><source src="..."></source></video> 케이스
-            src_el = v.locator("source").first
-            if await src_el.count():
-                vsrc = await src_el.get_attribute("src")
+        try:
+            v = vids.nth(i)
+            # 2) video src가 안 박히는 경우가 많아서 두 군데를 봄
+            vsrc = await v.get_attribute("src")
+            if not vsrc or vsrc.startswith("blob:"):
+                # <video><source src="..."></source></video> 케이스
+                src_el = v.locator("source").first
+                if await src_el.count():
+                    vsrc = await src_el.get_attribute("src")
 
-        if vsrc and vsrc.startswith("http"):
-            dom_video_srcs.append(vsrc)
+            if vsrc and vsrc.startswith("http"):
+                dom_video_srcs.append(vsrc)
+        except Exception as e:
+            print(f"[ERROR-3-0] video src 추출 실패 index={i}: {e}")
+            ERROR_LINKS.append(url)
+            pass
 
     # DOM/네트워크 합치고, 최종적으로 CDN 규칙으로 필터
     candidates = set(dom_video_srcs) | good_video_urls
@@ -771,7 +774,7 @@ async def handle_account(page, account: str):
 
     if account == 'test':
         # 디버깅
-        links = TEST_LINKS
+        links = ERROR_LINKS
     else:
         # 링크 수집
         links = await collect_post_links(page)
@@ -804,18 +807,22 @@ async def handle_account(page, account: str):
         # None, False, 0, '', [], {}, 모두 여기로 들어옴
         # if idx == 5: # 디버깅 테스트용
         #     break
-        media = None
+        media = {
+            "post_url": link,
+            "images": [],
+            "videos": [],
+            "video_cdn": [],
+        }
         for attempt in range(3):
             try:
                 media = await extract_media_from_post(page, link)
                 break
             except Exception as e:
-                print(f"[ERROR-2] media 추출 실패-{attempt + 1}: {e}")
-
                 if attempt < 2:
                     await asyncio.sleep(2)
                 else:
-                    media = None
+                    print(f"[ERROR-2] media 추출 실패-{attempt + 1}: {e}")
+                    ERROR_LINKS.append(url)
 
             # print('media', media)
             # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
@@ -827,6 +834,7 @@ async def handle_account(page, account: str):
             )
         except Exception as e:
             print(f"[ERROR-3] 다운로드 실패 {e}")
+            ERROR_LINKS.append(url)
 
         # print('saved', saved)
         all_saved.extend(saved or [])
@@ -893,8 +901,6 @@ async def run_scrap():
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
 
-        # 디버깅
-        # await handle_account(context, 'test')
 
         for i, acc in enumerate(ACCOUNTS):
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
@@ -920,6 +926,10 @@ async def run_scrap():
                     await asyncio.sleep(DELAY_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
                 else:
                     await asyncio.sleep(30)
+
+        if len(ERROR_LINKS) > 0:
+            page = await context.new_page()
+            await handle_account(page, 'test')
 
         await context.close()
 
