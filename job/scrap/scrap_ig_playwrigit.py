@@ -830,7 +830,7 @@ async def handle_account(page, account: str):
         saved = None
         try:
             saved = await download_media(
-                media["images"], media["videos"], media["video_cdn"], dirs, account
+                media.get("images", []), media.get("videos", []), media["video_cdn"], dirs, account
             )
         except Exception as e:
             print(f"[ERROR-3] 다운로드 실패 {e}")
