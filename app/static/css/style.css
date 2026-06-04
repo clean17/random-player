@@ -217,3 +217,1221 @@ button:hover {
 .pagination a.active {
     background-color: #007BFF;
 }
+
+
+/* ===== App template shell / mobile-app style chrome ===== */
+:root {
+    --app-bg: #f5f7fb;
+    --app-surface: rgba(255, 255, 255, 0.86);
+    --app-surface-solid: #ffffff;
+    --app-text: #111827;
+    --app-muted: #64748b;
+    --app-border: rgba(15, 23, 42, 0.10);
+    --app-primary: #111827;
+    --app-primary-soft: #eef2ff;
+    --app-accent: #2563eb;
+    --app-danger: #ef4444;
+    --app-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+    --app-radius: 24px;
+    --app-header-height: 58px;
+}
+
+body.app-page,
+body.page-home,
+body.page-chat,
+body.page-stocks {
+    color: var(--app-text);
+    background:
+        radial-gradient(circle at 10% -10%, rgba(37, 99, 235, 0.14), transparent 34%),
+        radial-gradient(circle at 96% 4%, rgba(14, 165, 233, 0.12), transparent 30%),
+        var(--app-bg);
+}
+
+.app-header,
+.top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    height: calc(var(--app-header-height) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+    display: grid;
+    grid-template-columns: minmax(44px, 1fr) auto minmax(44px, 1fr);
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.78);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 12px 35px rgba(15, 23, 42, 0.08);
+    transition: transform .24s ease, opacity .22s ease, box-shadow .22s ease;
+}
+
+.top-bar.chrome-hidden,
+.app-header.chrome-hidden {
+    transform: translateY(calc(-1 * (var(--app-header-height) + env(safe-area-inset-top))));
+    opacity: 0.08;
+    box-shadow: none;
+}
+
+.app-header__left,
+.app-header__center,
+.app-header__right,
+.top-bar .back,
+.top-bar .logout,
+.top-bar .app-title {
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
+    z-index: 1;
+    min-width: 0;
+}
+
+.app-header__left,
+.top-bar .back { justify-self: start; }
+.app-header__center,
+.top-bar .app-title { justify-self: center; }
+.app-header__right,
+.top-bar .logout { justify-self: end; }
+
+.app-title,
+.app-header__center {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 56vw;
+    color: var(--app-text);
+}
+
+.app-back,
+.top-bar .back a,
+.app-icon-button,
+.app-menu-button,
+.top-bar .logout > button,
+.top-bar .logout > a {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0 12px;
+    margin: 0;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--app-text);
+    font-size: 14px;
+    font-weight: 750;
+    line-height: 1;
+    text-decoration: none;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+    cursor: pointer;
+}
+
+.app-back::before,
+.top-bar .back a::before {
+    content: "‹";
+    font-size: 25px;
+    line-height: 0;
+    transform: translateY(-1px);
+}
+
+.app-back:hover,
+.top-bar .back a:hover,
+.app-icon-button:hover,
+.app-menu-button:hover,
+.top-bar .logout > button:hover,
+.top-bar .logout > a:hover {
+    background: #ffffff;
+    color: var(--app-accent);
+}
+
+.app-user-menu,
+.top-bar .logout {
+    position: relative;
+}
+
+.app-menu-button,
+.top-bar .logout > button {
+    width: 40px;
+    padding: 0;
+    font-size: 18px;
+}
+
+.app-menu-panel,
+.top-bar .logout .app-menu-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 178px;
+    padding: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: var(--app-shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    display: none;
+}
+
+.app-user-menu.is-open .app-menu-panel,
+.top-bar .logout.is-open .app-menu-panel {
+    display: block;
+}
+
+.app-menu-panel a {
+    width: 100%;
+    min-height: 40px;
+    margin: 0;
+    padding: 0 12px;
+    border: 0;
+    box-shadow: none;
+    border-radius: 12px;
+    justify-content: flex-start;
+    background: transparent;
+    color: var(--app-text);
+    box-sizing: border-box;
+}
+
+.app-menu-panel a:hover {
+    background: #f1f5f9;
+    color: var(--app-accent);
+}
+
+.app-menu-panel .danger {
+    color: var(--app-danger);
+}
+
+.app-header-spacer {
+    height: calc(var(--app-header-height) + env(safe-area-inset-top));
+}
+
+@media (min-width: 820px) {
+    .app-header,
+    .top-bar {
+        top: 12px;
+        left: 50%;
+        right: auto;
+        width: min(1120px, calc(100vw - 32px));
+        height: 58px;
+        padding: 0 12px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 999px;
+        transform: translateX(-50%);
+    }
+
+    .top-bar.chrome-hidden,
+    .app-header.chrome-hidden {
+        transform: translate(-50%, -86px);
+    }
+
+    .app-header-spacer {
+        height: 86px;
+    }
+}
+
+@media (max-width: 520px) {
+    .app-title,
+    .app-header__center,
+    .top-bar .app-title {
+        font-size: 15px;
+        max-width: 48vw;
+    }
+
+    .top-bar .back a,
+    .app-back {
+        font-size: 0;
+        width: 40px;
+        padding: 0;
+    }
+
+    .top-bar .back a::before,
+    .app-back::before {
+        margin: 0;
+        font-size: 27px;
+    }
+}
+
+.app-menu-name {
+    display: block;
+    max-width: 170px;
+    padding: 8px 10px 10px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 750;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Page-specific spacing for the fixed app chrome */
+body.page-chat #chat-container {
+    padding-top: calc(var(--app-header-height) + env(safe-area-inset-top) + 8px);
+}
+
+body.page-chat #user-count-indicator {
+    top: calc(var(--app-header-height) + env(safe-area-inset-top) + 8px);
+    z-index: 9990;
+}
+
+body.page-chat.chrome-visible #user-count-indicator {
+    opacity: .72;
+}
+
+@media (min-width: 820px) {
+    body.page-chat #chat-container {
+        padding-top: 82px;
+    }
+
+    body.page-chat #user-count-indicator {
+        top: 22px;
+    }
+}
+
+
+/* ===== Template shell refinements: flat header, no gradients ===== */
+:root {
+    --app-bg: #f6f7f9;
+    --app-surface: #ffffff;
+    --app-surface-solid: #ffffff;
+    --app-text: #171717;
+    --app-muted: #6b7280;
+    --app-border: #e5e7eb;
+    --app-primary: #171717;
+    --app-accent: #2563eb;
+    --app-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+    --app-header-height: 56px;
+}
+
+body.app-page,
+body.page-home,
+body.page-chat,
+body.page-stocks,
+body.page-upload {
+    background: var(--app-bg) !important;
+    color: var(--app-text);
+}
+
+.app-header,
+.top-bar {
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    transform: none !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--app-border) !important;
+    background: rgba(255,255,255,.96) !important;
+    box-shadow: 0 2px 14px rgba(15,23,42,.06) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.app-header__left,
+.top-bar .back {
+    justify-self: start !important;
+}
+
+.app-back,
+.top-bar .back a {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--app-text) !important;
+    font-size: 0 !important;
+}
+
+.app-back::before,
+.top-bar .back a::before {
+    content: "‹";
+    font-size: 31px;
+    font-weight: 600;
+    line-height: 1;
+    transform: translateY(-1px);
+}
+
+.app-menu-button,
+.top-bar .logout > button {
+    width: 40px;
+    height: 40px;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--app-text) !important;
+}
+
+.app-brand-mark {
+    background: #171717 !important;
+    box-shadow: none !important;
+}
+
+/* 상단바 자동 숨김은 모바일/태블릿에서만 적용 */
+@media (max-width: 819px) {
+    .top-bar.chrome-hidden,
+    .app-header.chrome-hidden {
+        transform: translateY(calc(-1 * (var(--app-header-height) + env(safe-area-inset-top)))) !important;
+        opacity: 0.05;
+        box-shadow: none !important;
+    }
+}
+
+@media (min-width: 820px) {
+    .top-bar.chrome-hidden,
+    .app-header.chrome-hidden {
+        transform: none !important;
+        opacity: 1 !important;
+    }
+    .app-header,
+    .top-bar {
+        height: 58px !important;
+        padding: 0 max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left)) !important;
+    }
+}
+
+/* File upload page: prevent broken centered layout and keep inputs usable */
+body.page-upload {
+    display: block !important;
+    min-height: 100dvh;
+    padding: calc(var(--app-header-height) + env(safe-area-inset-top) + 18px) 12px 28px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+body.page-upload > .container {
+    width: min(680px, 100%) !important;
+    max-width: 680px !important;
+    margin: 0 auto !important;
+    padding: 18px !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    box-shadow: 0 8px 24px rgba(15,23,42,.08) !important;
+    text-align: left !important;
+    box-sizing: border-box;
+}
+
+body.page-upload h2 {
+    margin: 0 0 16px;
+    font-size: 22px;
+    letter-spacing: -0.03em;
+}
+
+body.page-upload .input-size,
+body.page-upload input[type="file"],
+body.page-upload select {
+    width: 100% !important;
+    min-height: 46px;
+    margin-bottom: 10px;
+    border-radius: 12px;
+    box-sizing: border-box;
+}
+
+body.page-upload #progressBar {
+    width: 100% !important;
+    max-width: 100%;
+}
+
+/* ===== Cross-page chrome repair pass ===== */
+body.app-page {
+    width: 100%;
+    min-height: 100dvh;
+    color: var(--app-text);
+    background: var(--app-bg) !important;
+}
+
+body.app-page .top-bar {
+    opacity: 1 !important;
+}
+
+body.app-page .app-title {
+    pointer-events: none;
+}
+
+body.app-page .app-menu-panel {
+    pointer-events: auto;
+}
+
+/* Keep page content below fixed mobile-app header */
+body.page-log,
+body.page-post,
+body.page-image {
+    display: block !important;
+    min-height: 100dvh;
+    padding-top: calc(var(--app-header-height) + env(safe-area-inset-top) + 12px);
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+body.page-log {
+    height: 100dvh;
+    overflow: hidden;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 10px;
+}
+
+body.page-log .container {
+    width: min(1600px, 100%) !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: calc(100dvh - var(--app-header-height) - env(safe-area-inset-top) - 24px) !important;
+    margin: 0 auto !important;
+    padding: 10px !important;
+    box-sizing: border-box;
+}
+
+body.page-post {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 16px;
+}
+
+body.page-post .container {
+    width: min(1000px, 100%) !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: calc(100dvh - var(--app-header-height) - env(safe-area-inset-top) - 28px);
+    height: auto !important;
+    margin: 0 auto !important;
+}
+
+body.page-image {
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-bottom: 12px;
+}
+
+body.page-image .container {
+    margin: 0 auto !important;
+    box-sizing: border-box;
+}
+
+body.page-image .floating-button2 {
+    top: calc(var(--app-header-height) + env(safe-area-inset-top) + 12px) !important;
+}
+
+body.page-image #fetch-image-button,
+body.page-image #slideshow-btn {
+    top: calc(var(--app-header-height) + env(safe-area-inset-top) + 62px) !important;
+}
+
+/* Upload page: center the upload box vertically and horizontally under the header */
+body.page-upload {
+    display: grid !important;
+    grid-template-rows: 1fr;
+    place-items: center;
+    min-height: 100dvh;
+    padding: calc(var(--app-header-height) + env(safe-area-inset-top) + 18px) 12px 28px !important;
+    box-sizing: border-box;
+}
+
+body.page-upload > .container {
+    align-self: center;
+    width: min(680px, 100%) !important;
+    margin: auto !important;
+}
+
+@media (max-height: 620px) {
+    body.page-upload {
+        place-items: start center;
+    }
+}
+
+
+/* ===== Verify password + universal auto-hide final patch ===== */
+body.page-verify {
+    display: grid !important;
+    place-items: center;
+    min-height: 100dvh;
+    width: 100%;
+    padding: calc(var(--app-header-height) + env(safe-area-inset-top) + 18px) 14px 28px !important;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    background: var(--app-bg) !important;
+    color: var(--app-text) !important;
+}
+
+.verify-shell {
+    width: min(420px, 100%);
+    margin: 0 auto;
+}
+
+.verify-card {
+    width: 100%;
+    padding: 24px;
+    border: 1px solid var(--app-border);
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+    box-sizing: border-box;
+}
+
+.verify-card h4 {
+    margin: 0 0 16px;
+    color: var(--app-text);
+    font-size: 18px;
+    letter-spacing: -0.03em;
+}
+
+.verify-card .input-size {
+    width: 100% !important;
+    min-height: 48px;
+    margin-bottom: 12px;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.verify-card .btn-w100 {
+    min-height: 48px;
+    border-radius: 12px;
+    background: var(--app-primary);
+}
+
+@media (max-height: 520px) {
+    body.page-verify {
+        place-items: start center;
+    }
+}
+
+/* Auto-hide should work on desktop web as well, not only mobile. */
+.top-bar[data-auto-hide="true"].chrome-hidden,
+.app-header[data-auto-hide="true"].chrome-hidden {
+    transform: translateY(calc(-1 * (var(--app-header-height) + env(safe-area-inset-top) + 14px))) !important;
+    opacity: 0.05 !important;
+    box-shadow: none !important;
+    pointer-events: none;
+}
+
+.top-bar[data-auto-hide="true"].chrome-visible,
+.app-header[data-auto-hide="true"].chrome-visible {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto;
+}
+
+@media (min-width: 820px) {
+    .top-bar[data-auto-hide="true"].chrome-hidden,
+    .app-header[data-auto-hide="true"].chrome-hidden {
+        transform: translateY(-82px) !important;
+        opacity: 0.05 !important;
+    }
+
+    .top-bar[data-auto-hide="true"].chrome-visible,
+    .app-header[data-auto-hide="true"].chrome-visible {
+        transform: translateY(0) !important;
+        opacity: 1 !important;
+    }
+}
+
+
+/* ===== App-wide datepicker polish ===== */
+input[type="date"],
+input.date,
+#date-picker {
+    min-height: 42px;
+    padding: 0 40px 0 14px;
+    border: 1px solid var(--app-border, #d1d5db);
+    border-radius: 13px;
+    background-color: #fff;
+    color: var(--app-text, #111827);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .05);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease, transform .16s ease;
+    color-scheme: light;
+}
+
+input[type="date"]:hover,
+input.date:hover,
+#date-picker:hover {
+    border-color: #9ca3af;
+    background-color: #fafafa;
+}
+
+input[type="date"]:focus,
+input.date:focus,
+#date-picker:focus {
+    border-color: var(--app-primary, #2563eb);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, .12), 0 8px 22px rgba(15, 23, 42, .08);
+    background-color: #fff;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input.date::-webkit-calendar-picker-indicator,
+#date-picker::-webkit-calendar-picker-indicator {
+    width: 18px;
+    height: 18px;
+    padding: 6px;
+    margin-right: -28px;
+    border-radius: 10px;
+    cursor: pointer;
+    opacity: .62;
+    filter: grayscale(1);
+    transition: opacity .16s ease, background-color .16s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input.date::-webkit-calendar-picker-indicator:hover,
+#date-picker::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    background-color: #eef2ff;
+}
+
+.datepicker-block {
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.datepicker-block label {
+    color: var(--app-muted, #6b7280);
+    font-size: 13px;
+    font-weight: 750;
+}
+
+body.page-stocks input[type="date"],
+body.page-stocks input.date {
+    min-height: 38px;
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+@media (max-width: 560px) {
+    input[type="date"],
+    input.date,
+    #date-picker {
+        width: 100%;
+        min-height: 44px;
+        font-size: 15px;
+    }
+}
+
+/* ===== App-wide fixes: dropdown info, centered labels, desktop auto-hide, dark mode ===== */
+.app-menu-info small {
+    margin-left: auto;
+    color: var(--app-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.app-menu-panel a.is-disabled {
+    opacity: .74;
+    cursor: default;
+}
+
+.app-menu-panel a.is-disabled:hover {
+    background: transparent;
+    color: var(--app-text);
+}
+
+/* desktop/web에서도 스크롤 시 상단바 숨김 */
+@media (min-width: 820px) {
+    .top-bar.chrome-hidden,
+    .app-header.chrome-hidden {
+        transform: translateY(calc(-1 * (var(--app-header-height) + env(safe-area-inset-top) + 8px))) !important;
+        opacity: 0.05 !important;
+        box-shadow: none !important;
+    }
+}
+
+body.page-upload > .container h2,
+.verify-card h4 {
+    text-align: center !important;
+    width: 100%;
+}
+
+.verify-card form {
+    text-align: center;
+}
+
+/* ===== Unified app menu dropdown spacing + danger action ===== */
+.app-menu-panel,
+.top-bar .logout .app-menu-panel {
+    min-width: 178px !important;
+    padding: 8px !important;
+    border-radius: 18px !important;
+}
+
+.app-menu-panel a,
+.top-bar .logout .app-menu-panel a,
+.app-menu-panel button,
+.top-bar .logout .app-menu-panel button {
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    box-sizing: border-box !important;
+}
+
+.app-menu-panel .danger,
+.top-bar .logout .app-menu-panel .danger {
+    color: #ef4444 !important;
+    font-weight: 800 !important;
+}
+
+.app-menu-panel .danger:hover,
+.top-bar .logout .app-menu-panel .danger:hover {
+    background: rgba(239, 68, 68, .10) !important;
+    color: #dc2626 !important;
+}
+
+/* ===== Final chrome/menu refinements ===== */
+.app-menu-panel,
+.top-bar .logout .app-menu-panel {
+    min-width: 178px !important;
+    padding: 8px !important;
+    border-radius: 18px !important;
+}
+.app-menu-panel a,
+.top-bar .logout .app-menu-panel a {
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+.app-menu-panel .danger,
+.top-bar .logout .app-menu-panel .danger {
+    color: #dc2626 !important;
+}
+.app-menu-panel .danger:hover,
+.top-bar .logout .app-menu-panel .danger:hover {
+    background: #fef2f2 !important;
+    color: #b91c1c !important;
+}
+
+@media (min-width: 820px) {
+    .top-bar.chrome-hidden,
+    .app-header.chrome-hidden {
+        transform: translateY(-86px) !important;
+        opacity: 0.05 !important;
+        box-shadow: none !important;
+    }
+}
+
+/* ===== Log viewer compact toolbar ===== */
+body.page-log {
+    display: block !important;
+    min-height: 100dvh;
+    padding: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 12px) 12px 14px !important;
+    box-sizing: border-box;
+    overflow: hidden;
+    background: var(--app-bg, #f6f7f9) !important;
+}
+body.page-log .container.log-viewer-shell,
+body.page-log > .container {
+    width: min(1600px, 100%) !important;
+    max-width: min(1600px, 100%) !important;
+    min-width: 0 !important;
+    height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 26px) !important;
+    margin: 0 auto !important;
+    padding: 12px !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .08) !important;
+}
+body.page-log .log-toolbar,
+body.page-log .datepicker-block {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    padding: 4px 2px 10px !important;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 700;
+}
+body.page-log #date-picker {
+    margin: 0 !important;
+    width: auto !important;
+    min-width: 148px;
+}
+body.page-log #sse-status {
+    margin-left: auto;
+    white-space: nowrap;
+    color: #64748b;
+    font-size: 13px;
+}
+
+/* ===== Better empty states ===== */
+td.empty,
+.table td.empty {
+    height: 180px;
+    padding: 34px 16px !important;
+    text-align: center !important;
+    color: #64748b !important;
+    font-size: 0 !important;
+    background: #f8fafc !important;
+    border-radius: 16px;
+}
+td.empty::before,
+.table td.empty::before {
+    content: "표시할 데이터가 없어요";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 750;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .05);
+}
+/* Empty stock card only: 실제 데이터 카드(article.trade-card)가 1개일 때는 빈 상태 스타일이 먹지 않게 분리 */
+.table-scroller > .trade-card:only-child:not(article),
+.table-scroller .trade-carousel > .trade-card:only-child:not(article) {
+    border: 1px dashed #cbd5e1 !important;
+    background: #f8fafc !important;
+    color: #64748b !important;
+    text-align: center;
+    border-radius: 18px !important;
+    box-shadow: none !important;
+}
+
+body.page-stocks article.trade-card,
+body.page-stocks .table-scroller article.trade-card,
+body.page-stocks .trade-track article.trade-card,
+body.page-stocks article.trade-card.low-card,
+body.page-stocks article.trade-card.summary-card {
+    background: #fff !important;
+    color: #111827 !important;
+    border-style: solid !important;
+    border-color: rgba(0,0,0,.08) !important;
+    text-align: left !important;
+}
+
+/* ===== Dropdown restore from last known working version ===== */
+.app-header,
+.top-bar,
+.app-header__right,
+.app-user-menu,
+.top-bar .logout {
+    overflow: visible !important;
+}
+.app-user-menu,
+.top-bar .logout {
+    position: relative !important;
+    z-index: 2147483000 !important;
+}
+.app-menu-panel,
+.top-bar .logout .app-menu-panel {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    left: auto !important;
+    display: none !important;
+    min-width: 178px !important;
+    max-width: calc(100vw - 24px) !important;
+    padding: 8px !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    border: 1px solid rgba(15, 23, 42, .08) !important;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, .18) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    z-index: 2147483647 !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+}
+.app-user-menu.is-open > .app-menu-panel,
+.top-bar .logout.is-open > .app-menu-panel {
+    display: flex !important;
+}
+.app-menu-panel .app-menu-name {
+    display: block !important;
+    padding: 8px 12px 6px !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+}
+.app-menu-panel a,
+.top-bar .logout .app-menu-panel a {
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    color: #111827 !important;
+    text-decoration: none !important;
+}
+.app-menu-panel a:hover,
+.top-bar .logout .app-menu-panel a:hover {
+    background: #f3f4f6 !important;
+}
+.app-menu-panel .danger,
+.top-bar .logout .app-menu-panel .danger {
+    color: #dc2626 !important;
+}
+.app-menu-panel .danger:hover,
+.top-bar .logout .app-menu-panel .danger:hover {
+    background: #fef2f2 !important;
+    color: #b91c1c !important;
+}
+
+
+/* ===== 2026-05-30 topbar layer only: no layout or scroll impact ===== */
+.app-header[data-auto-hide="true"],
+.top-bar[data-auto-hide="true"] {
+    position: fixed !important;
+    will-change: transform !important;
+    overflow: visible !important;
+}
+.app-header[data-auto-hide="true"].chrome-hidden,
+.top-bar[data-auto-hide="true"].chrome-hidden,
+.app-header[data-auto-hide="true"].chrome-visible,
+.top-bar[data-auto-hide="true"].chrome-visible {
+    margin: 0 !important;
+}
+
+
+/* ===== Final restore: header dropdowns use in-place original panel ===== */
+.app-header,
+.top-bar,
+.app-header[data-auto-hide="true"],
+.top-bar[data-auto-hide="true"],
+.app-header__right,
+.app-user-menu,
+.top-bar .logout {
+    overflow: visible !important;
+}
+.app-header,
+.top-bar {
+    z-index: 100000 !important;
+}
+.app-user-menu,
+.top-bar .logout {
+    position: relative !important;
+    z-index: 100010 !important;
+}
+.app-user-menu > .app-menu-panel,
+.top-bar .logout > .app-menu-panel {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    left: auto !important;
+    display: none !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    min-width: 178px !important;
+    max-width: calc(100vw - 24px) !important;
+    padding: 8px !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    border: 1px solid rgba(15, 23, 42, .10) !important;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, .22) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    z-index: 100020 !important;
+    box-sizing: border-box !important;
+}
+.app-user-menu.is-open > .app-menu-panel,
+.top-bar .logout.is-open > .app-menu-panel {
+    display: flex !important;
+}
+.app-user-menu.is-open,
+.top-bar .logout.is-open {
+    overflow: visible !important;
+}
+.app-user-menu.is-open .app-menu-button,
+.top-bar .logout.is-open .app-menu-button {
+    background: #fff !important;
+}
+
+/* ===== Final verify password primary submit button ===== */
+body.page-verify .verify-card button[type="submit"],
+body.page-verify .verify-card .btn-w100 {
+    background: #2563eb !important;
+    border: 1px solid #93c5fd !important;
+    color: #ffffff !important;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.22) !important;
+    font-weight: 800 !important;
+}
+body.page-verify .verify-card button[type="submit"]:hover,
+body.page-verify .verify-card .btn-w100:hover {
+    background: #1d4ed8 !important;
+}
+
+/* ===== Verify/Login primary buttons: lighter base, darker hover ===== */
+body.page-verify .verify-card button[type="submit"],
+body.page-verify .verify-card .btn-w100 {
+    background: #3b82f6 !important;
+    border: 1px solid #93c5fd !important;
+    color: #ffffff !important;
+    box-shadow: 0 8px 18px rgba(59, 130, 246, 0.20) !important;
+    font-weight: 800 !important;
+    cursor: pointer !important;
+    transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease !important;
+}
+body.page-verify .verify-card button[type="submit"]:hover,
+body.page-verify .verify-card .btn-w100:hover {
+    background: #2563eb !important;
+    border-color: #60a5fa !important;
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.25) !important;
+}
+body.page-verify .verify-card button[type="submit"]:active,
+body.page-verify .verify-card .btn-w100:active {
+    transform: translateY(1px) !important;
+}
+
+
+/* ===== Unified button focus/hover polish ===== */
+button,
+.btn,
+.btn-w100,
+.btn-main,
+.btn-secondary,
+.post-action-btn,
+.app-menu-button,
+.chat-theme-button,
+.carousel-btn,
+.pp-btn,
+.file-button,
+a.button {
+    transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, filter .16s ease, transform .16s ease !important;
+}
+button:hover:not(.ql-toolbar button):not(.ql-picker-label),
+button:focus-visible:not(.ql-toolbar button):not(.ql-picker-label),
+.btn:hover,
+.btn:focus-visible,
+.btn-w100:hover,
+.btn-w100:focus-visible,
+.btn-main:hover,
+.btn-main:focus-visible,
+.btn-secondary:hover,
+.btn-secondary:focus-visible,
+.post-action-btn:hover,
+.post-action-btn:focus-visible,
+a.button:hover,
+a.button:focus-visible {
+    filter: brightness(.94) !important;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, .10) !important;
+}
+button:active:not(.ql-toolbar button):not(.ql-picker-label),
+.btn:active,
+.btn-w100:active,
+.btn-main:active,
+.btn-secondary:active,
+.post-action-btn:active,
+a.button:active {
+    filter: brightness(.90) !important;
+    transform: translateY(1px) !important;
+}
+.ql-toolbar button:hover,
+.ql-toolbar button:focus,
+.ql-toolbar button:focus-visible {
+    background: transparent !important;
+    filter: none !important;
+    box-shadow: none !important;
+}
+
+/* Keep upload/login primary buttons light at rest and slightly darker on hover */
+.btn-w100,
+button.btn-w100,
+body.page-login #loginForm .btn-w100,
+body.page-verify .verify-card .btn-w100,
+body.page-verify .verify-card button[type="submit"] {
+    background: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: #fff !important;
+}
+.btn-w100:hover,
+button.btn-w100:hover,
+body.page-login #loginForm .btn-w100:hover,
+body.page-verify .verify-card .btn-w100:hover,
+body.page-verify .verify-card button[type="submit"]:hover {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    filter: none !important;
+}
+
+/* Center log toolbar content on desktop and mobile */
+body.page-log .log-toolbar,
+body.page-log .datepicker-block {
+    justify-content: center !important;
+    text-align: center !important;
+}
+body.page-log #sse-status {
+    margin-left: 0 !important;
+}
+@media (max-width: 640px) {
+    body.page-log .log-toolbar,
+    body.page-log .datepicker-block {
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+    }
+}
+
+
+/* ===== 2026-05-31 final primary button hover: always darker, never brighter ===== */
+.btn-w100,
+button.btn-w100,
+input[type="submit"].btn-w100,
+body.page-login #loginForm .btn-w100,
+body.page-login #loginForm button[type="submit"],
+body.page-verify .verify-card .btn-w100,
+body.page-verify .verify-card button[type="submit"] {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: #fff !important;
+}
+.btn-w100:hover,
+.btn-w100:focus,
+.btn-w100:focus-visible,
+button.btn-w100:hover,
+button.btn-w100:focus,
+button.btn-w100:focus-visible,
+input[type="submit"].btn-w100:hover,
+input[type="submit"].btn-w100:focus,
+body.page-login #loginForm .btn-w100:hover,
+body.page-login #loginForm .btn-w100:focus,
+body.page-login #loginForm button[type="submit"]:hover,
+body.page-login #loginForm button[type="submit"]:focus,
+body.page-verify .verify-card .btn-w100:hover,
+body.page-verify .verify-card .btn-w100:focus,
+body.page-verify .verify-card button[type="submit"]:hover,
+body.page-verify .verify-card button[type="submit"]:focus {
+    background-color: #1d4ed8 !important;
+    border-color: #1d4ed8 !important;
+    color: #fff !important;
+    filter: none !important;
+}

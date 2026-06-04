@@ -1,75 +1,393 @@
-body {
-    background-color: #f4f4f4;
-    /* 가운데 정렬 */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: auto;
+body.page-home {
+    display: block;
+    min-height: 100dvh;
+    padding: 0;
+    overflow-x: hidden;
 }
 
-.container {
-    min-width: 400px; /* 모바일에서 보기 좋게 나온다 */
-    max-width: 50vw;
-    width: 20%;
-    max-height: 100vh;
-    background: white;
-    padding: 10px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    text-align: center;
-    box-sizing: border-box; /* 패딩 포함하여 크기 조정 */
+.home-shell {
+    width: min(1120px, calc(100% - 28px));
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: calc(92px + env(safe-area-inset-top)) 0 34px;
+    box-sizing: border-box;
 }
-h2 {
+
+.home-hero {
     margin-bottom: 20px;
-    font-size: 24px;
+    padding: 8px 4px 0;
 }
 
-.select-dropdown { /* div */
+.home-eyebrow {
+    margin: 0 0 8px;
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.home-hero h1 {
+    margin: 0;
+    font-size: clamp(30px, 6vw, 54px);
+    line-height: 1.06;
+    letter-spacing: -0.07em;
+    color: #111827;
+}
+
+.home-subtitle {
+    max-width: 620px;
+    margin: 12px 0 0;
+    color: #64748b;
+    font-size: 16px;
+    line-height: 1.65;
+}
+
+body.page-home .container.menu-card {
     width: 100%;
-    margin-bottom: 10px;
-    text-align: center;
-    text-align-last: center; /* 마지막 줄도 가운데 정렬 (크로스 브라우저 호환) */
-    padding: 15px;
-    appearance: none; /* Remove default arrow */
+    max-width: none;
+    min-width: 0;
+    max-height: none;
+    margin: 0;
+    padding: 18px;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,.84);
+    background: rgba(255,255,255,.82);
+    box-shadow: 0 24px 70px rgba(15,23,42,.10);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    text-align: left;
+    box-sizing: border-box;
+}
+
+.menu-select-form {
+    margin: 0 0 12px;
+}
+
+.select-dropdown {
+    width: 100%;
+    min-height: 48px;
+    margin: 0;
+    padding: 0 42px 0 16px;
+    border: 1px solid rgba(15,23,42,.10);
+    border-radius: 16px;
+    appearance: none;
     cursor: pointer;
-    background-color: #0056b3;
-    color: white;
-    font-size: 18px;
-    border-radius: 5px;
-}
-.select-dropdown option {
-    padding: 10px;
-    background-color: white;
-    color: #333;
-}
-select.select-dropdown:hover {
-    background-color: #007BFF;
+    color: #111827;
+    background:
+        linear-gradient(45deg, transparent 50%, #64748b 50%) calc(100% - 22px) 20px / 7px 7px no-repeat,
+        linear-gradient(135deg, #ffffff, #f8fafc);
+    font-size: 15px;
+    font-weight: 750;
+    box-shadow: 0 8px 20px rgba(15,23,42,.04);
 }
 
-/* 뱃지를 위한 설정 */
-.chat-btn-wrapper {
-    display: inline-block;
-    position: relative;
-    width: 100%;
+.select-dropdown option {
+    background: white;
+    color: #111827;
 }
+
+select.select-dropdown:hover {
+    border-color: rgba(37,99,235,.35);
+    background-color: #fff;
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.menu-tile {
+    position: relative;
+    min-height: 128px;
+    padding: 18px;
+    border-radius: 24px;
+    border: 1px solid rgba(15,23,42,.08);
+    background: #fff;
+    color: #111827;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 14px 36px rgba(15,23,42,.06);
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    overflow: hidden;
+}
+
+.menu-tile::after {
+    content: "";
+    position: absolute;
+    inset: auto -20px -30px auto;
+    width: 100px;
+    height: 100px;
+    border-radius: 999px;
+    background: rgba(37,99,235,.08);
+}
+
+.menu-tile:hover {
+    transform: translateY(-2px);
+    border-color: rgba(37,99,235,.30);
+    box-shadow: 0 18px 48px rgba(15,23,42,.11);
+}
+
+.menu-tile-primary {
+    background: linear-gradient(135deg, #111827, #1e293b);
+    color: #fff;
+}
+
+.menu-tile-primary::after {
+    background: rgba(255,255,255,.12);
+}
+
+.menu-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    background: #f1f5f9;
+    font-size: 22px;
+    z-index: 1;
+}
+
+.menu-tile-primary .menu-icon {
+    background: rgba(255,255,255,.12);
+}
+
+.menu-title {
+    margin-top: 16px;
+    font-size: 20px;
+    font-weight: 850;
+    letter-spacing: -0.04em;
+    z-index: 1;
+}
+
+.menu-desc {
+    margin-top: 2px;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 650;
+    z-index: 1;
+}
+
+.menu-tile-primary .menu-desc {
+    color: rgba(255,255,255,.70);
+}
+
+.chat-btn-wrapper {
+    position: relative;
+}
+
 .unread-badge {
     position: absolute;
-    top: -0.6em;
-    right: 1em;
-    min-width: 1.6em;
-    height: 1.6em;
-    padding: 0 0.2em;
-    background: #ff4b4b;
+    top: 12px;
+    right: 12px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    background: #ef4444;
     color: #fff;
-    border-radius: 1em;
-    font-size: 1em;
-    font-weight: bold;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 850;
     display: flex;
     align-items: center;
     justify-content: center;
     border: 2px solid #fff;
-    box-shadow: 0 0 0.3em #f77c7c3d;
+    box-shadow: 0 10px 24px rgba(239,68,68,.30);
     pointer-events: none;
     line-height: 1;
     z-index: 2;
+}
+
+.app-brand-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 15px;
+    display: inline-grid;
+    place-items: center;
+    background: #111827;
+    color: #fff;
+    font-weight: 900;
+    box-shadow: 0 10px 24px rgba(15,23,42,.18);
+}
+
+.app-menu-name {
+    display: block;
+    max-width: 170px;
+    padding: 8px 10px 10px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 750;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (min-width: 860px) {
+    .home-shell {
+        padding-top: 112px;
+    }
+
+    body.page-home .container.menu-card {
+        padding: 22px;
+    }
+
+    .menu-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+}
+
+@media (max-width: 560px) {
+    .home-shell {
+        width: min(100% - 20px, 1120px);
+        padding-top: calc(76px + env(safe-area-inset-top));
+    }
+
+    body.page-home .container.menu-card {
+        padding: 12px;
+        border-radius: 24px;
+    }
+
+    .menu-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .menu-tile {
+        min-height: 104px;
+        padding: 16px;
+    }
+}
+
+
+/* ===== Flat home template: remove gradients ===== */
+.home-eyebrow { color: #6b7280 !important; }
+body.page-home .container.menu-card {
+    border: 1px solid #e5e7eb !important;
+    background: #fff !important;
+    box-shadow: 0 8px 24px rgba(15,23,42,.06) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+.select-dropdown {
+    background-color: #fff !important;
+    background-image: none !important;
+}
+.menu-tile,
+.menu-tile-primary {
+    background: #fff !important;
+    color: #171717 !important;
+}
+.menu-tile::after { display: none !important; }
+.menu-tile-primary .menu-icon,
+.menu-icon {
+    background: #f3f4f6 !important;
+    color: #171717 !important;
+}
+.menu-tile-primary .menu-desc,
+.menu-desc { color: #6b7280 !important; }
+
+/* Trip Image uses the same .menu-tile sizing as Chat / Stock. */
+.trip-image-tile .menu-icon {
+    font-size: 22px;
+}
+
+/* ===== Mobile home menu: keep 2 columns like app launcher ===== */
+@media (max-width: 560px) {
+    .menu-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+    }
+
+    .menu-tile {
+        min-height: 118px !important;
+        padding: 14px !important;
+        border-radius: 20px !important;
+    }
+
+    .menu-icon {
+        width: 38px !important;
+        height: 38px !important;
+        border-radius: 14px !important;
+        font-size: 20px !important;
+    }
+
+    .menu-title {
+        margin-top: 12px !important;
+        font-size: 17px !important;
+    }
+
+    .menu-desc {
+        font-size: 12px !important;
+    }
+}
+
+@media (max-width: 360px) {
+    .menu-tile {
+        min-height: 108px !important;
+        padding: 12px !important;
+    }
+
+    .menu-title {
+        font-size: 16px !important;
+    }
+}
+
+
+/* ===== Home menu selected/focus feedback ===== */
+.menu-tile:hover,
+.menu-tile:focus-visible,
+.menu-tile:active,
+.menu-tile.is-selected {
+    background: #eff6ff !important;
+    border-color: rgba(37, 99, 235, .32) !important;
+    box-shadow: 0 16px 42px rgba(37, 99, 235, .12) !important;
+}
+.menu-tile:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .22) !important;
+    outline-offset: 3px !important;
+}
+.menu-tile:active {
+    transform: translateY(0) scale(.99) !important;
+}
+.menu-tile:hover .menu-icon,
+.menu-tile:focus-visible .menu-icon,
+.menu-tile:active .menu-icon,
+.menu-tile.is-selected .menu-icon {
+    background: #dbeafe !important;
+    color: #1d4ed8 !important;
+}
+
+
+/* ===== Home menu selected/focus polish ===== */
+.menu-tile,
+.home-card,
+.menu-card {
+    transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease !important;
+}
+.menu-tile:hover,
+.menu-tile:focus-visible,
+.menu-tile:active,
+.home-card:hover,
+.home-card:focus-visible,
+.home-card:active,
+.menu-card:hover,
+.menu-card:focus-visible,
+.menu-card:active {
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+    box-shadow: 0 12px 28px rgba(37, 99, 235, .12) !important;
+    transform: translateY(-1px) !important;
+}
+.menu-tile:hover .menu-icon,
+.menu-tile:focus-visible .menu-icon,
+.menu-tile:active .menu-icon,
+.home-card:hover .menu-icon,
+.home-card:focus-visible .menu-icon,
+.home-card:active .menu-icon {
+    background: #dbeafe !important;
+    color: #1d4ed8 !important;
 }
