@@ -153,3 +153,147 @@ video::-webkit-media-controls {
     /*display: none;*/
     z-index: 10;
 }
+
+/* ===== Legacy video page top-bar isolation =====
+   Keep video.html controls in the original floating style.
+   Global app top-bar styles are for app pages and should not restyle video.html. */
+body.page-video,
+body.legacy-video-page {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    overflow: hidden !important;
+    background: #000 !important;
+}
+
+body.page-video .top-bar,
+body.legacy-video-page .top-bar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    overflow: visible !important;
+    z-index: 10000 !important;
+    pointer-events: none !important;
+}
+
+body.page-video .top-bar.chrome-hidden,
+body.page-video .top-bar.chrome-visible,
+body.legacy-video-page .top-bar.chrome-hidden,
+body.legacy-video-page .top-bar.chrome-visible {
+    transform: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+body.page-video .top-bar .back,
+body.legacy-video-page .top-bar .back {
+    position: absolute !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    display: block !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    z-index: 10002 !important;
+}
+
+body.page-video .top-bar .prev,
+body.legacy-video-page .top-bar .prev {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    left: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    display: block !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    z-index: 10002 !important;
+}
+
+body.page-video .top-bar .loop,
+body.legacy-video-page .top-bar .loop {
+    position: absolute !important;
+    top: 60px !important;
+    right: 10px !important;
+    left: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    display: block !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    z-index: 10002 !important;
+}
+
+body.page-video .top-bar a,
+body.legacy-video-page .top-bar a {
+    display: inline-block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 10px !important;
+    margin: 5px !important;
+    border: none !important;
+    border-radius: 5px !important;
+    background: rgba(0, 0, 0, 0.82) !important;
+    color: #fff !important;
+    opacity: 0.82 !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    text-decoration: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    text-indent: 0 !important;
+    overflow: visible !important;
+    cursor: pointer !important;
+}
+
+body.page-video .top-bar a:hover,
+body.legacy-video-page .top-bar a:hover {
+    background: #0056b3 !important;
+    opacity: 1 !important;
+    color: #fff !important;
+}
+
+body.page-video .top-bar .back a::before,
+body.legacy-video-page .top-bar .back a::before {
+    content: none !important;
+    display: none !important;
+}
+
+body.page-video #videoContainer,
+body.legacy-video-page #videoContainer {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+}

@@ -10,7 +10,7 @@ function openVideoCallWindow() {
     if (!videoCallWindow) {
         videoCallWindow = document.createElement("div");
         videoCallWindow.style.position = "fixed";
-        videoCallWindow.style.top = "15px";
+        videoCallWindow.style.top = "calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 14px)";
         videoCallWindow.style.left = "15px";
         videoCallWindow.style.width = "380px";
         videoCallWindow.style.height = "530px";
@@ -20,7 +20,7 @@ function openVideoCallWindow() {
         videoCallWindow.style.minHeight = "300px";
         videoCallWindow.style.background = "#000";
         videoCallWindow.style.border = "2px solid #ccc";
-        videoCallWindow.style.zIndex = "10";
+        videoCallWindow.style.zIndex = "2147481000";
         videoCallWindow.style.flexDirection = "column";
         videoCallWindow.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
         videoCallWindow.style.resize = "both";
