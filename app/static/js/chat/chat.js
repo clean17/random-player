@@ -1,4 +1,11 @@
 
+function shouldAutoFocusChatInput() {
+    // 모바일/터치 환경에서는 초기 진입이나 화면 복귀 때 focus()가 키보드를 강제로 올릴 수 있다.
+    // 사용자가 입력창을 직접 눌렀을 때만 키보드가 올라오도록 자동 포커스를 막는다.
+    return !(window.matchMedia && window.matchMedia('(max-width: 768px)').matches) && !('ontouchstart' in window);
+}
+
+
 
 const chatContainer = document.getElementById("chat-container"),
     chatInput = document.getElementById("chat-input"),
@@ -11,6 +18,24 @@ const chatContainer = document.getElementById("chat-container"),
     toggleNotificationBtn = document.getElementById("toggleNotification"),
     roomUserCount = document.getElementById('userCount'),
     typingIndicator = document.getElementById('typingIndicator');
+
+
+function setVideoCallButtonActive(isActive) {
+    if (!videoCallBtn) return;
+    videoCallBtn.classList.toggle('is-video-active', !!isActive);
+    videoCallBtn.classList.toggle('video-active', !!isActive);
+    if (isActive) {
+        // 원래 동작 복구: 상대 영통 신호가 있으면 버튼 배경을 초록색으로 직접 표시
+        videoCallBtn.style.backgroundColor = '#16a34a';
+        videoCallBtn.style.color = '#fff';
+        videoCallBtn.style.opacity = '1';
+    } else {
+        videoCallBtn.style.backgroundColor = '';
+        videoCallBtn.style.color = '';
+        videoCallBtn.style.opacity = '';
+    }
+}
+window.setVideoCallButtonActive = setVideoCallButtonActive;
 
 let offset = 0, // 가장 최근 10개는 이미 로드됨
     socket,
@@ -42,28 +67,129 @@ const debouncedUpdate = debounce(updateChatSession, 1000 * 10);
 // const trottledUpdate = throttle(updateChatSession, 1000 * 10);
 let controller = new AbortController();
 
+
+let initialChatBottomLock = false;
+let initialChatBottomTimer = null;
+
+function getChatDistanceFromBottom() {
+    if (!chatContainer) return 0;
+    return Math.max(0, chatContainer.scrollHeight - chatContainer.clientHeight - chatContainer.scrollTop);
+}
+
+function isChatNearBottom(threshold = 80) {
+    return getChatDistanceFromBottom() <= threshold;
+}
+
+function scrollChatToBottomExact(retries = 3) {
+    if (!chatContainer) return;
+    const go = () => {
+        // scrollHeight - clientHeight is the actual maximum scrollTop.
+        // Setting scrollHeight alone can leave a tiny gap on some mobile browsers after layout changes.
+        const maxTop = Math.max(0, chatContainer.scrollHeight - chatContainer.clientHeight);
+        chatContainer.scrollTop = maxTop;
+    };
+    go();
+    for (let i = 1; i <= retries; i += 1) {
+        setTimeout(() => requestAnimationFrame(go), i * 80);
+    }
+}
+
+function startInitialChatBottomLock(duration = 1800) {
+    initialChatBottomLock = true;
+    clearTimeout(initialChatBottomTimer);
+    initialChatBottomTimer = setTimeout(() => {
+        initialChatBottomLock = false;
+    }, duration);
+}
+
+function stopInitialChatBottomLockSoon() {
+    clearTimeout(initialChatBottomTimer);
+    initialChatBottomTimer = setTimeout(() => {
+        initialChatBottomLock = false;
+    }, 250);
+}
+
+function updateChatViewportInsets() {
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    if (!root) return;
+    let bottomGap = 0;
+    if (vv) {
+        bottomGap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    }
+    root.style.setProperty('--chat-visual-bottom', `${bottomGap}px`);
+}
+
+updateChatViewportInsets();
+window.addEventListener('resize', updateChatViewportInsets, { passive: true });
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateChatViewportInsets, { passive: true });
+    window.visualViewport.addEventListener('scroll', updateChatViewportInsets, { passive: true });
+}
+
 ////////////////////////////// Util Function ////////////////////////////
 
 // 채팅 입력창 자동으로 높이 조절
+function updateChatInputShellHeight(textarea) {
+    if (!textarea) return;
+    const inputBar = textarea.closest('.chat-bottom-input');
+    const barHeight = inputBar ? Math.ceil(inputBar.getBoundingClientRect().height) : 0;
+    const fallback = Math.ceil(textarea.getBoundingClientRect().height) + 10;
+    const nextHeight = Math.max(46, barHeight || fallback);
+    document.body.style.setProperty('--chat-input-shell-h', `${nextHeight}px`);
+}
+
+function resizeChatTextarea(textarea) {
+    if (!textarea) return;
+
+    // Keep the first/empty state as a true one-line input.
+    // Some mobile browsers report a taller scrollHeight on an empty textarea,
+    // which made the chat box start as two lines.
+    if (!textarea.value) {
+        resetChatTextareaToInitial(textarea);
+        return;
+    }
+
+    const maxLines = Number(textarea.dataset.textareaAutoResize) || 6;
+    const computed = window.getComputedStyle(textarea);
+    const lineHeight = parseFloat(computed.lineHeight) || 21;
+    const paddingTop = parseFloat(computed.paddingTop) || 0;
+    const paddingBottom = parseFloat(computed.paddingBottom) || 0;
+    const borderTop = parseFloat(computed.borderTopWidth) || 0;
+    const borderBottom = parseFloat(computed.borderBottomWidth) || 0;
+    const maxHeight = Math.ceil((lineHeight * maxLines) + paddingTop + paddingBottom + borderTop + borderBottom);
+
+    // A lot of legacy CSS in this project sets #chat-input height with !important.
+    // Use inline important values so Shift+Enter can grow the textarea reliably.
+    textarea.style.setProperty('height', 'auto', 'important');
+    textarea.style.setProperty('line-height', '1.35', 'important');
+    const wantedHeight = Math.ceil(textarea.scrollHeight + borderTop + borderBottom);
+    const nextHeight = Math.min(wantedHeight, maxHeight);
+
+    textarea.style.setProperty('--chat-textarea-h', `${nextHeight}px`);
+    textarea.style.setProperty('height', `${nextHeight}px`, 'important');
+    textarea.style.setProperty('overflow-y', wantedHeight > maxHeight ? 'auto' : 'hidden', 'important');
+    textarea.classList.toggle('is-scrollable', wantedHeight > maxHeight);
+    updateChatInputShellHeight(textarea);
+}
+
+
+function resetChatTextareaToInitial(textarea) {
+    if (!textarea) return;
+    textarea.classList.remove('is-scrollable');
+    textarea.style.setProperty('--chat-textarea-h', '36px');
+    textarea.style.setProperty('height', '36px', 'important');
+    textarea.style.setProperty('overflow-y', 'hidden', 'important');
+    document.body.style.setProperty('--chat-input-shell-h', '46px');
+}
+
 document.querySelectorAll('textarea[data-textarea-auto-resize]').forEach(textarea => {
-    const maxLines = Number(textarea.dataset.textareaAutoResize) || 5;
-    const maxHeight = maxLines * textAreaOffsetHeight;
-
-    const resize = () => {
-        textarea.style.height = '22px';  // ✅ 초기화
-        // const lineCount = textarea.value.split('\n').length;
-        // const newHeight = Math.min(lineCount * textAreaOffsetHeight, maxHeight);
-
-        const scrollHeight = textarea.scrollHeight - 10; // ✅ 실제 내용 높이
-        const newHeight = Math.min(scrollHeight, maxHeight);
-
-        textarea.style.height = `${newHeight}px`;
-    };
-
+    textarea.dataset.textareaAutoResize = textarea.dataset.textareaAutoResize || '6';
+    const resize = () => resizeChatTextarea(textarea);
     textarea.addEventListener('input', resize, { signal: controller.signal });
-
-    // 초기 설정
-    resize();
+    textarea.addEventListener('change', resize, { signal: controller.signal });
+    window.addEventListener('resize', resize, { signal: controller.signal, passive: true });
+    requestAnimationFrame(resize);
 });
 
 function extractDomain(url) {
@@ -218,7 +344,7 @@ function connectSocket() {
     // 상대는 이미 영상통화를 연결함 + 채팅방이 늦게 들어와 영통소켓 정보를 받아옴
     socket.on("find_video_call", (data) => {
         if (data.userList.length !== 0 && !data.userList.includes(username)) {
-            videoCallBtn.style.backgroundColor = "green";
+            setVideoCallButtonActive(true);
         }
     });
 
@@ -226,7 +352,7 @@ function connectSocket() {
     socket.on("video_call_ready", (data) => {
         videoCallRoomName = data.videoCallRoomName;
         if (username !== data.username) {
-            videoCallBtn.style.backgroundColor = "green";
+            setVideoCallButtonActive(true);
         }
     });
 
@@ -236,8 +362,7 @@ function connectSocket() {
         // 상대가 다른 탭에 있어도 영상통화를 나간게 아니므로 신호는 끄지 않는다
         // if (username !== data.username) {
         //     videoCallBtn.style.backgroundColor = "";
-        // }
-        videoCallBtn.style.backgroundColor = "";
+        setVideoCallButtonActive(false);
     });
 }
 
@@ -299,7 +424,7 @@ document.addEventListener('visibilitychange', async () => {
      */
     if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
         startPolling();
-        chatInput.focus();
+        if (shouldAutoFocusChatInput()) chatInput.focus();
 
         const isValidSession = await checkVerified();
         if (!isValidSession) {
@@ -556,9 +681,12 @@ function loadMoreChats(event) {
                 updateUserReadChatId();
             }, 300);*/
             if (event === 'init') {
-                // 채팅 데이터 로드 후 최하단으로 채팅창 스크롤링
-                moveBottonScroll();
+                // 최초 진입 때만 렌더링 완료 후 최하단으로 이동한다.
+                // 이후 탭 복귀/포커스/리사이즈에서는 강제 이동하지 않는다.
+                startInitialChatBottomLock(1600);
+                scrollChatToBottomExact(6);
                 socket.emit("message_read", {chatId: lastChatId, room: roomName, username: username });
+                stopInitialChatBottomLockSoon();
             }
         })
         .finally(() => {
@@ -581,8 +709,15 @@ function sendMessage() {
     }
     // chatInput.blur();  // IME 조합을 강제로 끊기 위해 포커스 제거
     chatInput.value = "";
-    chatInput.style.height = textAreaOffsetHeight + "px";
-    chatInput.focus();
+    if (typeof resetChatTextareaToInitial === "function") {
+        resetChatTextareaToInitial(chatInput);
+        requestAnimationFrame(() => resetChatTextareaToInitial(chatInput));
+    } else if (typeof resizeChatTextarea === "function") {
+        resizeChatTextarea(chatInput);
+    } else {
+        chatInput.style.height = textAreaOffsetHeight + "px";
+    }
+    if (shouldAutoFocusChatInput() || document.activeElement === chatInput) chatInput.focus();
     // chatInput.setSelectionRange(0, 0);  // 커서 위치 맨 앞으로 다시 지정,  iOS Safari에서 포커스 후 스크롤 위치 이상 현상을 유발할 수도
     localStorage.setItem("#tempChat-250706", '');
     updateChatSession();  // 채팅 세션 갱신
@@ -620,7 +755,7 @@ function addMessage(data, load = false) {
 
     if (isMine) {
         // messageDiv.classList.add("bg-blue-200", "text-left");
-        messageDiv.classList.add("text-left");
+        messageDiv.classList.add("text-left", "is-mine");
         // messageDiv.style.backgroundColor = '#fef01b'; // 노란색
         messageDiv.style.backgroundColor = '#fbe843'; // 옅은 노란색
     } else {
@@ -628,7 +763,7 @@ function addMessage(data, load = false) {
             vibrate();
         }
         // messageDiv.classList.add("bg-gray-200", "text-left");
-        messageDiv.classList.add("text-left");
+        messageDiv.classList.add("text-left", "is-other");
         messageDiv.style.backgroundColor = '#ffffff'; // 흰색 (카톡 기본테마)
         messageDiv.style.backgroundColor = '#303030'; // 어두운 회색 (카톡 다크모드)
         messageDiv.style.color = 'lightgray'; // 글자색 (카톡 다크모드)
@@ -751,21 +886,17 @@ function addMessage(data, load = false) {
 
         renderDateDivider(chatState, dateStr)
 
+        const shouldKeepBottom = initialChatBottomLock || (!load && isChatNearBottom(90));
+
         if (load) {
             // 저장된 메세지 렌더링
             chatContainer.prepend(messageRow);
         } else {
             // 새로운 메세지 렌더링
             chatContainer.appendChild(messageRow);
-            // console.log('check', scrollHeight - scrollTop )
-            if (isScrollAtTheBottom()) {
-                moveBottonScroll();
+            if (shouldKeepBottom) {
+                scrollChatToBottomExact(2);
             }
-            /*if (scrollHeight - scrollTop < 1300) {
-                setTimeout(() => {
-                    moveBottonScroll();
-                }, 50);
-            }*/
         }
 
         // 정렬 순서: 시간 → 메시지 또는 메시지 → 시간
@@ -795,7 +926,7 @@ function addTypingBox(typingIndicator) {
     const messageRow = renderMessageRow(false, -1);
     const messageDiv = renderMessageDiv();
     // messageDiv.classList.add("bg-gray-200", "text-left");
-    messageDiv.classList.add("text-left");
+    messageDiv.classList.add("text-left", "is-other");
     messageDiv.style.backgroundColor = '#303030'; // 어두운 회색 (카톡 다크모드)
 
     const cloneTypingIndicator = typingIndicator.cloneNode(true);
@@ -830,6 +961,7 @@ function renderMessageRow(isMine, chatId) {
     messageRow.style.maxWidth = "100%";
     messageRow.style.justifyContent = isMine ? "flex-end" : "flex-start";
     messageRow.classList.add('messageRow')
+    messageRow.classList.add(isMine ? 'is-mine' : 'is-other');
     messageRow.dataset.chatId = chatId;
     return messageRow;
 }
@@ -866,6 +998,7 @@ function renderMessageDiv() {
 // 시간 박스
 function renderTimeDiv(timeStr) {
     const timeDiv = document.createElement("div");
+    timeDiv.classList.add("message-time");
     timeDiv.textContent = timeStr;
     timeDiv.style.fontSize = "0.75em";
     timeDiv.style.color = "#666";
@@ -925,17 +1058,18 @@ function renderDateDivider(chatState, dateStr) {
 
 function createDateDivider(dateStr) {
     const divider = document.createElement("div");
+    divider.className = "chat-date-divider";
     divider.style.display = "flex";
     divider.style.alignItems = "center";
     divider.style.textAlign = "center";
     divider.style.margin = "16px 0";
-    divider.style.color = "#999";
+    divider.style.color = "var(--chat-date-text, #777)";
     divider.style.fontSize = "0.9em";
 
     divider.innerHTML = `
-        <hr style="flex:1; border:none; border-top:1px solid #ccc;" />
-        <span style="margin: 0 10px;">${dateStr}</span>
-        <hr style="flex:1; border:none; border-top:1px solid #ccc;" />
+        <hr class="chat-date-line" style="flex:1; border:none; border-top:1px solid var(--chat-date-line, #d1d5db);" />
+        <span class="chat-date-text" style="margin: 0 10px;">${dateStr}</span>
+        <hr class="chat-date-line" style="flex:1; border:none; border-top:1px solid var(--chat-date-line, #d1d5db);" />
     `;
 
     return divider;
@@ -945,7 +1079,7 @@ function createDateDivider(dateStr) {
 function updateUserCount(number) {
     roomUserCount.textContent = number < 0 ? 1 : number;
     /*if (number === 1) {
-        videoCallBtn.style.backgroundColor = "";
+        setVideoCallButtonActive(false);
     }*/
 }
 
@@ -1157,9 +1291,21 @@ function toggleNotification() {
 }
 
 // 스크롤 이동 버튼 클릭 > 최하단
-function moveBottonScroll() {
+function moveBottonScroll(event) {
+    if (event && typeof event.preventDefault === "function") event.preventDefault();
+    if (!chatContainer) return;
+
+    // 버튼 클릭은 사용자가 명시적으로 요청한 순간이므로 흔들림 없이 즉시 한 번만 최하단으로 보낸다.
+    // 여러 번 setTimeout/requestAnimationFrame 보정하면 모바일에서 스크롤이 떨려 보인다.
+    const previousBehavior = chatContainer.style.scrollBehavior;
+    chatContainer.style.scrollBehavior = 'auto';
+    chatContainer.scrollTop = 999999999;
+    if (scrollButton) scrollButton.style.display = 'none';
+
     requestAnimationFrame(() => {
-        chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "auto" });
+        chatContainer.scrollTop = 999999999;
+        if (scrollButton) scrollButton.style.display = 'none';
+        chatContainer.style.scrollBehavior = previousBehavior || '';
     });
 }
 
@@ -1169,12 +1315,8 @@ function handleChatScroll() {
     scrollHeight = chatContainer.scrollHeight;  // 전체 스크롤 높이
     scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
 
-    if (scrollHeight - scrollTop > 1400) {
-        scrollButton.style.display = "block";
-    } else {
-        if (scrollButton) {
-            scrollButton.style.display = "none";
-        }
+    if (scrollButton) {
+        scrollButton.style.display = getChatDistanceFromBottom() > 80 ? "block" : "none";
     }
 
     sendReadDataLastChat();
@@ -1283,18 +1425,11 @@ async function initPage() {
             }
         });
 
-        // 하단으로 스크롤링
-        let attempt = 0;
-        const maxAttempts = 10;
-
-        intervalId = setInterval(() => {
-            moveBottonScroll();
-
-            attempt++;
-            if (attempt >= maxAttempts) {
-                clearInterval(intervalId);
-            }
-        }, 30);
+        // 최초 진입 때만 최하단 보정. 사용자가 만든 스크롤 이벤트가 아니면 이후에는 건드리지 않는다.
+        startInitialChatBottomLock(1800);
+        requestAnimationFrame(() => {
+            scrollChatToBottomExact(4);
+        });
     }, 250)
 
     m_intervalId2 = setInterval(() => {
@@ -1313,10 +1448,112 @@ async function initPage() {
         socket.emit("polling_chat_user", { username: username, room: roomName, timestamp: timestamp }) // 채팅방 참여자 요청
     }, 500);
 
-    chatInput.textContent = localStorage.getItem("#tempChat-250706");
+    chatInput.value = localStorage.getItem("#tempChat-250706") || "";
 
-    chatInput.focus();
-    chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+    if (shouldAutoFocusChatInput()) {
+        chatInput.focus();
+        chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+    }
 }
 
 document.addEventListener("DOMContentLoaded", initPage);
+
+// ===== Initial chat bottom anchoring =====
+// 최초 채팅 진입 시에만 마지막 메시지가 잘리지 않도록 최하단에 붙인다.
+// 탭 복귀, 입력 포커스, visualViewport 변경에서는 절대 자동으로 최하단 이동하지 않는다.
+(function () {
+    let userTouchedScroll = false;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const box = document.getElementById('chat-container');
+        if (!box) return;
+
+        startInitialChatBottomLock(1800);
+        box.addEventListener('scroll', function () {
+            if (!initialChatBottomLock) userTouchedScroll = true;
+        }, { passive: true });
+
+        requestAnimationFrame(function () {
+            if (!userTouchedScroll) scrollChatToBottomExact(4);
+        });
+
+        if (window.MutationObserver) {
+            const startedAt = Date.now();
+            const observer = new MutationObserver(function () {
+                if (Date.now() - startedAt > 1600 || userTouchedScroll) {
+                    observer.disconnect();
+                    stopInitialChatBottomLockSoon();
+                    return;
+                }
+                scrollChatToBottomExact(1);
+            });
+            observer.observe(box, { childList: true, subtree: false });
+            setTimeout(function () {
+                observer.disconnect();
+                stopInitialChatBottomLockSoon();
+            }, 1700);
+        }
+    });
+})();
+
+
+// Keyboard inset guard: move only the input bar above the keyboard.
+// Do NOT change chatContainer.scrollTop here. The user's scroll position must remain exactly where it was.
+(function initChatKeyboardGuard() {
+    const root = document.documentElement;
+    const input = document.getElementById('chat-input');
+    if (!root || !input) return;
+
+    function setKeyboardInset() {
+        const vv = window.visualViewport;
+        let gap = 0;
+        if (vv) gap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        root.style.setProperty('--chat-keyboard-bottom', gap + 'px');
+    }
+
+    input.addEventListener('focus', function () {
+        setTimeout(setKeyboardInset, 60);
+        setTimeout(setKeyboardInset, 240);
+    });
+    input.addEventListener('blur', function () {
+        setTimeout(setKeyboardInset, 80);
+    });
+    window.addEventListener('resize', setKeyboardInset, { passive: true });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setKeyboardInset, { passive: true });
+        window.visualViewport.addEventListener('scroll', setKeyboardInset, { passive: true });
+    }
+    setKeyboardInset();
+})();
+
+
+
+// ===== Final chat input auto-grow guard =====
+// Keeps the textarea growing up to 6 lines even when older CSS uses !important heights.
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('chat-input');
+    if (!input) return;
+    input.dataset.textareaAutoResize = input.dataset.textareaAutoResize || '6';
+    const run = () => {
+        if (!input.value && typeof resetChatTextareaToInitial === 'function') {
+            resetChatTextareaToInitial(input);
+            return;
+        }
+        if (typeof resizeChatTextarea === 'function') resizeChatTextarea(input);
+    };
+    input.addEventListener('input', run);
+    input.addEventListener('keyup', run);
+    input.addEventListener('paste', () => setTimeout(run, 0));
+    requestAnimationFrame(run);
+});
+
+
+// One-line initial chat input guard. This runs after all legacy init code.
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('chat-input');
+    if (!input) return;
+    if (!input.value && typeof resetChatTextareaToInitial === 'function') {
+        requestAnimationFrame(() => resetChatTextareaToInitial(input));
+        setTimeout(() => resetChatTextareaToInitial(input), 60);
+    }
+});

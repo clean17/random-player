@@ -20,7 +20,7 @@
 <!--    <noscript><link rel="stylesheet" href="/static/css/chat.abc123.css"></noscript>-->
 
 </head>
-<body>
+<body class="page-chat">
 <div class="icon-buttons">
     <!--<button id="searchBtn btn-open-search" title="Search">
         <i class="fa-solid fa-magnifying-glass"></i>
@@ -33,18 +33,40 @@
     </button>
 </div>
 <!--<audio id="alert-sound" src="/static/sound/beep.mp3" preload="auto"></audio>-->
-<div class="top-bar">
-    <div class="logout">
+<div class="top-bar" data-auto-hide="true">
+    <div class="back app-header__left">
+        <a href="/" class="app-back">Back</a>
+    </div>
+    <div class="app-title chat-app-title">
+        <span>Chat</span>
+    </div>
+    <div class="logout app-user-menu app-header__right chat-header-actions">
+        <div class="chat-theme-menu" data-chat-theme-menu>
+            <button type="button" class="chat-theme-toggle" aria-label="채팅 테마 변경" aria-expanded="false">
+                <svg class="chat-theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3.25a8.75 8.75 0 0 0-8.75 8.75c0 4.83 3.92 8.75 8.75 8.75h1.05c1.13 0 1.74-1.31 1.03-2.18-.33-.41-.16-1.03.33-1.22l1.54-.59A5.77 5.77 0 0 0 19.75 11.35C19.75 6.88 16.28 3.25 12 3.25Zm-4.04 9.5a1.22 1.22 0 1 1 0-2.44 1.22 1.22 0 0 1 0 2.44Zm2.19-3.72a1.22 1.22 0 1 1 0-2.44 1.22 1.22 0 0 1 0 2.44Zm3.7 0a1.22 1.22 0 1 1 0-2.44 1.22 1.22 0 0 1 0 2.44Zm2.19 3.72a1.22 1.22 0 1 1 0-2.44 1.22 1.22 0 0 1 0 2.44Z"/>
+                </svg>
+            </button>
+            <div class="chat-theme-panel" role="menu">
+                <button type="button" data-chat-theme-option="kakao-dark">카톡 다크</button>
+                <button type="button" data-chat-theme-option="kakao-light">카톡 라이트</button>
+                <button type="button" data-chat-theme-option="whatsapp">WhatsApp 다크</button>
+                <button type="button" data-chat-theme-option="imessage">기본 메시지</button>
+            </div>
+        </div>
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        <button type="button" class="app-menu-button" aria-label="사용자 메뉴" aria-expanded="false">☰</button>
+        <div class="app-menu-panel" role="menu">
+            <span class="app-menu-name">{{ current_user.get_id() }}</span>
+            <a href="#" class="app-menu-info is-disabled" role="menuitem" aria-disabled="true" onclick="return false;">내 정보 <small>준비중</small></a>
+            <a href="{{ url_for('auth.logout') }}" class="danger" role="menuitem">Logout</a>
+        </div>
         {% endif %}
     </div>
-    <div class="back">
-        <a href="{{ url_for('main.home') }}">Back</a>
-    </div>
 </div>
-<div id="user-count-indicator">
-    <i class="fas fa-user"></i>
+
+<div id="user-count-indicator" class="chat-user-count" aria-label="접속자 수">
+    <i class="fas fa-user" aria-hidden="true"></i>
     <span id="userCount">1</span>
 </div>
 
@@ -104,15 +126,16 @@
         </form>
 
         <!-- box-content: padding이 height에 포함되지 않도록 함 --> <!-- border -->
-        <textarea type="text" id="chat-input"
+        <textarea type="text" id="chat-input" rows="1"
                   class="p-2 px-3 py-[6px] rounded-lg focus:outline-none w-[95%] box-content resize-none chat-bottom-btn"
-                  placeholder="Type a message..."
-                  data-textarea-auto-resize="8"
+                  placeholder="메세지 입력"
+                  data-textarea-auto-resize="6"
         ></textarea>
 
-        <button id="send-button" class="p-2 rounded-lg w-[auto] ml-2 chat-bottom-btn rounded-lg">
-            <!--📤-->
-            📨
+        <button id="send-button" class="p-2 rounded-lg w-[auto] ml-2 chat-bottom-btn rounded-lg" aria-label="메세지 전송">
+            <svg class="chat-send-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3.9 19.1L21 12 3.9 4.9 3 10.4 13.8 12 3 13.6l.9 5.5z"></path>
+            </svg>
         </button>
     </div>
 
@@ -147,5 +170,7 @@
 <script src="/static/js/chat/upload_file.js?v={{ version }}"></script>
 <script src="/static/js/chat/chat.js?v={{ version }}"></script>
 <!--<script src="/static/js/chat/chat_search.js?v={{ version }}"></script>-->
+<script src="/static/js/ui_chrome.js?v={{ version }}"></script>
+<script src="/static/js/chat/chat_theme.js?v={{ version }}"></script>
 </body>
 </html>
