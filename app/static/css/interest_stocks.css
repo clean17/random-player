@@ -172,3 +172,248 @@ img.preview {
 
 .fade { animation: fade-highlight 0.6s ease; }
 
+
+
+/* ===== App header compatibility + requested stock adjustments ===== */
+body.page-stocks {
+    display: block;
+    min-height: 100dvh;
+    padding: 0;
+    background: #f4f4f4 !important;
+}
+
+body.page-stocks .container {
+    margin: 0 auto;
+    padding-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 12px);
+}
+
+body.page-stocks .tab-bar {
+    position: sticky;
+    top: 0;
+    z-index: 3000;
+    background: #fff;
+    padding: 6px 0;
+}
+
+body.page-stocks.chrome-visible .tab-bar {
+    top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top));
+}
+
+body.page-stocks .section-title {
+    position: static !important;
+    top: auto !important;
+    background: transparent !important;
+}
+
+body.page-stocks .table-scroller .trade-grid {
+    grid-template-columns: 1fr 1fr !important;
+}
+
+body.page-stocks .table-scroller .carousel-btn {
+    position: fixed !important;
+    top: 58vh !important;
+    transform: translateY(-50%) !important;
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 38px !important;
+    opacity: .26 !important;
+    background: rgba(255,255,255,.44) !important;
+    color: rgba(17,24,39,.50) !important;
+    border: 1px solid rgba(0,0,0,.08) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,.06) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 8500 !important;
+}
+
+body.page-stocks .table-scroller:hover .carousel-btn,
+body.page-stocks .table-scroller .carousel-btn:focus,
+body.page-stocks.chrome-visible .table-scroller .carousel-btn {
+    opacity: .48 !important;
+}
+
+body.page-stocks .table-scroller .carousel-btn.left {
+    left: max(10px, env(safe-area-inset-left)) !important;
+}
+body.page-stocks .table-scroller .carousel-btn.right {
+    right: max(10px, env(safe-area-inset-right)) !important;
+}
+
+@media (max-width: 430px) {
+    body.page-stocks .table-scroller .trade-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 7px 7px;
+        font-size: 12px;
+    }
+    body.page-stocks .table-scroller .kv {
+        gap: 6px;
+        padding: 7px 8px;
+    }
+    body.page-stocks .table-scroller .kv .v {
+        white-space: normal;
+        text-align: right;
+    }
+}
+
+
+/* ===== Desktop stock carousel buttons inside the content container ===== */
+body.page-stocks .table-scroller {
+    position: relative !important;
+}
+@media (min-width: 768px) {
+    body.page-stocks .table-scroller .carousel-btn {
+        position: absolute !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        z-index: 20 !important;
+    }
+    body.page-stocks .table-scroller .carousel-btn.left {
+        left: 14px !important;
+    }
+    body.page-stocks .table-scroller .carousel-btn.right {
+        right: 14px !important;
+    }
+}
+
+
+/* ===== Stock carousel viewport-centered buttons ===== */
+body.page-stocks .table-scroller .carousel-btn {
+    position: fixed !important;
+    top: 50vh !important;
+    transform: translateY(-50%) !important;
+    z-index: 8500 !important;
+}
+@media (min-width: 768px) {
+    body.page-stocks .table-scroller .carousel-btn.left {
+        left: max(20px, calc((100vw - min(1120px, calc(100vw - 48px))) / 2 + 14px)) !important;
+    }
+    body.page-stocks .table-scroller .carousel-btn.right {
+        right: max(20px, calc((100vw - min(1120px, calc(100vw - 48px))) / 2 + 14px)) !important;
+    }
+}
+@media (max-width: 767px) {
+    body.page-stocks .table-scroller .carousel-btn.left {
+        left: max(10px, env(safe-area-inset-left)) !important;
+    }
+    body.page-stocks .table-scroller .carousel-btn.right {
+        right: max(10px, env(safe-area-inset-right)) !important;
+    }
+}
+
+
+/* ===== 2026-05-31 stock carousel buttons: viewport center, container edges ===== */
+body.page-stocks {
+    --stock-container-max: 900px;
+    --stock-container-gutter: 24px;
+}
+@media (min-width: 1500px) {
+    body.page-stocks { --stock-container-max: 1500px; }
+}
+body.page-stocks .table-scroller .carousel-btn {
+    position: fixed !important;
+    top: 50vh !important;
+    transform: translateY(-50%) !important;
+    z-index: 8500 !important;
+}
+@media (min-width: 768px) {
+    body.page-stocks .table-scroller .carousel-btn.left {
+        left: max(12px, calc((100vw - min(var(--stock-container-max), calc(100vw - var(--stock-container-gutter)))) / 2 + 12px)) !important;
+        right: auto !important;
+    }
+    body.page-stocks .table-scroller .carousel-btn.right {
+        right: max(12px, calc((100vw - min(var(--stock-container-max), calc(100vw - var(--stock-container-gutter)))) / 2 + 12px)) !important;
+        left: auto !important;
+    }
+}
+@media (max-width: 767px) {
+    body.page-stocks .table-scroller .carousel-btn.left {
+        left: max(10px, env(safe-area-inset-left)) !important;
+        right: auto !important;
+    }
+    body.page-stocks .table-scroller .carousel-btn.right {
+        right: max(10px, env(safe-area-inset-right)) !important;
+        left: auto !important;
+    }
+}
+
+/* ===== Stock tab-bar date range layout =====
+   모바일에서 date input 2개가 각각 한 줄씩 내려가지 않고
+   같은 행에서 반반씩 보이도록 보정한다. */
+body.page-stocks .tab-bar {
+    align-items: center;
+}
+
+body.page-stocks .tab-bar input.date,
+body.page-stocks .tab-bar input[type="date"].date {
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+    body.page-stocks .tab-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    body.page-stocks .tab-bar .tab-btn {
+        flex: 0 0 auto;
+    }
+
+    body.page-stocks .tab-bar input.date,
+    body.page-stocks .tab-bar input[type="date"].date {
+        flex: 1 1 calc(50% - 4px) !important;
+        width: calc(50% - 4px) !important;
+        max-width: calc(50% - 4px) !important;
+        min-width: 0 !important;
+        height: 40px;
+        margin: 0 !important;
+        padding-left: 10px;
+        padding-right: 8px;
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 380px) {
+    body.page-stocks .tab-bar input.date,
+    body.page-stocks .tab-bar input[type="date"].date {
+        font-size: 12px;
+        padding-left: 8px;
+        padding-right: 6px;
+    }
+}
+
+/* ===== Stock carousel buttons: restore static/no-animation state ===== */
+body.page-stocks .table-scroller .carousel-btn {
+    width: 58px !important;
+    height: 58px !important;
+    font-size: 34px !important;
+    transition: none !important;
+    animation: none !important;
+    transform: translateY(-50%) !important;
+    filter: none !important;
+}
+
+body.page-stocks .table-scroller .carousel-btn:hover,
+body.page-stocks .table-scroller .carousel-btn:focus,
+body.page-stocks .table-scroller .carousel-btn:focus-visible,
+body.page-stocks .table-scroller .carousel-btn:active {
+    transition: none !important;
+    animation: none !important;
+    transform: translateY(-50%) !important;
+    filter: none !important;
+}
+
+body.page-stocks .table-scroller .carousel-btn .chev {
+    transition: none !important;
+    animation: none !important;
+    transform: translateY(-1px) !important;
+}
+
+@media (max-width: 767px) {
+    body.page-stocks .table-scroller .carousel-btn {
+        width: 54px !important;
+        height: 54px !important;
+        font-size: 32px !important;
+    }
+}

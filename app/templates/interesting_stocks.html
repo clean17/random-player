@@ -11,17 +11,24 @@
     <link rel="stylesheet" href="/static/css/interest_stocks.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/carousel.css?v={{ version }}">
 </head>
-<body>
-<div class="top-bar">
-    <div class="logout">
+<body class="page-stocks">
+<div class="top-bar" data-auto-hide="true">
+    <div class="back app-header__left">
+        <a href="{{ url_for('main.home') }}" class="app-back">Back</a>
+    </div>
+    <div class="app-title">Stock</div>
+    <div class="logout app-user-menu app-header__right">
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('auth.logout') }}">Logout</a>
+        <button type="button" class="app-menu-button" aria-label="사용자 메뉴" aria-expanded="false">☰</button>
+        <div class="app-menu-panel" role="menu">
+            <span class="app-menu-name">{{ current_user.get_id() }}</span>
+            <a href="#" class="app-menu-info is-disabled" role="menuitem" aria-disabled="true" onclick="return false;">내 정보 <small>준비중</small></a>
+            <a href="{{ url_for('auth.logout') }}" class="danger" role="menuitem">Logout</a>
+        </div>
         {% endif %}
     </div>
-    <div class="back">
-        <a href="{{ url_for('main.home') }}">Back</a>
-    </div>
 </div>
+
 
 <div class="container">
     <div class="tab-bar">
@@ -41,7 +48,8 @@
 <!--                  d="M12 21s-7.2-4.6-9.6-8.6C.6 9.3 2.2 6.2 5.4 5.3c2.1-.6 4.2.3 6.6 2.8 2.4-2.5 4.5-3.4 6.6-2.8 3.2.9 4.8 4 3 7.1C19.2 16.4 12 21 12 21z"/>-->
 <!--            </svg>-->
 <!--        </button>-->
-        <input id="dateInput" class="date" type="date" />
+        <input id="dateInputStart" class="date" type="date" />
+        <input id="dateInputEnd" class="date" type="date" style="display: none"/>
     </div>
 
     <h3 class="section-title">검색 결과
@@ -188,6 +196,8 @@
     const mm = String(today.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
     const dd = String(today.getDate()).padStart(2, '0');
     const favoriteStocks = [];
+    const startDateInputEl = document.getElementById('dateInputStart');
+    const endDateInputEl = document.getElementById('dateInputEnd');
 
     const today_yyyymmdd = `${yyyy}${mm}${dd}`;
     const fmt = new Intl.DateTimeFormat("ko-KR", {
@@ -210,28 +220,28 @@
             const target = document.querySelector(btn.dataset.target);
             if (target) target.style.display = 'block';
             if (target.id === 'tab-summary'||target.id === 'tab-favorite') {
-                setDefaultDateToday(14);
+                setDefaultDateToday(8, startDateInputEl);
                 loadData()
             } else {
-                setDefaultDateToday();
+                setDefaultDateToday(0, startDateInputEl);
                 loadData()
             }
         });
     });
 
     // 오늘 날짜 기본값
-    function setDefaultDateToday(interval=0){
-        const input = document.getElementById('dateInput');
+    function setDefaultDateToday(interval=0, dateEl){
         const now = new Date();
         const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() - interval);
         const yyyy = target.getFullYear();
         const mm = String(target.getMonth() + 1).padStart(2, '0');
         const dd = String(target.getDate()).padStart(2, '0');
-        input.value = `${yyyy}-${mm}-${dd}`;
+        dateEl.value = `${yyyy}-${mm}-${dd}`;
     }
 
     // 숫자 포맷, fmtNum.format(1234567.891); // "1,234,567.89"
     const fmtNum = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }); // Intl.NumberFormat 은 언어에 맞는 숫자 서식을 지원하는 객체의 생성자
+
     function fmt2(val) {
         if (val == null || val === '') return '';
         const n = Number(val);
@@ -239,7 +249,9 @@
         return fmtNum.format(Math.round(n * 100) / 100); // Math.round(n * 100) / 100 → 소수 둘째 자리까지 반올림
     }
 
-    function fmt_won(val) {
+
+    // 2.4조, 2052.2억, 7039.1만원.. 거래대금 표시용
+    function trValFmtWon(val) {
         if (val == null || val === '') return '';
         const n = Number(val);
         if (!isFinite(n)) return String(val);
@@ -255,8 +267,17 @@
             return new Intl.NumberFormat('ko-KR').format(Math.round(n / 1e4)) + '만원';
         } else {
             // 1만 미만 그냥 숫자
-            return new Intl.NumberFormat('ko-KR').format(Math.round(n));
+            return new Intl.NumberFormat('ko-KR').format(Math.round(n)) + '원'
         }
+    }
+
+    function fmtKrClose(value) {
+        return Math.round(value).toLocaleString("ko-KR");
+    }
+
+    function calCloseReturn(now, buy) {
+        const returnRate = ((now - buy) / buy) * 100;
+        return returnRate.toFixed(1) + '%';
     }
 
 
@@ -279,7 +300,7 @@
         const tbody =    tradingTable.querySelector('tbody');
 
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -300,13 +321,13 @@
         <tr>
           <td>${imgBtn}</td>
 <!--          <td>${r.stock_code ?? ''}</td>-->
-          <td>`+formatted_date+`</td>
+<!--          <td>`+formatted_date+`</td>-->
           <input type="hidden" class="stock_code" value="${r.stock_code ?? ''}">
           <input type="hidden" class="product_code" value="">
           <td class="stock_name">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
-          <td class="right avg_amount" data-avg5d-amount="${r.avg5d_trading_value}">${fmt_won(r.avg5d_trading_value)}</td>
-          <td class="right cur_amount" data-current-amount="${r.current_trading_value}">${fmt_won(r.current_trading_value)}</td>
+          <td class="right avg_amount" data-avg5d-amount="${r.avg5d_trading_value}">${trValFmtWon(r.avg5d_trading_value)}</td>
+          <td class="right cur_amount" data-current-amount="${r.current_trading_value}">${trValFmtWon(r.current_trading_value)}</td>
           <td class="right tv_change">${fmt2(r.trading_value_change_pct)}%</td>
           <td class="right yst_close">${fmt2(r.yesterday_close)}원</td>
           <td class="right cur_close">${fmt2(r.current_price)}원</td>
@@ -329,7 +350,7 @@
         const thCount = changeTable.querySelectorAll("thead tr th").length;
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -352,8 +373,8 @@
           <td>`+formatted_date+`</td>
           <td class="">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
-          <td class="right">${fmt_won(r.avg5d_trading_value)}</td>
-          <td class="right">${fmt_won(r.current_trading_value)}</td>
+          <td class="right">${trValFmtWon(r.avg5d_trading_value)}</td>
+          <td class="right">${trValFmtWon(r.current_trading_value)}</td>
           <td class="right">${fmt2(r.trading_value_change_pct)}%</td>
           <td class="right">${fmt2(r.yesterday_close)}원</td>
           <td class="right">${fmt2(r.current_price)}원</td>
@@ -375,7 +396,7 @@
         const thCount = changeTable.querySelectorAll("thead tr th").length;
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -430,7 +451,7 @@
         const thCount = lowTable.querySelectorAll("thead tr th").length;
         const tbody =    lowTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -453,7 +474,7 @@
           <td class="stock_name">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right">${r.market_value ?? ''}</td>
-          <td class="right">${fmt_won(r.current_trading_value)}</td>
+          <td class="right">${trValFmtWon(r.current_trading_value)}</td>
           <td class="right">${fmt2(r.today_price_change_pct)}%</td>
           <td class="right">${fmt2(r.yesterday_close)}원</td>
           <td class="right yst_close">${fmt2(r.current_price)}원</td>
@@ -497,14 +518,14 @@
                 target = document.querySelector(btn.dataset.target).id;
             }
         });
-        const input = document.getElementById('dateInput');
-        const yyyymmdd = input.value?.replace(/-/g, '');
+        const yyyymmdd = startDateInputEl.value?.replace(/-/g, '');
+        const yyyymmdd2 = endDateInputEl.value?.replace(/-/g, '');
 
         const url = 'https://chickchick.kr/stocks/interest/data/today';
         const url2 = 'https://chickchick.kr/stocks/interest/data/fire';
         const url3 = 'https://chickchick.kr/stocks/interest/data/low';
         const url4 = 'https://chickchick.kr/stocks/interest/data/favorite';
-        const payload = { date: yyyymmdd };
+        const payload = { date: yyyymmdd, endDate: yyyymmdd2 };
 
         try {
             renderLoadingOverlay();
@@ -533,6 +554,7 @@
             }
 
             if (target === 'tab-summary') {
+                endDateInputEl.style.display = 'block';
                 const res2 = await fetch(url2, {
                     method: 'POST',
                     headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
@@ -547,6 +569,7 @@
             }
 
             if (target === 'tab-low') {
+                payload.endDate = null;
                 const res3 = await fetch(url3, {
                     method: 'POST',
                     headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
@@ -560,6 +583,7 @@
             }
 
             if (target === 'tab-favorite') {
+                endDateInputEl.style.display = 'block';
                 const res4 = await fetch(url4, {
                     method: 'POST',
                     headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
@@ -570,6 +594,10 @@
                 removeLoadingOverlay();
                 // renderLowTable(data3);
                 renderTradingView(data4);
+            }
+
+            if (target !== 'tab-summary' && target !== 'tab-favorite') {
+                endDateInputEl.style.display = 'none';
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
         } catch (e) {
@@ -592,8 +620,7 @@
 
         // 금일 등락률
         timer = setInterval(()=>{
-            const input = document.getElementById('dateInput');
-            const yyyymmdd = input.value?.replace(/-/g, '');
+            const yyyymmdd = startDateInputEl.value?.replace(/-/g, '');
             // if (!yyyymmdd || today_yyyymmdd !== yyyymmdd) return;
             const activeTable = document.querySelector('.tab-bar .tab-btn.active').dataset.target;
             const stock_names = document.querySelector(activeTable).querySelectorAll('.stock_name'); // 탭 1
@@ -661,7 +688,7 @@
                                 const amount_change_pct = Number(amount) / Number(yesterday_amount.replace(/[^0-9.]/g, "")) * 100
                                 const current_amount_el = tr.querySelector('.cur_amount');
                                 const amount_change_pct_el = tr.querySelector('.tv_change');
-                                updateTdWithBlink(current_amount_el, fmt_won(amount));
+                                updateTdWithBlink(current_amount_el, trValFmtWon(amount));
                                 updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
                             }
                         }
@@ -740,15 +767,18 @@
     })
 
     // 날짜 변경 시 즉시 불러오기
-    document.getElementById('dateInput').addEventListener('change', loadData);
+    startDateInputEl.addEventListener('change', loadData);
+    endDateInputEl.addEventListener('change', loadData);
 
     // 첫 진입 시 현재 날짜로 자동 로드
     window.addEventListener('DOMContentLoaded', _ => {
-        setDefaultDateToday();
+        setDefaultDateToday(0, startDateInputEl);
+        setDefaultDateToday(0, endDateInputEl);
         loadData();
         getFavoriteStocks();
     });
 </script>
 
+<script src="/static/js/ui_chrome.js?v={{ version }}"></script>
 </body>
 </html>

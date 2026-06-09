@@ -236,3 +236,21 @@
 .fav-btn[data-favorited="true"]{  color:#f5c400; } /* 노란 채움 */
 .fav-icon-star{ color:#f5c400; }
 .fav-icon-heart{  color:#F54A00; }
+
+
+/* 실제 데이터 카드가 1개뿐이어도 빈 상태 배경이 적용되지 않게 보정 */
+.table-scroller article.trade-card,
+.table-scroller article.trade-card.low-card,
+.table-scroller article.trade-card.summary-card {
+    background: #fff !important;
+    color: #111827 !important;
+    border-style: solid !important;
+    border-color: rgba(0,0,0,.08) !important;
+    text-align: left !important;
+}
+
+.table-scroller > .trade-card:only-child:not(article) {
+    background: #f8fafc !important;
+    color: #64748b !important;
+    text-align: center !important;
+}
