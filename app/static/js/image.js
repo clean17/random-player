@@ -206,9 +206,13 @@ function nextImage(nextImg) {
 function previousImage() {
     const centerImage = getCenterImage();
     if (centerImage) {
-        const previousImage = centerImage.previousElementSibling;
-        if (previousImage && previousImage.classList.contains('image-item')) {
-            previousImage.scrollIntoView({ behavior: 'auto', block: 'center' });
+        const previousEL = centerImage.previousElementSibling;
+        if (previousEL && previousEL.classList.contains('image-item')) {
+            previousEL.scrollIntoView({ behavior: 'auto', block: 'center' });
+            if (previousEL.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
+                const videoEl = previousEL.querySelector('video');
+                videoEl.currentTime = 0;
+            }
         } else {
             showDebugToast("처음입니다.");
         }
@@ -767,8 +771,10 @@ function showSlideshowModal(fileList) {
 
 async function slideShow() {
     try {
+        console.log('$1')
         const resp = await fetch("/image/pages?slide=y&dir=refine");
         const imgList = await resp.json();  // 서버에서 JSON 배열로 이미지 URL 목록 반환한다고 가정
+        console.log('imgList', imgList);
 
         if (!Array.isArray(imgList['slide_show_images']) || imgList['slide_show_images'].length === 0) {
             alert("이미지가 없습니다.");
@@ -776,6 +782,7 @@ async function slideShow() {
         }
         showSlideshowModal(imgList['slide_show_images']);
     } catch (e) {
+        console.error(e)
         alert("이미지 목록을 가져오는 데 실패했습니다.");
     }
 }

@@ -336,19 +336,14 @@ def image_list():
         template_html = 'image_list_masonry.html'
 
     elif dir == 'refine':
-        # firstRequst = request.args.get('firstRequst')
-        # if firstRequst == 'True':
-        #     initialize_shuffle_images() # ref는 처음 조회 시 이미지 셔플을 사용한다
-
-        # isSlide = request.args.get('slide', '')
-        # if isSlide == 'y':
-        #     print('sliedddddddddddddddd')
-        #     images, page = get_images(0, images_length, page, REF_IMAGE_DIR)
-        #     return jsonify({"slide_show_images": images})
-
         images, page, start, images_length, template_html = get_image_page(
             start, LIMIT_PAGE_NUM, page, REF_IMAGE_DIR, refined_image_arr, 'image_list.html'
         )
+
+        isSlide = request.args.get('slide', '')
+        if isSlide == 'y':
+            images, page = get_images(0, images_length, page, REF_IMAGE_DIR)
+            return jsonify({"slide_show_images": images})
 
     elif dir == 'stock':
         market = request.args.get('market') or ''
@@ -656,6 +651,8 @@ def get_stock_graph(market, filename):
     directory = DIRECTORY_MAP.get(market.lower())
 
     if market.lower() == 'interest':
+    # if market.lower() == 'interest' or market.lower() == 'kospil':
+        # directory = DIRECTORY_MAP.get('interest')
         # URL 인코딩된 파일명 대응
         filename = unquote(filename)
 
