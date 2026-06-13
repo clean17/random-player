@@ -398,22 +398,35 @@ def fetch_image_list():
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
 @login_required
 def move_image():
+    payload = request.get_json(silent=True) or {}
     # imagepath의 값에 따라 src_path 결정
-    imagepath = request.get_json().get('imagepath')
-    subpath = request.get_json().get('subpath', '')
-    filename = request.get_json().get('filename')
+    imagepath = payload.get('imagepath')
+    subpath = payload.get('subpath', '')
+    filename = payload.get('filename')
+
+    if not imagepath:
+        return jsonify({'status': 'error', 'message': 'imagepath is required'}), 400
+
+    if not filename:
+        return jsonify({'status': 'error', 'message': 'filename is required'}), 400
+
     filename = urllib.parse.unquote(filename)
 
-    filename = os.path.join(os.path.dirname(filename),
-                            clean_filename(os.path.basename(filename)))
-    dest_path = os.path.join(MOVE_DIR,
-                             clean_filename(os.path.basename(filename)))
+    filename = os.path.join(
+        os.path.dirname(filename),
+        clean_filename(os.path.basename(filename))
+    )
+    dest_path = os.path.join(
+        MOVE_DIR,
+        clean_filename(os.path.basename(filename))
+    )
 
-    ref_dest_path = os.path.join(REF_IMAGE_DIR,
-                             clean_filename(os.path.basename(filename)))
+    ref_dest_path = os.path.join(
+        REF_IMAGE_DIR,
+        clean_filename(os.path.basename(filename))
+    )
 
     name_without_ext = os.path.splitext(filename)[0]
-
 
     # send2trash(os.path.join(IMAGE_DIR2, new_path)) # 휴지통으로 보낸다
 
@@ -588,7 +601,7 @@ def get_image():
             base_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
     elif dir == 'stock':
         if directory is not None:
-            return send_from_directory(directory, filename)
+            return send_from_directory(directory, filename)  # 없으면 함수가 404를 응답함
         else:
             abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
     else:

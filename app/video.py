@@ -5,7 +5,8 @@ import time, gc
 import cv2
 import re
 from send2trash import send2trash, TrashPermissionError
-from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for, Response, abort
+from flask import Blueprint, request, jsonify, send_file, render_template, redirect, url_for, Response, abort, \
+    current_app, send_from_directory
 from flask_login import login_required
 # from werkzeug.utils import secure_filename
 from urllib.parse import quote
@@ -81,26 +82,30 @@ def get_video(filepath):
 @login_required
 def get_temp_video(filename):
     filename = filename.replace("\\", "/")
-    dir = request.args.get('dir')
+
+    dir_type = request.args.get('dir')
     selected_dir = request.args.get('selected_dir')
 
-    if dir == 'temp':
-        dir = TEMP_IMAGE_DIR
+    if dir_type == 'temp':
+        base_dir = TEMP_IMAGE_DIR
         if selected_dir:
-            dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
-    elif dir == 'image2':
-        dir = IMAGE_DIR2
-    elif dir == 'image':
-        dir = IMAGE_DIR
-    elif dir == 'move':
-        dir = MOVE_DIR
-    elif dir == 'refine':
-        dir = REF_IMAGE_DIR
+            base_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
+    elif dir_type == 'image2':
+        base_dir = IMAGE_DIR2
+    elif dir_type == 'image':
+        base_dir = IMAGE_DIR
+    elif dir_type == 'move':
+        base_dir = MOVE_DIR
+    elif dir_type == 'refine':
+        base_dir = REF_IMAGE_DIR
+    else:
+        abort(400)
 
-
-    return send_file(
-        os.path.join(dir, filename),
-        conditional=True
+    # send_file보다 send_from_directory사용하는게 안전
+    return send_from_directory(
+        base_dir,
+        filename,
+        conditional=True  # 영상의 필요한 구간만
     )
 
 
