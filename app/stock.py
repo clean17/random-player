@@ -5,7 +5,8 @@ from flask_login import login_required, current_user
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
-    update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api
+    update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
+    update_low_stock_graph
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
@@ -81,7 +82,6 @@ def upsert_interesting_stocks():
     stock_name = data.get("stock_name") or None
     pred_price_change_3d_pct = data.get("pred_price_change_3d_pct") or None
     yesterday_close = data.get("yesterday_close") or None
-    current_price = data.get("current_price") or None
     today_price_change_pct = data.get("today_price_change_pct") or None
     avg5d_trading_value = data.get("avg5d_trading_value") or None
     current_trading_value = data.get("current_trading_value") or None
@@ -89,12 +89,12 @@ def upsert_interesting_stocks():
     graph_file = data.get("graph_file") or None
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
-    target = data.get("target") or None
-    last_close = data.get("last_close") or current_price
+    target = data.get("target") or 'interest'
+    last_close = data.get("last_close") or None
 
     # 종가만 수정
     close_list = []
-    close_list.append((str(last_close), None, logo_image_url, stock_code))
+    close_list.append((str(int(last_close)), None, logo_image_url, stock_code))
     update_interest_stock_list_close(close_list)
 
     stock = StockDTO(
@@ -103,7 +103,7 @@ def upsert_interesting_stocks():
         stock_name=stock_name,
         pred_price_change_3d_pct=pred_price_change_3d_pct,
         yesterday_close=yesterday_close,
-        current_price=current_price,
+        current_price=last_close,
         today_price_change_pct=today_price_change_pct,
         avg5d_trading_value=avg5d_trading_value,
         current_trading_value=current_trading_value,
@@ -121,22 +121,35 @@ def upsert_interesting_stocks():
 def update_interesting_stocks_graph():
     data = request.json
     stock_code = data.get("stock_code")
-    stock_name = data.get("stock_name") or None
     graph_file = data.get("graph_file") or None
 
     stock = StockDTO(
         stock_code=stock_code,
-        stock_name=stock_name,
         graph_file=graph_file,
     )
     result = update_interest_stock_graph(stock)
+    return {"status": "success", "result": result}, 200
+
+@stock.route("/low/graph", methods=["POST"])
+def update_low_stocks_graph():
+    data = request.json
+    stock_code = data.get("stock_code")
+    created_at = data.get("created_at")
+    graph_file = data.get("graph_file") or None
+
+    stock = StockDTO(
+        stock_code=stock_code,
+        created_at=created_at,
+        graph_file=graph_file,
+    )
+    result = update_low_stock_graph(stock)
     return {"status": "success", "result": result}, 200
 
 @stock.route("/interest/data/today", methods=["POST"])
 def get_interesting_stocks():
     data = request.json
     date = data.get("date")
-    target = data.get("target")
+    target = data.get("target") or 'interest'
     stocks = get_interest_stocks(date, date,"normal")
     return stocks
 
@@ -153,7 +166,7 @@ def get_low_stocks():
     data = request.json
     date = data.get("date")
     endDate = data.get("endDate") or date
-    # target = data.get("target")
+    # target = data.get("target") or 'interest'
     stocks = get_interest_stocks(date, endDate, "low")
     return stocks
 
@@ -301,6 +314,21 @@ def get_favorite_stocks_data():
     stocks = get_interest_stocks_info(date, endDate, user_id)
     return stocks
 
+@stock.route("/interest/data/favorite/heart", methods=["POST"])
+@login_required
+def get_favorite_heart_stocks_data():
+    data = request.json
+    date = data.get("date")
+    endDate = data.get("endDate")
+
+    fetch_user = find_user_by_username(session["_user_id"])
+    if fetch_user is not None:
+        user_id = fetch_user.id
+    else:
+        user_id = None
+
+    stocks = get_interest_stocks_info(date, endDate, user_id)
+    return stocks
 
 @stock.route("/interest/data/favorite/schedule", methods=["POST"])
 def get_favorite_stocks_data_schedule():

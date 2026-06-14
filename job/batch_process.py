@@ -344,6 +344,50 @@ def find_low_stocks():
     if process.returncode != 0:
         print("returncode =", process.returncode)
 
+def find_low_stocks_v2():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\4_find_low_point_v2.py"
+
+    # subprocess 실행 (새로운 프로세스)
+    process = subprocess.Popen(
+        [venv_python, "-u", "-X", "utf8", py_script],  #  UTF-8 강제하면 이모지 출력 가능
+        cwd=r"C:\my-project\AutoSales.py",   # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
+        stdout=subprocess.PIPE,               # 주석하면 자식 프로세스의 출력이 “파이프로 캡처되지 않고” 그냥 기본 출력 스트림으로 흘러간다
+        stderr=subprocess.STDOUT,             # stderr도 stdout으로 합치기(편함)
+        text=True,
+        encoding="utf-8",                     # 부모도 UTF-8로 읽기
+        errors="replace",                     # ignore 대신 replace 추천(문제 보이게)
+        bufsize=1,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # Windows에서 종료 제어용
+    )
+
+    try:
+        # 출력이 안 나와도 멈춘 것처럼 보이지 않게 poll 방식, 출력이 없는 구간에서 “멈춘 것처럼 보이는 문제” 예방하려면 추천(안정성 ↑)
+        while True:
+            line = process.stdout.readline()
+            if line:
+                print(line, end="")
+            elif process.poll() is not None:
+                break
+            else:
+                time.sleep(0.05)
+
+    except KeyboardInterrupt:  # “서버/스케줄러에서 돌리고 Ctrl+C로 끌 수 있다”면 잡는 게 맞음
+        # Ctrl+C 받으면 자식도 같이 종료 시도
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        rc = process.wait()
+
+    if process.returncode != 0:
+        print("returncode =", process.returncode)
+
+
 
 def find_low_stocks_us():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"

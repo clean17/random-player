@@ -68,7 +68,11 @@ def update_interest_stock_list_close(rows: Sequence[Tuple[float, str, str, str]]
 @db_transaction
 def get_stock_list(nation: str, conn=None):
     sql = """
-    SELECT stock_code, stock_name, sector_code, stock_market 
+    SELECT stock_code
+         , stock_name
+         , sector_code
+         , stock_market
+         , product_code
     FROM stocks 
     WHERE nation = %s
     and flag = True
@@ -153,7 +157,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             %s, %s, %s
         )
         -- ON CONFLICT ON CONSTRAINT stocks_code_daily
-        ON CONFLICT (stock_code, (created_at::date))
+        ON CONFLICT (stock_code, target, (created_at::date))
         DO UPDATE SET
             updated_at               = now(),
             nation                   = COALESCE(EXCLUDED.nation,                   interest_stocks.nation),
@@ -166,8 +170,8 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             current_trading_value    = COALESCE(EXCLUDED.current_trading_value,    interest_stocks.current_trading_value),
             trading_value_change_pct = COALESCE(EXCLUDED.trading_value_change_pct, interest_stocks.trading_value_change_pct),
             graph_file               = COALESCE(EXCLUDED.graph_file,               interest_stocks.graph_file),
-            market_value             = COALESCE(EXCLUDED.market_value,             interest_stocks.market_value),
-            target                   = COALESCE(EXCLUDED.target,                   interest_stocks.target)
+            market_value             = COALESCE(EXCLUDED.market_value,             interest_stocks.market_value)
+            --target                   = COALESCE(EXCLUDED.target,                   interest_stocks.target)
         RETURNING id;
         """
         cur.execute(
@@ -207,27 +211,54 @@ def update_interest_stock_graph(stock: "StockDTO", conn=None) -> None:
         return row[0] if row else None
 
 
+# 저점 그래프만 갱신 (매수 시점으로부터 2주 동안)
+@db_transaction
+def update_low_stock_graph(stock: "StockDTO", conn=None) -> None:
+    sql = """
+        UPDATE interest_stocks 
+        SET 
+            graph_file  = COALESCE(%s, graph_file),
+            updated_at = now() 
+        WHERE stock_code = %s 
+          AND created_at::date = %s
+          AND target like 'low%%'
+        RETURNING id;
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(
+            sql,
+            (
+                stock.graph_file, stock.stock_code, stock.created_at
+            )
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
 # 실시간, 저점 데이터 조회
 @db_transaction
 def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None):
     base_sql = """
-    SELECT i.id
-         , i.created_at
-         , i.stock_code
-         , i.stock_name
-         , i.pred_price_change_3d_pct
-         , i.yesterday_close
-         , i.current_price
-         , i.today_price_change_pct
-         , i.avg5d_trading_value
-         , i.current_trading_value
-         , i.trading_value_change_pct
-         , i.graph_file
-         , i.updated_at
-         , i.market_value
-         , s.category
-         , s.close
-         , s.logo_image_url
+    SELECT 
+        --row_number() over (order by i.id) as rn 
+        i.id
+        , i.stock_code
+        , i.stock_name
+        , s.category        
+        , i.yesterday_close
+        , i.current_price
+        , s.close
+        , i.today_price_change_pct
+        , i.avg5d_trading_value
+        , i.current_trading_value
+        , i.trading_value_change_pct
+        , i.pred_price_change_3d_pct
+        , i.graph_file
+        , i.market_value
+        , i.created_at
+        , i.updated_at              
+        , s.logo_image_url
+        , s.product_code
     FROM interest_stocks i
     JOIN stocks s ON i.stock_code = s.stock_code
     WHERE i.created_at::date >= %s
@@ -241,7 +272,7 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None
         base_sql += """
           AND i.today_price_change_pct::float >= 4
           AND i.current_trading_value::numeric > 5_000_000_000
-          AND i.target IS NULL
+          AND i.target = 'interest'
         ORDER BY i.today_price_change_pct::numeric DESC,
                  i.current_trading_value::numeric DESC
         """
@@ -250,7 +281,7 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None
         base_sql += """
           AND i.today_price_change_pct::numeric > 3.3
           AND i.target LIKE 'low%%'
-        ORDER BY i.today_price_change_pct::numeric DESC
+        ORDER BY i.created_at::date, i.today_price_change_pct::numeric DESC
         """
 
     else:
@@ -283,24 +314,41 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
             and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
         """
         target_condition = """
-            and i.target is null
+            and i.target = 'interest'
         """
         fire_condition = """
             where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
             and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8.5
             and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
             and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.8
+            and min < close
         """
         params = [date, endDate]
 
     sql = f"""
-    select row_number() over (
-        order by count desc
-        , REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric desc
-        , REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric desc
+    select 
+        row_number() over (
+            order by count desc
+            , REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric desc
+            , REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric desc
         ) as rn
-        , b.* 
+        , b.id
+        , b.stock_name
+        , b.stock_code
+        , b.category
+        , b.count
+        , b.min
+        , b.last
+        , b.close
+        , b.avg_change_pct
+        , b.total_rate_of_increase
+        , b.increase_per_day
+        , b.market_value
+        , b.avg_trading_value
         , last_i.last_trading_value_num as current_trading_value
+        , b.first_date
+        , b.last_date
+        , b.logo_image_url
         , coalesce(b.s_graph_file, last_i.graph_file) as graph_file
     from (
         select 
@@ -319,7 +367,7 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
           , ROUND(
               AVG(
                 COALESCE(
-                  NULLIF(REGEXP_REPLACE(today_price_change_pct, '%%', '', 'g'), '')::numeric, 0)
+                  NULLIF(REGEXP_REPLACE(i.today_price_change_pct, '%%', '', 'g'), '')::numeric, 0)
                )
             , 1)||'%%' AS avg_change_pct  
           , ROUND(
@@ -343,13 +391,13 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
           , (select market_value from interest_stocks is2
             	where is2.created_at = max(i.created_at)
             ) as market_value
-          , avg(current_trading_value::numeric) as avg_trading_value
+          , ROUND(avg(current_trading_value::numeric)) as avg_trading_value
           , min(i.created_at)::date as first_date
           , max(i.created_at)::date as last_date
           , s.logo_image_url
           , s.category
           , s.graph_file as s_graph_file
-          , s.close
+          , to_char(s.close::numeric, 'FM999,999,999') as close
         from interest_stocks i 
         join stocks s on s.stock_code = i.stock_code and s.flag = true
         {favorite_join}
@@ -360,8 +408,8 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
         --and i.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
         and i.created_at >= %s::date
         and i.created_at < %s::date + interval '1 day'
-        and today_price_change_pct is not null
-        and target is null
+        and i.today_price_change_pct is not null
+        and i.target = 'interest'
         {target_condition}
         group by i.stock_code, i.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
         having count(i.stock_code) >= 1
@@ -416,9 +464,9 @@ def get_today_low_stocks(conn=None):
     sql = """
     select id, updated_at, nation, stock_code, stock_name, target 
     from interest_stocks 
-    where target = 'low'
-      and updated_at::date = now()::date
-      and updated_at <= now() - interval '25 minutes'
+    where target like 'low%%'
+      and created_at::date = now()::date
+      and updated_at <= now() - interval '15 minutes'
     """
 
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
@@ -429,13 +477,13 @@ def get_today_low_stocks(conn=None):
 
 # 실시간 데이터 중에서 갱신이 되지 않은 데이터를 반환 (타겟 아웃)
 @db_transaction
-def get_today_fire_stocks(conn=None):
+def get_today_interest_stocks(conn=None):
     sql = """
     select id, updated_at, nation, stock_code, stock_name, target 
     from interest_stocks 
-    where target is null
-      and updated_at::date = now()::date
-      and updated_at <= now() - interval '35 minutes'
+    where target = 'interest'
+      and created_at::date = now()::date
+      and updated_at <= now() - interval '15 minutes'
     """
 
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
@@ -445,20 +493,73 @@ def get_today_fire_stocks(conn=None):
     return rows
 
 # 데이터 중에서 타겟에서 아웃된 종목을 target = 'break_away' 처리
+#     delete from interest_stocks
+#     where id = %s
 @db_transaction
-def update_stocks_low_away(stock, conn=None):
+def update_stocks_break_away(stock, conn=None):
+    origin_target = stock["target"]
+
+    if origin_target.startswith("low"):
+        breakaway_target = "breakaway_low"
+    elif origin_target == "interest":
+        breakaway_target = "breakaway"
+    else:
+        raise ValueError(f"지원하지 않는 target 값입니다: {origin_target}")
+
+    delete_sql = """
+    DELETE FROM interest_stocks
+    WHERE stock_code = %s
+      AND created_at::date = now()::date
+      AND target = %s
+      AND id <> %s;
+    """
+
+    update_sql = """
+    UPDATE interest_stocks
+    SET
+        target = %s,
+        updated_at = now()
+    WHERE id = %s
+    RETURNING stock_code;
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(
+            delete_sql,
+            (
+                stock["stock_code"],
+                breakaway_target,
+                stock["id"],
+            )
+        )
+
+        cur.execute(
+            update_sql,
+            (
+                breakaway_target,
+                stock["id"],
+            )
+        )
+
+        row = cur.fetchone()
+
+    return row[0] if row else None
+
+
+@db_transaction
+def update_stocks_product_code(stock_code, product_code, conn=None):
     sql = """
-    update interest_stocks
+    update stocks
     set 
-        target = 'break_away',
+        product_code = %s,
         updated_at = now()
     where stock_code = %s
-      and updated_at::date = now()::date
+      and flag = True
     returning stock_code;
     """
 
     with conn.cursor() as cur:
-        cur.execute(sql, (stock["stock_code"],))
+        cur.execute(sql, (product_code, stock_code,))
         row = cur.fetchone()
 
     return row[0] if row else None

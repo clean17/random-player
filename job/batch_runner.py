@@ -9,12 +9,12 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
-    update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data
+    update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
+    find_low_stocks_v2
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
-from job.renew_stock_close import renew_interest_stocks_close, verify_low_stock_data
-
+from job.renew_stock_close import renew_interest_stocks_close, verify_low_stock_data, update_product_code
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
 
@@ -190,7 +190,7 @@ def create_scheduler():
     )
 
 
-    # 0) 스케줄러 동작 확인용
+    # 0) 스케줄러 동작 확인용 (1시간 간격)
     scheduler.add_job(
         debug_scheduler,
         # trigger=IntervalTrigger(minutes=5),
@@ -200,16 +200,16 @@ def create_scheduler():
         replace_existing=True
     )
 
-    # 1) 로또 주 1회
-    scheduler.add_job(
-        async_buy_lotto,
-        trigger=CronTrigger(day_of_week="sat", hour=8, minute=0),
-        id="lotto_weekly",
-        executor="io",
-        replace_existing=True
-    )
+    # 1-1) 로또 주 1회
+    # scheduler.add_job(
+    #     async_buy_lotto,
+    #     trigger=CronTrigger(day_of_week="sat", hour=8, minute=0),
+    #     id="lotto_weekly",
+    #     executor="io",
+    #     replace_existing=True
+    # )
 
-    # 2) 매 6시간마다 압축
+    # 1-2) 매 6시간마다 압축
     scheduler.add_job(
         compress_directory_to_zip,
         trigger=IntervalTrigger(hours=6),
@@ -218,7 +218,27 @@ def create_scheduler():
         replace_existing=True
     )
 
-    # 3) 매일 07:00 키움 토큰 갱신
+    # 1-3) 매일 02:00 스크랩
+    scheduler.add_job(
+        run_crawl_ig_image,
+        trigger=CronTrigger(hour=2, minute=0),
+        id="scrap_ig_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 1-4) 매일 04:00 스크랩
+    scheduler.add_job(
+        run_crawl_ai_image,
+        trigger=CronTrigger(hour=4, minute=0),
+        id="scrap_ai_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    ####################################################################
+
+    # 2) 매일 07:00 키움 토큰 갱신
     scheduler.add_job(
         renew_kiwoom_token_job,
         trigger=CronTrigger(hour=7, minute=0),
@@ -227,6 +247,43 @@ def create_scheduler():
         executor="io",
         replace_existing=True
     )
+
+    # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)
+    scheduler.add_job(
+        update_stock_data_daily,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=1, minute=0),
+        id="update_stock_data_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-2) 월요일 09:01 국장 종목 '신규상장/상장폐지' 갱신 (vpn으로 엑셀 다운 받고 stocks 테이블 merge)
+    scheduler.add_job(
+        update_stocks_daily,
+        trigger=CronTrigger(day_of_week="mon", hour=9, minute=1),
+        id="renewal_stocks_weekly",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-3) 데이터 파일 (pkl) 전체 갱신 >>> 저점 계산에 사용 - 20분 간격
+    scheduler.add_job(
+        fetch_stock_data,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="09-15", minute="10,30,50"),
+        id="minutely_20_fetch_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-4) 매일 토스증권 product_code 갱신
+    scheduler.add_job(
+        update_product_code,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=6, minute=0),
+        id="update_product_code",
+        executor="io",
+        replace_existing=True,
+    )
+
 
     # 4) 매일 07:00 나스닥 예측 (CPU 3시간)
     # scheduler.add_job(
@@ -248,82 +305,47 @@ def create_scheduler():
     #     args=["kospi"],
     # )
 
-    # 6) 국장 시작 - 2_finding_stocks_with_increased_volume.py (09:05, 09:30~20:00, 30분마다)
+    # 3) 국장 시작 - 2_finding_stocks_with_increased_volume.py (09:03, 09:20~20:00, 20분마다)
     scheduler.add_job(
         find_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=4),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=3),
         id="korea_open_0905_find_stocks",
         executor="io",
         replace_existing=True,
     )
     scheduler.add_job(
         find_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=30),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute="20,40"),
         id="0930_find_stocks",
         executor="io",
         replace_existing=True,
     )
     scheduler.add_job(
         find_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="0,30"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="0,20,40"),
         id="every_30min_1000_1530_find_stocks",
         executor="io",
         replace_existing=True,
     )
     scheduler.add_job(
         find_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=0),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=15),
         id="2000_find_stocks",
         executor="io",
         replace_existing=True,
     )
 
-    # 7) 종목 데이터 파일(pkl) 갱신 > 저점 계산
-    scheduler.add_job(
-        fetch_stock_data,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="09-15", minute="10,30,50"),
-        id="minutely_20_fetch_stock_data",
-        executor="io",
-        replace_existing=True,
-    )
-
-    # 8) 저점 매수 찾기 >> 10:05 - 19:55 (매 시각의 5분부터 59분까지, 10분 간격으로 실행)
-    scheduler.add_job(
-        find_low_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="5-59/10"),
-        id="hourly_1505_find_low_stocks",
-        executor="io",
-        replace_existing=True,
-    )
-    # 8-1) 08:00 - 미장 저점 매수 찾기
-    scheduler.add_job(
-        find_low_stocks_us,
-        trigger=CronTrigger(day_of_week="mon-fri", minute="0"),
-        id="daily_0800_find_low_stocks_us",
-        executor="io",
-        replace_existing=True,
-    )
-
-    # 9) 월~금 9분마다 오늘 급상승 종목 데이터 파일 갱신  (update_interest_stocks)
+    # 3-1) 월~금 5분마다 오늘 급상승 종목 데이터 파일 갱신  (update_interest_stocks)
     scheduler.add_job(
         run_cumtom_time_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/9"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/5"),
         id="weekday_every_5min_update_interest_stocks",
         executor="io",
         replace_existing=True,
         args=[update_interest_stocks],
     )
 
-    # 10) 매일 02:00 스크랩
-    scheduler.add_job(
-        run_crawl_ig_image,
-        trigger=CronTrigger(hour=2, minute=0),
-        id="scrap_ig_daily",
-        executor="io",
-        replace_existing=True,
-    )
-
-    # 11) 09:30 ~ 20:30, 30분마다 (평일) 코스피 종가 수정
+    # 3-2) 09:30 ~ 20:30, 30분마다 최근 관심 종목 (국장) 종가를 수정 (stocks 테이블 only)
     scheduler.add_job(
         renew_interest_stocks_close,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="0,30"),
@@ -332,56 +354,66 @@ def create_scheduler():
         replace_existing=True
     )
 
-    # 12) 매일 04:00 스크랩
+
+    # 4) 저점 매수 찾기 >> 10:05 - 19:55 (매 시각의 5분부터 59분까지, 10분 간격으로 실행)
     scheduler.add_job(
-        run_crawl_ai_image,
-        trigger=CronTrigger(hour=4, minute=0),
-        id="scrap_ai_daily",
+        find_low_stocks,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="5-59/10"),
+        id="hourly_1505_find_low_stocks",
         executor="io",
         replace_existing=True,
     )
-
-    # 13) 월요일 09:01 주식 종목 갱신
     scheduler.add_job(
-        update_stocks_daily,
-        trigger=CronTrigger(day_of_week="mon", hour=9, minute=1),
-        id="renewal_stocks_weekly",
+        find_low_stocks_v2,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="6-59/10"),
+        id="hourly_1505_find_low_stocks_v2",
         executor="io",
         replace_existing=True,
     )
+    # 8-1) 08:00 - 미장 저점 매수 찾기
+    # scheduler.add_job(
+    #     find_low_stocks_us,
+    #     trigger=CronTrigger(day_of_week="mon-fri", minute="0"),
+    #     id="daily_0800_find_low_stocks_us",
+    #     executor="io",
+    #     replace_existing=True,
+    # )
 
-    # 14) 데이터 파일 전체 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)
-    scheduler.add_job(
-        update_stock_data_daily,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=1, minute=0),
-        id="update_stock_data_daily",
-        executor="io",
-        replace_existing=True,
-    )
 
-    # 15) 상승주 그래프 갱신
+    # 5) 상승주 그래프 갱신
     scheduler.add_job(
         update_summary_stock_graph_daily,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="10,40"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="5-59/10"),
         id="update_summary_stocks_graph",
         executor="io",
         replace_existing=True,
     )
-
-    # 16) 매일 10:00 full-chain.pem 생성 (인증서)
     scheduler.add_job(
-        generate_fullchain_pem_daily,
-        trigger=CronTrigger(hour=10, minute=0),
-        id="generate_fullchain_pem_daily",
+        update_summary_stock_graph_daily,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=5),
+        id="update_summary_stocks_graph_2",
         executor="io",
         replace_existing=True,
     )
 
-    # 17) 저점 신뢰도 검증 (계속해서 조건 만족하는것만 남기려는 의도)
+
+    # 17) 저점+급상승 종목 신뢰도 검증 (계속해서 조건 만족하는것만 남기려는 의도)
     scheduler.add_job(
         verify_low_stock_data,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/1"),
         id="verify_low_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+
+    ####################################################################
+
+    # 99) 매일 10:00 full-chain.pem 생성 (인증서)
+    scheduler.add_job(
+        generate_fullchain_pem_daily,
+        trigger=CronTrigger(hour=10, minute=0),
+        id="generate_fullchain_pem_daily",
         executor="io",
         replace_existing=True,
     )
