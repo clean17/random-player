@@ -9,6 +9,8 @@ from datetime import datetime, time as dtime
 from pathlib import Path
 import sys
 
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 from utils.wsgi_midleware import logger
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
@@ -256,18 +258,49 @@ def renew_interest_stocks_close():
 
 
 def verify_low_stock_data():
-    from app.repository.stocks.stocks import get_today_low_stocks, get_today_fire_stocks, update_stocks_low_away
+    from app.repository.stocks.stocks import get_today_low_stocks, get_today_interest_stocks, update_stocks_break_away
 
     stocks = get_today_low_stocks()
-    stocks2 = get_today_fire_stocks()
+    stocks2 = get_today_interest_stocks()
     combined = stocks + stocks2
 
     for stock in combined:
         try:
-            update_stocks_low_away(stock)
+            update_stocks_break_away(stock)
+        except Exception as e:
+            print(f"Failed to update stock {stock}: {e}")
+
+
+# 하루에 한번 토스 product_code 갱신
+def update_product_code():
+    from app.repository.stocks.stocks import get_stock_list, update_stocks_product_code
+    from utils.request_toss_api import request_stock_info_with_toss_api
+
+    stocks = get_stock_list("kor")
+
+    for stock in stocks:
+        try:
+            stock_code = stock.get('stock_code')
+            result = request_stock_info_with_toss_api(stock_code)
+
+            if result is None or not result:  # dict이 비어있으면 False
+                continue
+
+            data_list = result['result']
+            if not data_list:  # result 리스트가 비어있음
+                continue
+
+            items = data_list[0].get('data', {}).get('items', [])
+            if not items:  # items 리스트가 비어있음
+                continue
+
+            productCode = items[0].get('productCode')
+
+            update_stocks_product_code(stock_code, productCode)
         except Exception as e:
             print(f"Failed to update stock {stock}: {e}")
 
 
 # if __name__ == '__main__':
-#     renew_interest_stocks_close()
+    # renew_interest_stocks_close()
+    # update_product_code()
