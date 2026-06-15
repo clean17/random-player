@@ -6,6 +6,7 @@ import atexit
 import subprocess
 from collections import defaultdict
 import logging
+from concurrent.futures import ProcessPoolExecutor
 
 from config.db_connect import db_pool
 from job.batch_runner import executors
@@ -67,11 +68,13 @@ def cleanup(scheduler=None, node_process=None):
     try:
         if _executors:
             for name, ex in _executors.items():
-                try:
-                    print(f"🧹 executor 종료: {name}")
-                    ex.shutdown(wait=False)   # 빨리 끊기
-                except Exception as e:
-                    print(f"executor {name} shutdown error:", e)
+                print(f"🧹 executor 종료: {name} ({type(ex).__name__})")
+                if isinstance(ex, ProcessPoolExecutor):
+                    # ProcessPoolExecutor는 Python 3.8에서 cancel_futures 옵션이 없어 wait=True로 안전하게 종료
+                    ex.shutdown(wait=True)
+                else:
+                    # 다른 executor는 wait=False로 빠르게 종료
+                    ex.shutdown(wait=False)
     except Exception as e:
         print("executors shutdown error:", e)
 
