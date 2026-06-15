@@ -64,7 +64,7 @@ def cleanup(scheduler=None, node_process=None):
     except Exception as e:
         print("scheduler shutdown error:", e)
 
-    # 2) executor 확실히 shutdown (중요)
+    # 2) executor(스레드풀, 프로세스풀 등) 확실히 shutdown (중요)
     try:
         if _executors:
             for name, ex in _executors.items():
@@ -78,7 +78,7 @@ def cleanup(scheduler=None, node_process=None):
     except Exception as e:
         print("executors shutdown error:", e)
 
-    # 3) DB pool
+    # 3) DB 커넥션 풀 종료
     try:
         print("🧹 서버 종료 중: db_pool 정리")
         if db_pool:
