@@ -39,9 +39,13 @@ def convert_webm_to_mp4(webm_path, output_dir):
         # ✅ 변환 성공 시 원본 삭제
         try:
             os.remove(webm_path)
-            pass
         except Exception as e:
             print(f"❗ 원본 삭제 실패: {e}")
         return mp4_path
     else:
-        raise RuntimeError(f"FFmpeg error: {result.stderr.decode()}")
+        stderr_text = result.stderr.decode('utf-8', errors='replace')
+        # 버전 배너 제외하고 실제 에러 줄만 추출
+        error_lines = [l for l in stderr_text.splitlines() if l.strip() and not l.startswith(('ffmpeg version', 'built with', 'configuration:', 'lib', ' lib', 'Copyright'))]
+        error_summary = '\n'.join(error_lines[-10:]) if error_lines else stderr_text[-300:]
+        print(f"❗ FFmpeg stderr:\n{stderr_text}")
+        raise RuntimeError(f"FFmpeg error: {error_summary}")

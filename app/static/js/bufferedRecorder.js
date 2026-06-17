@@ -50,9 +50,16 @@ class BufferedRecorder {
             if (res.ok) {
                 this.#showDebugToast('✅ 업로드 성공');
             } else {
-                this.#showDebugToast('❌ 업로드 실패, retry');
+                res.json().then(data => {
+                    console.error('[Upload] 실패:', res.status, data);
+                    this.#showDebugToast(`❌ 업로드 실패 (${res.status}): ${data?.error || 'retry'}`);
+                }).catch(() => {
+                    console.error('[Upload] 실패:', res.status, res.url);
+                    this.#showDebugToast(`❌ 업로드 실패 (${res.status})`);
+                });
             }
         }).catch(error => {
+            console.error('[Upload] 네트워크 오류:', error);
             this.#showDebugToast('❌ 업로드 실패');
         });
     }
