@@ -94,7 +94,8 @@ def upsert_interesting_stocks():
 
     # 종가만 수정
     close_list = []
-    close_list.append((str(int(last_close)), None, logo_image_url, stock_code))
+    # close_list.append((str(int(last_close)), None, logo_image_url, stock_code))
+    close_list.append((str(int(float(last_close))), None, logo_image_url, stock_code))
     update_interest_stock_list_close(close_list)
 
     stock = StockDTO(

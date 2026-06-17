@@ -259,6 +259,7 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None
         , i.updated_at              
         , s.logo_image_url
         , s.product_code
+        , i.target
     FROM interest_stocks i
     JOIN stocks s ON i.stock_code = s.stock_code
     WHERE i.created_at::date >= %s

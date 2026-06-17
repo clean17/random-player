@@ -256,6 +256,26 @@ body.page-stocks .table-scroller .carousel-btn.right {
 }
 
 
+/* ===== 룰 태그 ===== */
+.rule-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.rule-tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+.rule-tag--version { background: #6b7280; color: #f3f4f6; }
+.rule-tag--s       { background: #16a34a; color: #f0fdf4; } /* 안정 */
+.rule-tag--h       { background: #ea580c; color: #fff7ed; } /* 고확률 */
+.rule-tag--c       { background: #2563eb; color: #eff6ff; } /* 커버리지 */
+
+
 /* ===== Desktop stock carousel buttons inside the content container ===== */
 body.page-stocks .table-scroller {
     position: relative !important;
