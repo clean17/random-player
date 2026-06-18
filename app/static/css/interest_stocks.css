@@ -256,6 +256,10 @@ body.page-stocks .table-scroller .carousel-btn.right {
 }
 
 
+/* ===== 카드 로고/종목명 클릭 ===== */
+.trade-logo, .trade-name { cursor: pointer; }
+.trade-name:hover { text-decoration: underline; }
+
 /* ===== 룰 태그 ===== */
 .rule-tags {
     display: flex;

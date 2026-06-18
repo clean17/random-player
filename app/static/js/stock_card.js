@@ -446,6 +446,16 @@ function renderTradingCards(rows, section, tableName) {
     if (tableName === 'table-favorite') renderFavoriteCardHtml(track, rows);
     initFavoriteButtons();
 
+    track.addEventListener("click", (e) => {
+        if (isDragging) return;
+        const trigger = e.target.closest(".trade-logo, .trade-name");
+        if (!trigger) return;
+        const article = trigger.closest("article.trade-card");
+        if (!article) return;
+        const stockCode = article.querySelector(".fav-btn")?.dataset.stockCode;
+        if (stockCode) window.open(`https://m.stock.naver.com/domestic/stock/${stockCode}/total`, "_blank");
+    });
+
     // dots (많으면 12개로 축약)
     const maxDots = 12;
     const dotCount = Math.min(rows.length, maxDots);
@@ -661,6 +671,16 @@ function setView(toggle, view, focus = false) {
     renderTradingView(globalTradingRows);
 }
 
+function openStockOnToss(stockName) {
+    axios.post('/stocks/info', { stock_name: stockName }, {})
+        .then(response => {
+            if (response.status !== 200) { showDebugToast('요청 실패'); return; }
+            const code = response.data.result[0].data.items[0].code;
+            window.open("https://www.tossinvest.com/stocks/" + code, "_blank");
+        })
+        .catch(err => console.error(err));
+}
+
 // 드롭다운 변경 시 즉시 반영
 setTimeout(()=>{
         document.querySelectorAll('.view-toggle').forEach((el)=>{
@@ -695,21 +715,7 @@ setTimeout(()=>{
                 case 'Enter':
                     event.preventDefault();
                     const currentArticle2 = getCurrentArticle();
-
-                    axios.post('/stocks/info',
-                        {
-                        "stock_name": currentArticle2.querySelector(".trade-name")?.textContent,
-                        }, {}
-                    ).then(response => {
-                        if (response.status !== 200) {
-                            showDebugToast('요청 실패');
-                        }
-                        const code = response.data.result[0].data.items[0].code
-
-                        window.open("https://www.tossinvest.com/stocks/"+code, "_blank");
-                    }).catch(err => {
-                        console.error(err);
-                    });
+                    openStockOnToss(currentArticle2.querySelector(".trade-name")?.textContent);
                     break;
                 default:
                     break;
