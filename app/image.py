@@ -115,8 +115,7 @@ def get_images(start, count, page, dir, image_arr=None):
             page = max(1, page - 1)
 
         if image_arr is not None:
-            image_arr.clear()
-            image_arr.extend(images)
+            image_arr[:] = images
 
     else:
         full_paths = []
@@ -145,8 +144,7 @@ def get_images(start, count, page, dir, image_arr=None):
             page = max(1, page - 1)
 
         if image_arr is not None:
-            image_arr.clear()
-            image_arr.extend(images)
+            image_arr[:] = images
 
     return images[start:start + count], page
 
@@ -184,8 +182,7 @@ def get_subdir_and_reels_images(start, limit, page, parent_dir, image_arr):
         start = max(0, start - LIMIT_PAGE_NUM)
         page = max(1, page - 1)
 
-    image_arr.clear()
-    image_arr.extend(images)
+    image_arr[:] = images
 
     return images[start:start + limit], page
 
