@@ -299,14 +299,13 @@ def clean_filename(filename):
 
 
 def safe_path_join(base_dir, rel_path):
-    # URL 디코딩 + 트리밍
     rel_path = unquote(rel_path).strip()
-    # 절대경로로 정규화
-    nor_path = os.path.normpath(os.path.join(base_dir, rel_path))
-    # 상위 디렉토리 탈출 방지
-    if not nor_path.startswith(base_dir + os.sep):
-        raise ValueError(f"path traversal detected (경로 탈출 감지됨) : {rel_path}")
-    return nor_path
+    base = os.path.realpath(base_dir)
+    target = os.path.realpath(os.path.join(base, rel_path))
+    # base 자신이거나 base 하위 경로만 허용 (심볼릭 링크 우회 차단)
+    if target != base and not target.startswith(base + os.sep):
+        raise ValueError(f"경로 탈출 감지: {rel_path}")
+    return target
 
 
 def delete_images_task(images_to_delete, dir):
