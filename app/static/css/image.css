@@ -343,8 +343,8 @@ button.delete-button:hover {
 }
 #slideshow-modal img,
 #slideshow-modal .slideshow-video {
-    width: 95vw;
-    height: 95vh;
+    width: 100vw;
+    height: 100vh;
     object-fit: contain;
     display: block;
 }

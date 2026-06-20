@@ -36,6 +36,67 @@
             flex-direction: column;
             gap: 5px;
         }
+
+        .top-menu-panel {
+            position: fixed;
+            z-index: 9000;
+            right: 10px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+            padding: 6px;
+            min-width: 170px;
+        }
+        .menu-item-btn {
+            display: block;
+            width: 100%;
+            padding: 10px 14px;
+            text-align: left;
+            background: none;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #222;
+            height: auto;
+            margin: 0;
+        }
+        .menu-item-btn:hover { background: #f2f2f2; }
+        .menu-divider {
+            height: 1px;
+            background: #eee;
+            margin: 4px 6px;
+        }
+        .menu-label {
+            font-size: 11px;
+            color: #999;
+            padding: 4px 14px 2px;
+        }
+        .col-selector-group {
+            display: flex;
+            gap: 4px;
+            padding: 4px 8px 6px;
+        }
+        .col-btn {
+            flex: 1;
+            padding: 6px 0;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fff;
+            color: #222;
+            cursor: pointer;
+            width: auto;
+            height: auto;
+            margin: 0;
+        }
+        .col-btn.active {
+            background: #1a8cff;
+            color: #fff;
+            border-color: #1a8cff;
+        }
     </style>
 </head>
 
@@ -57,23 +118,28 @@
     </div>
 </div>
 
-{% if dir in ['image', 'image2', 'move', 'cos'] %}
-<button id="empty-bin-button" class="floating-button2">Empty</button>
-<button id="fetch-image-button" class="floating-button2" style="top: 120px">Fetch</button>
-{% elif dir == 'refine' %}
-<button id="shuffle-button" class="floating-button2">Shuffle</button>
-<button id="slideshow-btn" class="floating-button2" style="top: 120px">Slide show</button>
-{% elif dir in ['temp', 'trip'] %}
-<button id="download-zip-btn" class="floating-button2">
-    <span class="icon">📂</span>
-</button>
-<ul id="dropdown-menu" class="dropdown-menu">
-    <li onclick="downloadThisPage()">Download This Page</li>
-    <li onclick="downloadAllFiles()">Download All Files</li>
-    <!-- <li>Another Action</li> -->
-</ul>
-{% else %}
-{% endif %}
+<button id="top-menu-btn" class="floating-button2">☰</button>
+<div id="top-menu-panel" class="top-menu-panel" style="display:none;">
+    {% if dir in ['image', 'image2', 'move', 'cos'] %}
+    <button class="menu-item-btn" id="empty-bin-button">🗑 Empty bin</button>
+    <button class="menu-item-btn" id="fetch-image-button">↻ Fetch</button>
+    {% elif dir == 'refine' %}
+    <button class="menu-item-btn" id="shuffle-button">🔀 Shuffle</button>
+    <button class="menu-item-btn" id="slideshow-btn">▶ Slide show</button>
+    {% elif dir in ['temp', 'trip'] %}
+    <button class="menu-item-btn" onclick="downloadThisPage()">📄 Download This Page</button>
+    <button class="menu-item-btn" onclick="downloadAllFiles()">📦 Download All Files</button>
+    {% endif %}
+    <div class="menu-divider"></div>
+<!--    <div class="menu-label">열 수</div>-->
+    <div id="col-selector" class="col-selector-group">
+        <button class="col-btn" data-col="1">1</button>
+        <button class="col-btn" data-col="2">2</button>
+        <button class="col-btn" data-col="3">3</button>
+        <button class="col-btn" data-col="4">4</button>
+        <button class="col-btn" data-col="5">5</button>
+    </div>
+</div>
 
 <!--<button id="next-image-button" class="floating-button-right">Next</button>-->
 
@@ -279,6 +345,9 @@
     let currentIndex = 0;
     let rebalanceTimer;
 
+    const COL_STORAGE_KEY = 'masonry-col-count';
+    let manualColumnCount = Number(localStorage.getItem(COL_STORAGE_KEY)) || null;
+
     /* =========================
        Height 계산
     ========================= */
@@ -334,15 +403,22 @@
         }
     }
 
-    // 반응형 column 개수
+    // 반응형 column 개수 (수동 선택이 있으면 우선)
     function getColumnCount() {
+        if (manualColumnCount) return manualColumnCount;
         const width = window.innerWidth;
-
         if (width > 2500) return 5;
         if (width > 1900) return 4;
         if (width > 1200) return 3;
         if (width > 800) return 2;
         return 1;
+    }
+
+    function updateColBtnActive() {
+        const current = getColumnCount();
+        document.querySelectorAll('.col-btn').forEach(btn => {
+            btn.classList.toggle('active', Number(btn.dataset.col) === current);
+        });
     }
 
     /* =========================
@@ -441,7 +517,40 @@
         renderBatch();
     }
 
-    window.addEventListener("load", initMasonry);
+    window.addEventListener("load", () => {
+        initMasonry();
+        updateColBtnActive();
+
+        const topMenuBtn = document.getElementById('top-menu-btn');
+        const topMenuPanel = document.getElementById('top-menu-panel');
+
+        topMenuBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (topMenuPanel.style.display === 'none') {
+                const rect = topMenuBtn.getBoundingClientRect();
+                topMenuPanel.style.top = (rect.bottom + 6) + 'px';
+                topMenuPanel.style.display = 'block';
+            } else {
+                topMenuPanel.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (topMenuPanel && !topMenuPanel.contains(e.target) && e.target !== topMenuBtn) {
+                topMenuPanel.style.display = 'none';
+            }
+        });
+
+        document.getElementById('col-selector')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.col-btn');
+            if (!btn) return;
+            const n = Number(btn.dataset.col);
+            manualColumnCount = n;
+            localStorage.setItem(COL_STORAGE_KEY, n);
+            updateColBtnActive();
+            rebuildMasonryKeepingScroll();
+        });
+    });
 
     /* =========================
        Lazy Load
