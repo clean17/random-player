@@ -16,15 +16,18 @@ from datetime import datetime
 import job.batch_runner as batch_runner
 
 image_bp = Blueprint('image', __name__)
-LIMIT_PAGE_NUM = 1000
-ref_shuffled_images = None
 
+
+# 이미지 배열
 ai_image_arr = []
 ig_image_arr = []
+cos_image_arr = []
 moved_image_arr = []
 refined_image_arr = []
+ref_shuffled_images = None
 
 # 설정
+LIMIT_PAGE_NUM = 1000
 IMAGE_DIR = settings['IMAGE_DIR']
 IMAGE_DIR2 = settings['IMAGE_DIR2']
 MOVE_DIR = settings['MOVE_DIR']
@@ -32,6 +35,7 @@ REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 DEL_TEMP_IMAGE_DIR = settings['DEL_TEMP_IMAGE_DIR']
+COS_DIR = settings['COS_DIR']
 KOSPI_DIR = settings['KOSPI_DIR']
 SP500_DIR = settings['SP500_DIR']
 INTEREST_DIR = settings['INTEREST_DIR']
@@ -47,16 +51,8 @@ DIRECTORY_MAP = {
 
 EXCLUDE_SUFFIXES: Final = (".zip", ".ini", ".Identifier")  # 불변 튜플
 
-# MOVE_DIR = os.path.join(os.getcwd(), 'move')
 
-# 디렉토리 추가하면
-# def initialize_image_directories():
-#     os.makedirs(IMAGE_DIR, exist_ok=True)
-#     os.makedirs(MOVE_DIR, exist_ok=True)
-#
-# initialize_image_directories()
-
-
+# 정렬 함수
 def initialize_sorted_images():
     global ref_shuffled_images
     images = [
@@ -68,6 +64,7 @@ def initialize_sorted_images():
     ref_shuffled_images = images
 
 
+# 셔플 함수
 def initialize_shuffle_images():
     global ref_shuffled_images
     images = [
@@ -79,9 +76,6 @@ def initialize_shuffle_images():
     random.shuffle(images)
     ref_shuffled_images = images
 
-
-# 애플리케이션 실행 시 한 번 셔플된 리스트를 초기화
-# initialize_shuffle_images()
 
 # 최초에는 정렬
 initialize_sorted_images()
@@ -95,41 +89,49 @@ def safe_mtime(path):
         return 0  # 또는 float('-inf')
 
 
-
 def get_images(start, count, page, dir, image_arr=None):
     if dir == REF_IMAGE_DIR:
         images = ref_shuffled_images
+
         if start >= len(images) and len(images) > 0:
             start = max(0, start - LIMIT_PAGE_NUM)
             page = max(1, page - 1)
+
         if image_arr is not None:
             image_arr.clear()
             image_arr.extend(images)
+
     else:
-        # .zip, .ini 파일 제외한 파일 리스트
-        files = [
-            f for f in os.listdir(dir)
-            if not f.lower().endswith(EXCLUDE_SUFFIXES)
+        full_paths = []
+
+        for root, dirs, files in os.walk(dir):
+            for f in files:
+                if f.lower().endswith(EXCLUDE_SUFFIXES):
+                    continue
+
+                full_path = os.path.join(root, f)
+
+                if os.path.isfile(full_path):
+                    full_paths.append(full_path)
+
+        # 수정시간 오름차순
+        full_paths.sort(key=lambda x: os.path.getmtime(x))
+
+        # dir 기준 상대경로로 변환
+        images = [
+            os.path.relpath(path, dir).replace("\\", "/")
+            for path in full_paths
         ]
-        # 전체 경로로 변환
-        full_paths = [os.path.join(dir, f) for f in files]
-        full_paths = [p for p in full_paths if os.path.isfile(p)] # 파일 존재 검증
-        full_paths.sort(key=safe_mtime)
-        # 생성시간(ctime) 기준으로 정렬
-        # full_paths.sort(key=lambda x: os.path.getctime(x)) # 생성시간 오름차순
-        # full_paths.sort(key=lambda x: os.path.getmtime(x), reverse=True) # 수정시간 내림차순
-        full_paths.sort(key=lambda x: os.path.getmtime(x)) # 수정시간 오름차순
-        # 파일명만 추출
-        images = [os.path.basename(f) for f in full_paths]
+
         if start >= len(images) and len(images) > 0:
             start = max(0, start - LIMIT_PAGE_NUM)
             page = max(1, page - 1)
+
         if image_arr is not None:
             image_arr.clear()
             image_arr.extend(images)
 
     return images[start:start + count], page
-
 
 def get_subdir_and_reels_images(start, limit, page, parent_dir, image_arr):
     images = []
@@ -203,6 +205,7 @@ def get_image_page(start, limit, page, target_dir, image_arr, html, source_type=
 
     return images, page, start, images_length, template_html
 
+
 def get_stock_graphs(dir, start, count):
     all_items = os.listdir(dir)
     images = [f for f in all_items if os.path.isfile(os.path.join(dir, f))]
@@ -255,6 +258,49 @@ def count_non_zip_files(directory):
 def clean_filename(filename):
     # Windows에서 허용되지 않는 문자(: * ? " < > | / \)를 _로 변경
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
+
+
+
+
+def safe_path_join(base_dir, rel_path):
+    # URL 디코딩 + 트리밍
+    rel_path = unquote(rel_path).strip()
+    # 절대경로로 정규화
+    nor_path = os.path.normpath(os.path.join(base_dir, rel_path))
+    # 상위 디렉토리 탈출 방지
+    if not nor_path.startswith(base_dir + os.sep):
+        raise ValueError(f"path traversal detected (경로 탈출 감지됨) : {rel_path}")
+    return nor_path
+
+
+def delete_images_task(images_to_delete, dir):
+    for image in images_to_delete:
+        try:
+            if dir == 'move':
+                safe_path = safe_path_join(MOVE_DIR, image)
+            elif dir == 'image':
+                safe_path = safe_path_join(IMAGE_DIR, image)
+            elif dir == 'image2':
+                dir_part  = os.path.dirname(image)
+                file_part = os.path.basename(image)
+                clean_file_part = clean_filename(unquote(file_part).strip())
+                safe_path = safe_path_join(IMAGE_DIR2, os.path.join(dir_part, clean_file_part))
+            else:
+                continue  # 알 수 없는 dir
+
+            if not os.path.exists(safe_path):
+                # 이미 지워졌거나 잘못된 이름
+                # print(f"[WARN] not found: {safe_path}")
+                continue
+
+            send2trash(safe_path)
+
+        except FileNotFoundError:
+            print(f"[WARN] not found (caught): {image}")
+        except Exception as e:
+            # 다른 문제(권한, path traversal 등)
+            print(f"[ERROR] delete failed: {image} -> {e}")
+
 
 ###################### image ########################
 
@@ -322,6 +368,16 @@ def image_list():
         images_length = len(ig_image_arr)
         template_html = 'image_list_masonry.html'
 
+    elif dir == 'cos':
+        images = cos_image_arr[start:start + LIMIT_PAGE_NUM]
+        if len(images) == 0:
+            page = page - 1
+            start = (page - 1) * LIMIT_PAGE_NUM
+            images = cos_image_arr[start:start + LIMIT_PAGE_NUM]
+
+        images_length = len(cos_image_arr)
+        template_html = 'image_list_masonry.html'
+
     elif dir == 'move':
         # images, page, start, images_length, template_html = get_image_page(
         #     start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, 'image_list.html'
@@ -381,6 +437,10 @@ def fetch_image_list():
         images, page, start, images_length, template_html = get_image_page(
             start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, ig_image_arr, template_html, 'ig'
         )
+    elif dir == 'cos':
+        images, page, start, images_length, template_html = get_image_page(
+            start, LIMIT_PAGE_NUM, page, COS_DIR, cos_image_arr, template_html,
+        )
     elif dir == 'move':
         images, page, start, images_length, template_html = get_image_page(
             start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, template_html
@@ -436,6 +496,9 @@ def move_image():
     elif imagepath == "image2":
         src_path = os.path.join(IMAGE_DIR2, filename)
         thumb_dir = os.path.join(IMAGE_DIR2, "thumb")
+    elif imagepath == "cos":
+        src_path = os.path.join(COS_DIR, filename)
+        thumb_dir = os.path.join(COS_DIR, "thumb")
     elif imagepath == "move":
         src_path = os.path.join(MOVE_DIR, filename)
         thumb_dir = os.path.join(MOVE_DIR, "thumb")
@@ -467,45 +530,6 @@ def move_image():
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
-
-def safe_path_join(base_dir, rel_path):
-    # URL 디코딩 + 트리밍
-    rel_path = unquote(rel_path).strip()
-    # 절대경로로 정규화
-    nor_path = os.path.normpath(os.path.join(base_dir, rel_path))
-    # 상위 디렉토리 탈출 방지
-    if not nor_path.startswith(base_dir + os.sep):
-        raise ValueError(f"path traversal detected (경로 탈출 감지됨) : {rel_path}")
-    return nor_path
-
-
-def delete_images_task(images_to_delete, dir):
-    for image in images_to_delete:
-        try:
-            if dir == 'move':
-                safe_path = safe_path_join(MOVE_DIR, image)
-            elif dir == 'image':
-                safe_path = safe_path_join(IMAGE_DIR, image)
-            elif dir == 'image2':
-                dir_part  = os.path.dirname(image)
-                file_part = os.path.basename(image)
-                clean_file_part = clean_filename(unquote(file_part).strip())
-                safe_path = safe_path_join(IMAGE_DIR2, os.path.join(dir_part, clean_file_part))
-            else:
-                continue  # 알 수 없는 dir
-
-            if not os.path.exists(safe_path):
-                # 이미 지워졌거나 잘못된 이름
-                # print(f"[WARN] not found: {safe_path}")
-                continue
-
-            send2trash(safe_path)
-
-        except FileNotFoundError:
-            print(f"[WARN] not found (caught): {image}")
-        except Exception as e:
-            # 다른 문제(권한, path traversal 등)
-            print(f"[ERROR] delete failed: {image} -> {e}")
 
 
 # @image_bp.route('/delete-images/<path:filename>', methods=['POST'], endpoint='delete-images')
@@ -589,6 +613,8 @@ def get_image():
         base_dir = IMAGE_DIR
     elif dir == 'image2':
         base_dir = IMAGE_DIR2
+    elif dir == 'cos':
+        base_dir = COS_DIR
     elif dir == 'refine':
         base_dir = REF_IMAGE_DIR
     elif dir == 'trip':
