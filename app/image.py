@@ -597,17 +597,16 @@ def get_image():
     else:
         abort(400, 'Invalid dir')
 
-    # ✅ thumb 디렉토리 경로 설정
-    thumb_dir = os.path.join(base_dir, 'thumb')
-    name_without_ext, _ = os.path.splitext(filename)
-    webp_name = name_without_ext + '.webp'
-    webp_path = os.path.join(thumb_dir, webp_name)
+    # thumb 디렉토리가 실제로 존재하는 dir에서만 webp 조회
+    _THUMB_DIRS = {'trip', 'temp'}
+    if dir in _THUMB_DIRS:
+        thumb_dir = os.path.join(base_dir, 'thumb')
+        name_without_ext, _ = os.path.splitext(filename)
+        webp_path = os.path.join(thumb_dir, name_without_ext + '.webp')
+        if os.path.exists(webp_path):
+            return send_from_directory(thumb_dir, name_without_ext + '.webp')
 
-    # ✅ webp 썸네일이 존재하면 반환
-    if os.path.exists(webp_path):
-        return send_from_directory(thumb_dir, webp_name)
-
-    # ✅ 기존 파일 경로에서 반환
+    # 썸네일 없으면 기존 파일 경로
     return send_from_directory(base_dir, filename)
 
 @image_bp.route('/shuffle/ref-images', methods=['POST'], endpoint='shuffle/ref-images')
