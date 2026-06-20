@@ -370,10 +370,16 @@ def image_list():
 
         target_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
         if selected_dir == 'video-call':
-            images = get_reverse_images(start, LIMIT_PAGE_NUM, target_dir)
+            all_files = sorted(
+                [f for f in os.listdir(target_dir) if not f.lower().endswith(EXCLUDE_SUFFIXES)],
+                reverse=True
+            )
+            images = all_files[start:start + LIMIT_PAGE_NUM]
+            images_length = len(all_files)
         else:
-            images, page = get_images(start, LIMIT_PAGE_NUM, page, target_dir)
-        images_length = count_non_zip_files(target_dir)
+            tmp_arr = []
+            images, page = get_images(start, LIMIT_PAGE_NUM, page, target_dir, tmp_arr)
+            images_length = len(tmp_arr)
         dir = 'temp'
 
     # elif dir == 'trip':
