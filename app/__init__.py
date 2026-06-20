@@ -13,7 +13,7 @@ from config.config import load_config
 from .ffmpeg_handle import m_ffmpeg # ffmpeg_handle.py에서 m_ffmpeg 블루프린트를 import
 from .main import main
 from .video import video
-from .image import image_bp, environment
+from .image import image_bp, environment, warm_up_image_caches
 from .function import func, socketio
 from .stock import stock
 from .upload import upload
@@ -457,5 +457,16 @@ def create_app():
                 f.write('restarted')
             return True
         return False
+
+    import job.batch_runner as _batch_runner
+    if _batch_runner.scheduler is not None:
+        _batch_runner.scheduler.add_job(
+            warm_up_image_caches,
+            trigger='date',
+            run_date=datetime.now(),
+            executor='io',
+            id='warm_up_image_caches',
+            replace_existing=True,
+        )
 
     return app

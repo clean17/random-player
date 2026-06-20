@@ -223,6 +223,14 @@ def get_image_page(start, limit, page, target_dir, image_arr, html, source_type=
     return images, page, start, images_length, template_html
 
 
+def warm_up_image_caches():
+    for cfg in DIR_CONFIG.values():
+        try:
+            fetch_images(0, LIMIT_PAGE_NUM, 1, cfg.base_dir, cfg.image_arr, cfg.source_type)
+        except Exception as e:
+            print(f"[WARN] 캐시 워밍업 실패 ({cfg.base_dir}): {e}")
+
+
 def resolve_dir_page(dir: str, page: int):
     cfg = DIR_CONFIG.get(dir)
     if cfg is None:
