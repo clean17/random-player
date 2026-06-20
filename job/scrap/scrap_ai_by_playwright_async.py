@@ -225,7 +225,13 @@ def run_scrap_ai_job():
     asyncio.run(async_crawl_ai())
 
 # 그냥 호출(async_crawl_ai())하면 코루틴 객체만 리턴, 코드가 실행되지 않음
-asyncio.run(async_crawl_ai())
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+try:
+    loop.run_until_complete(async_crawl_ai())
+finally:
+    loop.close()
+    os._exit(0)  # anyio atexit 스레드 풀 경고 방지
 
 '''
 비동기 함수(코루틴, asyncio) 안에서 아래 코드 사용하면 ?

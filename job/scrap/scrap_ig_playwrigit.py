@@ -52,8 +52,157 @@ MIN_GOOD_VIDEO_BYTES = 500_000        # 0.5MB 이상만 후보
 
 # 동시 다운로드 제한
 MAX_CONCURRENCY = 4
+# 팔로우 btran24x
 ACCOUNTS = [
+    # 'im____neko', 'btran24x',
+    # 'eul_jj', 'yeoxoho', '_loveys_', 'loaju____', '77sweetybee', 'happyunaaa', 'minginggg', 'angelinababyxx77',
+    # '____yoming', 'sehee2_2', 'himira_baby', 'suyyyisss', 'hw._____2', 'chaeero', 'minjeong48576', 'bibi_0_0_11',
+    # 'x_arielxx', 'daaasomm', 'queenzy_qzy', 'lingdfg', 'eundew_gondew', 'gemmanotalone_', 'dailyssong', 'ttokkenge',
+    # 'nana.k9901', 'qaaallaq', 'daisy.baby1004', '8701jll', 'phoebe_.xn', 'lilygumii', 'within_elin', 'florso0',
+    # 'ana_nyang', 'cutey.wolf', '7ouhwon', 'gu___gubear', 'linhlinhchip', 'salysaouk', 'ngquynhnhi_qni', 'Phanva_vye',
+    # '1.21.apm', 'nahaneulll', 'xviimpr__', 'hiyroze', 'su____0717', 'da.seol_', 'uneed___y', 'jaamietan',
+    # 'm._.eeo', 'jiyeonova', 'lxvefrxmnxc', '_uchu_uchu_123', 'hhr_301', 'zyzyveve', 'yonuonly', 'rika7me',
+    # '11sukiyo', 'snusnu', 'neine.ipupu', 'zav_by1', 'seaofy._', 'smorebin', 'm1nzng', 'ztc_713', 'meinvjihe',
+    # 'k_02kg', '_91yu', '___wuyou', 'callmemira926', 'mikanaka95', 'kmiseo___', 'jjimmy.am', 'kyliett1', '_scotthh_',
 
+
+
+
+
+
+
+    # 다시 시작할때는 아래부터
+    # 'ja_y_0_0', 'dumb_pink6', '456818_luv', '_joon__e', 's2.aaaaaa', 'eye.luv.uuu', 'songzi_won', 'kk.kyl0',
+    # 'miemayon', 'nguyenry_na05', 'miisu000', 'xiiaom_life', 'kurosakiqiqi', 'irysl', 'kyu__ming', 'yuina6867',
+    # 'luv_mr.9', 'e_unzni', 'so_rabimu', 'niya.gerda', '_j_sy', 'michi1.8', 'j_reve__', 'ria0kcal', 'asyalikizpaylasiom',
+    # '_._.min.s_', 'jena.legs', 'yeosney', 'heduolexiangtu00', 'nanaboa_s2', 'itsjihoooo', 'xeoeunx', '_jiiyou',
+    # 'lijiamin922', 'qiuuuqiu', 'j__oony', 'meowsso', 'babyjiin_', 'yxx.jj', 'suu.eun', 'soxuni_6', '_____serendip1ty__',
+    # 'fall_s2_', 'hm2.j', 'eeu_nkyo', 'fei210k', '__soften__', 'tokki_0_0_', 'sseunaa', 'yeoonge',
+    # 'jiminnx_', 'nyeoie', 'maruemon_96', 'newwwspring2', 'so1rblu', 'jju_dxeng', 'ximi_v', 'asianbunnyxu',
+    # '_dahyexn', 'juicy_s2_', 'i.a.m.joy_', 'pm16._.00', 'imparkseoyi', 'voos._.soov', '6nthespot_j', 'passerby_383',
+    # 'cheeerry_g', 'heesu._.ji', 'j1won.ver', '___ffany___', 'jelly._cc', 'h_aeining', 'kimkkukku_vv', '7ee7in',
+    # 'karineeee_j', 'elina.xuanxuan', 'serenaa_xy', 'somi.yii', 'sowol.2', 'jellymon_', 'hyoca_v', 'breathsums',
+    # 'nimkguyen', 'riya_yu', 'lovelynnboo', 'becky.o9o', 'celi.nejy', '_imnyx', 'seven.eso', 'sansanbaebae',
+    # 'showa_shojo', 'sirobutadesu', 'yyuu_1127._.1', 'hazzumerirong', 'jeemneee', 'banita.jin', 'suzziiiiy',
+    # 'composer_seol', 'h_______hrin', '0lin97', 'sh_4.2.0', '_____jen2', 'rangpila', 'meowhae_02', 'p0_0q_12',
+    # 'mypinktension', '3.18_jy', 'sonnyxux', 'mer_maid_io', 'bada_00k', 'xyoungna', 'by_seoa', 'queenzy._nail',
+    # 'bin___chuuu', 'jihyetty', 'ji.eunnii', 'juju__.s', 'itsmin_j', 'im_your_jyeon',
+    # 'alicejungxx', 'hwangbabi.owner', 'soxxhui', 'sunn416', 'kasagi.cos', 'gar_dxx',
+    # 'jangjang.97', 'syx_janeyoo', '_s_j_sonyeo', 'dyonni__', '_pmk___', 'ye._.rry', 'mikanaka9999',
+    # 'godrhea', 'offmmin', 'bo_ming__', 'mia0.713', 's_b_131', '2u_fairy', 'rosie_weiwei',
+    # 'kurosakiqiqi', 'ruri_azurrum', 'sakura_maomao', 'hopxheex', 'love_zennyrt', 'nyangcre', 'i.am.sehee',
+    # 'yunyunyun01', 'duyenn.hipp10_4', 'duyenn.hipp10_4', 'junglnside', 'uxx.mee', 'mimi___2k', 'yoodaye__',
+    # 'syb.3_3', 'gisele_48', 'p_a_s_s_o_u_t___', 'tmfrl5687', '__e_zz', 'ji_hye._.choi', 'xtrzssss',
+    # 'chaeee222', 'llovelydday', 'ellie.yh.kim', 'eatha_02', 'niuu.yh', 'only_jin_want', 'ha_lklk',
+    # 'jeonsebin606', 'starlike999', 'pdpd_xixe', 's2eeena1_214', 'g.xyn_8',
+    # 'jinyomissong', '24.yu_', '1004yyyyyy', 'ini_113', 'cocoyoen', 'gahee_lov', 'xoxojiyu', 'y._.yun__',
+    # 'linhtho_06', 'qtd___', 'onvi2ee', 'a_iridescence', 'spring_.0304',
+    # 'taemmimm', '_uni_j', 'haenni_48', 'jji__chuuu', '__etre0301', 'serein_rin', 'eddddnnn', 'yeah_niii',
+    # 'star.1ikeu', 's_ye__j', '09x05', 'dgeneva___', 'hiandme_lhj', 'hanlalahh', 'eliteiaai',
+    # 'yena_.nya', '9530.2', 'glea.mingsoi', 'seoren__________', 'eyu.xx', 'yelinnne',
+    # 'innooonni', 'sseuldl', '0224y_y', '__khina.z',
+    # 'yua_voxy', 'takomayuyi', 'zuozuo0701', 'kekexiyyy_', 'iam_victoria_dream', 'mmikobbb', 'xiianger',
+    # 'lovel__yuu', 'hsxxa_', 'sxxg_a', 'xixigina', '4saruru', 'jjuya_o0o', '_______sooah_', '__habin_s2',
+    # 'noonnyvichudawan', 'hbbxx_milk', 'x2_w2_', 'xx1oo9', 'love.been_', 'jelly_riri_', 'evolyvul__',
+    # 'vely.mom', 'xx_miiyo', 'g.lita._', 'viviana___jung', 'binnnibii', 'bjju.__.jj', 'bini._.9', '__mjie__',
+    # 'yundeun_', 'nna_yomi', 'serena__sy', 'seoyoon282', 'haeun_______', 'xxyspx_xx',
+    # 'vivivxxy__', 'gnaranha', 'a.ming_s', 'xx_sunh_xx', 'lee_so0810', 'lovres_min_',
+    # 'bibee2ee', 'sun_ssilver', 'neutral_magazine_', 'cotton.un', 'hayounngg', 'adorable.ssin',
+    # 'love._.lett', 'iamsxxy', 'jun.amaki', 'm3dusa_9', 'tawanptn', 'sine_swxgg', 'xxhannipxx',
+    # 'byhyunbi', 'inah_sekiz05', 'tt_congg', '75.twl_', 'rmrm_1813', 'peach__army',
+    # 'rosy_una_yyy', 'egg_egg0.0', '_dear_bella_', 'pilaxxs', 's_fute19', '16.7_kg',
+    # '171___55', 'sia2_2a', 'sha2_s2022', 'minhanna0914', 'babyswims.sg', 'kabiqiu',
+    # 'pat_parichat_', 'natty_n22', 'l70.4_', 'hyo.j.u', 'onlyone_zin', '_young2._', 'cocoxreal_', 'hzzu__u',
+    # 'n0b0dye1se', 'zyeoooon', 'new.and.b', '7x3gram', 'serin.2am', 'huru.huruu', 'bababibear__',
+    # 'sheknoh', '173_sj', 'ringo_lyn', 'via_olivia_xoxo', 'o9__o8', 'yn____say',
+    # 'me.ow_me.ow_', '175_pyeon', 'l2.sh__', 'hip_pretty', '3.26._.c', 'you_mini_da',
+    # 'hajiwon.22', 'bisoou_uu', 'bbgrbttr', 'yoon._.vely2', 'hahahazwoo', 'iii_17.0', 'sook_0', '_silver_snow_',
+    # 'dahye_1lee3', 'jeehyeounn', 'chaae.rin', 'jini_bbangg_', 'kimgapju', '_aarome', 'soooobxxn', 'sexy_minji_',
+    # 'yoomstagramm_', 'hbbxx_s2', 'l_mh92', 'starlight_h20', 'j_i_y__', 'pilason._',
+    # 'jiseon_tv', 'jini__0227', 'slowswan', '___jung.g', 'haminiii', 'chaexnn', 'myu_a_',
+    # 'won._.niii', 'hana_sooong', 'xo_yeri', 'floretta__', 'floretta_for_summer',
+    # 'chaey17', 'neejinee', 'u.zyn', 'popoyehh', 'kalokagatxia', 'from__honeyvivi', 'jeee622',
+    # 'berryooon', '11.3bin', '__jan.7', '0y_joo0', 'dig_gi', 'love.bitt', 'u__v.ely', 'emmmshin',
+    # 'tian_meiso', 'swai_sy', 'shushu_2.1', 'n__yoonn', 'h_s.s2', 'yee.rimi',
+    # 'si.young', 'vivixch', 'yea_rang', '6.15zm', 'xxaxix_', 'diamant.ete', 'aa_yoon',
+    # 'coszmy', 'eu_nj', 'zhuhaina', 'an_xna_', '__dmswl_',
+    # 'seultori_510', 'yuri_luffy', 'iamruzzxng', 'song__ji_', 'sukimi0320', '_xem__i',
+    # 'svn9o.__.ww', 'da._.hae12', 'iloveyou._.3000', 'rinrin.zip', 'ceunee', 'guswl_0409', 'ttt.ri',
+    # 'green.teabag', 'ji2une', 'ye.__119', 'ssoyeomi', 'nannychanada', 'faiisukanya.6992', 'candyseul',
+    # 'bin___0812', 'oaoagirl', 'badass._.sky', 'jeje_482', '_oucci___',
+    # 'ellaeaaa', 'chaeri__.s2_', 'lovley__zuzu', 'o_8.6', 'iilike.0',
+    # 'honey___bikini', 'otracyo8', 'ahyo12_07', 'roxeuoon',
+    # 'p___nr', 'jiee_wen', '_lovely.jin', 'miya.02822', 'ji__sunny_', 'lim__bell',
+    # '_heeyomii', 'yund_s2', 'gaheunii', 'bai_zzi', 'flora_0ne', 'yyy_123n',
+    # 'xrkghk_.h', 'jiminbaby_s2', 'si_.yoni', 'gyuky_', 'you.nique9', 'bo.nn._y', 'th_exy',
+    # 'my._ju', 'seo__0.x', 'nowex._', 'hhauuni', 'crewme_academy', 'f0iury_1', 'vuv_lly',
+    # 'luvbbeen', 'eve_noh_', 'sorakxx', 'cooomong', 'arreumii', 'suxgexn',
+    # 'vivian____e', 'loveeee___168', 'ggyong_ee', 'sys2_s2', 'yourmuseisu',
+    # 'yaozhuzhu_', 'suming_ee', 'nanaring_', 'm._ung', 'dear.araminta', 'kkang.nyang',
+    # 'ddo._.uuuu', 'mintbaka', 'ssol_ra.c', 'blossom_rim___', 'yea__won_', '_i.magine_', 'sovely_fit',
+    # 'baek_nahyun_', '_.0_.oo', 'valennjy', 'richyaaaaaa',
+    # 'key_ssam_', 'fullmooon___', 'doa_1224', 'dh_oh_eb', '0_gwlny', 'uyuy_joo', 'jonye.com_',
+    # 'seohavivi', 'rh_ab', 'boonong_lovely', '_peachme_', '875cos', 'xisiun', 'youvlyna',
+    # 'hee._.tty',  'heeya_cosplay', 's2_u.l', 'ww0205ww', 'soo_flower',
+    # 'daaddaad_daad', 'myelnday', 'zl_rlo.k', '_sorang__', 'signal_jung', 'jaewoneey', 'lamianxiong7717',
+    # 'samura2.heart', '92ddo', '2.09ke', 'bhabiesol', 'heenyang___', 'bambiaura9999',
+    # 'shavit_khan', 'uzoolike_', 'lilithzxm', 'dlove_x', '0_u_ng',
+    # 'rogle__', 'aomsin.wrp', '36.mxmxyyy', '_hyounj', 'hyxmimi',
+    # 'hee.zini', 'lluvly_', 'binxnnn', 'crystalgramx', 'sojjing', 'furee999', 'c.haee_', '5.24_c',
+    # 'kinnjust', 'd_bani97', 'd___q_', 'k__xiin', 'ming_cute_', 'zisoooop',
+    # 'aonaumaaa_', 'velyroom', 'hoi__yoon', 'hal.h.l', '___eunluv', 'grxra', 'juneeexoxo',
+    # 'so.tamin', 'e_y00', 'eun2ang', 'yunseul_000', 'hxxmiso', 'dear._.jung',
+    # 'kangtokki_', 'cheap_box', 'its_suzy_time', 'amourfor_u', 'o___jin.a_', 'wellhari_',
+    # 'so0o_h_', 'sinyxii', 'ch__hana', 'so_love_so_', 'hoy_ni_', 'luvurse1f_',
+    # 'pu.___', '7.10h', 'chennierubychane', 'inooyeah', 'imyeonduu', 'beloved__yoo',
+    #
+    # # cleanup --------------------------------
+    # 'angel_youn', 'vvknkk', 'cherish.__h', 'akdeb_', 'iamyeoninn', 'mio_love_y', 'cha_sohyeon',
+    # 'yisoah', 'pilarim__', 'signoey', 'nuuzln', 'yuanweiibing', '__jihyang_',
+    # 'i_ye0ni_', 'loyewe_official', 'seo.ohh', 'dduen2', 'baby__rosy_',
+    # 'h0_barbie', 'beena._s2', 'se0kxxg', 'min_vely__26', '_9.km', 'kss0x', 'ssoyababe', '_chae_rin2',
+    # 'kyoungsxx', 'realminzu', 'davely__o', 'oasis_0_0', 'lovelykce', 'sin_e_g', 'soo_dayo2', '10o4z', 'a.__.rume',
+    # 'selpo_s2', 'sonming52', 'i_am_young22', 'cosyounghere', 'momokini_com',
+    # 'yasal_170', 's0zzzi', '_jinuary_', 'ye0n2yo',
+    # 'c_dbfl', 'its_hr_time', 'red.bell3', '__szimpatikus', 'soapurin', 'joj._.uk',
+    # 'ddohyun', 'j1ns1m', 'soo_m___', 'leedahve', 'sara.co.k', 'zennyrt', '____gyom',
+    # 'siu.im', 'su0rla', 'yeji._.joo', 'wankeeratiya', 'u__stagram__',
+    # 'ye.eun_son', '_hheya', 'eiiiiiiem', 'kingvivianelee', 'nar1n_2', '_sumang._', 'xov.xul_',
+    # 'earnjubu', 'xouuuus', 'lssaaxx', 'closecurve_official', 'j.warm_', 'zero0silver',
+    # 'g.naaaa_', 'soyeemilk', 'soyee.milk', 'le_wnyoung_', 'love__coc0', 'zizihyun080', 'zzuu.___', 'xeuul_',
+    # 'minimini_1004', '_dudu_di_', 'sonyearin', 'b_____star', 'youdaeng__', 'egg00_2.0',
+    # 'lovejaewonzz', 'h_a_c_a_', 'rlwndud05_', 'jihyun_09_16', 'yoo.oonni',
+    # 'hypnotic.co.kr', '_kkhj2', 'prettygirl__stagram__',  'hyan_08', 'hyerininng', 'the._.2y',
+    # 'ejyoooou', 'charming__ny', 'jdabyeol2', 'gu__zzzi', 'simgaram', 'inkyung97', 'xon_ah',
+    # 'seoulasuna', 'harinxchu', 'dltnqls823', 'jia__a', 'so__w0n', 'sux_eon', 'xeva.qiaoniutt',
+    # 'xxinchye_', 'h1_chu_', 'lilly_11029', 'seon_h_e', '59.5994', 'susan.n426', 'seo._.llll',
+    # 'kim_s_ofo', 'svvvnswan', 'koreangirlsontop', 'obolzr_', 'uni_h_',
+    # 'bi._.kini', '_wj._d', '9.74kg', 'subni0.0', 'lylakong01', 'xiaoyou_uzi',
+    # '70g_ee_y', 'xmoonoa', 'bodyon_bikini', 'soouine', 'star____b._', 'yu._.mei', 'necomimi_b',
+    # 's0on_ho', 'ju_.vely_', '_yj2.18k', 'youuuu_d', 'u__stagram__', 'y_chaeee', 'heex.x_', 'roongzie',
+    # 'meww.jin', 'myuxxrv', 'y._.dulcet', 'p.___.gj', 'si_euns2', 'in2327_h', 'jihea_a', '5959__50',
+    #
+    # # 비공개였다가 공개된 계정들
+    #  'xaevev', 'seasooseasoo', '171.mc', 'eunnhong', 'arinm_1204', 'dinnydyu', 'no.park.gu_', 'jiyouxn', 'sen.xy_',
+    #
+    # # 비공개 계정들
+    # '728mz', 'cherrytohearts', 'viesuzami', 'eoxnyx', 'immzoo',
+    # 'zzyuridarong', '_ha_nari_', 'nn_yun_s', '2pendency', 'koberryy',
+    # 'anhamm_1111', 'ba.kkung', 'jxngxxin', 'zzyuridayo', 'leeae_ai', 'jjo_nyxx',
+    #
+    #
+    # # 삭제프로필
+    # 'baberamii', # (가룸)
+    # 'chocomintteri', 'yasminabb_', 'xipduksoojeong', 'jqbabyby', 'onibaby2001', 's2ena2', 'h___rvn', 'sunny_chijnn',
+    # 'jxngxxin', 'aoi._.9z', 'qiaoniu1987', 'sindabazzi', 'godseolhwa', 'yun_iia', 'ps.eunji', 'jnxul',
+    # 'iam_besso', 'loveynynyn', 'jy_911', 'lasy_243', 'serimm11', 'wonyforone', 'ne_0_ie', 'se.rin.06',
+    # 'necomimivv', 'hmmmem', 'llilyylux', 'nhagirlxinh', 'meimeii.99', 'miyukiicos', 'vunarz', 'yeonyuneko',
+    # 'dirinzero', 'mandy__nana', '_qingzi00', 'jinheeru', 'j.nsul', 'hyexnst', 'songe_love07',
+    # 'siyeon_lovee', 'ryu._sy', 'uhwa_171', 'nameisgrvn1015', 'banseozi', 'by_jin06', 'yuuko_uzi',  'jiwon.lee_06',
+    # '0.0_ey', 'ulzzanggirlasia__', 'illl__._', 'tatayatatay', 'ssuduck', 'iamharuzzxng', 'catjjoa',
+    # 'youcantbejennifer_', 'ivytt77', 'zoeeecsy_sy', '3.sun.2', 's_jisu_02', '9_9hop', '2week_ago', 'fuxi_korean',
+    # 'fluffycandyrat_', 'himenoyudii', 'meiyouyuanzi_001', 'julia_yang01', 'eunj._.ya', 'areuumm__', 'the.muse_elen',
+    # 'rim._.kim',
 ]
 # ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
 
@@ -945,4 +1094,10 @@ if __name__ == "__main__":
     asyncio.run(run_scrap)      # ❌ 함수 자체를 넘김
     asyncio.run(run_scrap())    # ✅ 코루틴 객체를 넘김
     '''
-    asyncio.run(run_scrap())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_scrap())
+    finally:
+        loop.close()
+        os._exit(0)  # anyio atexit 스레드 풀 경고 방지
