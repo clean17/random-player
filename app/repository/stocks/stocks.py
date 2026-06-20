@@ -148,13 +148,13 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             created_at, updated_at, nation, stock_code, stock_name, 
             pred_price_change_3d_pct, yesterday_close, current_price, today_price_change_pct,
             avg5d_trading_value, current_trading_value, trading_value_change_pct,
-            graph_file, market_value, target
+            graph_file, market_value, target, find_rule
         )
         VALUES (
             now(), now(), %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s, %s,
-            %s, %s, %s
+            %s, %s, %s, %s
         )
         -- ON CONFLICT ON CONSTRAINT stocks_code_daily
         ON CONFLICT (stock_code, target, (created_at::date))
@@ -170,8 +170,9 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
             current_trading_value    = COALESCE(EXCLUDED.current_trading_value,    interest_stocks.current_trading_value),
             trading_value_change_pct = COALESCE(EXCLUDED.trading_value_change_pct, interest_stocks.trading_value_change_pct),
             graph_file               = COALESCE(EXCLUDED.graph_file,               interest_stocks.graph_file),
-            market_value             = COALESCE(EXCLUDED.market_value,             interest_stocks.market_value)
+            market_value             = COALESCE(EXCLUDED.market_value,             interest_stocks.market_value),
             --target                   = COALESCE(EXCLUDED.target,                   interest_stocks.target)
+            find_rule                = COALESCE(EXCLUDED.find_rule,                interest_stocks.find_rule)
         RETURNING id;
         """
         cur.execute(
@@ -181,7 +182,7 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
                 stock.yesterday_close, stock.current_price, stock.today_price_change_pct,
                 stock.avg5d_trading_value, stock.current_trading_value,
                 stock.trading_value_change_pct, stock.graph_file, stock.market_value,
-                stock.target
+                stock.target, stock.find_rule
             )
         )
         row = cur.fetchone()
@@ -237,7 +238,7 @@ def update_low_stock_graph(stock: "StockDTO", conn=None) -> None:
 
 # 실시간, 저점 데이터 조회
 @db_transaction
-def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None):
+def get_interest_stocks(date: str, endDate: str, mode: str = "normal", rule: str = None, conn=None):
     base_sql = """
     SELECT 
         --row_number() over (order by i.id) as rn 
@@ -260,6 +261,7 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None
         , s.logo_image_url
         , s.product_code
         , i.target
+        , i.find_rule
     FROM interest_stocks i
     JOIN stocks s ON i.stock_code = s.stock_code
     WHERE i.created_at::date >= %s
@@ -279,9 +281,13 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", conn=None
         """
 
     elif mode == "low":
+        if rule in ("low_v1", "low_v2"):
+            base_sql += "  AND i.target = %s\n"
+            params.append(rule)
+        else:
+            base_sql += "  AND i.target LIKE 'low%%'\n"
         base_sql += """
           AND i.today_price_change_pct::numeric > 3.3
-          AND i.target LIKE 'low%%'
         ORDER BY i.created_at::date, i.today_price_change_pct::numeric DESC
         """
 

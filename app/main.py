@@ -14,6 +14,7 @@ TRIP_IMAGE_DIR = 'trip'
 TEMP_IMAGE_DIR = 'temp'
 KOSPI_DIR = settings['KOSPI_DIR']
 SP500_DIR = settings['SP500_DIR']
+COS_DIR = 'cos'
 
 @main.route('/')
 @login_required
@@ -26,6 +27,7 @@ def home():
                            , REF_IMAGE_DIR=REF_IMAGE_DIR
                            , TRIP_IMAGE_DIR=TRIP_IMAGE_DIR
                            , TEMP_IMAGE_DIR=TEMP_IMAGE_DIR
+                           , COS_DIR=COS_DIR
                            , username=session["_user_id"]
                            , version=int(time.time())
                            )

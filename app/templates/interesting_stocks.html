@@ -50,6 +50,11 @@
 <!--        </button>-->
         <input id="dateInputStart" class="date" type="date" />
         <input id="dateInputEnd" class="date" type="date" style="display: none"/>
+        <select id="ruleFilter" class="rule-filter" style="display:none">
+            <option value="">전체</option>
+            <option value="low_v1">룰 V1</option>
+            <option value="low_v2" selected>룰 V2</option>
+        </select>
     </div>
 
     <h3 class="section-title">검색 결과
@@ -198,6 +203,7 @@
     const favoriteStocks = [];
     const startDateInputEl = document.getElementById('dateInputStart');
     const endDateInputEl = document.getElementById('dateInputEnd');
+    const ruleFilterEl = document.getElementById('ruleFilter');
 
     const today_yyyymmdd = `${yyyy}${mm}${dd}`;
     const fmt = new Intl.DateTimeFormat("ko-KR", {
@@ -211,6 +217,12 @@
     });
 
 
+    function updateTabExtras(tabId) {
+        ruleFilterEl.style.display = (tabId === 'tab-low') ? '' : 'none';
+        if (tabId === 'tab-low') ruleFilterEl.value = ruleFilterEl.value || 'low_v2';
+        else ruleFilterEl.value = '';
+    }
+
     // 탭 전환
     document.querySelectorAll('.tab-btn[data-target]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -219,8 +231,9 @@
             document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
             const target = document.querySelector(btn.dataset.target);
             if (target) target.style.display = 'block';
+            updateTabExtras(target.id);
             if (target.id === 'tab-summary'||target.id === 'tab-favorite') {
-                setDefaultDateToday(8, startDateInputEl);
+                setDefaultDateToday(6, startDateInputEl);
                 loadData()
             } else {
                 setDefaultDateToday(0, startDateInputEl);
@@ -228,6 +241,8 @@
             }
         });
     });
+
+    ruleFilterEl.addEventListener('change', loadData);
 
     // 오늘 날짜 기본값
     function setDefaultDateToday(interval=0, dateEl){
@@ -570,6 +585,7 @@
 
             if (target === 'tab-low') {
                 payload.endDate = null;
+                payload.rule = ruleFilterEl.value || null;
                 const res3 = await fetch(url3, {
                     method: 'POST',
                     headers: { 'Content-Type':'application/json', 'Accept':'application/json' },

@@ -94,7 +94,7 @@
 .table-scroller .carousel-btn {
     all: unset;
     position: fixed;
-    top: 60vh;            /* 화면 높이 기준 중앙 */
+    top: 92vh;            /* 화면 높이 기준 중앙 */
     transform: translateY(-50%);
 
     width: 50px;

@@ -22,6 +22,7 @@ class StockDTO:
     market_value: str = None
     category: str = None
     target: str = None
+    find_rule: str = None
     last_close: str = None
     user_id: int = None
     flag: bool = None

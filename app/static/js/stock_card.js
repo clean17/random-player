@@ -354,12 +354,11 @@ function renderLowCardHtml(track, rows) {
             ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/kospil/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
 
-        // target 파싱: "low_v1_shc" → 버전 + 플래그 태그
+        // target: "low_v1" → 버전, find_rule: "shc" → 플래그
         const targetRuleHtml = (() => {
             const parts = String(r.target ?? "").split("_");
-            if (parts.length < 2) return "";
             const version = parts[1] ?? "";
-            const flags = parts[2] ?? "";
+            const flags = String(r.find_rule ?? "");
             const flagMap = { s: "안정", h: "고확률", c: "커버리지" };
             const tags = [...flags].filter(f => flagMap[f]).map(f =>
                 `<span class="rule-tag rule-tag--${f}">${flagMap[f]}</span>`

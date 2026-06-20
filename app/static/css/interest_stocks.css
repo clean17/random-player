@@ -211,7 +211,7 @@ body.page-stocks .table-scroller .trade-grid {
 
 body.page-stocks .table-scroller .carousel-btn {
     position: fixed !important;
-    top: 58vh !important;
+    top: 82vh !important;
     transform: translateY(-50%) !important;
     width: 64px !important;
     height: 64px !important;
@@ -255,6 +255,18 @@ body.page-stocks .table-scroller .carousel-btn.right {
     }
 }
 
+
+/* ===== 룰 필터 select ===== */
+.rule-filter {
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    color: #111;
+    font-size: 13px;
+    cursor: pointer;
+}
 
 /* ===== 카드 로고/종목명 클릭 ===== */
 .trade-logo, .trade-name { cursor: pointer; }
@@ -439,5 +451,12 @@ body.page-stocks .table-scroller .carousel-btn .chev {
         width: 54px !important;
         height: 54px !important;
         font-size: 32px !important;
+    }
+}
+
+/* ===== 버튼 세로 위치 최종 override ===== */
+@media (max-width: 767px) {
+    body.page-stocks .table-scroller .carousel-btn {
+        top: 65vh !important;
     }
 }

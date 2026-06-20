@@ -90,6 +90,7 @@ def upsert_interesting_stocks():
     logo_image_url = data.get("logo_image_url") or None
     market_value = data.get("market_value") or None
     target = data.get("target") or 'interest'
+    find_rule = data.get("find_rule") or None
     last_close = data.get("last_close") or None
 
     # 종가만 수정
@@ -113,6 +114,7 @@ def upsert_interesting_stocks():
         logo_image_url=logo_image_url,
         market_value=market_value,
         target=target,
+        find_rule=find_rule,
     )
     # print(stock)
     result = merge_daily_interest_stocks(stock)
@@ -167,8 +169,8 @@ def get_low_stocks():
     data = request.json
     date = data.get("date")
     endDate = data.get("endDate") or date
-    # target = data.get("target") or 'interest'
-    stocks = get_interest_stocks(date, endDate, "low")
+    rule = data.get("rule") or None
+    stocks = get_interest_stocks(date, endDate, "low", rule=rule)
     return stocks
 
 @stock.route("/interest/view", methods=["GET"])
