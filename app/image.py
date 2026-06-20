@@ -223,6 +223,17 @@ def get_image_page(start, limit, page, target_dir, image_arr, html, source_type=
     return images, page, start, images_length, template_html
 
 
+def resolve_dir_page(dir: str, page: int):
+    cfg = DIR_CONFIG.get(dir)
+    if cfg is None:
+        return None
+    start = (page - 1) * LIMIT_PAGE_NUM
+    images, page, start, images_length, template_html = get_image_page(
+        start, LIMIT_PAGE_NUM, page, cfg.base_dir, cfg.image_arr, cfg.template, cfg.source_type
+    )
+    return images, page, start, images_length, template_html
+
+
 def get_stock_graphs(dir, start, count):
     all_items = os.listdir(dir)
     images = [f for f in all_items if os.path.isfile(os.path.join(dir, f))]
@@ -362,7 +373,7 @@ def image_list():
     #     template_html = 'trip_image_list.html'
 
 
-    # 공통 기능 : 첫번째 페이지에서만 풀 스캔
+    # 공통 기능 : 캐시 배열 슬라이싱 (풀스캔은 /fetch 에서만)
     elif dir in DIR_CONFIG:
         cfg = DIR_CONFIG[dir]
         images = cfg.image_arr[start:start + LIMIT_PAGE_NUM]
@@ -412,12 +423,7 @@ def fetch_image_list():
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
     if dir in DIR_CONFIG:
-        cfg = DIR_CONFIG[dir]
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, cfg.base_dir, cfg.image_arr, cfg.template, cfg.source_type
-        )
-    else:
-        pass
+        images, page, start, images_length, template_html = resolve_dir_page(dir, page)
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
