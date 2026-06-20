@@ -29,8 +29,8 @@
 <main class="home-shell">
     <section class="home-hero">
         <p class="home-eyebrow">Dashboard</p>
-        <h1>주식 정보</h1>
-        <p class="home-subtitle">저점 매수로 돈을 벌자</p>
+        <h1></h1>
+        <p class="home-subtitle"></p>
     </section>
 
     <section class="container menu-card" aria-label="메뉴 선택">
@@ -66,6 +66,7 @@
                 {% if current_user.get_id() == config.SUPER_USERNAME %}
                 <option value="{{ url_for('image.image_list', dir=IMAGE_DIR) }}">View Images</option>
                 <option value="{{ url_for('image.image_list', dir=IMAGE_DIR2) }}">View Images2</option>
+                <option value="{{ url_for('image.image_list', dir=COS_DIR) }}">View Cosplay</option>
                 <option value="{{ url_for('image.image_list', dir=MOVE_DIR) }}">Move Image</option>
                 <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
                 {% endif %}

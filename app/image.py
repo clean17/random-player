@@ -11,7 +11,8 @@ import time
 import urllib.parse
 import shutil
 from urllib.parse import unquote
-from typing import Final
+from dataclasses import dataclass
+from typing import Final, Optional
 from datetime import datetime
 import job.batch_runner as batch_runner
 
@@ -50,6 +51,22 @@ DIRECTORY_MAP = {
 }
 
 EXCLUDE_SUFFIXES: Final = (".zip", ".ini", ".Identifier")  # 불변 튜플
+
+
+@dataclass
+class DirConfig:
+    base_dir: str
+    image_arr: list
+    template: str
+    source_type: Optional[str] = None
+
+
+DIR_CONFIG: Final = {
+    'image':  DirConfig(IMAGE_DIR,  ai_image_arr,   'image_list_masonry.html'),
+    'image2': DirConfig(IMAGE_DIR2, ig_image_arr,   'image_list_masonry.html', 'ig'),
+    'cos':    DirConfig(COS_DIR,    cos_image_arr,  'image_list_masonry.html'),
+    'move':   DirConfig(MOVE_DIR,   moved_image_arr,'image_list_masonry.html'),
+}
 
 
 # 정렬 함수
@@ -276,15 +293,13 @@ def safe_path_join(base_dir, rel_path):
 def delete_images_task(images_to_delete, dir):
     for image in images_to_delete:
         try:
-            if dir == 'move':
-                safe_path = safe_path_join(MOVE_DIR, image)
-            elif dir == 'image':
-                safe_path = safe_path_join(IMAGE_DIR, image)
-            elif dir == 'image2':
+            if dir == 'image2':
                 dir_part  = os.path.dirname(image)
                 file_part = os.path.basename(image)
                 clean_file_part = clean_filename(unquote(file_part).strip())
                 safe_path = safe_path_join(IMAGE_DIR2, os.path.join(dir_part, clean_file_part))
+            elif dir in DIR_CONFIG:
+                safe_path = safe_path_join(DIR_CONFIG[dir].base_dir, image)
             else:
                 continue  # 알 수 없는 dir
 
@@ -348,48 +363,15 @@ def image_list():
 
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
-    elif dir == 'image':
-        images = ai_image_arr[start:start + LIMIT_PAGE_NUM]
+    elif dir in DIR_CONFIG:
+        cfg = DIR_CONFIG[dir]
+        images = cfg.image_arr[start:start + LIMIT_PAGE_NUM]
         if len(images) == 0:
             page = page - 1
             start = (page - 1) * LIMIT_PAGE_NUM
-            images = ai_image_arr[start:start + LIMIT_PAGE_NUM]
-
-        images_length = len(ai_image_arr)
-        template_html = 'image_list_masonry.html'
-
-    elif dir == 'image2':
-        images = ig_image_arr[start:start + LIMIT_PAGE_NUM]
-        if len(images) == 0:
-            page = page - 1
-            start = (page - 1) * LIMIT_PAGE_NUM
-            images = ig_image_arr[start:start + LIMIT_PAGE_NUM]
-
-        images_length = len(ig_image_arr)
-        template_html = 'image_list_masonry.html'
-
-    elif dir == 'cos':
-        images = cos_image_arr[start:start + LIMIT_PAGE_NUM]
-        if len(images) == 0:
-            page = page - 1
-            start = (page - 1) * LIMIT_PAGE_NUM
-            images = cos_image_arr[start:start + LIMIT_PAGE_NUM]
-
-        images_length = len(cos_image_arr)
-        template_html = 'image_list_masonry.html'
-
-    elif dir == 'move':
-        # images, page, start, images_length, template_html = get_image_page(
-        #     start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, 'image_list.html'
-        # )
-        images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
-        if len(images) == 0:
-            page = page - 1
-            start = (page - 1) * LIMIT_PAGE_NUM
-            images = moved_image_arr[start:start + LIMIT_PAGE_NUM]
-
-        images_length = len(moved_image_arr)
-        template_html = 'image_list_masonry.html'
+            images = cfg.image_arr[start:start + LIMIT_PAGE_NUM]
+        images_length = len(cfg.image_arr)
+        template_html = cfg.template
 
     elif dir == 'refine':
         images, page, start, images_length, template_html = get_image_page(
@@ -429,21 +411,10 @@ def fetch_image_list():
     start = (page - 1) * LIMIT_PAGE_NUM
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
-    if dir == 'image':
+    if dir in DIR_CONFIG:
+        cfg = DIR_CONFIG[dir]
         images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, IMAGE_DIR, ai_image_arr, template_html,
-        )
-    elif dir == 'image2':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, IMAGE_DIR2, ig_image_arr, template_html, 'ig'
-        )
-    elif dir == 'cos':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, COS_DIR, cos_image_arr, template_html,
-        )
-    elif dir == 'move':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, MOVE_DIR, moved_image_arr, template_html
+            start, LIMIT_PAGE_NUM, page, cfg.base_dir, cfg.image_arr, cfg.template, cfg.source_type
         )
     else:
         pass
@@ -490,19 +461,12 @@ def move_image():
 
     # send2trash(os.path.join(IMAGE_DIR2, new_path)) # 휴지통으로 보낸다
 
-    if imagepath == "image":
-        src_path = os.path.join(IMAGE_DIR, filename)
-        thumb_dir = os.path.join(IMAGE_DIR, "thumb")
-    elif imagepath == "image2":
-        src_path = os.path.join(IMAGE_DIR2, filename)
-        thumb_dir = os.path.join(IMAGE_DIR2, "thumb")
-    elif imagepath == "cos":
-        src_path = os.path.join(COS_DIR, filename)
-        thumb_dir = os.path.join(COS_DIR, "thumb")
-    elif imagepath == "move":
-        src_path = os.path.join(MOVE_DIR, filename)
-        thumb_dir = os.path.join(MOVE_DIR, "thumb")
-        dest_path = ref_dest_path
+    if imagepath in DIR_CONFIG:
+        cfg = DIR_CONFIG[imagepath]
+        src_path = os.path.join(cfg.base_dir, filename)
+        thumb_dir = os.path.join(cfg.base_dir, "thumb")
+        if imagepath == "move":
+            dest_path = ref_dest_path
     elif imagepath == "refine":
         src_path = os.path.join(REF_IMAGE_DIR, filename)
         thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
@@ -553,25 +517,13 @@ def delete_images():
         replace_existing=False
     )
 
-    # 루프가 끝난 뒤, ig_image_arr에서 한 번에 삭제(모든 중복 제거)
-    if dir == 'image' and ai_image_arr:
-        to_delete = set(images_to_delete)
-        # in-place 갱신(참조 유지)
-        ai_image_arr[:] = [p for p in ai_image_arr if p not in to_delete]
-
-    if dir == 'image2' and ig_image_arr:
-        to_delete = set(images_to_delete)
-        # in-place 갱신(참조 유지)
-        ig_image_arr[:] = [p for p in ig_image_arr if p not in to_delete]
-
-    if dir == 'move' and moved_image_arr:
-        to_delete = set(images_to_delete)
-        # in-place 갱신(참조 유지)
-        moved_image_arr[:] = [p for p in moved_image_arr if p not in to_delete]
-
-    if dir == 'refine' and refined_image_arr:
-        to_delete = set(images_to_delete)
-        # in-place 갱신(참조 유지)
+    # 루프가 끝난 뒤 한 번에 삭제(모든 중복 제거, in-place 갱신으로 참조 유지)
+    to_delete = set(images_to_delete)
+    if dir in DIR_CONFIG:
+        arr = DIR_CONFIG[dir].image_arr
+        if arr:
+            arr[:] = [p for p in arr if p not in to_delete]
+    elif dir == 'refine' and refined_image_arr:
         refined_image_arr[:] = [p for p in refined_image_arr if p not in to_delete]
 
     page = int(data.get("page", 1))
@@ -609,18 +561,12 @@ def get_image():
     directory = DIRECTORY_MAP.get(market.lower())
 
 
-    if dir == 'image':
-        base_dir = IMAGE_DIR
-    elif dir == 'image2':
-        base_dir = IMAGE_DIR2
-    elif dir == 'cos':
-        base_dir = COS_DIR
+    if dir in DIR_CONFIG:
+        base_dir = DIR_CONFIG[dir].base_dir
     elif dir == 'refine':
         base_dir = REF_IMAGE_DIR
     elif dir == 'trip':
         base_dir = TRIP_IMAGE_DIR
-    elif dir == 'move':
-        base_dir = MOVE_DIR
     elif dir == 'temp':
         base_dir = TEMP_IMAGE_DIR
         if selected_dir:
