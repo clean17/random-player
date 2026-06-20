@@ -151,36 +151,38 @@ def get_images(start, count, page, dir, image_arr=None):
     return images[start:start + count], page
 
 def get_subdir_and_reels_images(start, limit, page, parent_dir, image_arr):
-    images = []
+    pairs = []  # (rel_path, mtime)
     # subdir: 각 인스타그램 계정 폴더
     for subdir in os.listdir(parent_dir):
-        # print('subdir ', subdir )
         subdir_path = os.path.join(parent_dir, subdir)
-        if os.path.isdir(subdir_path):
-            # 1. dirA, dirB 바로 아래 파일
-            for f in os.listdir(subdir_path):
-                file_path = os.path.join(subdir_path, f)
+        if not os.path.isdir(subdir_path):
+            continue
+        # 1. subdir 바로 아래 파일
+        for f in os.listdir(subdir_path):
+            file_path = os.path.join(subdir_path, f)
+            if os.path.isfile(file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
+                pairs.append((f"{subdir}/{f}", safe_mtime(file_path)))
+        # 2. reels 서브디렉토리
+        reels_path = os.path.join(subdir_path, "reels")
+        if os.path.isdir(reels_path):
+            for f in os.listdir(reels_path):
+                file_path = os.path.join(reels_path, f)
                 if os.path.isfile(file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
-                    images.append(f"{subdir}/{f}")
-            # 2. reels 서브디렉토리의 파일도 포함
-            reels_path = os.path.join(subdir_path, "reels")
-            if os.path.isdir(reels_path):
-                for f in os.listdir(reels_path):
-                    reels_file_path = os.path.join(reels_path, f)
-                    if os.path.isfile(reels_file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
-                        images.append(f"{subdir}/reels/{f}")
-            # 3. images 서브디렉토리의 파일
-            images_path = os.path.join(subdir_path, "images")
-            if os.path.isdir(images_path):
-                for f in os.listdir(images_path):
-                    img_file_path = os.path.join(images_path, f)
-                    if os.path.isfile(img_file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
-                        images.append(f"{subdir}/images/{f}")
-    images.sort()
+                    pairs.append((f"{subdir}/reels/{f}", safe_mtime(file_path)))
+        # 3. images 서브디렉토리
+        images_path = os.path.join(subdir_path, "images")
+        if os.path.isdir(images_path):
+            for f in os.listdir(images_path):
+                file_path = os.path.join(images_path, f)
+                if os.path.isfile(file_path) and not f.lower().endswith(EXCLUDE_SUFFIXES):
+                    pairs.append((f"{subdir}/images/{f}", safe_mtime(file_path)))
+
+    pairs.sort(key=lambda x: x[1], reverse=True)  # mtime 내림차순 (최신 먼저)
+    images = [rel for rel, _ in pairs]
+
     if start >= len(images) and len(images) > 0:
         start = max(0, start - LIMIT_PAGE_NUM)
         page = max(1, page - 1)
-    # 'account/p/{파일명}'
 
     image_arr.clear()
     image_arr.extend(images)
