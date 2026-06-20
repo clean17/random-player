@@ -275,7 +275,7 @@
                     }
                 });
             });
-        } else {
+        } else if (dir !== 'refine') {
             imageItems.forEach(item => {
                 const img = item.querySelector('.thumbnail');
                 img?.addEventListener('click', () => {
