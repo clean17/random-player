@@ -5,7 +5,9 @@ from config.config import settings
 oauth = Blueprint('oauth', __name__)
 
 THREADS_APP_ID = settings['THREADS_APP_ID']
+THREADS_APP_ID2 = settings['THREADS_APP_ID2']
 THREADS_APP_SECRET = settings['THREADS_APP_SECRET']
+THREADS_APP_SECRET2 = settings['THREADS_APP_SECRET2']
 FACEBOOK_APP_ID = settings['FACEBOOK_APP_ID']
 
 @oauth.route('/policy', methods=['GET'])
@@ -51,6 +53,45 @@ def callback():
     exchange_params = {
         "grant_type": "th_exchange_token",
         "client_secret": THREADS_APP_SECRET,
+        "access_token": access_token,
+    }
+    response = requests.get(exchange_url, params=exchange_params, timeout=15)
+    long_term_token_data = response.json()
+    # long_term_access_token = long_term_token_data.get("access_token")
+
+    return long_term_token_data
+
+@oauth.route('/callback2', methods=['GET'])
+def callback2():
+    print('콜백')
+    code = request.args.get("code")
+    if not code:
+        return "No code received", 400
+    print('code', code)
+
+    # 코드 → 액세스 토큰 요청
+    token_url = "https://graph.threads.net/oauth/access_token"
+    params = {
+        "client_id": THREADS_APP_ID2,
+        "client_secret": THREADS_APP_SECRET2,
+        "redirect_uri": "https://chickchick.kr/oauth/callback2",
+        "grant_type": "authorization_code",
+        "code": code,
+    }
+
+    # response = requests.post(token_url, params=params)
+    response = requests.post(token_url, data=params, timeout=15)
+    token_data = response.json()
+    if "access_token" not in token_data:
+        return token_data, 400
+    print('token_data', token_data)
+    access_token = token_data.get("access_token")
+    user_id = token_data.get("user_id")
+
+    exchange_url = "https://graph.threads.net/access_token"
+    exchange_params = {
+        "grant_type": "th_exchange_token",
+        "client_secret": THREADS_APP_SECRET2,
         "access_token": access_token,
     }
     response = requests.get(exchange_url, params=exchange_params, timeout=15)

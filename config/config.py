@@ -111,11 +111,13 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         'HTM_DIRECTORY': directories.get('htm_directory'),
         'LOW_KOSPI_DIR': directories.get('low_kospi_stocks_directory'),
         'UNC_DIR': directories.get('unc_directory'),
+        'COS_DIR': directories.get('cosplay_directory'),
 
         'CRAWL_URL': urls.get('crawl_url'),
         'MUD_VPN': urls.get('mud_vpn'),
         'COOKIE': urls.get('cookie'),
         'CRAWL_HOST': urls.get('crawl_host'),
+        'COS_URL': urls.get('cosplay_url'),
 
         'FFMPEG_SCRIPT_PATH': paths.get('ffmpeg_script_path'),
         'WORK_DIRECTORY': paths.get('work_directory'),
@@ -128,7 +130,9 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
 
         'FACEBOOK_APP_ID': meta.get('facebook_app_id'),
         'THREADS_APP_ID': meta.get('threads_app_id'),
+        'THREADS_APP_ID2': meta.get('threads_app_id2'),
         'THREADS_APP_SECRET': meta.get('threads_app_secret'),
+        'THREADS_APP_SECRET2': meta.get('threads_app_secret2'),
 
         'DB_NAME': db.get('db_name'),
         'DB_ID': db.get('db_id'),
