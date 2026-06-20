@@ -17,22 +17,29 @@ sys.stdout = log_file
 # stderr는 콘솔로 유지 (오류 확인용)
 
 IMAGE_DIR = settings['IMAGE_DIR']
+COS_DIR = settings['COS_DIR']
 COS_URL = settings['COS_URL']
-SAVE_DIR = os.path.join(IMAGE_DIR, 'cos')
-os.makedirs(SAVE_DIR, exist_ok=True)
 
 
 
 
-def download_image(img_url: str, save_dir: str, post_id: str) -> bool:
+def download_image(img_url: str, save_dir: str, post_id: str, fallback_url: str = None) -> bool:
     try:
         basename = os.path.basename(img_url.split('?')[0])
         name, ext = os.path.splitext(basename)
         ts = datetime.now().strftime("%H%M%S%f")[:9]
-        new_filename = f"{name}_{post_id}_{ts}{ext}"
+        new_filename = f"{post_id}_{name}_{ts}{ext}"
         save_path = os.path.join(save_dir, new_filename)
-        resp = requests.get(img_url, timeout=30, headers={'Referer': COS_URL})
-        resp.raise_for_status()
+        try:
+            resp = requests.get(img_url, timeout=30, headers={'Referer': COS_URL})
+            resp.raise_for_status()
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404 and fallback_url:
+                print(f"  404 → fallback src: {fallback_url}")
+                resp = requests.get(fallback_url, timeout=30, headers={'Referer': COS_URL})
+                resp.raise_for_status()
+            else:
+                raise
         with open(save_path, 'wb') as f:
             f.write(resp.content)
         print(f"  Downloaded: {new_filename}")
@@ -40,6 +47,19 @@ def download_image(img_url: str, save_dir: str, post_id: str) -> bool:
     except Exception as e:
         print(f"  Failed {img_url}: {e}")
         return False
+
+
+async def goto_with_retry(page, url: str, retries: int = 3, wait_sec: int = 10):
+    for attempt in range(1, retries + 1):
+        try:
+            await page.goto(url, timeout=30000)
+            return
+        except Exception as e:
+            print(f"  [goto] 시도 {attempt}/{retries} 실패: {e}")
+            log_file.flush()
+            if attempt < retries:
+                await page.wait_for_timeout(wait_sec * 1000)
+    raise Exception(f"goto 실패 ({retries}회 재시도 후): {url}")
 
 
 async def get_photo_item_count(page) -> int:
@@ -80,7 +100,7 @@ async def auto_scroll_until_div_pt2(page):
             print(f"  [scroll] 스피너 감지 · 중지 · items={before_count} · 최대 5초 대기")
             log_file.flush()
 
-            deadline = loop.time() + 5
+            deadline = loop.time() + 8
             new_items = False
             while loop.time() < deadline:
                 await page.wait_for_timeout(500)
@@ -138,30 +158,31 @@ async def auto_scroll_until_div_pt2(page):
         await page.wait_for_timeout(500)
 
 
-async def collect_and_download(page, post_id: str) -> int:
+async def collect_and_download(page, post_id: str, save_dir: str) -> int:
     downloaded_count = 0
     loop = asyncio.get_event_loop()
 
     await auto_scroll_until_div_pt2(page)
 
-    links = await page.eval_on_selector_all(
+    pairs = await page.eval_on_selector_all(
         "div.position-relative.d-inline-block > a[data-fancybox='gallery']",
-        "els => els.map(a => a.getAttribute('href')).filter(Boolean)"
+        """els => els.map(a => [
+            a.getAttribute('href'),
+            a.querySelector('img') ? a.querySelector('img').getAttribute('src') : null
+        ]).filter(p => p[0])"""
     )
 
-    # 중복 URL 감지
     seen = {}
-    for link in links:
-        seen[link] = seen.get(link, 0) + 1
+    for href, _ in pairs:
+        seen[href] = seen.get(href, 0) + 1
     duplicates = {url: cnt for url, cnt in seen.items() if cnt > 1}
-    unique_count = len(seen)
-    print(f"  [collect] a태그={len(links)}개  unique={unique_count}개  중복={len(duplicates)}건")
+    print(f"  [collect] a태그={len(pairs)}개  unique={len(seen)}개  중복={len(duplicates)}건")
     for url, cnt in duplicates.items():
         print(f"  [dup] {cnt}회 등장: {url}")
     log_file.flush()
 
-    for link in links:
-        if await loop.run_in_executor(None, download_image, link, SAVE_DIR, post_id):
+    for href, src in pairs:
+        if await loop.run_in_executor(None, download_image, href, save_dir, post_id, src):
             downloaded_count += 1
 
     return downloaded_count
@@ -192,10 +213,10 @@ async def async_crawl_depth2():
                     print(f"[{i}/{len(post_urls)}] {post_url}  (post_id={post_id})")
                     log_file.flush()
 
-                    await page.goto(post_url, timeout=30000)
-                    await page.wait_for_timeout(2000)
+                    await goto_with_retry(page, post_url)
+                    await page.wait_for_timeout(5000)
 
-                    count = await collect_and_download(page, post_id)
+                    count = await collect_and_download(page, post_id, COS_DIR)
                     print(f"  ✅ 이번 게시글 다운로드: {count}개")
                     total_downloaded += count
                     log_file.flush()
@@ -208,7 +229,7 @@ async def async_crawl_depth2():
             print(f"▶ 전체 완료")
             print(f"▶ 처리 게시글 수 : {len(post_urls)}개")
             print(f"▶ 총 다운로드 수  : {total_downloaded}개")
-            print(f"▶ 저장 경로       : {SAVE_DIR}")
+            # print(f"▶ 저장 경로       : {COS_DIR}")
             log_file.flush()
 
             await page.close()
@@ -218,4 +239,10 @@ async def async_crawl_depth2():
     log_file.close()
 
 
-asyncio.run(async_crawl_depth2())
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+try:
+    loop.run_until_complete(async_crawl_depth2())
+finally:
+    loop.close()
+    os._exit(0)  # anyio atexit 스레드 풀 경고 방지
