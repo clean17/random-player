@@ -121,6 +121,11 @@ function removeLoadingOverlay() {
     document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
 }
 
+// bfcache 복원 시(뒤로가기) 오버레이 잔류 제거
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted) removeLoadingOverlay();
+});
+
 // 휴지통 비우기 요청
 async function emptyTrash() {
     const userConfirmed = confirm("휴지통을 비우시겠습니까?");

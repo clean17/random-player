@@ -515,7 +515,6 @@ function goPage(page) {
     }
     url.searchParams.set("page", page);
 
-    removeLoadingOverlay();
     window.location.href = url.toString(); // 그냥 링크 이동
 }
 
@@ -614,9 +613,7 @@ async function fetchImage() {
         const response = await fetch(url);
         if (!response.ok) throw new Error("이미지 요청 실패");
 
-        removeLoadingOverlay();
-
-        window.location.href = url.toString(); // 그냥 링크 이동
+        window.location.href = url.toString(); // 오버레이 유지한 채 이동
     } catch (error) {
         console.error(error);
         removeLoadingOverlay();
