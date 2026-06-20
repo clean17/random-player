@@ -693,27 +693,70 @@ function showSlideshowModal(fileList) {
         modal.id = "slideshow-modal";
         modal.style.display = "flex";
         modal.innerHTML = `
-            <button class="close-modal" title="닫기" ><i class="fas fa-times" style="color:white"></i></button>
-            <!--<button class="close-modal" title="닫기" aria-label="닫기">✕</button>-->
+            <button class="close-modal" title="닫기"><i class="fas fa-times" style="color:white"></i></button>
+            <button class="slide-prev" title="이전">&#8249;</button>
             <img src="" alt="슬라이드" id="slideshow-img" style="display:none;">
-      
             <video id="slideshow-video" class="slideshow-video" style="display:none;"
                    muted playsinline controls loop>
               <source id="slideshow-video-source" src="" type="video/mp4">
             </video>
+            <button class="slide-next" title="다음">&#8250;</button>
         `;
         document.body.appendChild(modal);
 
         modal.querySelector('.close-modal').onclick = () => {
             clearInterval(slideShowTimer);
-            // 영상 재생 중이면 멈추기
             const v = modal.querySelector("#slideshow-video");
             v.pause();
             v.currentTime = 0;
             modal.style.display = "none";
+            document.body.style.overflow = '';
+            document.body.classList.remove('slideshow-active');
         };
+
+        modal.querySelector('.slide-prev').onclick = () => {
+            slideShowIdx = (slideShowIdx - 1 + slideShowImgs.length) % slideShowImgs.length;
+            clearInterval(slideShowTimer);
+            setSlide(slideShowImgs[slideShowIdx]);
+            slideShowTimer = setInterval(() => {
+                slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
+                setSlide(slideShowImgs[slideShowIdx]);
+            }, 10000);
+        };
+
+        modal.querySelector('.slide-next').onclick = () => {
+            slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
+            clearInterval(slideShowTimer);
+            setSlide(slideShowImgs[slideShowIdx]);
+            slideShowTimer = setInterval(() => {
+                slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
+                setSlide(slideShowImgs[slideShowIdx]);
+            }, 10000);
+        };
+
+        // 슬라이드쇼 열려 있을 때 키보드 이벤트 전점 점유 (capture phase)
+        document.addEventListener('keydown', (e) => {
+            if (modal.style.display === 'none' || !modal.style.display) return;
+            e.preventDefault();
+            e.stopPropagation();
+            switch (e.key) {
+                case 'ArrowLeft':
+                case 'ArrowUp':
+                    modal.querySelector('.slide-prev').click();
+                    break;
+                case 'ArrowRight':
+                case 'ArrowDown':
+                    modal.querySelector('.slide-next').click();
+                    break;
+                case 'Escape':
+                    modal.querySelector('.close-modal').click();
+                    break;
+            }
+        }, true); // capture: true → 기존 bubble 핸들러보다 먼저 실행
     }
     modal.style.display = "flex";
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('slideshow-active');
 
     const imgEl = modal.querySelector("#slideshow-img");
     const videoEl = modal.querySelector("#slideshow-video");
