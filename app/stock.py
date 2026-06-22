@@ -105,7 +105,7 @@ def upsert_interesting_stocks():
         stock_name=stock_name,
         pred_price_change_3d_pct=pred_price_change_3d_pct,
         yesterday_close=yesterday_close,
-        current_price=last_close,
+        current_price=str(int(float(last_close))),
         today_price_change_pct=today_price_change_pct,
         avg5d_trading_value=avg5d_trading_value,
         current_trading_value=current_trading_value,

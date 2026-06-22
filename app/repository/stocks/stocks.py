@@ -195,8 +195,8 @@ def update_interest_stock_graph(stock: "StockDTO", conn=None) -> None:
     sql = """
         UPDATE stocks 
         SET 
-            graph_file  = COALESCE(%s, graph_file),
-            updated_at = now() 
+            graph_file  = COALESCE(%s, graph_file)
+            --updated_at = now() 
         WHERE stock_code = %s 
         RETURNING id;
     """
@@ -218,8 +218,8 @@ def update_low_stock_graph(stock: "StockDTO", conn=None) -> None:
     sql = """
         UPDATE interest_stocks 
         SET 
-            graph_file  = COALESCE(%s, graph_file),
-            updated_at = now() 
+            graph_file  = COALESCE(%s, graph_file)
+            --updated_at = now() 
         WHERE stock_code = %s 
           AND created_at::date = %s
           AND target like 'low%%'
