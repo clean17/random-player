@@ -7,6 +7,7 @@ class BufferedRecorder {
         this.maxChunks = Math.ceil(this.bufferDuration / this.chunkDuration);
 
         this.recorder = null;
+        this.initChunk = null; // EBML 헤더 + Tracks 포함 첫 번째 청크 (절대 버리지 않음)
         this.chunks = [];
     }
 
@@ -16,9 +17,14 @@ class BufferedRecorder {
         this.recorder = new MediaRecorder(this.stream, { mimeType: this.mimeType });
         this.recorder.ondataavailable = (e) => {
             if (e.data && e.data.size > 0) {
-                this.chunks.push(e.data);
-                if (this.chunks.length > this.maxChunks) {
-                    this.chunks.shift(); // 오래된 것 제거
+                if (!this.initChunk) {
+                    // 첫 번째 청크: EBML 헤더 + Tracks 포함 → 항상 보존
+                    this.initChunk = e.data;
+                } else {
+                    this.chunks.push(e.data);
+                    if (this.chunks.length > this.maxChunks) {
+                        this.chunks.shift(); // 오래된 클러스터만 제거
+                    }
                 }
             }
         };
@@ -34,7 +40,9 @@ class BufferedRecorder {
     }
 
     getBufferedBlob() {
-        return new Blob(this.chunks, { type: this.mimeType });
+        // initChunk 없으면 녹화 시작 전에 버튼 누른 것
+        if (!this.initChunk) return new Blob([], { type: this.mimeType });
+        return new Blob([this.initChunk, ...this.chunks], { type: this.mimeType });
     }
 
     uploadBufferedBlob(uploadUrl, title = "video-call") {
