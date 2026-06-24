@@ -212,14 +212,14 @@ def create_app():
         ip = get_client_ip(request)
 
         if ip and any(ip.startswith(prefix + '.') for prefix in BLOCKED_IP_PREFIXES):
-            return abort(403, description="Access blocked IP.")
+            return abort(403, description="Access blocked IP-1.")
 
         # 차단된 경우 -> 시간 지난 건 해제
         if ip and ip in BLOCKED_IPS:
             if datetime.now() >= BLOCKED_IPS[ip]:
                 del BLOCKED_IPS[ip]  # 차단 해제
             else:
-                return abort(403, description="Access blocked IP.")
+                return abort(403, description="Access blocked IP-2.")
 
         if not ip:
             print('# No ip information')
