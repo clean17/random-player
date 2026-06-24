@@ -6,7 +6,7 @@ from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
-    update_low_stock_graph
+    update_low_stock_graph, update_interest_stock_close_correctly_list
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
@@ -119,6 +119,52 @@ def upsert_interesting_stocks():
     # print(stock)
     result = merge_daily_interest_stocks(stock)
     return {"status": "success", "result": result}, 200
+
+
+@stock.route("/interest/correct/list", methods=["POST"])
+def update_interest_stock_close_correct_list():
+    data = request.json or {}
+    items = data.get("items") or []
+
+    if not isinstance(items, list):
+        return {
+            "status": "fail",
+            "message": "items must be list"
+        }, 400
+
+    stocks = []
+
+    for item in items:
+        stock_code = item.get("stock_code")
+        yesterday_close = item.get("yesterday_close") or None
+        today_price_change_pct = item.get("today_price_change_pct") or None
+        last_close = item.get("last_close") or None
+        created_at = item.get("created_at") or None
+        target = item.get("target") or None
+
+        if not stock_code or not last_close or not created_at:
+            continue
+
+        stocks.append(
+            StockDTO(
+                stock_code=stock_code,
+                yesterday_close=yesterday_close,
+                current_price=str(int(float(last_close))),
+                today_price_change_pct=today_price_change_pct,
+                target=target,
+                created_at=created_at,
+            )
+        )
+
+    result = update_interest_stock_close_correctly_list(stocks)
+
+    return {
+        "status": "success",
+        "request_count": len(items),
+        "update_target_count": len(stocks),
+        "result": result
+    }, 200
+
 
 @stock.route("/interest/graph", methods=["POST"])
 def update_interesting_stocks_graph():

@@ -189,6 +189,73 @@ def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
         return row[0] if row else None
 
 
+# interest 종목 가격 데이터 갱신
+@db_transaction
+def update_interest_stock_close_correctly_list(stocks, conn=None):
+    sql = """
+        UPDATE interest_stocks s
+        SET
+            yesterday_close        = COALESCE(%s, s.yesterday_close),
+            current_price          = COALESCE(%s, s.current_price),
+            today_price_change_pct = COALESCE(%s, s.today_price_change_pct),
+            target                 = COALESCE(%s, s.target)
+        WHERE s.stock_code       = %s
+          AND s.target           = 'interest'
+          AND s.created_at::date = %s
+          AND NOT EXISTS (
+              SELECT 1
+              FROM interest_stocks x
+              WHERE x.stock_code = s.stock_code
+                AND x.target = %s
+                AND x.created_at::date = s.created_at::date
+                AND x.id <> s.id
+          )
+        RETURNING s.id, s.stock_code, s.target;
+    """
+
+    updated_rows = []
+    skipped_rows = []
+
+    with conn.cursor() as cur:
+        for stock in stocks:
+            cur.execute(
+                sql,
+                (
+                    stock.yesterday_close,
+                    stock.current_price,
+                    stock.today_price_change_pct,
+                    stock.target,
+
+                    stock.stock_code,
+                    stock.created_at,
+
+                    stock.target,
+                )
+            )
+
+            row = cur.fetchone()
+
+            if row:
+                updated_rows.append({
+                    "id": row[0],
+                    "stock_code": row[1],
+                    "target": row[2],
+                })
+            else:
+                skipped_rows.append({
+                    "stock_code": stock.stock_code,
+                    "target": stock.target,
+                    "created_at": stock.created_at,
+                    "reason": "duplicate target exists or matching interest row not found",
+                })
+
+    return {
+        "updated_count": len(updated_rows),
+        "skipped_count": len(skipped_rows),
+        "updated_rows": updated_rows,
+        "skipped_rows": skipped_rows,
+    }
+
 # 상승주 그래프만 갱신
 @db_transaction
 def update_interest_stock_graph(stock: "StockDTO", conn=None) -> None:
