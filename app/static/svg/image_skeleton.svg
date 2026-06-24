@@ -8,7 +8,7 @@
             <animate attributeName="x2" values="0;2" dur="1.2s" repeatCount="indefinite"/>
         </linearGradient>
         <clipPath id="r">
-            <rect x="0" y="0" width="240" height="160" rx="12" ry="12"/>
+            <rect x="0" y="0" width="240" height="160"/>
         </clipPath>
     </defs>
 
