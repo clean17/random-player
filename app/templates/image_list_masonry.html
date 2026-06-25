@@ -358,6 +358,9 @@
     const COL_STORAGE_KEY = 'masonry-col-count';
     let manualColumnCount = Number(localStorage.getItem(COL_STORAGE_KEY)) || null;
 
+    const topMenuBtn = document.getElementById('top-menu-btn');
+    const topMenuPanel = document.getElementById('top-menu-panel');
+
     /* =========================
        Height 계산
     ========================= */
@@ -531,9 +534,6 @@
         initMasonry();
         updateColBtnActive();
 
-        const topMenuBtn = document.getElementById('top-menu-btn');
-        const topMenuPanel = document.getElementById('top-menu-panel');
-
         topMenuBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
             if (topMenuPanel.style.display === 'none') {
@@ -655,6 +655,10 @@
     let isRendering = false;
 
     window.addEventListener("scroll", () => {
+        if (topMenuPanel && topMenuPanel.style.display !== 'none') {
+            topMenuPanel.style.display = 'none';
+        }
+
         if (isRendering) return;
 
         requestAnimationFrame(() => {
