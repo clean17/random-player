@@ -211,9 +211,9 @@ def renew_interest_stocks_close():
             if len(result) == 0:
                 continue
 
-            product_code = json_data["result"][0]["data"]["items"][0]["productCode"]
-            product_name = json_data["result"][0]["data"]["items"][0]["productName"]
-            logo_image_url = json_data["result"][0]["data"]["items"][0]["logoImageUrl"]
+            product_code = result[0]["data"]["items"][0]["productCode"]
+            product_name = result[0]["data"]["items"][0]["productName"]
+            logo_image_url = result[0]["data"]["items"][0]["logoImageUrl"]
         except Exception as e:
             print(f"renew_interest_stocks_close [info 요청 실패1]: {str(ticker)} {str(product_name)} {e}")
             continue  # 오류
