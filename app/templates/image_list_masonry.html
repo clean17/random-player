@@ -615,6 +615,11 @@
                     source.src = url;
                     source.removeAttribute('data-src');
 
+                    source.onerror = () => {
+                        targetEl.closest('.image-item')?.remove();
+                        observer.unobserve(targetEl);
+                    };
+
                     // const ok = await validateMedia(url);
                     //
                     // if (!ok) {
