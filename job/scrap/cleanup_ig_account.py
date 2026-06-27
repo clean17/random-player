@@ -105,7 +105,7 @@ async def open_one(context, url):
 
 async def main():
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=False)
+        # browser = await pw.chromium.launch(headless=False)
         context = await pw.chromium.launch_persistent_context(
             USER_DATA_DIR,
             headless=False,
@@ -113,18 +113,47 @@ async def main():
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
 
+        """
+        코루틴 
+        - 중간에 멈췄다가 다시 이어서 실행할 수 있는 함수
+        - async def로 정의되고, await으로 실행 흐름을 제어
+        - 이벤트 루프가 여러 코루틴을 동시에 관리하면서 비동기 처리를 가능하게 함
+        
+        asyncio.Event()
+        - 비동기 동기화 객체
+        - 여러 코루틴이 동시에 어떤 "신호"를 기다릴 수 있도록 해주는 장치
+        - 기본 unset (False), set() 호출  >> True, clear() 호출 >> False 
+                
+        event.set()
+        - 이벤트를 발생시킴. 이 순간 await event.wait()으로 기다리던 모든 코루틴이 깨어남
+        
+        await event.wait()
+        - 이벤트가 set될 때까지 대기. set 상태라면 즉시 통과
+        
+        context.on("close", ...)
+        - context 객체가 "close" 이벤트를 발생시킬 때 실행할 콜백을 등록
+        """
+
+        # 탭 오픈 도중 닫혀도 감지하려면 루프 시작 전에 등록
+        event = asyncio.Event()
+        context.on("close", lambda: event.set())
+
         page = await context.new_page()
         await ensure_login(page)
 
-        # pages = await open_tabs(context, ACCOUNTS) # 순차
-        pages = await open_tabs_keep_focus(context, ACCOUNTS) # 첫번째 탭 유지 + 순차
-        # pages = await asyncio.gather(*(open_one(context, url) for url in ACCOUNTS)) # 비동기
+        try:
+            # pages = await open_tabs(context, ACCOUNTS) # 순차
+            pages = await open_tabs_keep_focus(context, ACCOUNTS)  # 첫번째 탭 유지 + 순차
+            # pages = await asyncio.gather(*(open_one(context, url) for url in ACCOUNTS)) # 비동기
+        except Exception:
+            await asyncio.sleep(0)  # 이벤트 루프 한 틱 양보 → close 이벤트 처리
+            if event.is_set():
+                print("브라우저 닫힘 감지 — 스크립트 종료-1")
+                return
+            raise
 
-        # 탭들이 열린 상태로 유지 (원하면 시간 늘리기)
-        await asyncio.sleep(6000000)
-
-        await context.close()
-        await browser.close()
+        await event.wait()
+        print("브라우저 닫힘 감지 — 스크립트 종료-2")
 
 if __name__ == "__main__":
     asyncio.run(main())
