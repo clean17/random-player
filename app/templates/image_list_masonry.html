@@ -416,15 +416,24 @@
         }
     }
 
-    // 반응형 column 개수 (수동 선택이 있으면 우선)
+    // 반응형 column 개수 (수동 선택이 있으면 우선, 단 아이템 수 미만이면 cap)
     function getColumnCount() {
-        if (manualColumnCount) return manualColumnCount;
-        const width = window.innerWidth;
-        if (width > 2500) return 5;
-        if (width > 1900) return 4;
-        if (width > 1200) return 3;
-        if (width > 800) return 2;
-        return 1;
+        let count;
+        if (manualColumnCount) {
+            count = manualColumnCount;
+        } else {
+            const width = window.innerWidth;
+            if (width > 2500) count = 5;
+            else if (width > 1900) count = 4;
+            else if (width > 1200) count = 3;
+            else if (width > 800) count = 2;
+            else count = 1;
+        }
+
+        if (allItems.length > 0 && allItems.length < 5) {
+            count = Math.min(count, allItems.length);
+        }
+        return count;
     }
 
     function updateColBtnActive() {
@@ -523,8 +532,8 @@
     ========================= */
 
     function initMasonry() {
-        createColumns();
         initData();
+        createColumns();
 
         currentIndex = 0;
         renderBatch();
@@ -775,8 +784,8 @@
 
         isRestoringLayout = true;
 
-        createColumns();
         initData();
+        createColumns();
 
         currentIndex = 0;
 
