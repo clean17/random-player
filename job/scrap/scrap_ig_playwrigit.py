@@ -59,9 +59,37 @@ ACCOUNTS = [
 # ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
 
 
-ERROR_LINKS = [
+ERROR_LINKS: Dict[str, List[str]] = {}  # account -> [failed links]
+ERROR_LINKS_FILE = "logs/i/error_links.json"
 
-]
+
+def load_error_links() -> Dict[str, List[str]]:
+    if not os.path.exists(ERROR_LINKS_FILE):
+        return {}
+    try:
+        with open(ERROR_LINKS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        total = sum(len(v) for v in data.values())
+        if total:
+            print(f"[INFO] 이전 에러 링크 로드: {total}개 ({list(data.keys())})")
+        return data
+    except Exception as e:
+        print(f"[WARN] error_links 로드 실패: {e}")
+        return {}
+
+
+def save_error_links(data: Dict[str, List[str]]) -> None:
+    try:
+        os.makedirs(os.path.dirname(ERROR_LINKS_FILE), exist_ok=True)
+        with open(ERROR_LINKS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[WARN] error_links 저장 실패: {e}")
+
+
+def append_error_link(account: str, link: str) -> None:
+    ERROR_LINKS.setdefault(account, []).append(link)
+    save_error_links(ERROR_LINKS)
 
 
 
@@ -769,16 +797,11 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
 
 
 # ======== 메인 플로우 ========
-async def handle_account(page, account: str):
+async def handle_account(page, account: str, preset_links: Optional[List[str]] = None):
     await ensure_login(page)
     await go_to_profile(page, account)
 
-    if account == 'test':
-        # 디버깅
-        links = ERROR_LINKS
-    else:
-        # 링크 수집
-        links = await collect_post_links(page)
+    links = preset_links if preset_links is not None else await collect_post_links(page)
 
 
     if len(links) > 5:
@@ -823,7 +846,7 @@ async def handle_account(page, account: str):
                     await asyncio.sleep(2)
                 else:
                     print(f"[ERROR-2] media 추출 실패-{attempt + 1}: {e}")
-                    ERROR_LINKS.append(url)
+                    append_error_link(account, link)
 
             # print('media', media)
             # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
@@ -835,7 +858,7 @@ async def handle_account(page, account: str):
             )
         except Exception as e:
             print(f"[ERROR-3] 다운로드 실패 {e}")
-            ERROR_LINKS.append(url)
+            append_error_link(account, link)
 
         # print('saved', saved)
         all_saved.extend(saved or [])
@@ -883,6 +906,9 @@ async def handle_account(page, account: str):
     return len(links)
 
 async def run_scrap():
+    global ERROR_LINKS
+    ERROR_LINKS = load_error_links()
+
     account_length = len(ACCOUNTS)
     if account_length > 0:
         log_file = open(filename, "a", encoding="utf-8")   # w: 덮어쓰기, a: 이어쓰기
@@ -928,9 +954,36 @@ async def run_scrap():
                 else:
                     await asyncio.sleep(30)
 
-        if len(ERROR_LINKS) > 0:
-            page = await context.new_page()
-            await handle_account(page, 'test')
+        # 재시도: 스냅샷 후 초기화 → 재시도 중 발생한 새 에러는 다시 파일에 누적
+        pending = {acc: links for acc, links in ERROR_LINKS.items() if links}
+        if pending:
+            ERROR_LINKS.clear()
+            save_error_links(ERROR_LINKS)
+
+        for acc, err_links in pending.items():
+            today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+            print(f"\n[INFO] [{today}] [{acc}] 에러 링크 재시도: {len(err_links)}개")
+            try:
+                page = await context.new_page()
+            except Exception:
+                context = await pw.chromium.launch_persistent_context(
+                    USER_DATA_DIR,
+                    args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                )
+                page = await context.new_page()
+            try:
+                await handle_account(page, acc, preset_links=err_links)
+            except Exception as e:
+                print(f"[ERROR-4] [{acc}] 에러 재시도 실패: {e}")
+
+        # 재시도 후 남은 에러 파일 처리
+        if ERROR_LINKS:
+            save_error_links(ERROR_LINKS)
+        else:
+            try:
+                os.remove(ERROR_LINKS_FILE)
+            except FileNotFoundError:
+                pass
 
         await context.close()
 
