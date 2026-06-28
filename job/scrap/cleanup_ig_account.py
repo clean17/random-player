@@ -72,14 +72,22 @@ async def open_tabs_keep_focus(context: BrowserContext, urls: List[str], focus_p
 
         url = "https://www.instagram.com/" + u.lstrip("/")
         page = await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded")
+        try:
+            await page.goto(url, wait_until="domcontentloaded")
+        except Exception as e:
+            print(f"[WARN] 페이지 이동 실패, 스킵 ({url}): {e}")
+            try:
+                if not page.is_closed():
+                    await page.close()
+            except Exception:
+                pass
+            continue
 
         # 닫히는 타이밍 레이스 방지: 한 번 더 보정 후 포커스 복귀
         focus_page = await get_focus_page(context, focus_page)
         try:
             await focus_page.bring_to_front()
         except Exception:
-            # 사용자가 닫는 순간 등에 걸리면 그냥 무시
             pass
 
         pages.append(page)
