@@ -151,7 +151,7 @@
                        data-index="{{ loop.index }}"
                        alt="{{ image|urlencode }}"
                 >
-                    <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir }}"
+                    <source data-src="/video/temp-video/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir|urlencode }}"
                             type="video/mp4"
                             data-filename="{{ image|urlencode }}">
                 </video>

@@ -81,7 +81,7 @@
           containerHeight = document.querySelector('.container').scrollHeight,
           uploadBatchSize = 20,
           uploadForm = document.getElementById('uploadForm'),
-          previous_title = `{{ previous_title }}`,
+          previous_title = {{ previous_title | tojson }},
           titleSelect = document.getElementById('title-select'),
           titleInput = document.getElementById('title');
     let currentBatchIndex = 0,
