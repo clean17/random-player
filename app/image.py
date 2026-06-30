@@ -121,6 +121,7 @@ def get_images(start, count, page, dir, image_arr=None):
         full_paths = []
 
         for root, dirs, files in os.walk(dir):
+            dirs[:] = [d for d in dirs if d != 'thumb']
             for f in files:
                 if f.lower().endswith(EXCLUDE_SUFFIXES):
                     continue
@@ -597,16 +598,17 @@ def get_image():
     else:
         abort(400, 'Invalid dir')
 
-    # thumb 디렉토리가 실제로 존재하는 dir에서만 webp 조회
-    _THUMB_DIRS = {'trip', 'temp'}
-    if dir in _THUMB_DIRS:
-        thumb_dir = os.path.join(base_dir, 'thumb')
-        name_without_ext, _ = os.path.splitext(filename)
-        webp_path = os.path.join(thumb_dir, name_without_ext + '.webp')
-        if os.path.exists(webp_path):
-            return send_from_directory(thumb_dir, name_without_ext + '.webp')
+    # thumb 서브디렉토리에 동일 이름 .webp 있으면 우선 반환
+    thumb_dir = os.path.join(base_dir, 'thumb')
+    if not os.path.isdir(thumb_dir):
+        # raise FileNotFoundError(f"thumb_dir이 존재하지 않습니다: {thumb_dir}")
+        return send_from_directory(base_dir, filename)
 
-    # 썸네일 없으면 기존 파일 경로
+    name_without_ext, _ = os.path.splitext(filename)
+    webp_path = os.path.join(thumb_dir, name_without_ext + '.webp')
+    if os.path.exists(webp_path):
+        return send_from_directory(thumb_dir, name_without_ext + '.webp')
+
     return send_from_directory(base_dir, filename)
 
 @image_bp.route('/shuffle/ref-images', methods=['POST'], endpoint='shuffle/ref-images')
