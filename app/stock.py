@@ -76,48 +76,12 @@ def update_progress(stock):
 
 @stock.route("/interest/insert", methods=["POST"])
 def upsert_interesting_stocks():
-    data = request.json
-    nation = data.get("nation")
-    stock_code = data.get("stock_code")
-    stock_name = data.get("stock_name") or None
-    pred_price_change_3d_pct = data.get("pred_price_change_3d_pct") or None
-    yesterday_close = data.get("yesterday_close") or None
-    today_price_change_pct = data.get("today_price_change_pct") or None
-    avg5d_trading_value = data.get("avg5d_trading_value") or None
-    current_trading_value = data.get("current_trading_value") or None
-    trading_value_change_pct = data.get("trading_value_change_pct") or None
-    graph_file = data.get("graph_file") or None
-    logo_image_url = data.get("logo_image_url") or None
-    market_value = data.get("market_value") or None
-    target = data.get("target") or 'interest'
-    find_rule = data.get("find_rule") or None
-    last_close = data.get("last_close") or None
+    s = StockDTO.from_json(request.json)
+    if not s.target:
+        s.target = 'interest'
 
-    # 종가만 수정
-    close_list = []
-    # close_list.append((str(int(last_close)), None, logo_image_url, stock_code))
-    close_list.append((str(int(float(last_close))), None, logo_image_url, stock_code))
-    update_interest_stock_list_close(close_list)
-
-    stock = StockDTO(
-        nation=nation,
-        stock_code=stock_code,
-        stock_name=stock_name,
-        pred_price_change_3d_pct=pred_price_change_3d_pct,
-        yesterday_close=yesterday_close,
-        current_price=str(int(float(last_close))),
-        today_price_change_pct=today_price_change_pct,
-        avg5d_trading_value=avg5d_trading_value,
-        current_trading_value=current_trading_value,
-        trading_value_change_pct=trading_value_change_pct,
-        graph_file=graph_file,
-        logo_image_url=logo_image_url,
-        market_value=market_value,
-        target=target,
-        find_rule=find_rule,
-    )
-    # print(stock)
-    result = merge_daily_interest_stocks(stock)
+    update_interest_stock_list_close([(s.current_price, None, s.logo_image_url, s.stock_code)])
+    result = merge_daily_interest_stocks(s)
     return {"status": "success", "result": result}, 200
 
 
@@ -127,37 +91,15 @@ def update_interest_stock_close_correct_list():
     items = data.get("items") or []
 
     if not isinstance(items, list):
-        return {
-            "status": "fail",
-            "message": "items must be list"
-        }, 400
+        return {"status": "fail", "message": "items must be list"}, 400
 
-    stocks = []
-
-    for item in items:
-        stock_code = item.get("stock_code")
-        yesterday_close = item.get("yesterday_close") or None
-        today_price_change_pct = item.get("today_price_change_pct") or None
-        last_close = item.get("last_close") or None
-        created_at = item.get("created_at") or None
-        target = item.get("target") or None
-
-        if not stock_code or not last_close or not created_at:
-            continue
-
-        stocks.append(
-            StockDTO(
-                stock_code=stock_code,
-                yesterday_close=yesterday_close,
-                current_price=str(int(float(last_close))),
-                today_price_change_pct=today_price_change_pct,
-                target=target,
-                created_at=created_at,
-            )
-        )
+    stocks = [
+        StockDTO.from_json(item)
+        for item in items
+        if item.get("stock_code") and item.get("last_close") and item.get("created_at")
+    ]
 
     result = update_interest_stock_close_correctly_list(stocks)
-
     return {
         "status": "success",
         "request_count": len(items),
@@ -168,30 +110,12 @@ def update_interest_stock_close_correct_list():
 
 @stock.route("/interest/graph", methods=["POST"])
 def update_interesting_stocks_graph():
-    data = request.json
-    stock_code = data.get("stock_code")
-    graph_file = data.get("graph_file") or None
-
-    stock = StockDTO(
-        stock_code=stock_code,
-        graph_file=graph_file,
-    )
-    result = update_interest_stock_graph(stock)
+    result = update_interest_stock_graph(StockDTO.from_json(request.json))
     return {"status": "success", "result": result}, 200
 
 @stock.route("/low/graph", methods=["POST"])
 def update_low_stocks_graph():
-    data = request.json
-    stock_code = data.get("stock_code")
-    created_at = data.get("created_at")
-    graph_file = data.get("graph_file") or None
-
-    stock = StockDTO(
-        stock_code=stock_code,
-        created_at=created_at,
-        graph_file=graph_file,
-    )
-    result = update_low_stock_graph(stock)
+    result = update_low_stock_graph(StockDTO.from_json(request.json))
     return {"status": "success", "result": result}, 200
 
 @stock.route("/interest/data/today", methods=["POST"])
@@ -227,38 +151,12 @@ def get_view_of_interesting_stocks():
 
 @stock.route("/update", methods=["POST"])
 def update_stocks():
-    data_list = request.json
-    # print('len', len(data_list))
-
-    stocks = []
-    for data in data_list:
-        nation = data.get("nation") or None
-        stock_code = data.get("stock_code")
-        stock_name = data.get("stock_name") or None
-        sector_code = data.get("sector_code") or None
-        stock_market = data.get("stock_market") or None
-        category = data.get("category") or None
-
-        stock = StockDTO(
-            nation=nation,
-            stock_code=stock_code,
-            stock_name=stock_name,
-            sector_code=sector_code,
-            category=category,
-            stock_market=stock_market,
-        )
-        stocks.append(stock)
-
+    stocks = [StockDTO.from_json(d) for d in request.json]
     try:
         update_stock_list(stocks)
     except Exception as e:
         print(e)
-        # 오류 발생시 JSON 반환
-        return {
-            "status": "error",
-            "message": str(e)
-        }, 500
-
+        return {"status": "error", "message": str(e)}, 500
     return {"status": "success", "result": "200"}, 200
 
 # 주식 종목 리스트 갱신 후 상장폐지된 종목 flag 수정
@@ -324,16 +222,9 @@ def get_stock_company_info():
 @stock.route("/favorite", methods=["POST"])
 @login_required
 def upsert_favorite_stock():
-    data = request.json
-    stock_code = data.get('stock_code') or ""
-
-    fetch_user = find_user_by_username(session["_user_id"])
-    stock = StockDTO(
-        stock_code=stock_code,
-        user_id=fetch_user.id,
-    )
-
-    result = upsert_favorite_stocks(stock)
+    s = StockDTO.from_json(request.json)
+    s.user_id = find_user_by_username(session["_user_id"]).id
+    result = upsert_favorite_stocks(s)
     return {"status": "success", "result": result}, 200
 
 
