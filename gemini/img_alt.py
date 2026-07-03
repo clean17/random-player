@@ -107,12 +107,11 @@ def fetch_image(url: str) -> tuple:
     return data, mime
 
 
-def describe_image(url: str, prompt: str = ALT_PROMPT) -> str:
-    """이미지 URL 을 받아 alt 설명 문자열을 반환한다."""
+def alt_from_bytes(data: bytes, mime: str, prompt: str = ALT_PROMPT) -> str:
+    """이미지 bytes + mime 을 받아 alt 설명 문자열을 반환한다 (로컬파일/URL 공통)."""
     if not API_KEY:
         raise SystemExit("GEMINI_API_KEY 환경변수(.env)가 설정되지 않았습니다.")
 
-    data, mime = fetch_image(url)
     b64 = base64.b64encode(data).decode("ascii")
 
     resp = _request_with_retry(
@@ -134,6 +133,12 @@ def describe_image(url: str, prompt: str = ALT_PROMPT) -> str:
     )
     result = resp.json()
     return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+
+def describe_image(url: str, prompt: str = ALT_PROMPT) -> str:
+    """이미지 URL 을 받아 alt 설명 문자열을 반환한다."""
+    data, mime = fetch_image(url)
+    return alt_from_bytes(data, mime, prompt)
 
 
 if __name__ == "__main__":
