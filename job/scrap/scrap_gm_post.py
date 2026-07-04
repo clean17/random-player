@@ -48,7 +48,7 @@ async def main():
     )
 
     dirs = ensure_dirs(BASE_SAVE_DIR, ACCOUNT)
-    print(f"[저장 위치] {dirs['images']}  /  {dirs['reels']}")
+    # print(f"[저장 위치] {dirs['images']}  /  {dirs['reels']}")
 
     async with async_playwright() as pw:
         context = await pw.chromium.launch_persistent_context(
@@ -68,19 +68,23 @@ async def main():
             video_cdn = result.get("video_cdn", [])
             print(f"  이미지 {len(images)}개 / 비디오 {len(video_cdn)}개")
 
-            saved = await download_media(images, [], video_cdn, dirs, ACCOUNT)
+            ig_cookies = await page.context.cookies(["https://www.instagram.com", "https://cdninstagram.com"])
+            saved, _ = await download_media(images, [], video_cdn, dirs, ACCOUNT, cookies=ig_cookies)
             print(f"  저장 완료 {len(saved)}개")
-            for p in saved:
-                print(f"    {p}")
+            # for p in saved:
+            #     print(f"    {p}")
 
         await context.close()
 
 
 if __name__ == "__main__":
+    import traceback
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(main())
+    except Exception:
+        traceback.print_exc()
     finally:
         loop.close()
         os._exit(0)  # anyio atexit 스레드 풀 경고 방지
