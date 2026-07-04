@@ -2478,3 +2478,46 @@ body.page-chat[data-chat-theme="whatsapp"] .chat-bottom-input,
 body.page-chat[data-chat-theme="imessage"] .chat-bottom-input {
     bottom: var(--chat-keyboard-bottom, 0px) !important;
 }
+
+/* ===== 입력창 하단 여백 + 버튼·입력창 높이 정렬 ===== */
+body.page-chat {
+    --chat-input-shell-h: 58px !important;
+    --chat-input-height-final: calc(var(--chat-input-shell-h) + env(safe-area-inset-bottom)) !important;
+}
+body.page-chat #chat-container,
+body.page-chat .top-bar.chrome-hidden ~ .container #chat-container,
+body.page-chat .top-bar.chrome-visible ~ .container #chat-container,
+body.page-chat .top-bar.chrome-hidden + #user-count-indicator + .container #chat-container,
+body.page-chat .top-bar.chrome-visible + #user-count-indicator + .container #chat-container {
+    height: calc(100dvh - var(--chat-input-height-final)) !important;
+    max-height: calc(100dvh - var(--chat-input-height-final)) !important;
+}
+body.page-chat .chat-bottom-input,
+body.page-chat[data-chat-theme] .chat-bottom-input,
+body.page-chat[data-chat-theme="kakao-dark"] .chat-bottom-input,
+body.page-chat[data-chat-theme="kakao-light"] .chat-bottom-input,
+body.page-chat[data-chat-theme="whatsapp"] .chat-bottom-input,
+body.page-chat[data-chat-theme="imessage"] .chat-bottom-input {
+    align-items: center !important;
+    padding-top: 8px !important;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+}
+body.page-chat .chat-bottom-input form {
+    height: 38px !important;
+    min-height: 38px !important;
+}
+body.page-chat .chat-bottom-input label.chat-bottom-btn,
+body.page-chat #send-button.chat-bottom-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    align-self: center !important;
+}
+body.page-chat #chat-input {
+    min-height: 38px !important;
+    height: var(--chat-textarea-h, 38px) !important;
+    align-self: center !important;
+    padding-top: 10px !important;
+    padding-bottom: 5px !important;
+}

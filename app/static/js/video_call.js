@@ -27,6 +27,7 @@
  */
 
 const myFace = document.getElementById('myFace');
+const myFaceWrapper = document.getElementById('myFaceWrapper');
 const peerFace = document.getElementById("peerFace");
 const recordCanvas = document.getElementById('recordCanvas');
 const recordCtx = recordCanvas.getContext('2d');
@@ -35,7 +36,7 @@ const peerAudioBtn = document.getElementById("peerAudio");
 const cameraBtn = document.getElementById('camera');
 const audioInputSelect = document.getElementById('audioInputs');
 const autdioSelectDiv = document.querySelector('.audio-select');
-let switchCameraBtn = document.getElementById('switchCamera');
+const switchCameraBtn = document.getElementById('switchCamera');
 const captureBtn = document.getElementById('capture');
 const recordBtn = document.getElementById('record');
 const recordIcon = recordBtn.querySelector('i');
@@ -601,11 +602,10 @@ function getClientPosition(e) {
 function startDrag(e) {
     isDragging = true;
     const pos = getClientPosition(e);
-    offsetX = pos.x - myFace.offsetLeft;
-    offsetY = pos.y - myFace.offsetTop;
-    e.preventDefault(); // 터치 스크롤 방지
+    offsetX = pos.x - myFaceWrapper.offsetLeft;
+    offsetY = pos.y - myFaceWrapper.offsetTop;
+    e.preventDefault();
 }
-
 
 function onDrag(e) {
     if (!isDragging) return;
@@ -614,72 +614,48 @@ function onDrag(e) {
     const x = pos.x - offsetX;
     const y = pos.y - offsetY;
 
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
+    // 화면(뷰포트)을 벗어나지 않도록 제한
+    const clampedX = Math.max(0, Math.min(x, window.innerWidth  - myFaceWrapper.offsetWidth));
+    const clampedY = Math.max(0, Math.min(y, window.innerHeight - myFaceWrapper.offsetHeight));
 
-    const elemWidth = myFace.offsetWidth;
-    const elemHeight = myFace.offsetHeight;
-
-    // ✅ 화면(뷰포트)을 벗어나지 않도록 제한
-    const clampedX = Math.max(0, Math.min(x, windowWidth - elemWidth));
-    const clampedY = Math.max(0, Math.min(y, windowHeight - elemHeight));
-
-    myFace.style.left = `${clampedX}px`;
-    myFace.style.top = `${clampedY}px`;
-    myFace.style.right = "auto";
-    myFace.style.bottom = "auto";
-
-    // 버튼을 myFace의 좌하단에 위치시키기
-    const btnWidth = switchCameraBtn.offsetWidth;
-    const btnHeight = switchCameraBtn.offsetHeight;
-    switchCameraBtn.style.left = `${clampedX-15}px`;
-    switchCameraBtn.style.top = `${clampedY-15}px`;
-    // switchCameraBtn.style.top = `${clampedY + elemHeight - btnHeight - 10}px`;
-    switchCameraBtn.style.right = "auto";
-    switchCameraBtn.style.bottom = "auto";
-    switchCameraBtn.style.position = "absolute";
+    myFaceWrapper.style.left   = `${clampedX}px`;
+    myFaceWrapper.style.top    = `${clampedY}px`;
+    myFaceWrapper.style.right  = "auto";
+    myFaceWrapper.style.bottom = "auto";
 }
 
 function endDrag() {
     isDragging = false;
 }
 
-// ✅ 마우스 이벤트
-myFace.addEventListener("mousedown", startDrag);
+// 마우스 이벤트
+myFaceWrapper.addEventListener("mousedown", startDrag);
 document.addEventListener("mousemove", onDrag);
 document.addEventListener("mouseup", endDrag);
 
-// ✅ 터치 이벤트
-myFace.addEventListener("touchstart", startDrag, { passive: false });
+// 터치 이벤트
+myFaceWrapper.addEventListener("touchstart", startDrag, { passive: false });
 document.addEventListener("touchmove", onDrag, { passive: false });
 document.addEventListener("touchend", endDrag);
 
 function setSwitchCameraPos() {
-    if (!switchCameraBtn) {
-        switchCameraBtn = document.createElement('button');
-        switchCameraBtn.id = 'switchCamera';
-        switchCameraBtn.title = 'Switch Camera';
-        switchCameraBtn.className = 'circle-button';
-
-        const icon = document.createElement('i');
-        icon.id = 'switchCameraIcon';
-        icon.className = 'fas fa-sync-alt';
-        switchCameraBtn.appendChild(icon);
-
-        document.body.appendChild(switchCameraBtn);
-    }
-
-    const rect = myFace.getBoundingClientRect();
-    const btnWidth = switchCameraBtn.offsetWidth;
-    const btnHeight = switchCameraBtn.offsetHeight;
-    switchCameraBtn.style.left = rect.left - 15 + "px";
-    switchCameraBtn.style.top = rect.top - 15 + "px";
-    // switchCameraBtn.style.top = (rect.top + myFace.offsetHeight - btnHeight - 10) + "px";
-    switchCameraBtn.style.position = "absolute";
-    switchCameraBtn.style.zIndex = '10';
-    switchCameraBtn.addEventListener("click", handleCameraChange); // 내 카메라 전환
+    switchCameraBtn.addEventListener("click", handleCameraChange);
     setVideoCallButtonsOpacity(0.5);
 }
+
+// 뷰포트 크기 변화 시 myFace 위치 재클램프
+function clampMyFacePosition() {
+    const left = parseFloat(myFaceWrapper.style.left);
+    const top  = parseFloat(myFaceWrapper.style.top);
+    if (isNaN(left) || isNaN(top)) return; // CSS bottom/right 방식이면 건드리지 않음
+    const maxX = window.innerWidth  - myFaceWrapper.offsetWidth;
+    const maxY = window.innerHeight - myFaceWrapper.offsetHeight;
+    myFaceWrapper.style.left = Math.max(0, Math.min(left, maxX)) + "px";
+    myFaceWrapper.style.top  = Math.max(0, Math.min(top,  maxY)) + "px";
+}
+
+// ResizeObserver: 특정 HTML 요소의 크기 변화를 감지하는 객체 > 콜백함수
+new ResizeObserver(clampMyFacePosition).observe(document.documentElement);
 
 /////////////////////////////// SAVE SCREENSHOT /////////////////////////////////
 

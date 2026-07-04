@@ -35,10 +35,12 @@
     <div id="myStream">
         <canvas id="recordCanvas" style="display:none;"></canvas>
         <video id="peerFace" autoplay playsinline muted></video>
-        <video id="myFace" autoplay playsinline muted></video>
-        <!--<button id="switchCamera" title="Switch Camera" className="circle-button">
-            <i id="switchCameraIcon" className="fas fa-sync-alt"></i>
-        </button>-->
+        <div id="myFaceWrapper">
+            <video id="myFace" autoplay playsinline muted></video>
+            <button id="switchCamera" title="Switch Camera" class="circle-button">
+                <i id="switchCameraIcon" class="fas fa-sync-alt"></i>
+            </button>
+        </div>
         <div class="icon-buttons">
             <button id="camera" title="Camera Toggle" class="circle-button">
                 <i id="cameraIcon" class="fas fa-video"></i>

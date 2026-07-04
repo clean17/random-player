@@ -1,181 +1,185 @@
 let videoCallWindow = null,
+    vcallIframe = null,
     isDragging = false,
+    isResizing = false,
+    rafId = null,
+    pendingX = 0, pendingY = 0,
+    pendingW = 0, pendingH = 0,
     offsetX = 0,
     offsetY = 0,
+    resizeStartX = 0,
+    resizeStartW = 0,
     windowFullSizeOn = true;
+
+const VCALL_W = 380, VCALL_H = 530;
+const VCALL_RATIO = VCALL_W / VCALL_H;
 
 ////////////////////////// Video Call //////////////////////////////
 
 function openVideoCallWindow() {
     if (!videoCallWindow) {
         videoCallWindow = document.createElement("div");
-        videoCallWindow.style.position = "fixed";
-        videoCallWindow.style.top = "calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 14px)";
-        videoCallWindow.style.left = "15px";
-        videoCallWindow.style.width = "380px";
-        videoCallWindow.style.height = "530px";
-        videoCallWindow.style.maxWidth = "100vw";
-        videoCallWindow.style.maxHeight = "100vh";
-        videoCallWindow.style.minWidth = "200px";
-        videoCallWindow.style.minHeight = "300px";
-        videoCallWindow.style.background = "#000";
-        videoCallWindow.style.border = "2px solid #ccc";
-        videoCallWindow.style.zIndex = "2147481000";
-        videoCallWindow.style.flexDirection = "column";
-        videoCallWindow.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
-        videoCallWindow.style.resize = "both";
-        videoCallWindow.style.overflow = "auto";
-        videoCallWindow.style.display = "flex";
+        videoCallWindow.style.cssText = [
+            "position:fixed",
+            "top:calc(var(--app-header-height,56px) + env(safe-area-inset-top) + 14px)",
+            "left:15px",
+            "width:"  + VCALL_W + "px",
+            "height:" + VCALL_H + "px",
+            "max-width:100vw",
+            "max-height:100vh",
+            "min-width:200px",
+            "min-height:280px",
+            "background:#000",
+            "border:2px solid #ccc",
+            "z-index:2147483000",
+            "flex-direction:column",
+            "box-shadow:0 0 10px rgba(0,0,0,.5)",
+            "overflow:hidden",
+            "display:flex",
+            "will-change:transform",
+            "user-select:none",
+            "-webkit-user-select:none"
+        ].join(";");
     }
 
     const topBar = document.createElement("div");
-    topBar.style.display = "flex";
-    topBar.style.justifyContent = "space-between";
-    topBar.style.background = "#222";
-    topBar.style.color = "#fff";
-    topBar.style.padding = "4px 8px";
-
+    topBar.style.cssText = "display:flex;justify-content:space-between;background:#222;color:#fff;padding:4px 8px;flex-shrink:0;cursor:move";
 
     const hideBtn = document.createElement("span");
-    // hideBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';  // 🔽 숨기기
-    hideBtn.innerHTML = '<i id="expendWindowIcon" class="fas fa-compress"></i>';  // 🔽 숨기기
+    hideBtn.innerHTML = '<i id="expendWindowIcon" class="fas fa-compress"></i>';
     hideBtn.style.cursor = "pointer";
     hideBtn.onclick = () => {
-        // videoCallWindow.style.visibility = "hidden";
-        // videoCallWindow.style.opacity = "0";
-
         windowFullSizeOn = !windowFullSizeOn;
         const icon = document.getElementById("expendWindowIcon");
         icon.className = windowFullSizeOn ? "fas fa-compress" : "fas fa-expand";
-        videoCallWindow.style.width = windowFullSizeOn ? "380px" : "200px";
-        videoCallWindow.style.height = windowFullSizeOn ? "530px" : "300px";
+        videoCallWindow.style.width  = windowFullSizeOn ? VCALL_W + "px" : "200px";
+        videoCallWindow.style.height = windowFullSizeOn ? VCALL_H + "px" : Math.round(200 / VCALL_RATIO) + "px";
     };
 
     const closeBtn = document.createElement("span");
-    closeBtn.innerHTML = '<i class="fas fa-times"></i>'; // ❌ 닫기
+    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
     closeBtn.style.cursor = "pointer";
     closeBtn.onclick = () => {
         if (videoCallWindow) {
             document.body.removeChild(videoCallWindow);
             videoCallWindow = null;
-
-            // const msg = '<span style="color:green;"><i class="fa-solid fa-phone-slash" style="color: red;"></i></span>  통화종료';
-            // if (msg !== "") {
-            //     socket.emit("new_msg", { username, msg, room: roomName });
-            //     socket.emit("stop_typing", {room: roomName, username: username });
-            // }
+            vcallIframe = null;
         }
     };
 
-    hideBtn.addEventListener("touchstart", function(e) {
-        e.stopPropagation();
-    }, { passive: false });
-
-    closeBtn.addEventListener("touchstart", function(e) {
-        e.stopPropagation();
-    }, { passive: false });
-
-    hideBtn.addEventListener("mousedown", function(e) {
-        e.stopPropagation();
-    });
-    closeBtn.addEventListener("mousedown", function(e) {
-        e.stopPropagation();
-    });
+    hideBtn.addEventListener("touchstart", e => e.stopPropagation(), { passive: false });
+    closeBtn.addEventListener("touchstart", e => e.stopPropagation(), { passive: false });
+    hideBtn.addEventListener("mousedown", e => e.stopPropagation());
+    closeBtn.addEventListener("mousedown", e => e.stopPropagation());
 
     topBar.appendChild(hideBtn);
     topBar.appendChild(closeBtn);
 
-    const iframe = document.createElement("iframe");
-    iframe.src = "/func/video-call/window";
-    // iframe.style.flex = "1";
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-    iframe.style.border = "none";
+    vcallIframe = document.createElement("iframe");
+    vcallIframe.src = "/func/video-call/window";
+    vcallIframe.style.cssText = "width:100%;height:100%;border:none;flex:1";
 
-    // ✅ 마우스 이벤트
+    // 비율 유지 리사이즈 핸들 (우하단)
+    const resizeHandle = document.createElement("div");
+    resizeHandle.style.cssText = [
+        "position:absolute", "right:0", "bottom:0",
+        "width:18px", "height:18px", "cursor:nwse-resize", "z-index:1",
+        "background:linear-gradient(135deg,transparent 40%,#aaa 40%,#aaa 55%,transparent 55%,transparent 65%,#aaa 65%,#aaa 80%,transparent 80%)"
+    ].join(";");
+
+    resizeHandle.addEventListener("mousedown", startResize);
+    resizeHandle.addEventListener("touchstart", startResize, { passive: false });
+
     topBar.addEventListener("mousedown", startDrag);
-    document.addEventListener("mousemove", onDrag);
-    document.addEventListener("mouseup", endDrag);
-
-    // ✅ 터치 이벤트
     topBar.addEventListener("touchstart", startDrag, { passive: false });
-    document.addEventListener("touchmove", onDrag, { passive: false });
-    document.addEventListener("touchend", endDrag);
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onEnd);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
 
     videoCallWindow.appendChild(topBar);
-    videoCallWindow.appendChild(iframe);
-
+    videoCallWindow.appendChild(vcallIframe);
+    videoCallWindow.appendChild(resizeHandle);
     document.body.appendChild(videoCallWindow);
 
     window.addEventListener("message", (event) => {
-        if (event.data === "force-close") {
-            closeBtn.click();
-        }
+        if (event.data === "force-close") closeBtn.click();
     });
 
-
-    // const msg = '<span style="font-size:2em; color:green;">📞 통화요청</span>';
     const msg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화요청';
-    if (msg !== "") {
-        socket.emit("new_msg", { username, msg, room: roomName });
-        socket.emit("stop_typing", {room: roomName, username: username });
-    }
-
-    // closeBtn.click();
-    // 소켓으로 컨트롤 해야할지도
+    socket.emit("new_msg", { username, msg, room: roomName });
+    socket.emit("stop_typing", { room: roomName, username: username });
 }
 
+function setIframePointerEvents(enabled) {
+    if (vcallIframe) vcallIframe.style.pointerEvents = enabled ? "auto" : "none";
+}
 
-///////////////////////////////// Drag Evnet //////////////////////////////
+///////////////////////////////// 공통 이벤트 //////////////////////////////
 
-// 📱 공통 좌표 추출 함수 (마우스 or 터치 구분)
 function getClientPosition(e) {
     if (e.touches && e.touches.length > 0) {
-        return {
-            x: e.touches[0].clientX,
-            y: e.touches[0].clientY
-        };
-    } else {
-        return {
-            x: e.clientX,
-            y: e.clientY
-        };
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
+    return { x: e.clientX, y: e.clientY };
 }
 
 function startDrag(e) {
-    if (e.target.tagName.toLowerCase() !== 'span') { // 터치 스크롤, 새로고침 방지
-        e.preventDefault();
-    }
+    if (e.target.tagName.toLowerCase() !== "span") e.preventDefault();
     isDragging = true;
+    setIframePointerEvents(false);
     const pos = getClientPosition(e);
     offsetX = pos.x - videoCallWindow.offsetLeft;
     offsetY = pos.y - videoCallWindow.offsetTop;
 }
 
-function onDrag(e) {
-    if (!isDragging) return;
+function startResize(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    isResizing = true;
+    setIframePointerEvents(false);
     const pos = getClientPosition(e);
-
-    const x = pos.x - offsetX;
-    const y = pos.y - offsetY;
-
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-
-    const elemWidth = videoCallWindow.offsetWidth;
-    const elemHeight = videoCallWindow.offsetHeight;
-
-    // ✅ 화면(뷰포트)을 벗어나지 않도록 제한
-    const clampedX = Math.max(0, Math.min(x, windowWidth - elemWidth));
-    const clampedY = Math.max(0, Math.min(y, windowHeight - elemHeight));
-
-    videoCallWindow.style.left = `${clampedX}px`;
-    videoCallWindow.style.top = `${clampedY}px`;
-    videoCallWindow.style.right = "auto";
-    videoCallWindow.style.bottom = "auto";
+    resizeStartX = pos.x;
+    resizeStartW = videoCallWindow.offsetWidth;
 }
 
-function endDrag() {
+function onMove(e) {
+    if (!isDragging && !isResizing) return;
+    if (e.cancelable) e.preventDefault();
+
+    const pos = getClientPosition(e);
+
+    if (isDragging) {
+        pendingX = Math.max(0, Math.min(pos.x - offsetX, window.innerWidth  - videoCallWindow.offsetWidth));
+        pendingY = Math.max(0, Math.min(pos.y - offsetY, window.innerHeight - videoCallWindow.offsetHeight));
+    } else {
+        pendingW = Math.max(200, resizeStartW + (pos.x - resizeStartX));
+        pendingH = Math.round(pendingW / VCALL_RATIO);
+        if (pendingH < 280) return;
+    }
+
+    if (!rafId) {
+        rafId = requestAnimationFrame(applyMove);
+    }
+}
+
+function applyMove() {
+    rafId = null;
+    if (isDragging) {
+        videoCallWindow.style.left   = pendingX + "px";
+        videoCallWindow.style.top    = pendingY + "px";
+        videoCallWindow.style.right  = "auto";
+        videoCallWindow.style.bottom = "auto";
+    } else if (isResizing) {
+        videoCallWindow.style.width  = pendingW + "px";
+        videoCallWindow.style.height = pendingH + "px";
+    }
+}
+
+function onEnd() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     isDragging = false;
+    isResizing = false;
+    setIframePointerEvents(true);
 }

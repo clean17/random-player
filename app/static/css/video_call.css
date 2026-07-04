@@ -24,18 +24,30 @@ video.mirror {
     object-fit: contain; /* ✅ 화면에 꽉 차게 */
     z-index: 1;
 }
-#myFace {
+#myFaceWrapper {
     position: absolute;
     bottom: 15px;
     right: 15px;
-    max-width: 35vw;
-    max-height: 25vh;
-    aspect-ratio: auto; /* 기기 영상 비율 그대로 */
+    z-index: 2;
+    line-height: 0;
+}
+#myFace {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 42vw;
+    max-height: 30vh;
+    aspect-ratio: auto;
     border: 1px solid white;
     object-fit: cover;
-    z-index: 2; /* ✅ peerFace 위로 오버레이 */
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
     border-radius: 6px;
+}
+#switchCamera.circle-button {
+    position: absolute;
+    top: -12px;
+    left: -12px;
+    margin: 0;
 }
 
 
