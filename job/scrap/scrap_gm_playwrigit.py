@@ -42,8 +42,11 @@ PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
 # 스크롤/속도
 SCROLL_PAUSE = 1.8
 MAX_SCROLLS = 30001
-DELAY_SECOND = 2.0
-DELAY_MINUTE = 60 * 5
+DELAY_2_SECOND = 2
+DELAY_10_SECOND = 10
+DELAY_2_MINUTE = 60 * 2
+DELAY_5_MINUTE = 60 * 5
+DELAY_20_MINUTE = 60 * 20
 ALREADY_COLLECTED_COUNT = 40
 
 # ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
@@ -53,7 +56,7 @@ MIN_GOOD_VIDEO_BYTES = 500_000        # 0.5MB 이상만 후보
 
 # 동시 다운로드 제한
 MAX_CONCURRENCY = 4
-# 팔로우 btran24x
+# 팔로우
 ACCOUNTS = [
 
 ]
@@ -646,7 +649,7 @@ async def extract_media_from_post(page, url: str):
     page.on("response", on_response)
 
     await page.goto(url, wait_until="domcontentloaded")
-    await asyncio.sleep(DELAY_SECOND) # 시간 조정
+    await asyncio.sleep(DELAY_2_SECOND) # 시간 조정
 
     # 이미지 수집 (도우미 사용)
     seen = set()
@@ -658,17 +661,17 @@ async def extract_media_from_post(page, url: str):
     # 비디오 수집: 보이게/재생 유도 → '좋은' 응답 대기
     await force_play_video_if_possible(page)
 
-    # 잠시 재시도하며 응답 모으기(총 ~6초)
-    for _ in range(4):
+    # 잠시 재시도하며 응답 모으기
+    for _ in range(2):
         if good_video_urls:
             break
-        await asyncio.sleep(0.75) # 시간 조정
+        await asyncio.sleep(0.5)
 
     # 보조: DOM의 <video src>도 수집(있을 수 있음) → CDN 필터 적용
     vids = page.locator("section main > div:nth-of-type(1) video")
 
     try:
-        await vids.first.wait_for(state="attached", timeout=60000)
+        await vids.first.wait_for(state="attached", timeout=10000)
         n_vid = await vids.count()
     except Exception:
         n_vid = 0
@@ -809,7 +812,7 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
         today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         print(f"[INFO] [{today}] [{account}] Collect Postlinks: {len(links)}")
     if len(links) > 300:
-        await asyncio.sleep(60 * 30)  # 과도한 요청 방지
+        await asyncio.sleep(DELAY_20_MINUTE)  # 과도한 요청 방지
 
     # 저장 디렉토리 준비
     if len(links) > 0:
@@ -864,9 +867,9 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
         # print('saved', saved)
         all_saved.extend(saved or [])
         check_saved.extend(saved or [])
-        if idx % 10 == 0 or idx+1 == len(links):
+        if idx % 10 == 0:
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"[INFO] [{today}] [{account}] Interim check of number of saved files : {len(check_saved)}")
+            print(f"[INFO] [{today}] [{account}] Interim check of number of saved files: {len(check_saved)}")
             check_saved = []
         link_segment = extract_account_and_type(normalize_ig_post_url(link))
 
@@ -892,17 +895,17 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
                 else:  # 두 번째도 실패하면 그냥 무시
                     pass
 
-        await asyncio.sleep(DELAY_SECOND)  # 과도한 요청 방지
+        await asyncio.sleep(DELAY_2_SECOND)  # 과도한 요청 방지
         if cnt % 300 == 0:
-            await asyncio.sleep(60 * 30)  # 과도한 요청 방지
+            await asyncio.sleep(DELAY_20_MINUTE)  # 과도한 요청 방지
         elif cnt % 100 == 0:
-            await asyncio.sleep(DELAY_MINUTE)  # 과도한 요청 방지
+            await asyncio.sleep(DELAY_5_MINUTE)  # 과도한 요청 방지
 
 
     await page.close()
 
     if len(links) > 0:
-        print(f"[INFO] [{account}] Number of files saved: {len(all_saved)}")
+        print(f"[INFO] [{today}] [{account}] Number of files saved: {len(all_saved)}")
 
     return len(links)
 
@@ -932,7 +935,7 @@ async def run_scrap():
 
         for i, acc in enumerate(ACCOUNTS):
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"\n[INFO] [{today}] Start account processing: {acc} ({i+1}/{len(ACCOUNTS)})")
+            print(f"\n[INFO] [{today}] Start account processing: [{acc}] ({i+1}/{len(ACCOUNTS)})")
 
             try:
                 page = await context.new_page()
@@ -951,9 +954,9 @@ async def run_scrap():
 
             if i < len(ACCOUNTS) - 1:
                 if rs > 30:
-                    await asyncio.sleep(DELAY_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
+                    await asyncio.sleep(DELAY_2_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
                 else:
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(DELAY_10_SECOND)
 
         # 재시도: 스냅샷 후 초기화 → 재시도 중 발생한 새 에러는 다시 파일에 누적
         pending = {acc: links for acc, links in ERROR_LINKS.items() if links}
