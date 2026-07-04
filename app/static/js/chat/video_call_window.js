@@ -17,30 +17,31 @@ const VCALL_RATIO = VCALL_W / VCALL_H;
 ////////////////////////// Video Call //////////////////////////////
 
 function openVideoCallWindow() {
-    if (!videoCallWindow) {
-        videoCallWindow = document.createElement("div");
-        videoCallWindow.style.cssText = [
-            "position:fixed",
-            "top:calc(var(--app-header-height,56px) + env(safe-area-inset-top) + 14px)",
-            "left:15px",
-            "width:"  + VCALL_W + "px",
-            "height:" + VCALL_H + "px",
-            "max-width:100vw",
-            "max-height:100vh",
-            "min-width:200px",
-            "min-height:280px",
-            "background:#000",
-            "border:2px solid #ccc",
-            "z-index:2147483000",
-            "flex-direction:column",
-            "box-shadow:0 0 10px rgba(0,0,0,.5)",
-            "overflow:hidden",
-            "display:flex",
-            "will-change:transform",
-            "user-select:none",
-            "-webkit-user-select:none"
-        ].join(";");
-    }
+    // 이미 열려있으면 중복 생성 방지 (iframe 재로드 → getUserMedia 재호출 → myFace 멈춤)
+    if (videoCallWindow) return;
+
+    videoCallWindow = document.createElement("div");
+    videoCallWindow.style.cssText = [
+        "position:fixed",
+        "top:calc(var(--app-header-height,56px) + env(safe-area-inset-top) + 14px)",
+        "left:15px",
+        "width:"  + VCALL_W + "px",
+        "height:" + VCALL_H + "px",
+        "max-width:100vw",
+        "max-height:100vh",
+        "min-width:200px",
+        "min-height:280px",
+        "background:#000",
+        "border:2px solid #ccc",
+        "z-index:2147483000",
+        "flex-direction:column",
+        "box-shadow:0 0 10px rgba(0,0,0,.5)",
+        "overflow:hidden",
+        "display:flex",
+        "will-change:transform",
+        "user-select:none",
+        "-webkit-user-select:none"
+    ].join(";");
 
     const topBar = document.createElement("div");
     topBar.style.cssText = "display:flex;justify-content:space-between;background:#222;color:#fff;padding:4px 8px;flex-shrink:0;cursor:move";
