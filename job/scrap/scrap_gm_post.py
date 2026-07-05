@@ -68,8 +68,8 @@ async def main():
             video_cdn = result.get("video_cdn", [])
             print(f"  이미지 {len(images)}개 / 비디오 {len(video_cdn)}개")
 
-            ig_cookies = await page.context.cookies(["https://www.instagram.com", "https://cdninstagram.com"])
-            saved, _ = await download_media(images, [], video_cdn, dirs, ACCOUNT, cookies=ig_cookies)
+            ig_cookies = await page.context.cookies()
+            saved, _ = await download_media(images, [], video_cdn, dirs, ACCOUNT, cookies=ig_cookies, page=page)
             print(f"  저장 완료 {len(saved)}개")
             # for p in saved:
             #     print(f"    {p}")

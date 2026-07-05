@@ -51,7 +51,7 @@ ALREADY_COLLECTED_COUNT = 40
 
 # ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
 CDN_HOST_RE   = re.compile(r"^https://scontent-[a-z0-9\-]+\.cdninstagram\.com/") # scontent-ssn1-1 등
-CDN_PATH_ALLOW= re.compile(r"/o1/")   # # /o1/ 경로 포함 (t2, t16 등 세부 버전은 다양), 필요 시 |/o0/ 등 추가
+CDN_PATH_ALLOW= re.compile(r"/o1/|/v/t(?!51\.|39\.|89\.)\d")  # 이미지 경로(t51/t39/t89) 제외한 비디오 CDN
 MIN_GOOD_VIDEO_BYTES = 500_000        # 0.5MB 이상만 후보
 
 # 동시 다운로드 제한
@@ -75,7 +75,8 @@ def load_error_links() -> Dict[str, List[str]]:
             data = json.load(f)
         total = sum(len(v) for v in data.values())
         if total:
-            print(f"[INFO] 이전 에러 링크 로드: {total}개 ({list(data.keys())})")
+            # print(f"[INFO] 이전 에러 링크 로드: {total}개 ({list(data.keys())})")
+            print(f"[INFO] 이전 에러 링크 로드: {total}개")
         return data
     except Exception as e:
         print(f"[WARN] error_links 로드 실패: {e}")
@@ -168,6 +169,14 @@ def get_video_duration_sec(path: str):
         return float(out)
     except Exception:
         return None
+
+def shortcode_to_mediaid(shortcode: str) -> str:
+    """Instagram 릴스 shortcode → 숫자 media ID 변환"""
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+    n = 0
+    for c in shortcode:
+        n = n * 64 + alphabet.index(c)
+    return str(n)
 
 def canonical_cdn_key(u: str) -> str:
     """
@@ -593,16 +602,29 @@ def looks_like_good_video(resp):
         ct = (resp.headers or {}).get("content-type", "")
         if "video" not in ct:
             return False
-        # 조각 스트리밍 제외
         hdrs = {k.lower(): v for k, v in (resp.headers or {}).items()}
-        if "content-range" in hdrs:
+        # 206 range 응답: byte 0부터 시작하는 첫 청크만 허용 (URL 자체는 유효한 CDN URL)
+        cr = hdrs.get("content-range", "")
+        if resp.status == 206:
+            if not cr.lower().startswith("bytes 0-"):
+                return False  # 중간 청크는 무시
+        elif resp.status != 200:
             return False
         # CDN host + 경로 규칙
         if not (CDN_HOST_RE.match(resp.url) and CDN_PATH_ALLOW.search(resp.url)):
             return False
-        # 크기(있으면 체크)
-        clen = hdrs.get("content-length")
-        if clen and clen.isdigit() and int(clen) < MIN_GOOD_VIDEO_BYTES:
+        # 크기: content-range의 전체 크기(bytes 0-x/TOTAL) 또는 content-length로 판단
+        total = None
+        if cr:
+            try:
+                total = int(cr.split("/")[-1])
+            except Exception:
+                pass
+        if total is None:
+            clen = hdrs.get("content-length")
+            if clen and clen.isdigit():
+                total = int(clen)
+        if total is not None and total < MIN_GOOD_VIDEO_BYTES:
             return False
         return True
     except Exception:
@@ -649,7 +671,40 @@ async def extract_media_from_post(page, url: str):
     page.on("response", on_response)
 
     await page.goto(url, wait_until="domcontentloaded")
-    await asyncio.sleep(DELAY_2_SECOND) # 시간 조정
+    await asyncio.sleep(DELAY_2_SECOND)
+
+    # 정적 HTML을 인터랙션 전에 미리 캡처 (인터랙션 후엔 동적 콘텐츠가 URL 토큰을 잘라낼 수 있음)
+    _static_html: str = ""
+    if "/reel/" in url:
+        try:
+            _static_html = await page.content()
+        except Exception:
+            pass
+
+    # 페이지 상태 진단 — 릴스 페이지가 라이트 버전이면 SPA 재초기화 후 재진입
+    if "/reel/" in url:
+        try:
+            diag = await page.evaluate("""
+                () => ({
+                    hasArticle: !!document.querySelector('article'),
+                    videoCount: document.querySelectorAll('video').length,
+                })
+            """)
+            if not diag.get("hasArticle") and diag.get("videoCount", 0) == 0:
+                # SPA가 제대로 마운트되지 않음 → feed 경유 재진입 후 article 대기
+                # print(f"[INFO] reel 라이트 버전 감지 → instagram.com 경유 재로드")
+                await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
+                await asyncio.sleep(2)
+                await page.goto(url, wait_until="domcontentloaded")
+                # article이 마운트될 때까지 최대 8초 대기 (React SPA 렌더링 시간)
+                try:
+                    await page.wait_for_selector("article", timeout=8000)
+                    print(f"[INFO] article 감지됨 → SPA 정상 마운트")
+                except Exception:
+                    await asyncio.sleep(DELAY_2_SECOND)
+                _static_html = await page.content()
+        except Exception:
+            pass
 
     # 이미지 수집 (도우미 사용)
     seen = set()
@@ -661,49 +716,173 @@ async def extract_media_from_post(page, url: str):
     # 비디오 수집: 보이게/재생 유도 → '좋은' 응답 대기
     await force_play_video_if_possible(page)
 
-    # 잠시 재시도하며 응답 모으기
-    for _ in range(2):
+    # 릴스: 페이지의 모든 video 요소를 강제 재생 후 추가 대기
+    if "/reel/" in url:
+        try:
+            vid_count = await page.evaluate("""
+                () => {
+                    const vids = Array.from(document.querySelectorAll('video'));
+                    vids.forEach(v => { v.muted = true; v.play().catch(() => {}); });
+                    return vids.length;
+                }
+            """)
+            # print(f"[DEBUG] reel video 요소 {vid_count}개 발견, 강제 재생 시도")
+        except Exception:
+            pass
+
+        # video 0개이면 실제 마우스 클릭으로 플레이어 초기화 (isTrusted=true 필요)
+        if vid_count == 0:
+            try:
+                # main 요소 실제 위치에서 클릭 시도
+                clicked = False
+                try:
+                    main_el = page.locator("main").first
+                    if await main_el.count():
+                        box = await main_el.bounding_box()
+                        if box:
+                            cx = box["x"] + box["width"] * 0.45
+                            cy = box["y"] + box["height"] * 0.40
+                            await page.mouse.click(cx, cy)
+                            clicked = True
+                except Exception:
+                    pass
+                if not clicked:
+                    await page.mouse.click(640, 360)
+                await asyncio.sleep(0.5)
+                await page.keyboard.press("Space")
+                await asyncio.sleep(4)  # video 로드 충분히 대기
+                vid_count2 = await page.evaluate("document.querySelectorAll('video').length")
+                # 스크린샷으로 페이지 상태 확인 (디버그용)
+                try:
+                    import tempfile as _tf, pathlib as _pl
+                    ss_name = f"ig_reel_{url.rstrip('/').split('/')[-1]}.png"
+                    ss_path = str(_pl.Path(_tf.gettempdir()) / ss_name)
+                    await page.screenshot(path=ss_path, full_page=False)
+                    # print(f"[DEBUG] 스크린샷 저장: {ss_path}")
+                except Exception as _e:
+                    print(f"[DEBUG] 스크린샷 실패: {_e}")
+                if vid_count2 > 0:
+                    print(f"[INFO] 인터랙션 후 video {vid_count2}개 감지 → 재생 유도")
+                    await page.evaluate("""
+                        () => { document.querySelectorAll('video').forEach(v => { v.muted = true; v.play().catch(() => {}); }); }
+                    """)
+                else:
+                    # print(f"[INFO] 인터랙션 후에도 video 0개")
+                    pass
+            except Exception:
+                pass
+
+    # 잠시 재시도하며 응답 모으기 (릴스는 더 오래 대기)
+    wait_rounds = 8 if "/reel/" in url else 2
+    for _ in range(wait_rounds):
         if good_video_urls:
             break
         await asyncio.sleep(0.5)
 
     # 보조: DOM의 <video src>도 수집(있을 수 있음) → CDN 필터 적용
-    vids = page.locator("section main > div:nth-of-type(1) video")
-
+    # page.evaluate()로 JS 즉시 실행 → locator 대기/타임아웃 없음
     try:
-        await vids.first.wait_for(state="attached", timeout=10000)
-        n_vid = await vids.count()
-    except Exception:
-        n_vid = 0
+        dom_video_srcs: List[str] = await page.evaluate("""
+            () => {
+                const vids = Array.from(
+                    document.querySelectorAll('section main > div:nth-of-type(1) video')
+                );
+                return vids.map(v => {
+                    let src = v.getAttribute('src') || v.currentSrc || null;
+                    if (!src || src.startsWith('blob:')) {
+                        const s = v.querySelector('source');
+                        if (s) src = s.getAttribute('src');
+                    }
+                    return src;
+                }).filter(s => s && s.startsWith('http'));
+            }
+        """)
+    except Exception as e:
+        print(f"[ERROR-3-0] video src JS 추출 실패: {e}")
+        dom_video_srcs = []
 
-    dom_video_srcs = []
-    for i in range(n_vid):
+    # 릴스: 네트워크/DOM에서 못 잡았으면 모바일 API로 직접 영상 URL 요청
+    if "/reel/" in url and not good_video_urls:
         try:
-            v = vids.nth(i)
-            # 2) video src가 안 박히는 경우가 많아서 두 군데를 봄
-            vsrc = await v.get_attribute("src")
-            if not vsrc or vsrc.startswith("blob:"):
-                # <video><source src="..."></source></video> 케이스
-                src_el = v.locator("source").first
-                if await src_el.count():
-                    vsrc = await src_el.get_attribute("src")
+            shortcode = url.rstrip('/').split('/')[-1]
+            media_id = shortcode_to_mediaid(shortcode)
+            api_resp = await page.request.get(
+                f"https://i.instagram.com/api/v1/media/{media_id}/info/",
+                headers={
+                    "X-IG-App-ID": "936619743392459",
+                    "Accept": "application/json",
+                    "Accept-Language": "ko-KR,ko;q=0.9",
+                }
+            )
+            if api_resp.ok:
+                data = await api_resp.json()
+                items = data.get("items") or []
+                for item in items:
+                    for vv in (item.get("video_versions") or []):
+                        vurl = vv.get("url", "")
+                        if CDN_HOST_RE.match(vurl):
+                            good_video_urls.add(vurl)
+                if good_video_urls:
+                    print(f"[INFO] 모바일 API에서 영상 URL {len(good_video_urls)}개 획득")
+                else:
+                    print(f"[DEBUG] 모바일 API 응답에 영상 URL 없음 (status={api_resp.status})")
+            else:
+                print(f"[DEBUG] 모바일 API {api_resp.status}: {shortcode}")
+        except Exception as _e:
+            print(f"[DEBUG] 모바일 API 실패: {_e}")
 
-            if vsrc and vsrc.startswith("http"):
-                dom_video_srcs.append(vsrc)
+    # Fallback: 네트워크 인터셉터가 긴 토큰 URL을 잡지 못했을 때만 HTML 파싱
+    # (good_video_urls 있으면 긴 토큰이 이미 확보된 것 → HTML의 잘린 토큰 추가 불필요)
+    if not good_video_urls and (not dom_video_srcs or "/reel/" in url):
+        try:
+            # 릴스: 인터랙션 전 정적 HTML 사용 (인터랙션 후 동적 콘텐츠는 URL 토큰이 잘릴 수 있음)
+            html = _static_html if _static_html else await page.content()
+            # 1) CDN URL 직접 스캔
+            raw_urls = re.findall(
+                r'https:(?:/|\\/)(?:/|\\/)scontent-[a-z0-9\-]+\.cdninstagram\.com[^"\'<>\s]+',
+                html
+            )
+            # 2) JSON video_url / playback_url 키 추출 (긴 토큰이 여기 있을 수 있음)
+            for key_pat in (r'"video_url"\s*:\s*"([^"]+)"', r'"playback_url"\s*:\s*"([^"]+)"'):
+                for m in re.finditer(key_pat, html):
+                    u = m.group(1).replace('\\/', '/').replace('\\u0026', '&')
+                    if CDN_HOST_RE.match(u):
+                        raw_urls.append(u)
+            seen_fallback: Set[str] = set()
+            f1_urls: List[str] = []
+            f2_urls: List[str] = []
+            for u in raw_urls:
+                u = u.replace('\\/', '/').replace('\\u0026', '&').rstrip('\\')
+                if not any(x in u for x in ('.mp4', '/o1/v/', '/v/t2.', '/v/t50.')):
+                    continue
+                if u in seen_fallback:
+                    continue
+                seen_fallback.add(u)
+                # f2는 adaptive streaming 세그먼트 → f1(직접다운로드) 없을 때만 사용
+                if '/f2/' in u:
+                    f2_urls.append(u)
+                else:
+                    f1_urls.append(u)
+            # f1 우선, 없으면 f2도 시도 (일부 릴스는 f1 없음)
+            fallback_order = f1_urls if f1_urls else f2_urls
+            for u in fallback_order:
+                dom_video_srcs.append(u)
+            if seen_fallback:
+                print(f"[INFO] HTML fallback 후보 {len(seen_fallback)}개 (f1={len(f1_urls)}, f2(스킵)={len(f2_urls)})")
         except Exception as e:
-            print(f"[ERROR-3-0] video src 추출 실패 index={i}: {e}")
-            ERROR_LINKS.append(url)
-            pass
+            print(f"[ERROR-3-0] HTML fallback 실패: {e}")
 
     # DOM/네트워크 합치고, 최종적으로 CDN 규칙으로 필터
     candidates = set(dom_video_srcs) | good_video_urls
-    # video_cdn = sorted(u for u in candidates if CDN_HOST_RE.match(u) and CDN_PATH_ALLOW.search(u))
+    if not candidates and "/reel/" in url:
+        print(f"[DEBUG] reel 캡처 0 — good_video_urls={len(good_video_urls)} dom_video_srcs={len(dom_video_srcs)}")
     unique = {}
     for u in candidates:
         if CDN_HOST_RE.match(u) and CDN_PATH_ALLOW.search(u):
             k = canonical_cdn_key(u)
-            # 먼저 본(가장 '좋아 보이는') 원본 URL을 보존
             unique.setdefault(k, u)
+        elif candidates:
+            print(f"[DEBUG] CDN 필터 탈락: {u[:100]}")
     video_cdn = sorted(unique.values())
 
     return {
@@ -729,39 +908,76 @@ def safe_open_exclusive(path: str):
     # 존재 충돌 시 에러로 실패시키는 전용 오픈 (덮어쓰기 방지)
     return open(path, "xb")
 
+class _Retry403(Exception):
+    """aiohttp → page.request 재시도 신호"""
+    pass
+
 # ======== 다운로드 ========
-async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, prefix: str="media") -> Optional[str]:
+async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, prefix: str="media", page=None) -> Optional[str]:
+    data = None
+    ext = ".bin"
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-            if resp.status != 200:
+            if resp.status == 403 and page is not None:
+                # 브라우저 세션으로 재시도 (서명 URL은 세션 바인딩)
+                raise _Retry403()
+            if resp.status not in (200, 206):
+                print(f"[WARN] download_one HTTP {resp.status}: {url[:80]}")
                 return None
             ct = resp.headers.get("Content-Type", "")
             ext = guess_ext_from_url_or_type(url, ct)
-
-            ts = now_ms()
-            seq = await next_seq()  # 타이브레이커
-            fname = sanitize_filename(f"{prefix}_{ts:013d}_{seq:06d}{ext}")
-            # fname = sanitize_filename(f"{prefix}_{int(time.time()*1000)}{ext}")
-            path = os.path.join(save_dir, fname)
             data = await resp.read()
+            if "/reel/" in url or any(x in url for x in ("/o1/v/", "/v/t2.", "/v/t50.")):
+                # print(f"[INFO] download_one OK ({resp.status}): {url[:100]}")
+                print(f"[INFO] download_one OK ({resp.status})")
+    except _Retry403:
+        try:
+            pw_resp = await page.request.get(url, headers={
+                "Referer": "https://www.instagram.com/",
+                "Accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
+                "Sec-Fetch-Dest": "video",
+                "Sec-Fetch-Mode": "no-cors",
+                "Sec-Fetch-Site": "cross-site",
+            })
+            if not pw_resp.ok:
+                print(f"[WARN] download_one(pw) HTTP {pw_resp.status}: {url[:80]}")
+                return None
+            ct = pw_resp.headers.get("content-type", "")
+            ext = guess_ext_from_url_or_type(url, ct)
+            # print(f"[INFO] download_one(pw) OK: {url[:80]}")
+            print(f"[INFO] download_one(pw) OK")
+            print(f"[INFO] download_one(pw) OK")
+            data = await pw_resp.body()
+        except Exception as e:
+            print(f"[WARN] download_one(pw) 실패 ({type(e).__name__}: {e}): {url[:80]}")
+            return None
+    except Exception as e:
+        print(f"[WARN] download_one 실패 ({type(e).__name__}: {e}): {url[:80]}")
+        return None
+
+    if not data:
+        return None
+    try:
+        ts = now_ms()
+        seq = await next_seq()
+        fname = sanitize_filename(f"{prefix}_{ts:013d}_{seq:06d}{ext}")
+        path = os.path.join(save_dir, fname)
+        try:
             with safe_open_exclusive(path) as f:
                 f.write(data)
-            # with open(path, "wb") as f:
-            #     f.write(data)
-            return path
-    except FileExistsError:
-        # 극히 드문 경합 대비 (다시 한 번 시퀀스 증가)
-        seq = await next_seq()
-        ts = now_ms()
-        alt = os.path.join(save_dir, sanitize_filename(f"{prefix}_{ts:013d}_{seq:06d}{ext}"))
-        with open(alt, "wb") as f:
-            f.write(data)
-        return alt
-    except Exception:
+        except FileExistsError:
+            seq = await next_seq()
+            ts = now_ms()
+            path = os.path.join(save_dir, sanitize_filename(f"{prefix}_{ts:013d}_{seq:06d}{ext}"))
+            with open(path, "wb") as f:
+                f.write(data)
+        return path
+    except Exception as e:
+        print(f"[WARN] download_one 저장 실패 ({type(e).__name__}: {e}): {url[:80]}")
         return None
 
 
-async def download_media(images: List[str], videos: List[str], video_cdn: List[str], dirs: Dict[str, str], account: str):
+async def download_media(images: List[str], videos: List[str], video_cdn: List[str], dirs: Dict[str, str], account: str, cookies: Optional[List[Dict]] = None, page=None):
     # 비디오는 video_cdn만 사용 (요구사항)
     video_sources = video_cdn if video_cdn else []
 
@@ -770,24 +986,33 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
     video_sources = list(dict.fromkeys(video_sources))
 
     conn = aiohttp.TCPConnector(limit_per_host=MAX_CONCURRENCY, ssl=False)
-    async with aiohttp.ClientSession(connector=conn) as session:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Referer": "https://www.instagram.com/",
+    }
+    if cookies:
+        headers["Cookie"] = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+    async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
         tasks = []
         for i, url in enumerate(images, 1):
-            tasks.append(download_one(session, url, dirs["images"], prefix=f"{account}_img"))
+            tasks.append(download_one(session, url, dirs["images"], prefix=f"{account}_img", page=page))
         for i, url in enumerate(video_sources, 1):
-            tasks.append(download_one(session, url, dirs["reels"], prefix=f"{account}_reel"))
+            tasks.append(download_one(session, url, dirs["reels"], prefix=f"{account}_reel", page=page))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         ok_paths = [p for p in results if isinstance(p, str) and p]
+        download_failed = len(tasks) - len(ok_paths)
 
         # 🔥 비디오 길이가 1초 미만이거나(0 포함) 길이 판독 실패(None)면 삭제
         deleted = []
         for p in ok_paths:
             try:
                 if os.path.exists(p) and p.startswith(dirs["reels"]):
-                    dur = get_video_duration_sec(p)  # None이면 판독 실패
-                    # 규칙: dur is None(길이 불명) 또는 dur < 1.0 → 삭제
-                    if dur is None or dur < 1.0:
+                    dur = get_video_duration_sec(p)  # None = ffprobe 미설치 또는 판독 실패
+                    # ffprobe가 측정한 경우에만 1초 미만 삭제 (None이면 판단 불가 → 유지)
+                    if dur is not None and dur < 1.0:
+                        fsize = os.path.getsize(p) if os.path.exists(p) else 0
+                        print(f"[INFO] 짧은 비디오 삭제: {dur:.2f}s, {fsize//1024}KB — {os.path.basename(p)}")
                         os.remove(p)
                         deleted.append(p)
             except Exception as e:
@@ -796,23 +1021,28 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
         if deleted:
             print(f"[INFO] {len(deleted)}개의 짧은/길이불명 비디오 삭제됨 (<1s or unknown)")
 
-        # 삭제되지 않은 경로만 반환
-        return [p for p in ok_paths if p not in deleted]
+        final_paths = [p for p in ok_paths if p not in deleted]
+        stats = {
+            "attempted": len(tasks),
+            "download_failed": download_failed,
+            "deleted_short": len(deleted),
+        }
+        return final_paths, stats
 
 
 # ======== 메인 플로우 ========
-async def handle_account(page, account: str, preset_links: Optional[List[str]] = None):
+async def handle_account(page, account: str, preset_links: Optional[List[str]] = None, throttle: Optional[Dict] = None):
+    if throttle is None:
+        throttle = {"processed": 0}
+
     await ensure_login(page)
     await go_to_profile(page, account)
 
     links = preset_links if preset_links is not None else await collect_post_links(page)
 
-
     if len(links) > 5:
         today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         print(f"[INFO] [{today}] [{account}] Collect Postlinks: {len(links)}")
-    if len(links) > 300:
-        await asyncio.sleep(DELAY_20_MINUTE)  # 과도한 요청 방지
 
     # 저장 디렉토리 준비
     if len(links) > 0:
@@ -820,7 +1050,6 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
 
     all_saved = []
     check_saved = []
-    cnt = 0
     for idx, link in enumerate(links, 1):
         today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         print(f"[INFO] [{today}] [{account}] ({idx}/{len(links)}) {link}")
@@ -831,7 +1060,6 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
         # parsed = urlparse(qs_link)
         # print(f"[{account}] ({idx}/{len(links)}) {parsed.path}")
 
-        cnt += 1
         # None, False, 0, '', [], {}, 모두 여기로 들어옴
         # if idx == 5: # 디버깅 테스트용
         #     break
@@ -856,15 +1084,39 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
             # 이미지: 그대로 / 비디오: VIDEO_PREFIX만
 
         saved = None
+        dl_stats = {}
         try:
-            saved = await download_media(
-                media.get("images", []), media.get("videos", []), media["video_cdn"], dirs, account
+            ig_cookies = await page.context.cookies()
+            saved, dl_stats = await download_media(
+                media.get("images", []), media.get("videos", []), media["video_cdn"], dirs, account, cookies=ig_cookies, page=page
             )
         except Exception as e:
             print(f"[ERROR-3] 다운로드 실패 {e}")
             append_error_link(account, link)
 
-        # print('saved', saved)
+        today_log = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+        img_cnt = len(media.get("images", []))
+        vid_cnt = len(media.get("video_cdn", []))
+        if not saved:
+            if img_cnt == 0 and vid_cnt == 0:
+                reason = "미디어 수집 0개"
+            else:
+                parts = []
+                if dl_stats.get("download_failed"):
+                    parts.append(f"다운로드실패={dl_stats['download_failed']}")
+                    append_error_link(account, link)  # 다운로드 실패는 재시도 가치 있음
+                if dl_stats.get("deleted_short"):
+                    parts.append(f"짧은영상삭제={dl_stats['deleted_short']}")
+                reason = ", ".join(parts) if parts else "원인불명"
+            print(f"[WARN] [{today_log}] [{account}] ({idx}/{len(links)}) 저장 0개 (수집: img={img_cnt}, vid={vid_cnt} / {reason}) {link}")
+        elif dl_stats.get("download_failed") or dl_stats.get("deleted_short"):
+            parts = []
+            if dl_stats.get("download_failed"):
+                parts.append(f"다운로드실패={dl_stats['download_failed']}")
+                append_error_link(account, link)
+            if dl_stats.get("deleted_short"):
+                parts.append(f"짧은영상삭제={dl_stats['deleted_short']}")
+            print(f"[WARN] [{today_log}] [{account}] ({idx}/{len(links)}) 저장 {len(saved)}/{img_cnt+vid_cnt}개 ({', '.join(parts)}) {link}")
         all_saved.extend(saved or [])
         check_saved.extend(saved or [])
         if idx % 10 == 0:
@@ -896,9 +1148,13 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
                     pass
 
         await asyncio.sleep(DELAY_2_SECOND)  # 과도한 요청 방지
-        if cnt % 300 == 0:
-            await asyncio.sleep(DELAY_20_MINUTE)  # 과도한 요청 방지
-        elif cnt % 100 == 0:
+        throttle["processed"] += 1
+        if throttle["processed"] >= 300:
+            today_t = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+            print(f"[INFO] [{today_t}] 누적 처리 300개 도달 → 20분 대기 후 재개")
+            throttle["processed"] = 0
+            await asyncio.sleep(DELAY_20_MINUTE)
+        elif idx % 100 == 0:
             await asyncio.sleep(DELAY_5_MINUTE)  # 과도한 요청 방지
 
 
@@ -933,6 +1189,8 @@ async def run_scrap():
         )
 
 
+        throttle = {"processed": 0}  # 계정 간 누적 카운터 공유
+
         for i, acc in enumerate(ACCOUNTS):
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
             print(f"\n[INFO] [{today}] Start account processing: [{acc}] ({i+1}/{len(ACCOUNTS)})")
@@ -947,14 +1205,16 @@ async def run_scrap():
                 page = await context.new_page()
 
             try:
-                rs = await handle_account(page, acc)
+                rs = await handle_account(page, acc, throttle=throttle)
             except Exception as e:
                 print(f"[ERROR-4] [{acc}] Error in processing: {e}")
                 continue
 
             if i < len(ACCOUNTS) - 1:
                 if rs > 30:
-                    await asyncio.sleep(DELAY_2_MINUTE) # 계정 간 쿨다운(선택): 과도한 접근 방지
+                    today_c = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
+                    print(f"[INFO] [{today_c}] [{acc}] 계정 간 쿨다운 2분 대기")
+                    await asyncio.sleep(DELAY_2_MINUTE)
                 else:
                     await asyncio.sleep(DELAY_10_SECOND)
 
@@ -976,7 +1236,7 @@ async def run_scrap():
                 )
                 page = await context.new_page()
             try:
-                await handle_account(page, acc, preset_links=err_links)
+                await handle_account(page, acc, preset_links=err_links, throttle=throttle)
             except Exception as e:
                 print(f"[ERROR-4] [{acc}] 에러 재시도 실패: {e}")
 
