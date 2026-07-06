@@ -46,13 +46,13 @@ DELAY_2_SECOND = 2
 DELAY_10_SECOND = 10
 DELAY_2_MINUTE = 60 * 2
 DELAY_5_MINUTE = 60 * 5
-DELAY_20_MINUTE = 60 * 20
+DELAY_15_MINUTE = 60 * 15
 ALREADY_COLLECTED_COUNT = 40
 
 # ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
 CDN_HOST_RE   = re.compile(r"^https://scontent-[a-z0-9\-]+\.cdninstagram\.com/") # scontent-ssn1-1 등
 CDN_PATH_ALLOW= re.compile(r"/o1/|/v/t(?!51\.|39\.|89\.)\d")  # 이미지 경로(t51/t39/t89) 제외한 비디오 CDN
-MIN_GOOD_VIDEO_BYTES = 500_000        # 0.5MB 이상만 후보
+MIN_GOOD_VIDEO_BYTES = 50_000         # 50KB 이상만 후보 (짧은 캐러셀 영상 대응)
 
 # 동시 다운로드 제한
 MAX_CONCURRENCY = 4
@@ -772,6 +772,35 @@ async def extract_media_from_post(page, url: str):
             except Exception:
                 pass
 
+    # 캐러셀 포스트: 다음 슬라이드 버튼 클릭으로 모든 슬라이드 영상 CDN URL 수집
+    if "/reel/" not in url:
+        try:
+            for _slide in range(20):  # 최대 20슬라이드
+                btn = page.locator(
+                    "button[aria-label='다음'], button[aria-label='Next'], "
+                    "button[aria-label='next slide'], button[aria-label*='다음'], "
+                    "button[aria-label*='Next']"
+                ).first
+                if not await btn.count():
+                    break
+                await btn.click()
+                await asyncio.sleep(0.5)
+                # 슬라이드 전환 후 video 강제 재생 → CDN 요청 유도
+                try:
+                    await page.evaluate("""
+                        () => {
+                            document.querySelectorAll('article video, main video, video').forEach(v => {
+                                v.muted = true;
+                                v.play().catch(() => {});
+                            });
+                        }
+                    """)
+                except Exception:
+                    pass
+                await asyncio.sleep(1.0)  # CDN 응답 대기
+        except Exception:
+            pass
+
     # 잠시 재시도하며 응답 모으기 (릴스는 더 오래 대기)
     wait_rounds = 8 if "/reel/" in url else 2
     for _ in range(wait_rounds):
@@ -1151,9 +1180,9 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
         throttle["processed"] += 1
         if throttle["processed"] >= 300:
             today_t = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"[INFO] [{today_t}] 누적 처리 300개 도달 → 20분 대기 후 재개")
+            print(f"[INFO] [{today_t}] 누적 처리 300개 도달 → 15분 대기 후 재개")
             throttle["processed"] = 0
-            await asyncio.sleep(DELAY_20_MINUTE)
+            await asyncio.sleep(DELAY_15_MINUTE)
         elif idx % 100 == 0:
             await asyncio.sleep(DELAY_5_MINUTE)  # 과도한 요청 방지
 
@@ -1226,7 +1255,7 @@ async def run_scrap():
 
         for acc, err_links in pending.items():
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"\n[INFO] [{today}] [{acc}] 에러 링크 재시도: {len(err_links)}개")
+            print(f"[INFO] [{today}] [{acc}] 에러 링크 재시도: {len(err_links)}개")
             try:
                 page = await context.new_page()
             except Exception:
