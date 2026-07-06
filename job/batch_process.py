@@ -116,9 +116,9 @@ def run_crawl_ai_image():
         print("returncode =", process.returncode)
 
 def run_crawl_ig_image():
-    print('    ############################### run_crawl_ig_image ###############################')
+    print('    ############################### run_crawl_gm_image ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
-    py_script = r"C:\my-project\random-player\job\scrap\scrap_ig_playwrigit.py"
+    py_script = r"C:\my-project\random-player\job\scrap\scrap_gm_playwrigit.py"
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(

@@ -9,22 +9,29 @@ let videoCallWindow = null,
     offsetY = 0,
     resizeStartX = 0,
     resizeStartW = 0,
-    windowFullSizeOn = true;
+    windowFullSizeOn = true,
+    keyboardShrunken = false,
+    baseViewportH = 0;
 
 const VCALL_W = 380, VCALL_H = 530;
 const VCALL_RATIO = VCALL_W / VCALL_H;
+const COMPACT_W = 200;
+const COMPACT_H = Math.round(COMPACT_W / VCALL_RATIO);
+
+// 최초 위치 (왼쪽 상단)
+const HOME_TOP  = "calc(var(--app-header-height,56px) + env(safe-area-inset-top) + 14px)";
+const HOME_LEFT = "15px";
 
 ////////////////////////// Video Call //////////////////////////////
 
 function openVideoCallWindow() {
-    // 이미 열려있으면 중복 생성 방지 (iframe 재로드 → getUserMedia 재호출 → myFace 멈춤)
     if (videoCallWindow) return;
 
     videoCallWindow = document.createElement("div");
     videoCallWindow.style.cssText = [
         "position:fixed",
-        "top:calc(var(--app-header-height,56px) + env(safe-area-inset-top) + 14px)",
-        "left:15px",
+        "top:" + HOME_TOP,
+        "left:" + HOME_LEFT,
         "width:"  + VCALL_W + "px",
         "height:" + VCALL_H + "px",
         "max-width:100vw",
@@ -50,11 +57,12 @@ function openVideoCallWindow() {
     hideBtn.innerHTML = '<i id="expendWindowIcon" class="fas fa-compress"></i>';
     hideBtn.style.cursor = "pointer";
     hideBtn.onclick = () => {
+        if (keyboardShrunken) return; // 키보드 모드 중엔 무시
         windowFullSizeOn = !windowFullSizeOn;
         const icon = document.getElementById("expendWindowIcon");
         icon.className = windowFullSizeOn ? "fas fa-compress" : "fas fa-expand";
-        videoCallWindow.style.width  = windowFullSizeOn ? VCALL_W + "px" : "200px";
-        videoCallWindow.style.height = windowFullSizeOn ? VCALL_H + "px" : Math.round(200 / VCALL_RATIO) + "px";
+        videoCallWindow.style.width  = windowFullSizeOn ? VCALL_W + "px" : COMPACT_W + "px";
+        videoCallWindow.style.height = windowFullSizeOn ? VCALL_H + "px" : COMPACT_H + "px";
     };
 
     const closeBtn = document.createElement("span");
@@ -65,6 +73,13 @@ function openVideoCallWindow() {
             document.body.removeChild(videoCallWindow);
             videoCallWindow = null;
             vcallIframe = null;
+            keyboardShrunken = false;
+            document.removeEventListener("focusin",  onInputFocus);
+            document.removeEventListener("focusout", onInputBlur);
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener("resize", onViewportResize);
+            }
+            window.removeEventListener("resize", onViewportResize);
         }
     };
 
@@ -80,7 +95,6 @@ function openVideoCallWindow() {
     vcallIframe.src = "/func/video-call/window";
     vcallIframe.style.cssText = "width:100%;height:100%;border:none;flex:1";
 
-    // 비율 유지 리사이즈 핸들 (우하단)
     const resizeHandle = document.createElement("div");
     resizeHandle.style.cssText = [
         "position:absolute", "right:0", "bottom:0",
@@ -108,6 +122,17 @@ function openVideoCallWindow() {
         if (event.data === "force-close") closeBtn.click();
     });
 
+    // 키보드 감지: focusin(선제) + viewport resize(보장)
+    baseViewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.addEventListener("focusin",  onInputFocus);
+    document.addEventListener("focusout", onInputBlur);
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", onViewportResize);
+    }
+    window.addEventListener("resize", onViewportResize);
+    // eslint-disable-next-line no-unused-vars (module-level timer)
+    window._vcallPlaceTimer = null;
+
     const msg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화요청';
     socket.emit("new_msg", { username, msg, room: roomName });
     socket.emit("stop_typing", { room: roomName, username: username });
@@ -117,7 +142,7 @@ function setIframePointerEvents(enabled) {
     if (vcallIframe) vcallIframe.style.pointerEvents = enabled ? "auto" : "none";
 }
 
-///////////////////////////////// 공통 이벤트 //////////////////////////////
+///////////////////////////////// 드래그·리사이즈 //////////////////////////////
 
 function getClientPosition(e) {
     if (e.touches && e.touches.length > 0) {
@@ -130,9 +155,10 @@ function startDrag(e) {
     if (e.target.tagName.toLowerCase() !== "span") e.preventDefault();
     isDragging = true;
     setIframePointerEvents(false);
-    const pos = getClientPosition(e);
-    offsetX = pos.x - videoCallWindow.offsetLeft;
-    offsetY = pos.y - videoCallWindow.offsetTop;
+    const pos  = getClientPosition(e);
+    const rect = videoCallWindow.getBoundingClientRect();
+    offsetX = pos.x - rect.left;
+    offsetY = pos.y - rect.top;
 }
 
 function startResize(e) {
@@ -152,8 +178,10 @@ function onMove(e) {
     const pos = getClientPosition(e);
 
     if (isDragging) {
-        pendingX = Math.max(0, Math.min(pos.x - offsetX, window.innerWidth  - videoCallWindow.offsetWidth));
-        pendingY = Math.max(0, Math.min(pos.y - offsetY, window.innerHeight - videoCallWindow.offsetHeight));
+        const vpW = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
+        const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        pendingX = Math.max(0, Math.min(pos.x - offsetX, vpW - videoCallWindow.offsetWidth));
+        pendingY = Math.max(0, Math.min(pos.y - offsetY, vpH - videoCallWindow.offsetHeight));
     } else {
         pendingW = Math.max(200, resizeStartW + (pos.x - resizeStartX));
         pendingH = Math.round(pendingW / VCALL_RATIO);
@@ -183,4 +211,71 @@ function onEnd() {
     isDragging = false;
     isResizing = false;
     setIframePointerEvents(true);
+}
+
+///////////////////////////////// 키보드 감지 //////////////////////////////
+
+function placeCompactWindow() {
+    if (!videoCallWindow || !keyboardShrunken) return;
+    const vv   = window.visualViewport;
+    const vpW  = vv ? vv.width  : window.innerWidth;
+    // visual viewport 기준 우상단: offsetTop = 키보드로 인해 스크롤된 양
+    const offsetTop = vv ? vv.offsetTop : 0;
+    videoCallWindow.style.top    = (offsetTop + 10) + "px";
+    videoCallWindow.style.bottom = "auto";
+    videoCallWindow.style.left   = (vpW - COMPACT_W - 10) + "px";
+    videoCallWindow.style.right  = "auto";
+}
+
+function shrinkForKeyboard() {
+    if (!videoCallWindow || keyboardShrunken) return;
+    keyboardShrunken = true;
+    windowFullSizeOn = false;
+    const icon = document.getElementById("expendWindowIcon");
+    if (icon) icon.className = "fas fa-expand";
+    videoCallWindow.style.width  = COMPACT_W + "px";
+    videoCallWindow.style.height = COMPACT_H + "px";
+    placeCompactWindow(); // 크기와 동시에 위치도 즉시 변경
+}
+
+function restoreFromKeyboard() {
+    if (!videoCallWindow || !keyboardShrunken) return;
+    keyboardShrunken = false;
+    windowFullSizeOn = true;
+    const icon = document.getElementById("expendWindowIcon");
+    if (icon) icon.className = "fas fa-compress";
+    // 원래 크기·위치로 복원
+    videoCallWindow.style.width  = VCALL_W + "px";
+    videoCallWindow.style.height = VCALL_H + "px";
+    videoCallWindow.style.top    = HOME_TOP;
+    videoCallWindow.style.left   = HOME_LEFT;
+    videoCallWindow.style.right  = "auto";
+    videoCallWindow.style.bottom = "auto";
+}
+
+function onInputFocus(e) {
+    const tag = e.target.tagName.toLowerCase();
+    if (tag !== "input" && tag !== "textarea") return;
+    shrinkForKeyboard();
+}
+
+function onInputBlur(e) {
+    const tag = e.target.tagName.toLowerCase();
+    if (tag !== "input" && tag !== "textarea") return;
+    const next = e.relatedTarget;
+    if (next && (next.tagName === "INPUT" || next.tagName === "TEXTAREA")) return;
+    setTimeout(() => restoreFromKeyboard(), 150);
+}
+
+function onViewportResize() {
+    if (!videoCallWindow) return;
+    const currentH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    if (currentH < baseViewportH - 120) {
+        shrinkForKeyboard();
+        // 키보드 애니메이션 완료(~300ms) 후 최종 vpH로 위치 확정
+        clearTimeout(window._vcallPlaceTimer);
+        window._vcallPlaceTimer = setTimeout(() => requestAnimationFrame(placeCompactWindow), 350);
+    } else {
+        restoreFromKeyboard();
+    }
 }
