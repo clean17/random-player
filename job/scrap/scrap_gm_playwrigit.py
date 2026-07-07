@@ -956,7 +956,7 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
             ct = resp.headers.get("Content-Type", "")
             ext = guess_ext_from_url_or_type(url, ct)
             data = await resp.read()
-            if "/reel/" in url or any(x in url for x in ("/o1/v/", "/v/t2.", "/v/t50.")):
+            if resp.status != 200 and "/reel/" in url or any(x in url for x in ("/o1/v/", "/v/t2.", "/v/t50.")):
                 # print(f"[INFO] download_one OK ({resp.status}): {url[:100]}")
                 print(f"[INFO] download_one OK ({resp.status})")
     except _Retry403:
@@ -974,8 +974,7 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
             ct = pw_resp.headers.get("content-type", "")
             ext = guess_ext_from_url_or_type(url, ct)
             # print(f"[INFO] download_one(pw) OK: {url[:80]}")
-            print(f"[INFO] download_one(pw) OK")
-            print(f"[INFO] download_one(pw) OK")
+            # print(f"[INFO] download_one(pw) OK")
             data = await pw_resp.body()
         except Exception as e:
             print(f"[WARN] download_one(pw) 실패 ({type(e).__name__}: {e}): {url[:80]}")
