@@ -21,6 +21,7 @@ filename = f"{month_dir}/scrap_ig_{today}.log"
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
 
+COS_DIR = settings['COS_DIR']
 IMAGE_DIR2 = settings['IMAGE_DIR2']
 BASE_SAVE_DIR = IMAGE_DIR2
 # BASE_SAVE_DIR = r"D:\temp"
@@ -44,8 +45,8 @@ SCROLL_PAUSE = 1.8
 MAX_SCROLLS = 30001
 DELAY_2_SECOND = 2
 DELAY_10_SECOND = 10
-DELAY_2_MINUTE = 60 * 2
-DELAY_5_MINUTE = 60 * 5
+DELAY_1_MINUTE = 60 * 1
+DELAY_3_MINUTE = 60 * 3
 DELAY_15_MINUTE = 60 * 15
 ALREADY_COLLECTED_COUNT = 40
 
@@ -956,7 +957,7 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
             ct = resp.headers.get("Content-Type", "")
             ext = guess_ext_from_url_or_type(url, ct)
             data = await resp.read()
-            if resp.status != 200 and "/reel/" in url or any(x in url for x in ("/o1/v/", "/v/t2.", "/v/t50.")):
+            if resp.status != 200 and ("/reel/" in url or any(x in url for x in ("/o1/v/", "/v/t2.", "/v/t50."))):
                 # print(f"[INFO] download_one OK ({resp.status}): {url[:100]}")
                 print(f"[INFO] download_one OK ({resp.status})")
     except _Retry403:
@@ -1040,14 +1041,16 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
                     # ffprobe가 측정한 경우에만 1초 미만 삭제 (None이면 판단 불가 → 유지)
                     if dur is not None and dur < 1.0:
                         fsize = os.path.getsize(p) if os.path.exists(p) else 0
-                        print(f"[INFO] 짧은 비디오 삭제: {dur:.2f}s, {fsize//1024}KB — {os.path.basename(p)}")
-                        os.remove(p)
+                        os.makedirs(COS_DIR, exist_ok=True)
+                        dest = os.path.join(COS_DIR, os.path.basename(p))
+                        os.rename(p, dest)
+                        print(f"[INFO] 짧은 비디오 이동: {dur:.2f}s, {fsize//1024}KB — {os.path.basename(p)} → COS_DIR")
                         deleted.append(p)
             except Exception as e:
-                print(f"[WARN] 파일 삭제 실패: {p}, {e}")
+                print(f"[WARN] 파일 이동 실패: {p}, {e}")
 
-        if deleted:
-            print(f"[INFO] {len(deleted)}개의 짧은/길이불명 비디오 삭제됨 (<1s or unknown)")
+        # if deleted:
+        #     print(f"[INFO] {len(deleted)}개의 짧은/길이불명 비디오 삭제됨 (<1s or unknown)")
 
         final_paths = [p for p in ok_paths if p not in deleted]
         stats = {
@@ -1183,7 +1186,7 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
             throttle["processed"] = 0
             await asyncio.sleep(DELAY_15_MINUTE)
         elif idx % 100 == 0:
-            await asyncio.sleep(DELAY_5_MINUTE)  # 과도한 요청 방지
+            await asyncio.sleep(DELAY_3_MINUTE)  # 과도한 요청 방지
 
 
     await page.close()
@@ -1241,8 +1244,8 @@ async def run_scrap():
             if i < len(ACCOUNTS) - 1:
                 if rs > 30:
                     today_c = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-                    print(f"[INFO] [{today_c}] [{acc}] 계정 간 쿨다운 2분 대기")
-                    await asyncio.sleep(DELAY_2_MINUTE)
+                    print(f"[INFO] [{today_c}] [{acc}] 계정 간 쿨다운 1분 대기")
+                    await asyncio.sleep(DELAY_1_MINUTE)
                 else:
                     await asyncio.sleep(DELAY_10_SECOND)
 
