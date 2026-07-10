@@ -40,11 +40,29 @@
         .masonry-column .image-item {
             border-radius: 5px;
             overflow: hidden;
+            position: relative;
         }
         .masonry-column .image-item .thumbnail,
         .masonry-column .image-item .video-thumbnail {
             border-radius: 0;
             display: block;
+        }
+        .item-label {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: rgba(180, 180, 180, 0.55);
+            color: #333;
+            font-size: 12px;
+            line-height: 1.2;
+            padding: 2px 5px;
+            border-radius: 3px;
+            pointer-events: none;
+            z-index: 10;
+            max-width: calc(100% - 8px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .top-menu-panel {
@@ -462,35 +480,27 @@
         const end = Math.min(currentIndex + batchSize, allItems.length);
         currentIndex = end;
 
+        // 루프 전 높이를 한 번만 읽어 캐싱 → 루프 안에서 reflow 방지
+        const heights = columns.map(col => col.scrollHeight);
+
         for (let i = startIndex; i < end; i++) {
             const clone = allItems[i].cloneNode(true);
-
             observeImages(clone);
             observeVideos(clone);
+            addItemLabel(clone);
 
-            // clone.querySelectorAll("source[data-src]").forEach(s => {
-            //     s.src = s.dataset.src;
-            // });
-
-            getShortestColumn().appendChild(clone);
+            const shortestIdx = heights.indexOf(Math.min(...heights));
+            columns[shortestIdx].appendChild(clone);
+            heights[shortestIdx] += 300; // 실제 높이 대신 추정치로 캐시 갱신
         }
 
-        const minH = getMinColumnHeight();
-        const maxH = getMaxColumnHeight();
-
-        const msr_cnt = msr_container.querySelectorAll('.image-item').length
-        // console.log('msr_cnt', msr_cnt, columns.length * 2.2)
-        if (msr_cnt <= columns.length * 3) {
-            renderBatch();
-        }
-
-        if (window.scrollY === 0 && (maxH - minH > 300)) {
-            // console.warn('diff', maxH-minH);
-            rebalanceFromBottom();
-        }
-
-        // console.log('currentIndex', currentIndex);
         imageItems = msr_container.querySelectorAll('.masonry-column:first-child .image-item');
+
+        // 초기 로드 시 화면이 비어 있으면 다음 프레임에 이어서 렌더 (동기 재귀 제거)
+        const msr_cnt = msr_container.querySelectorAll('.image-item').length;
+        if (msr_cnt <= columns.length * 3 && currentIndex < allItems.length) {
+            requestAnimationFrame(renderBatch);
+        }
     }
 
 
@@ -605,52 +615,59 @@
         threshold: 0.05     // 5%만 보이면 isIntersecting = true
     });
 
-    const videoObserver = new IntersectionObserver((entries, observer) => {
-        entries.forEach(async entry => {
+    // 비디오 소스 미리 로드 전용 옵저버
+    const videoLoadObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
             const targetEl = entry.target;
             const source = targetEl.querySelector("source");
+            if (targetEl.tagName !== 'VIDEO') return;
+            if (!source || !source.dataset.src || source.src) return;
 
+            const url = source.dataset.src;
+            source.src = url;
+            source.removeAttribute('data-src');
+            source.onerror = () => {
+                targetEl.closest('.image-item')?.remove();
+                observer.unobserve(targetEl);
+            };
+            if (targetEl.dataset.poster) targetEl.poster = targetEl.dataset.poster;
+            targetEl.load();
+            attachTapEventOnly(targetEl, { autoPlay: true });
+            observer.unobserve(targetEl);
+        });
+    }, {
+        rootMargin: "0px 0px 1500px 0px",
+        threshold: 0
+    });
+
+    // 재생/일시정지 전용 옵저버 — 80% 이상 보일 때만 재생
+    const videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const targetEl = entry.target;
             if (!entry.isIntersecting) {
                 safePause(targetEl);
-                return;
-            }
-
-            // -------------------
-            // ✅ 비디오 처리
-            // -------------------
-            if (targetEl.tagName === 'VIDEO') {
-                if (source && source.dataset.src && !source.src) {
-                    const url = source.dataset.src;
-                    source.src = url;
-                    source.removeAttribute('data-src');
-
-                    source.onerror = () => {
-                        targetEl.closest('.image-item')?.remove();
-                        observer.unobserve(targetEl);
-                    };
-
-                    // const ok = await validateMedia(url);
-                    //
-                    // if (!ok) {
-                    //     console.log('invalid video (HEAD)', url);
-                    //     targetEl.closest('.image-item')?.remove();
-                    //     observer.unobserve(targetEl);
-                    //     return;
-                    // }
-
-                    if (targetEl.dataset.poster) targetEl.poster = targetEl.dataset.poster; // 썸네일 이미지 세팅
-                    targetEl.load();
-                    attachTapEventOnly(targetEl, { autoPlay: true });
-                }
-
+            } else {
                 safePlay(targetEl, { autoPlay: true, fromStart: true });
             }
         });
     }, {
-        rootMargin: "0px 0px 1500px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 전에 미리 감지 → 미리 로드 가능)
-        // threshold: 0.1 // 요소가 10% 보일 때 트리거
+        // rootMargin: "0px 0px 1500px 0px",  // 약간 미리 로드 (실제 화면에 들어오기 전에 미리 감지 → 미리 로드 가능)
+        threshold: 0.7
     });
 
+
+    function addItemLabel(clone) {
+        const el = clone.querySelector('img[data-filename], source[data-filename]');
+        if (!el) return;
+        const decoded = decodeURIComponent(el.dataset.filename || '');
+        const segment = decoded.split('/')[0];
+        if (!segment) return;
+        const label = document.createElement('div');
+        label.className = 'item-label';
+        label.textContent = segment;
+        clone.appendChild(label);
+    }
 
     function observeImages(container) {
         container.querySelectorAll("img[data-src]")
@@ -659,7 +676,10 @@
 
     function observeVideos(container) {
         const videos = container.querySelectorAll("video");
-        videos.forEach(video => videoObserver.observe(video));
+        videos.forEach(video => {
+            videoLoadObserver.observe(video);
+            videoObserver.observe(video);
+        });
     }
 
     /* =========================
@@ -675,30 +695,20 @@
 
         if (isRendering) return;
 
+        // rebalance는 스크롤 멈춘 후 1회만
+        clearTimeout(rebalanceTimer);
+        rebalanceTimer = setTimeout(() => {
+            rebalanceFromBottom();
+        }, 150);
+
+        if (!shouldLoadMore()) return;
+
+        isRendering = true;
+
         requestAnimationFrame(() => {
-            const minH = getMinColumnHeight();
-            const maxH = getMaxColumnHeight();
-
-            if (maxH - minH > 300) {
-                // console.log(maxH-minH);
-                rebalanceFromBottom();
-            }
-
-            if (!shouldLoadMore()) return;
-
-            isRendering = true;
-
             renderBatch();
-
             setTimeout(() => {
                 isRendering = false;
-            }, 100);
-
-            // 균형 맞추기
-            clearTimeout(rebalanceTimer);
-
-            rebalanceTimer = setTimeout(() => {
-                rebalanceFromBottom();
             }, 100);
         });
     });

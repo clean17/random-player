@@ -159,7 +159,7 @@ function getCenterImage(index= '') {
     let closestIndex = -1;
     let minDistance = Infinity;
 
-    imageItems.forEach((img, index) => {
+    imageItems?.forEach((img, index) => {
         const rect = img.getBoundingClientRect(); // 뷰포트 기준
         const itemCenterY = rect.top + rect.height / 2; // 뷰포트 내 이미지 중앙
         const distance = Math.abs(centerY - itemCenterY);
