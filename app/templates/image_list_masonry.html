@@ -57,7 +57,7 @@
             line-height: 1.2;
             padding: 2px 5px;
             border-radius: 3px;
-            pointer-events: none;
+            cursor: pointer;
             z-index: 10;
             max-width: calc(100% - 8px);
             overflow: hidden;
@@ -125,6 +125,33 @@
             color: #fff;
             border-color: #1a8cff;
         }
+        .search-row {
+            display: flex;
+            gap: 4px;
+            padding: 6px 8px;
+        }
+        .search-row input {
+            flex: 1;
+            padding: 6px 8px;
+            font-size: 13px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+            min-width: 0;
+        }
+        .search-row button {
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid #1a8cff;
+            border-radius: 6px;
+            background: #1a8cff;
+            color: #fff;
+            cursor: pointer;
+            white-space: nowrap;
+            width: auto;
+            height: auto;
+            margin: 0;
+        }
     </style>
 </head>
 
@@ -148,6 +175,11 @@
 
 <button id="top-menu-btn" class="floating-button2">☰</button>
 <div id="top-menu-panel" class="top-menu-panel" style="display:none;">
+    <div class="search-row">
+        <input type="text" id="search-input" placeholder="검색..." value="{{ search.rstrip('/') if search else '' }}">
+        <button id="search-btn">검색</button>
+    </div>
+    <div class="menu-divider"></div>
     {% if dir in ['image', 'image2', 'move', 'cos'] %}
     <button class="menu-item-btn" id="empty-bin-button">🗑 Empty bin</button>
     <button class="menu-item-btn" id="fetch-image-button">↻ Fetch</button>
@@ -361,6 +393,7 @@
           currentUserName = '{{ current_user.get_id() }}',
           guestName = '{{ config.GUEST_USERNAME }}',
           stock_name = `{{ market }}`,
+          currentSearch = '{{ search|default("") }}',
           progressBar = document.getElementById('progress-bar'),
           progressStatus = document.getElementById('progress-status'),
           msr_container = document.getElementById("masonry");
@@ -553,6 +586,13 @@
         initMasonry();
         updateColBtnActive();
 
+        // 검색 상태면 패널 자동 오픈
+        if (currentSearch) {
+            const rect = topMenuBtn.getBoundingClientRect();
+            topMenuPanel.style.top = (rect.bottom + 6) + 'px';
+            topMenuPanel.style.display = 'block';
+        }
+
         topMenuBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
             if (topMenuPanel.style.display === 'none') {
@@ -578,6 +618,68 @@
             localStorage.setItem(COL_STORAGE_KEY, n);
             updateColBtnActive();
             rebuildMasonryKeepingScroll();
+        });
+
+        function doSearch() {
+            const q = (document.getElementById('search-input')?.value || '').trim();
+            const url = new URL("/image/pages", window.location.origin);
+            url.searchParams.set("dir", dir);
+            url.searchParams.set("page", 1);
+            if (q) url.searchParams.set("search", q);
+            window.location.href = url.toString();
+        }
+
+        document.getElementById('search-btn')?.addEventListener('click', doSearch);
+        document.getElementById('search-input')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') doSearch();
+        });
+
+        let labelHoverTimer = null;
+        msr_container.addEventListener('mouseenter', (e) => {
+            const label = e.target.closest('.item-label');
+            if (!label) return;
+            labelHoverTimer = setTimeout(async () => {
+                const text = label.textContent.trim();
+                try {
+                    await navigator.clipboard.writeText(text);
+                    showDebugToast(`복사됨: ${text}`);
+                } catch {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                        showDebugToast(`복사됨: ${text}`);
+                    } catch {
+                        showDebugToast('복사 실패');
+                    }
+                    document.body.removeChild(ta);
+                }
+            }, 3000);
+        }, true);
+        msr_container.addEventListener('mouseleave', (e) => {
+            const label = e.target.closest('.item-label');
+            if (!label) return;
+            clearTimeout(labelHoverTimer);
+        }, true);
+
+        msr_container.addEventListener('click', (e) => {
+            const label = e.target.closest('.item-label');
+            if (!label) return;
+            e.stopPropagation();
+            const q = label.dataset.search || label.textContent.trim();
+            if (!q) return;
+            // 검색창에도 텍스트 표기 (trailing slash 제외)
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) searchInput.value = q.replace(/\/$/, '');
+            const url = new URL("/image/pages", window.location.origin);
+            url.searchParams.set("dir", dir);
+            url.searchParams.set("page", 1);
+            url.searchParams.set("search", q);
+            window.location.href = url.toString();
         });
     });
 
@@ -661,11 +763,20 @@
         const el = clone.querySelector('img[data-filename], source[data-filename]');
         if (!el) return;
         const decoded = decodeURIComponent(el.dataset.filename || '');
-        const segment = decoded.split('/')[0];
+        const parts = decoded.split('/');
+        const segment = parts[0];
         if (!segment) return;
+        const _imgIdx = segment.indexOf('_img_');
+        const _reelIdx = segment.indexOf('_reel_');
+        const cutIdx = [_imgIdx, _reelIdx].filter(i => i !== -1).reduce((a, b) => Math.min(a, b), Infinity);
+        const displayText = cutIdx < Infinity
+            ? segment.slice(0, cutIdx)
+            : segment.replace(/\.[^.]+$/, '');
+        if (!displayText) return;
         const label = document.createElement('div');
         label.className = 'item-label';
-        label.textContent = segment;
+        label.textContent = displayText;
+        label.dataset.search = displayText;
         clone.appendChild(label);
     }
 
@@ -688,6 +799,10 @@
 
     let isRendering = false;
 
+    function isNearBottom() {
+        return window.scrollY + window.innerHeight > document.body.scrollHeight - 800;
+    }
+
     window.addEventListener("scroll", () => {
         if (topMenuPanel && topMenuPanel.style.display !== 'none') {
             topMenuPanel.style.display = 'none';
@@ -695,9 +810,9 @@
 
         if (isRendering) return;
 
-        // rebalance는 스크롤 멈춘 후 1회만
         clearTimeout(rebalanceTimer);
         rebalanceTimer = setTimeout(() => {
+            if (isNearBottom()) return;
             rebalanceFromBottom();
         }, 150);
 

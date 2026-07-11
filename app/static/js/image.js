@@ -514,6 +514,9 @@ function goPage(page) {
         url.searchParams.set("dir", dir);
     }
     url.searchParams.set("page", page);
+    if (typeof currentSearch !== 'undefined' && currentSearch) {
+        url.searchParams.set("search", currentSearch);
+    }
 
     window.location.href = url.toString(); // 그냥 링크 이동
 }

@@ -349,6 +349,7 @@ def image_list():
     # print('selected_dir', selected_dir)
     if selected_dir in ("None", "null", "undefined", ""):
         selected_dir = None
+    search = request.args.get('search', '').strip()
     subdir_list = []
     images = []
     images_length = 0
@@ -389,17 +390,20 @@ def image_list():
     # 공통 기능 : 캐시 배열 슬라이싱 (풀스캔은 /fetch 에서만)
     elif dir in DIR_CONFIG:
         cfg = DIR_CONFIG[dir]
-        images = cfg.image_arr[start:start + LIMIT_PAGE_NUM]
-        if len(images) == 0:
+        source_arr = cfg.image_arr
+        if search:
+            source_arr = [f for f in source_arr if f.replace('\\', '/').startswith(search)]
+        images = source_arr[start:start + LIMIT_PAGE_NUM]
+        if len(images) == 0 and page > 1:
             page = page - 1
             start = (page - 1) * LIMIT_PAGE_NUM
-            images = cfg.image_arr[start:start + LIMIT_PAGE_NUM]
-        images_length = len(cfg.image_arr)
+            images = source_arr[start:start + LIMIT_PAGE_NUM]
+        images_length = len(source_arr)
         template_html = cfg.template
 
     elif dir == 'refine':
         images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, REF_IMAGE_DIR, refined_image_arr, 'image_list.html'
+            start, LIMIT_PAGE_NUM, page, REF_IMAGE_DIR, refined_image_arr, 'image_list_masonry.html'
         )
 
         isSlide = request.args.get('slide', '')
@@ -417,7 +421,8 @@ def image_list():
 
     return render_template(template_html, images=images, page=page,
                            total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, subdir_list=subdir_list, version=int(time.time()))
+                           selected_dir=selected_dir, subdir_list=subdir_list,
+                           search=search, version=int(time.time()))
 
 
 @image_bp.route('/fetch', methods=['GET'])
@@ -428,6 +433,7 @@ def fetch_image_list():
     selected_dir = request.args.get('selected_dir')
     if selected_dir in ("None", "null", "undefined", ""):
         selected_dir = None
+    search = request.args.get('search', '').strip()
     subdir_list = []
     images = []
     images_length = 0
@@ -437,12 +443,18 @@ def fetch_image_list():
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
     if dir in DIR_CONFIG:
         images, page, start, images_length, template_html = resolve_dir_page(dir, page)
+        if search:
+            cfg = DIR_CONFIG[dir]
+            source_arr = [f for f in cfg.image_arr if f.replace('\\', '/').startswith(search)]
+            images_length = len(source_arr)
+            images = source_arr[start:start + LIMIT_PAGE_NUM]
 
     total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
 
     return render_template(template_html, images=images, page=page,
                            total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, subdir_list=subdir_list, version=int(time.time()))
+                           selected_dir=selected_dir, subdir_list=subdir_list,
+                           search=search, version=int(time.time()))
 
 
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
