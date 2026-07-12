@@ -35,8 +35,15 @@ video::-webkit-media-controls {
     top: 60px;
     right: 10px;
 }
+.loop a {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: background-color 0.15s;
+}
 .loop .active {
     background-color: #0080ff;
+    color: #fff;
 }
 #toggleGain .active {
     background-color: #0080ff;
@@ -282,6 +289,13 @@ body.legacy-video-page .top-bar a:hover {
     background: #0056b3 !important;
     opacity: 1 !important;
     color: #fff !important;
+}
+
+body.page-video .top-bar .loop .active,
+body.legacy-video-page .top-bar .loop .active {
+    background: #0080ff !important;
+    color: #fff !important;
+    opacity: 1 !important;
 }
 
 body.page-video .top-bar .back a::before,
