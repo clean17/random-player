@@ -510,6 +510,12 @@ def move_image():
     if os.path.exists(src_path):
         # os.rename(src_path, dest_path) # OS ERROR : 다른 드라이브로 이동시킬 수 없다, shutil 사용을 권장
         shutil.move(src_path, dest_path) # src_path > dest_path 이동
+
+        raw_filename = urllib.parse.unquote(payload.get('filename', ''))
+        if imagepath in DIR_CONFIG:
+            arr = DIR_CONFIG[imagepath].image_arr
+            arr[:] = [p for p in arr if p != raw_filename]
+
         return jsonify({'status': 'success'})
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404

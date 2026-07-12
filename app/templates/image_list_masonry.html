@@ -844,7 +844,7 @@
         const cutIdx = [_imgIdx, _reelIdx].filter(i => i !== -1).reduce((a, b) => Math.min(a, b), Infinity);
         const displayText = cutIdx < Infinity
             ? segment.slice(0, cutIdx)
-            : segment.replace(/\.[^.]+$/, '');
+            : (parts.length > 1 ? segment : segment.replace(/\.[^.]+$/, ''));
         if (!displayText) return;
         const label = document.createElement('div');
         label.className = 'item-label';

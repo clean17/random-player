@@ -16,7 +16,6 @@ const nextBtn = document.getElementById('next-image-button'),
       emptyBinBtn = document.getElementById('empty-bin-button'),
       fetchImageBtn = document.getElementById('fetch-image-button'),
       TAP_THRESHOLD = 10, // 픽셀, 이 이하 이동이면 '탭'으로 간주
-      delImages = [...document.querySelectorAll('input[name="images[]"]')].map(el => el.value),
       slideShowBtn = document.getElementById("slideshow-btn"),
       zipBtn = document.getElementById('download-zip-btn'),
       dropdownMenu = document.getElementById('dropdown-menu'),
@@ -495,6 +494,9 @@ function handelDelBtn() {
 
 function deletePage(e) {
     preventAll(e);
+
+    // 삭제 시점 기준으로 남아있는(아직 이동/삭제 안 된) 이미지만 다시 조회
+    const delImages = [...document.querySelectorAll('input[name="images[]"]')].map(el => el.value);
 
     // 이중요청 방지 + 화면 이벤트 차단 + 로딩 애니메이션
     renderLoadingOverlay();
