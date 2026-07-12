@@ -47,7 +47,7 @@ DELAY_2_SECOND = 2
 DELAY_10_SECOND = 10
 DELAY_1_MINUTE = 60 * 1
 DELAY_3_MINUTE = 60 * 3
-DELAY_15_MINUTE = 60 * 15
+DELAY_10_MINUTE = 60 * 10
 ALREADY_COLLECTED_COUNT = 40
 
 # ── CDN/응답 필터 설정: 리전/세그먼트 버전 다양성 대응 ─────────────────────────────────────────
@@ -1182,9 +1182,9 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
         throttle["processed"] += 1
         if throttle["processed"] >= 300:
             today_t = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"[INFO] [{today_t}] 누적 처리 300개 도달 → 15분 대기 후 재개")
+            print(f"[INFO] [{today_t}] 누적 처리 300개 도달 → 10분 대기 후 재개")
             throttle["processed"] = 0
-            await asyncio.sleep(DELAY_15_MINUTE)
+            await asyncio.sleep(DELAY_10_MINUTE)
         elif idx % 100 == 0:
             await asyncio.sleep(DELAY_3_MINUTE)  # 과도한 요청 방지
 
@@ -1285,9 +1285,9 @@ async def run_scrap():
     if account_length > 0:
         log_file.close()
 
-def run_scrap_ig_job():
-    # 이벤트 루프는 “스레드당 1개”가 원칙
-    asyncio.run(run_scrap())
+# def run_scrap_ig_job():
+#     # 이벤트 루프는 “스레드당 1개”가 원칙
+#     asyncio.run(run_scrap())
 
 if __name__ == "__main__":
     '''
