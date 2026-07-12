@@ -335,8 +335,8 @@
                           {% endif %}"
                      data-src="{{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
                      alt="{{ image|urlencode }}"
-                     onerror="this.onerror=null; this.closest('.image-item')?.remove();"
-                     {% if dir not in ['trip', 'temp', 'refine'] %}
+                     onerror="this.onerror=null; this.closest('.image-item')?.remove(); if(typeof decrementTotalCount==='function') decrementTotalCount(); if(typeof adjustColumnsIfNeeded==='function') adjustColumnsIfNeeded();"
+                     {% if dir not in ['trip', 'temp'] %}
                 data-filename="{{ image|urlencode }}" data-index="{{ loop.index }}"
                 {% endif %}
                 data-index="{{ loop.index }}">
@@ -347,6 +347,17 @@
         <div class="image-container" id="masonry">
 
         </div>
+
+        <div id="empty-state" style="display:{% if images_length == 0 %}flex{% else %}none{% endif %}; flex-direction:column; align-items:center; justify-content:center; padding:80px 20px; color:#bbb; user-select:none;">
+            <svg width="130" height="110" viewBox="0 0 130 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="8" width="114" height="84" rx="10" stroke="#ddd" stroke-width="3" fill="#f8f8f8"/>
+                <circle cx="40" cy="38" r="12" stroke="#ddd" stroke-width="2.5"/>
+                <polyline points="8,80 44,48 70,66 96,40 122,80" stroke="#ddd" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
+                <line x1="12" y1="12" x2="118" y2="96" stroke="#f5c0c0" stroke-width="3.5" stroke-linecap="round"/>
+            </svg>
+            <p style="margin-top:18px; font-size:15px; letter-spacing:0.02em;">조회된 이미지가 없습니다</p>
+        </div>
+
         <div>
             total_count : <span id="total_count">{{ images_length }}</span>
         </div>
@@ -527,7 +538,7 @@
             heights[shortestIdx] += 300; // 실제 높이 대신 추정치로 캐시 갱신
         }
 
-        imageItems = msr_container.querySelectorAll('.masonry-column:first-child .image-item');
+        imageItems = msr_container.querySelectorAll('.image-item');
 
         // 초기 로드 시 화면이 비어 있으면 다음 프레임에 이어서 렌더 (동기 재귀 제거)
         const msr_cnt = msr_container.querySelectorAll('.image-item').length;
@@ -570,6 +581,65 @@
         }
     }
 
+    function adjustColumnsIfNeeded() {
+        const items = Array.from(msr_container.querySelectorAll('.image-item'));
+        if (items.length <= 0) return;
+
+        if (items.length < columns.length) {
+            // 아이템 수보다 열이 많으면 열 수 축소
+            const newCount = items.length;
+            msr_container.innerHTML = '';
+            columns = [];
+
+            for (let i = 0; i < newCount; i++) {
+                const col = document.createElement('div');
+                col.className = 'masonry-column';
+                msr_container.appendChild(col);
+                columns.push(col);
+            }
+
+            const heights = new Array(newCount).fill(0);
+            items.forEach(item => {
+                const minIdx = heights.indexOf(Math.min(...heights));
+                columns[minIdx].appendChild(item);
+                heights[minIdx] += item.getBoundingClientRect().height || 300;
+            });
+        } else {
+            // 빈 열이 있으면 rebalance
+            const hasEmpty = columns.some(col => col.querySelectorAll('.image-item').length === 0);
+            if (hasEmpty) rebalanceFromBottom();
+        }
+    }
+
+    // 슬라이드쇼에서 현재 data-index 기준으로 columnCount*2 앞까지 masonry 렌더
+    function preloadAheadOfSlide(dataIndex) {
+        const ahead = getColumnCount() * 2;
+        const targetDataIndex = dataIndex + ahead;
+        while (currentIndex < allItems.length) {
+            const nextItem = allItems[currentIndex];
+            const itemDataIndex = Number(nextItem.querySelector('[data-index]')?.dataset?.index || 0);
+            if (itemDataIndex > targetDataIndex) break;
+            renderBatch();
+        }
+    }
+
+    // 현재 렌더된 이미지+비디오를 data-index 순으로 합쳐 파일명 배열 반환
+    function buildRefineFileList() {
+        const imgItems = Array.from(
+            msr_container.querySelectorAll('img.thumbnail[data-filename]')
+        ).map(function(el) {
+            return { fn: decodeURIComponent(el.dataset.filename), idx: Number(el.dataset.index) };
+        });
+        const vidItems = Array.from(
+            msr_container.querySelectorAll('video[data-index] source[data-filename]')
+        ).map(function(el) {
+            return { fn: decodeURIComponent(el.dataset.filename), idx: Number(el.closest('video').dataset.index) };
+        });
+        return imgItems.concat(vidItems)
+            .sort(function(a, b) { return a.idx - b.idx; })
+            .map(function(item) { return item.fn; });
+    }
+
     /* =========================
        Init
     ========================= */
@@ -583,7 +653,9 @@
     }
 
     window.addEventListener("load", () => {
+        if (currentSearch) renderLoadingOverlay();
         initMasonry();
+        if (currentSearch) removeLoadingOverlay();
         updateColBtnActive();
 
         // 검색 상태면 패널 자동 오픈
@@ -626,6 +698,7 @@
             url.searchParams.set("dir", dir);
             url.searchParams.set("page", 1);
             if (q) url.searchParams.set("search", q);
+            renderLoadingOverlay();
             window.location.href = url.toString();
         }
 
@@ -775,7 +848,7 @@
         if (!displayText) return;
         const label = document.createElement('div');
         label.className = 'item-label';
-        label.textContent = displayText;
+        label.textContent = displayText.slice(0, 20);
         label.dataset.search = displayText;
         clone.appendChild(label);
     }
@@ -798,12 +871,17 @@
     ========================= */
 
     let isRendering = false;
+    let lastScrollY = window.scrollY;
 
     function isNearBottom() {
         return window.scrollY + window.innerHeight > document.body.scrollHeight - 800;
     }
 
     window.addEventListener("scroll", () => {
+        const currentScrollY = window.scrollY;
+        const scrollingDown = currentScrollY > lastScrollY;
+        lastScrollY = currentScrollY;
+
         if (topMenuPanel && topMenuPanel.style.display !== 'none') {
             topMenuPanel.style.display = 'none';
         }
@@ -811,10 +889,12 @@
         if (isRendering) return;
 
         clearTimeout(rebalanceTimer);
-        rebalanceTimer = setTimeout(() => {
-            if (isNearBottom()) return;
-            rebalanceFromBottom();
-        }, 150);
+        if (scrollingDown) {
+            rebalanceTimer = setTimeout(() => {
+                if (isNearBottom()) return;
+                rebalanceFromBottom();
+            }, 150);
+        }
 
         if (!shouldLoadMore()) return;
 
@@ -996,12 +1076,13 @@
 
         moveImage(filename, idx);
         imageItem.remove();
+        if (typeof decrementTotalCount === 'function') decrementTotalCount();
 
         // 스크롤 복원
         window.scrollTo(0, prevScrollY);
 
-        // 균형 맞추기
-        rebalanceFromBottom();
+        // 균형 맞추기 (아이템 수 < 열 수면 열 축소, 빈 열이면 rebalance)
+        adjustColumnsIfNeeded();
     }
 
 
@@ -1092,7 +1173,7 @@
             if (!imageItem) return;
 
             if (dir == 'refine') {
-                deleteItem(imageItem);
+                moveImageToPreviousStep(imageItem);
             } else {
                 let filename = imageItem.querySelector('.thumbnail')?.alt;
 
@@ -1115,6 +1196,21 @@
             }
         });
 
+        // 비디오 클릭 → refine 슬라이드쇼 (더블클릭으로 열기)
+        document.addEventListener('dblclick', function (e) {
+            if (dir !== 'refine') return;
+            if (e.target.closest('.delete-btn')) return;
+            const videoEl = e.target.closest('video.video-thumbnail');
+            if (!videoEl) return;
+            const sourceEl = videoEl.querySelector('source[data-filename]');
+            if (!sourceEl) return;
+            const filename = decodeURIComponent(sourceEl.dataset.filename);
+            const list = buildRefineFileList();
+            const startIdx = list.indexOf(filename);
+            showSlideshowModal(list, startIdx >= 0 ? startIdx : 0);
+            clearTimeout(slideShowTimer);
+        });
+
         // 이미지 클릭 (수정)
         document.addEventListener('click', function (e) {
             const img = e.target.closest('img.thumbnail');
@@ -1124,6 +1220,16 @@
 
             const imageItem = img.closest('.image-item');
             if (!imageItem) return;
+
+            if (dir === 'refine') {
+                const imgEl = imageItem.querySelector('img.thumbnail');
+                const filename = decodeURIComponent(imgEl?.dataset.filename || imgEl?.alt || '');
+                const list = buildRefineFileList();
+                const startIdx = list.indexOf(filename);
+                showSlideshowModal(list, startIdx >= 0 ? startIdx : 0);
+                clearTimeout(slideShowTimer);
+                return;
+            }
 
             if (dir === 'stock' && stock_name !== 'kospil') {
                 if (confirm('Delete the file ?')) {

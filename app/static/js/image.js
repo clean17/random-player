@@ -42,6 +42,203 @@ const THROTTLE_NEXT_IMG_SEC = 400
 let slideShowTimer = null;
 let slideShowImgs = [];
 let slideShowIdx = 0;
+let slideCountdownInterval = null;
+let slideStartTime = 0;
+const SLIDE_DURATION_MS = 10000;
+let slideDurationMs = SLIDE_DURATION_MS;   // 현재 슬라이드의 실효 지속시간 (비디오일 경우 영상 길이)
+let pendingMasonryScrollY = null;
+
+function _preventTouchScroll(e) { e.preventDefault(); }
+
+// masonry에 새로 렌더된 항목을 slideShowImgs에 추가 (data-index 순)
+function extendSlideShowImgs() {
+    const msr = document.getElementById('masonry');
+    if (!msr) return;
+    const existing = new Set(slideShowImgs);
+    const imgItems = Array.from(msr.querySelectorAll('img.thumbnail[data-filename]'))
+        .map(el => ({ fn: decodeURIComponent(el.dataset.filename), idx: Number(el.dataset.index) }));
+    const vidItems = Array.from(msr.querySelectorAll('video[data-index] source[data-filename]'))
+        .map(el => ({ fn: decodeURIComponent(el.dataset.filename), idx: Number(el.closest('video').dataset.index) }));
+    const newItems = imgItems.concat(vidItems)
+        .sort((a, b) => a.idx - b.idx)
+        .map(item => item.fn)
+        .filter(f => !existing.has(f));
+    if (newItems.length > 0) slideShowImgs.push(...newItems);
+}
+
+function startSlideCountdown() {
+    slideStartTime = Date.now();
+    clearInterval(slideCountdownInterval);
+    slideCountdownInterval = setInterval(() => {
+        const el = document.getElementById('slideshow-countdown');
+        if (!el) { clearInterval(slideCountdownInterval); return; }
+        const remaining = Math.max(0, (slideDurationMs - (Date.now() - slideStartTime)) / 1000);
+        el.textContent = remaining.toFixed(1) + 's';
+    }, 100);
+}
+
+function scheduleNextSlide() {
+    clearTimeout(slideShowTimer);
+    slideShowTimer = null;
+    const filename = slideShowImgs[slideShowIdx];
+    if (!filename) return;
+    const videoExts = ['mp4', 'mov', 'mkv', 'avi'];
+    const isVid = videoExts.includes(filename.split('.').pop().toLowerCase());
+
+    function advance() {
+        extendSlideShowImgs();
+        slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
+        setSlide(slideShowImgs[slideShowIdx]);
+        scheduleNextSlide();
+    }
+
+    if (isVid) {
+        const videoEl = document.getElementById('slideshow-video');
+        const applyDuration = function() {
+            const dur = videoEl ? videoEl.duration : NaN;
+            slideDurationMs = (dur && isFinite(dur) && dur > 0) ? Math.round(dur * 1000) : SLIDE_DURATION_MS;
+            startSlideCountdown();
+            slideShowTimer = setTimeout(advance, slideDurationMs);
+        };
+        if (videoEl && videoEl.readyState >= 1 && isFinite(videoEl.duration) && videoEl.duration > 0) {
+            applyDuration();
+        } else if (videoEl) {
+            let applied = false;
+            videoEl.addEventListener('loadedmetadata', function handler() {
+                if (applied) return;
+                applied = true;
+                applyDuration();
+            }, { once: true });
+            // 3초 안에 메타데이터가 안 오면 기본값으로 진행
+            setTimeout(function() {
+                if (!applied) {
+                    applied = true;
+                    applyDuration();
+                }
+            }, 3000);
+        } else {
+            slideDurationMs = SLIDE_DURATION_MS;
+            startSlideCountdown();
+            slideShowTimer = setTimeout(advance, slideDurationMs);
+        }
+    } else {
+        slideDurationMs = SLIDE_DURATION_MS;
+        startSlideCountdown();
+        slideShowTimer = setTimeout(advance, slideDurationMs);
+    }
+}
+
+function stopSlideCountdown() {
+    clearInterval(slideCountdownInterval);
+    slideCountdownInterval = null;
+    const el = document.getElementById('slideshow-countdown');
+    if (el) el.textContent = '';
+}
+
+function setSlide(filename) {
+    const imgEl = document.getElementById('slideshow-img');
+    const videoEl = document.getElementById('slideshow-video');
+    const videoSrcEl = document.getElementById('slideshow-video-source');
+    const videoExts = ['mp4', 'mov', 'mkv', 'avi'];
+    const imageBase = "https://chickchick.kr/image/images";
+    const videoBase = "/video/temp-video";
+    const enc = encodeURIComponent(filename);
+    const isVid = videoExts.includes(filename.split('.').pop().toLowerCase());
+
+    if (isVid) {
+        imgEl.style.display = "none";
+        videoEl.style.display = "block";
+        videoSrcEl.src = `${videoBase}/${enc}?dir=refine`;
+        videoEl.load();
+        videoEl.play().catch(() => {});
+    } else {
+        videoEl.pause();
+        videoEl.style.display = "none";
+        imgEl.style.display = "block";
+        imgEl.src = `${imageBase}?filename=${enc}&dir=refine`;
+    }
+
+    // 라벨 (masonry item-label과 동일 로직)
+    const labelEl = document.getElementById('slideshow-label');
+    if (labelEl) {
+        const segment = filename.split('/')[0];
+        const _i = segment.indexOf('_img_');
+        const _r = segment.indexOf('_reel_');
+        const cut = [_i, _r].filter(v => v !== -1).reduce((a, b) => Math.min(a, b), Infinity);
+        const text = cut < Infinity ? segment.slice(0, cut) : segment.replace(/\.[^.]+$/, '');
+        labelEl.textContent = text.slice(0, 40);
+    }
+
+    // 현재 인덱스
+    const indexEl = document.getElementById('slideshow-index');
+    if (indexEl) indexEl.textContent = `${slideShowIdx + 1} / ${slideShowImgs.length}`;
+
+    // masonry에서 현재 슬라이드 아이템을 화면 가운데로 스크롤 (이미지 또는 비디오)
+    // display:none 부모(#image-data)에 속한 요소는 offsetParent===null 로 제외
+    const imgMatches = Array.from(document.querySelectorAll(`img.thumbnail[data-filename="${enc}"]`));
+    const vidMatches = Array.from(document.querySelectorAll(`video source[data-filename="${enc}"]`))
+        .map(el => el.closest('video')).filter(Boolean);
+    const masonryEl = imgMatches.concat(vidMatches).find(el => el.offsetParent !== null);
+    if (masonryEl) {
+        const item = masonryEl.closest('.image-item');
+        if (item) {
+            const rect = item.getBoundingClientRect();
+            const targetY = Math.max(0, window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2));
+            pendingMasonryScrollY = targetY;
+            window.scrollTo({ top: targetY, behavior: 'instant' });
+        }
+        // 현재 data-index 기준으로 미리 렌더
+        const dataIndex = Number(masonryEl.dataset.index || 0);
+        if (dataIndex > 0 && typeof preloadAheadOfSlide === 'function') {
+            preloadAheadOfSlide(dataIndex);
+        }
+    }
+}
+
+function decrementTotalCount() {
+    const el = document.getElementById('total_count');
+    if (!el) return;
+    const n = parseInt(el.textContent, 10);
+    if (isNaN(n) || n <= 0) return;
+    el.textContent = n - 1;
+    if (n - 1 === 0) {
+        document.querySelectorAll('.pagination').forEach(p => p.remove());
+        document.querySelectorAll('.delete-button').forEach(b => b.remove());
+        const emptyState = document.getElementById('empty-state');
+        if (emptyState) emptyState.style.display = 'flex';
+    }
+}
+
+function slideShowDeleteCurrent() {
+    if (!slideShowImgs.length) return;
+    const filename = slideShowImgs[slideShowIdx];
+    const enc = encodeURIComponent(filename);
+
+    // DOM에서 찾아 즉시 제거 (현재 페이지에 있을 때만 적용)
+    const mediaEls = document.querySelectorAll(`img[data-filename="${enc}"], source[data-filename="${enc}"]`);
+    const removed = [...new Set([...mediaEls].map(el => el.closest('.image-item')).filter(Boolean))];
+    removed.forEach(item => item.remove());
+    if (removed.length) decrementTotalCount();
+    if (typeof adjustColumnsIfNeeded === 'function') adjustColumnsIfNeeded();
+
+    // API 직접 호출 (DOM 조회 성공 여부와 무관하게 항상 실행)
+    fetch('/image/move-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagepath: 'refine', filename })
+    }).catch(err => console.error('slideShowDelete:', err));
+
+    slideShowImgs.splice(slideShowIdx, 1);
+    if (!slideShowImgs.length) {
+        document.getElementById('slideshow-modal')?.querySelector('.close-modal')?.click();
+        return;
+    }
+    if (slideShowIdx >= slideShowImgs.length) slideShowIdx = slideShowImgs.length - 1;
+    clearTimeout(slideShowTimer);
+    stopSlideCountdown();
+    setSlide(slideShowImgs[slideShowIdx]);
+    scheduleNextSlide();
+}
 
 
 // 다음 이미지 함수 스로틀링
@@ -251,63 +448,48 @@ function initialImageLoad() {
     }
 }
 
-function moveImageToPreviousStep(event, imageItem) {
-    let filename = (event instanceof MouseEvent) ? event.target.alt : imageItem.querySelector('.thumbnail')?.alt;
-    if (imageItem) {
-        if (!filename) {
-            filename = imageItem.querySelector('source').dataset.filename;
-        }
-        let idx = 0;
-        if (imageItem.hasAttribute("id")) {
-            idx = imageItem.id.split('-')[1]
-        }
-
-        renderLoadingOverlay();
-        fetch(`/image/move-image`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                imagepath: 'refine',
-                filename: `${decodeURIComponent(filename)}`
-            })
-        })
-            .then(response => {
-                if (response.status === 404) {
-                    return { status: '404' };
-                }
-                return response.json();
-            })
-            .then(data => {
-                removeLoadingOverlay();
-                if (data.status === 'success' || '404') {
-                    const imageElement = (event instanceof MouseEvent) ? event.target.closest('.image-item') : imageItem;
-                    const nextImageElement = imageElement?.nextElementSibling;
-                    // const imageElement = document.getElementById(`image-${index}`);
-                    if (imageElement) {
-                        imageElement.remove();
-                        // if (nextImageElement) {
-                        //     nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        // }
-                        nextImage(nextImageElement)
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
+function moveImageToPreviousStep(imageItem) {
+    const media = imageItem.querySelector('img[data-filename], source[data-filename]');
+    let filename = media?.dataset.filename;
+    if (!filename) {
+        filename = imageItem.querySelector('.thumbnail')?.alt;
     }
+    if (!imageItem || !filename) return;
+
+    let idx = 0;
+    if (imageItem.hasAttribute("id")) {
+        idx = imageItem.id.split('-')[1];
+    }
+
+    renderLoadingOverlay();
+    fetch(`/image/move-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            imagepath: 'refine',
+            filename: decodeURIComponent(filename)
+        })
+    })
+        .then(response => response.status === 404 ? { status: '404' } : response.json())
+        .then(data => {
+            removeLoadingOverlay();
+            if (data.status === 'success' || data.status === '404') {
+                const nextImageElement = imageItem.nextElementSibling;
+                imageItem.remove();
+                nextImage(nextImageElement);
+                decrementTotalCount();
+                if (typeof adjustColumnsIfNeeded === 'function') adjustColumnsIfNeeded();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+
     isDelRunning = false;
 }
 
-function deleteItem(imageItem) {
-    moveImageToPreviousStep(null, imageItem);
-}
 
 function handelDelBtn() {
     const imageItem = getCenterImage();
-    deleteItem(imageItem);
+    moveImageToPreviousStep(imageItem);
 }
 
 
@@ -605,22 +787,11 @@ function moveStockImage(event) {
         });
 }
 
-async function fetchImage() {
+function fetchImage() {
     renderLoadingOverlay();
     const url = new URL("/image/fetch", window.location.origin);
-    if (dir !== null && dir !== undefined && dir !== "") {
-        url.searchParams.set("dir", dir);
-    }
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("이미지 요청 실패");
-
-        window.location.href = url.toString(); // 오버레이 유지한 채 이동
-    } catch (error) {
-        console.error(error);
-        removeLoadingOverlay();
-    }
+    if (dir) url.searchParams.set("dir", dir);
+    window.location.href = url.toString(); // Flask가 스캔 후 /pages로 리다이렉트
 }
 
 
@@ -686,7 +857,7 @@ function downloadAllFiles() {
 
 /******************************************  Slide Show  ****************************************/
 
-function showSlideshowModal(fileList) {
+function showSlideshowModal(fileList, startIdx = 0) {
     let modal = document.getElementById('slideshow-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -701,37 +872,40 @@ function showSlideshowModal(fileList) {
               <source id="slideshow-video-source" src="" type="video/mp4">
             </video>
             <button class="slide-next" title="다음">&#8250;</button>
+            <div id="slideshow-countdown"></div>
+            <div id="slideshow-label"></div>
+            <div id="slideshow-index"></div>
         `;
         document.body.appendChild(modal);
 
         modal.querySelector('.close-modal').onclick = () => {
-            clearInterval(slideShowTimer);
+            clearTimeout(slideShowTimer);
+            stopSlideCountdown();
             const v = modal.querySelector("#slideshow-video");
             v.pause();
             v.currentTime = 0;
             modal.style.display = "none";
-            document.body.style.overflow = '';
+            document.removeEventListener('touchmove', _preventTouchScroll);
             document.body.classList.remove('slideshow-active');
+            if (pendingMasonryScrollY !== null) {
+                window.scrollTo({ top: pendingMasonryScrollY, behavior: 'instant' });
+                pendingMasonryScrollY = null;
+            }
         };
 
         modal.querySelector('.slide-prev').onclick = () => {
             slideShowIdx = (slideShowIdx - 1 + slideShowImgs.length) % slideShowImgs.length;
-            clearInterval(slideShowTimer);
+            clearTimeout(slideShowTimer);
             setSlide(slideShowImgs[slideShowIdx]);
-            slideShowTimer = setInterval(() => {
-                slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
-                setSlide(slideShowImgs[slideShowIdx]);
-            }, 10000);
+            scheduleNextSlide();
         };
 
         modal.querySelector('.slide-next').onclick = () => {
+            extendSlideShowImgs();
             slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
-            clearInterval(slideShowTimer);
+            clearTimeout(slideShowTimer);
             setSlide(slideShowImgs[slideShowIdx]);
-            slideShowTimer = setInterval(() => {
-                slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
-                setSlide(slideShowImgs[slideShowIdx]);
-            }, 10000);
+            scheduleNextSlide();
         };
 
         // 슬라이드쇼 열려 있을 때 키보드 이벤트 전점 점유 (capture phase)
@@ -751,65 +925,27 @@ function showSlideshowModal(fileList) {
                 case 'Escape':
                     modal.querySelector('.close-modal').click();
                     break;
+                case 'Delete':
+                case '`':
+                    slideShowDeleteCurrent();
+                    break;
             }
         }, true); // capture: true → 기존 bubble 핸들러보다 먼저 실행
     }
     modal.style.display = "flex";
-    document.body.style.overflow = 'hidden';
+    document.addEventListener('touchmove', _preventTouchScroll, { passive: false });
     document.body.classList.add('slideshow-active');
 
-    const imgEl = modal.querySelector("#slideshow-img");
-    const videoEl = modal.querySelector("#slideshow-video");
-    const videoSrcEl = modal.querySelector("#slideshow-video-source");
-
-    // 확장자 판별용
-    const videoExts = ['mp4', 'mov', 'mkv', 'avi']; // 필요시 webm 추가
-    const imageBase = "https://chickchick.kr/image/images";
-    const videoBase = "/video/temp-video"; // 템플릿에서 쓰던 경로와 맞추기
-
-    function isVideo(filename) {
-        const ext = filename.split('.').pop().toLowerCase();
-        return videoExts.includes(ext);
-    }
-
-    function setSlide(filename) {
-        const enc = encodeURIComponent(filename);
-
-        if (isVideo(filename)) {
-            // IMG 숨기고 VIDEO 표시
-            imgEl.style.display = "none";
-            videoEl.style.display = "block";
-
-            // 영상 src 세팅 (템플릿과 동일하게 dir/selected_dir를 필요하면 추가)
-            // 기존 렌더링: /video/temp-video/{{ image }}?dir={{ dir }}&selected_dir={{ selected_dir }}
-            videoSrcEl.src = `${videoBase}/${enc}?dir=refine`;
-            videoEl.load();
-            videoEl.play().catch(()=>{ /* 자동재생 막히면 무시 */ });
-
-        } else {
-            // VIDEO 숨기고 IMG 표시
-            videoEl.pause();
-            videoEl.style.display = "none";
-            imgEl.style.display = "block";
-
-            imgEl.src = `${imageBase}?filename=${enc}&dir=refine`;
-        }
-    }
-
     // 슬라이드 쇼 상태 초기화
-    slideShowIdx = 0;
+    slideShowIdx = Math.max(0, Math.min(startIdx, fileList.length - 1));
     slideShowImgs = fileList;
 
     // 첫 장 세팅
-    setSlide(slideShowImgs[0]);
+    setSlide(slideShowImgs[slideShowIdx]);
 
-    // 기존 타이머 종료
-    if (slideShowTimer) clearInterval(slideShowTimer);
-
-    slideShowTimer = setInterval(() => {
-        slideShowIdx = (slideShowIdx + 1) % slideShowImgs.length;
-        setSlide(slideShowImgs[slideShowIdx]);
-    }, 10000);
+    // 기존 타이머 종료 후 다음 슬라이드 예약 (비디오면 영상 길이만큼 대기)
+    if (slideShowTimer) clearTimeout(slideShowTimer);
+    scheduleNextSlide();
 }
 
 async function slideShow() {

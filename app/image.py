@@ -66,6 +66,7 @@ DIR_CONFIG: Final = {
     'image2': DirConfig(IMAGE_DIR2, ig_image_arr,   'image_list_masonry.html', 'ig'),
     'cos':    DirConfig(COS_DIR,    cos_image_arr,  'image_list_masonry.html'),
     'move':   DirConfig(MOVE_DIR,   moved_image_arr,'image_list_masonry.html'),
+    'refine': DirConfig(REF_IMAGE_DIR, refined_image_arr, 'image_list_masonry.html'),
 }
 
 
@@ -92,6 +93,7 @@ def initialize_shuffle_images():
     random.seed(time.time())
     random.shuffle(images)
     ref_shuffled_images = images
+    refined_image_arr[:] = images
 
 
 # 최초에는 정렬
@@ -401,15 +403,9 @@ def image_list():
         images_length = len(source_arr)
         template_html = cfg.template
 
-    elif dir == 'refine':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, REF_IMAGE_DIR, refined_image_arr, 'image_list_masonry.html'
-        )
-
-        isSlide = request.args.get('slide', '')
-        if isSlide == 'y':
-            images, page = get_images(0, images_length, page, REF_IMAGE_DIR)
-            return jsonify({"slide_show_images": images})
+        if dir == 'refine' and request.args.get('slide') == 'y':
+            slide_images, _ = get_images(0, images_length, page, REF_IMAGE_DIR)
+            return jsonify({"slide_show_images": slide_images})
 
     elif dir == 'stock':
         market = request.args.get('market') or ''
@@ -442,19 +438,12 @@ def fetch_image_list():
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
     if dir in DIR_CONFIG:
-        images, page, start, images_length, template_html = resolve_dir_page(dir, page)
+        resolve_dir_page(dir, page)
         if search:
-            cfg = DIR_CONFIG[dir]
-            source_arr = [f for f in cfg.image_arr if f.replace('\\', '/').startswith(search)]
-            images_length = len(source_arr)
-            images = source_arr[start:start + LIMIT_PAGE_NUM]
+            pass  # 검색 필터는 /pages에서 처리
 
-    total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
-
-    return render_template(template_html, images=images, page=page,
-                           total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, subdir_list=subdir_list,
-                           search=search, version=int(time.time()))
+    return redirect(url_for('image.image_list', dir=dir, page=page,
+                            selected_dir=selected_dir, search=search or None))
 
 
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
