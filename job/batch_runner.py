@@ -258,11 +258,11 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-0-1) 키움 계좌 총자산 현황 로그 (장중 5분마다)
+    # 2-0-1) 키움 계좌 총자산 현황 로그 (장중 10분마다)
     scheduler.add_job(
         log_kiwoom_account_summary,
-        trigger=IntervalTrigger(minutes=5),
-        id="kiwoom_account_summary_5m",
+        trigger=IntervalTrigger(minutes=10),
+        id="kiwoom_account_summary_10m",
         executor="io",
         replace_existing=True,
     )

@@ -6,14 +6,21 @@ from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
-    update_low_stock_graph, update_interest_stock_close_correctly_list
+    update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
     request_stock_volume_and_amount, request_stock_category
 from job.batch_runner import predict_stock_graph
+from config.config import settings
+from job.kiwoom_api import get_holdings_and_summary, get_account_credentials, get_current_price_and_name
+from job.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell
 
 stock = Blueprint('stocks', __name__)
+
+
+def _is_guest():
+    return hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']
 
 
 
@@ -277,6 +284,104 @@ def get_favorite_stocks_data_schedule():
 
     stocks = get_favorite_stocks_info_api(None)
     return stocks
+
+
+# ── 키움 모의투자 대시보드 (내 종목 탭) ──────────────────────────────────────
+
+@stock.route("/kiwoom/lookup-code", methods=["GET"])
+@login_required
+def get_kiwoom_lookup_code():
+    name = (request.args.get("name") or "").strip()
+    if not name:
+        return jsonify({"matches": []})
+    try:
+        matches = find_stocks_by_name_prefix(name)
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"matches": matches})
+
+
+@stock.route("/kiwoom/price", methods=["GET"])
+@login_required
+def get_kiwoom_price():
+    stk_cd = (request.args.get("stk_cd") or "").strip()
+    if not stk_cd:
+        return {"status": "error", "message": "stk_cd is required"}, 400
+    try:
+        price, stk_nm = get_current_price_and_name(stk_cd)
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"stk_cd": stk_cd, "stk_nm": stk_nm, "price": price})
+
+
+@stock.route("/kiwoom/holdings", methods=["GET"])
+@login_required
+def get_kiwoom_holdings():
+    acnt_no, acnt_pwd = get_account_credentials()
+    if not (acnt_no and acnt_pwd):
+        return {"status": "error", "message": "계좌 정보가 설정되지 않음"}, 500
+    try:
+        holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd)
+        asset_pnl = get_asset_based_pnl(summary['total_asset'])
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"holdings": holdings, "summary": summary, "asset_pnl": asset_pnl})
+
+
+@stock.route("/kiwoom/history", methods=["GET"])
+@login_required
+def get_kiwoom_history():
+    limit = request.args.get("limit", 200, type=int)
+    try:
+        history = get_trade_history(limit)
+        pnl_summary = get_pnl_summary()
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"history": history, "pnl_summary": pnl_summary})
+
+
+@stock.route("/kiwoom/buy", methods=["POST"])
+@login_required
+def post_kiwoom_buy():
+    if _is_guest():
+        return {"status": "error", "message": "게스트는 매수할 수 없습니다"}, 403
+
+    data = request.get_json() or {}
+    stk_cd = data.get("stk_cd")
+    qty = data.get("qty")
+    if not stk_cd:
+        return {"status": "error", "message": "stk_cd is required"}, 400
+
+    try:
+        result = manual_buy(stk_cd, int(qty) if qty else None)
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"status": "success", "result": result})
+
+
+@stock.route("/kiwoom/sell", methods=["POST"])
+@login_required
+def post_kiwoom_sell():
+    if _is_guest():
+        return {"status": "error", "message": "게스트는 매도할 수 없습니다"}, 403
+
+    data = request.get_json() or {}
+    stk_cd = data.get("stk_cd")
+    qty = data.get("qty")
+    if not stk_cd or not qty:
+        return {"status": "error", "message": "stk_cd, qty is required"}, 400
+
+    try:
+        result = manual_sell(stk_cd, int(qty))
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"status": "success", "result": result})
 
 
 

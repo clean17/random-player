@@ -22,8 +22,8 @@ import datetime
 from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
-from job.kiwoom_api import get_holdings, sell_market, buy_market, get_current_price, dump_holdings_raw, \
-    get_account_credentials, get_account_summary
+from job.kiwoom_api import get_holdings, sell_market, buy_market, get_current_price, get_current_price_and_name, \
+    dump_holdings_raw, get_account_credentials, get_account_summary
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -57,7 +57,8 @@ TRAIL_GAP = 0.04
 MIN_PROFIT_FLOOR = 0.02
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_state.json')
-TRADES_FILE = os.path.join(_LOG_DIR, 'trades.jsonl')  # 일별/주별/월별 집계, 이력 조회용 구조화 기록
+TRADES_FILE = os.path.join(_LOG_DIR, 'trades.jsonl')  # 실현손익 이력(승률/손익비 계산용) — 기록 누락 가능성 있음
+BASELINE_FILE = os.path.join(_LOG_DIR, 'asset_baseline.json')  # 일/주/월 시작 시점 총자산 스냅샷
 
 # KIWOOM_ENV(mock/real)에 맞는 계좌번호 쌍을 가져옴 — 모의/실전 계좌번호가 다르므로 직접 os.environ으로 읽지 않음
 ACNT_NO, ACNT_PWD = get_account_credentials()
@@ -125,8 +126,32 @@ def get_trade_history(limit: int = 200) -> List[Dict]:
     return events[:limit]
 
 
+def _iter_sell_events() -> List[Dict]:
+    """trades.jsonl에서 매도(side='sell') 이벤트만 읽어 (날짜 파싱된) dict 리스트로 반환."""
+    events = []
+    if not os.path.exists(TRADES_FILE):
+        return events
+    with open(TRADES_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if ev.get('side') != 'sell':
+                continue
+            try:
+                ev['_date'] = datetime.datetime.fromisoformat(ev['ts']).date()
+            except (KeyError, ValueError):
+                continue
+            events.append(ev)
+    return events
+
+
 def get_pnl_summary() -> Dict:
-    """일별/주별/월별 실현손익 합계·수익률 (매도 이벤트 기준)."""
+    """일별/주별/월별/전체 실현손익 합계·수익률 (매도 이벤트 기준)."""
     today = datetime.date.today()
     week_start = today - datetime.timedelta(days=today.weekday())
     month_start = today.replace(day=1)
@@ -135,39 +160,103 @@ def get_pnl_summary() -> Dict:
         'daily': {'pnl': 0.0, 'cost': 0.0},
         'weekly': {'pnl': 0.0, 'cost': 0.0},
         'monthly': {'pnl': 0.0, 'cost': 0.0},
+        'all': {'pnl': 0.0, 'cost': 0.0},
     }
 
-    if os.path.exists(TRADES_FILE):
-        with open(TRADES_FILE, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    ev = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if ev.get('side') != 'sell':
-                    continue
-                try:
-                    ev_date = datetime.datetime.fromisoformat(ev['ts']).date()
-                except (KeyError, ValueError):
-                    continue
-                pnl = ev.get('pnl', 0.0)
-                cost = ev.get('avg_price', 0.0) * ev.get('qty', 0)
-                if ev_date == today:
-                    buckets['daily']['pnl'] += pnl
-                    buckets['daily']['cost'] += cost
-                if ev_date >= week_start:
-                    buckets['weekly']['pnl'] += pnl
-                    buckets['weekly']['cost'] += cost
-                if ev_date >= month_start:
-                    buckets['monthly']['pnl'] += pnl
-                    buckets['monthly']['cost'] += cost
+    for ev in _iter_sell_events():
+        pnl = ev.get('pnl', 0.0)
+        cost = ev.get('avg_price', 0.0) * ev.get('qty', 0)
+        ev_date = ev['_date']
+        buckets['all']['pnl'] += pnl
+        buckets['all']['cost'] += cost
+        if ev_date == today:
+            buckets['daily']['pnl'] += pnl
+            buckets['daily']['cost'] += cost
+        if ev_date >= week_start:
+            buckets['weekly']['pnl'] += pnl
+            buckets['weekly']['cost'] += cost
+        if ev_date >= month_start:
+            buckets['monthly']['pnl'] += pnl
+            buckets['monthly']['cost'] += cost
 
     return {
         key: {'pnl': b['pnl'], 'rate': (b['pnl'] / b['cost']) if b['cost'] > 0 else 0.0}
         for key, b in buckets.items()
+    }
+
+
+def get_win_loss_ratio() -> Optional[float]:
+    """손익비(Risk-Reward Ratio) = 실현 평균이익 / 실현 평균손실(절대값). 매도 이력 전체 기준.
+    손실 거래가 하나도 없으면 None(무한대 취급)."""
+    wins = [ev['pnl'] for ev in _iter_sell_events() if ev.get('pnl', 0.0) > 0]
+    losses = [-ev['pnl'] for ev in _iter_sell_events() if ev.get('pnl', 0.0) < 0]
+    if not losses:
+        return None
+    if not wins:
+        return 0.0
+    avg_win = sum(wins) / len(wins)
+    avg_loss = sum(losses) / len(losses)
+    return avg_win / avg_loss
+
+
+def _load_baseline() -> Dict:
+    if not os.path.exists(BASELINE_FILE):
+        return {}
+    try:
+        with open(BASELINE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_baseline(data: Dict):
+    with open(BASELINE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _ensure_baseline(current_total_asset: float) -> Dict:
+    """일/주/월이 바뀌면 그 시점 총자산을 새 기준선으로 기록. 실현손익 이력 누락과 무관하게
+    "실제 계좌 총자산이 얼마나 변했는지"를 정확히 측정하기 위한 기준값."""
+    today = datetime.date.today()
+    week_start = today - datetime.timedelta(days=today.weekday())
+    month_key = today.strftime('%Y-%m')
+
+    data = _load_baseline()
+    changed = False
+
+    if data.get('daily_date') != today.isoformat():
+        data['daily_date'] = today.isoformat()
+        data['daily_start'] = current_total_asset
+        changed = True
+    if data.get('weekly_date') != week_start.isoformat():
+        data['weekly_date'] = week_start.isoformat()
+        data['weekly_start'] = current_total_asset
+        changed = True
+    if data.get('monthly_date') != month_key:
+        data['monthly_date'] = month_key
+        data['monthly_start'] = current_total_asset
+        changed = True
+
+    if changed:
+        _save_baseline(data)
+    return data
+
+
+def get_asset_based_pnl(current_total_asset: float) -> Dict:
+    """실제 총자산 변동 기준 일/주/월 손익. 거래 누락·수수료·세금과 무관하게 항상 정확함
+    (trades.jsonl 기반 get_pnl_summary()의 실현손익 집계는 기록되지 않은 거래가 있으면 틀릴 수 있음)."""
+    baseline = _ensure_baseline(current_total_asset)
+
+    def calc(start):
+        start = start if start else current_total_asset
+        pnl = current_total_asset - start
+        rate = (pnl / start) if start else 0.0
+        return {'pnl': pnl, 'rate': rate}
+
+    return {
+        'daily': calc(baseline.get('daily_start')),
+        'weekly': calc(baseline.get('weekly_start')),
+        'monthly': calc(baseline.get('monthly_start')),
     }
 
 
@@ -203,6 +292,10 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
     if pos_state['remaining_qty'] <= 0:
         pos_state['exited'] = True
         return pos_state
+
+    # 이전 버전(단일 목표가 target_hit) 상태 파일과의 호환: target_idx가 없으면 마이그레이션
+    if 'target_idx' not in pos_state:
+        pos_state['target_idx'] = 1 if pos_state.get('target_hit') else 0
 
     # 1) 손절 — 다른 조건과 무관하게 잔여 수량 전량 즉시 청산
     if rate <= STOP_LOSS_RATE:
@@ -291,9 +384,20 @@ def log_account_summary():
         _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
         return
     s = get_account_summary(ACNT_NO, ACNT_PWD)
+
+    # 실제 총자산 변동 기준(거래 기록 누락·수수료·세금과 무관하게 항상 정확함)
+    asset_pnl = get_asset_based_pnl(s['total_asset'])
+
+    ratio = get_win_loss_ratio()
+    ratio_str = f'{ratio:.2f}' if ratio is not None else '손실없음'
+
     _log.info(
         f'[계좌현황] 총자산={s["total_asset"]:,.0f}원 매입={s["tot_pur_amt"]:,.0f}원 '
-        f'평가={s["tot_evlt_amt"]:,.0f}원 손익={s["tot_evlt_pl"]:+,.0f}원 수익률={s["tot_prft_rt"]:+.2%}'
+        f'평가={s["tot_evlt_amt"]:,.0f}원 손익={s["tot_evlt_pl"]:+,.0f}원 수익률={s["tot_prft_rt"]:+.2%} '
+        f'오늘손익={asset_pnl["daily"]["pnl"]:+,.0f}원({asset_pnl["daily"]["rate"]:+.2%}) '
+        f'주간손익={asset_pnl["weekly"]["pnl"]:+,.0f}원({asset_pnl["weekly"]["rate"]:+.2%}) '
+        f'월간손익={asset_pnl["monthly"]["pnl"]:+,.0f}원({asset_pnl["monthly"]["rate"]:+.2%}) '
+        f'손익비={ratio_str}'
     )
 
 
@@ -303,7 +407,7 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None):
         _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
         return
 
-    price = get_current_price(stk_cd)
+    price, stk_nm = get_current_price_and_name(stk_cd)
     if price <= 0:
         _log.error(f'[수동매수] {stk_cd} 현재가 조회 실패')
         return
@@ -314,12 +418,12 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None):
         qty = int(cash // price)
 
     if qty <= 0:
-        _log.error(f'[수동매수] {stk_cd} 현재가={price:,}원, 매수 가능 수량 0')
+        _log.error(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원, 매수 가능 수량 0')
         return
 
     result = buy_market(stk_cd, qty)
-    _log.info(f'[수동매수] {stk_cd} 현재가={price:,}원 {qty}주 → {result}')
-    _record_trade(stk_cd, None, 'buy', 'manual', qty, price, price, 0.0)
+    _log.info(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}')
+    _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0)
     return result
 
 

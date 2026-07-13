@@ -84,6 +84,21 @@ def get_stock_list(nation: str, conn=None):
     return rows
 
 
+# 종목명 부분 일치로 종목코드 조회 (모의투자 매수 입력창에서 한글 종목명 -> 코드 변환용)
+@db_transaction
+def find_stocks_by_name_prefix(name_prefix: str, conn=None) -> List[dict]:
+    sql = """
+    SELECT stock_code, stock_name
+    FROM stocks
+    WHERE stock_name LIKE %s
+    ORDER BY id
+    LIMIT 20;
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(sql, (f"%{name_prefix}%",))
+        return cur.fetchall()
+
+
 # 종가를 갱신할 때 조회
 @db_transaction
 def get_interest_stock_list(conn=None):

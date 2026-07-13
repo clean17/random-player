@@ -10,6 +10,203 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/interest_stocks.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/carousel.css?v={{ version }}">
+    <style>
+        .mystocks-summary {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .mystocks-stat {
+            flex: 1 1 0;
+            min-width: 0;
+            background: #f8f8f8;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+        }
+        .mystocks-stat .label {
+            font-size: 11px;
+            color: #888;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .mystocks-stat .value {
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #ms-total-asset, #ms-cash, #ms-evlt-amt {
+            font-size: 20px;
+        }
+        .value-sub {
+            font-size: 11px;
+            font-weight: 500;
+            color: #888;
+        }
+        .mystocks-pnl-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+        }
+        .mystocks-pnl-line .period {
+            font-size: 11px;
+            color: #888;
+            flex: 0 0 auto;
+        }
+        .mystocks-pnl-line .value {
+            font-size: 13px;
+            font-weight: 600;
+        }
+        @media (max-width: 480px) {
+            .mystocks-summary {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+            }
+            .mystocks-stat {
+                min-width: 0;
+            }
+            #mystocksPnl {
+                grid-template-columns: 1fr;
+            }
+        }
+        .mystocks-buy-row-wrap {
+            position: relative;
+            margin-bottom: 14px;
+        }
+        .mystocks-buy-price-preview {
+            font-size: 13px;
+            color: #555;
+            margin-top: 4px;
+            min-height: 18px;
+        }
+        .mystocks-buy-row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 6px;
+        }
+        .mystocks-code-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 20;
+            margin: 2px 0 0;
+            padding: 4px;
+            list-style: none;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-height: 220px;
+            overflow-y: auto;
+        }
+        .mystocks-code-suggestions li {
+            padding: 8px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .mystocks-code-suggestions li:hover { background: #f2f2f2; }
+        .mystocks-code-suggestions .code { color: #888; font-size: 12px; }
+        .mystocks-buy-row input {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            min-width: 0;
+        }
+        .mystocks-buy-row input#ms-buy-code { flex: 1 1 0; }
+        .mystocks-buy-row input#ms-buy-qty { flex: 1 1 0; }
+        .mystocks-buy-row button { flex: 0 0 auto; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+        .ms-positive { color: #d32f2f; }
+        .ms-negative { color: #1565c0; }
+        /* interest_stocks.css의 .table td { color: #111827 }가 특이도(요소+클래스)로 이겨버려서 별도 지정 */
+        .table td.ms-positive { color: #d32f2f; }
+        .table td.ms-negative { color: #1565c0; }
+
+        .mystocks-subtitle {
+            font-size: 16px;
+            font-weight: 700;
+            margin: 24px 0 10px;
+        }
+
+        .mystocks-pie-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding: 10px 12px;
+            background: #f8f8f8;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+        .mystocks-pie {
+            position: relative;
+            flex: 0 0 auto;
+            width: 130px;
+            height: 130px;
+            border-radius: 50%;
+            background: #eee;
+        }
+        .mystocks-pie::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 30%;
+            height: 30%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: #f8f8f8; /* .mystocks-pie-wrap 배경과 동일하게 맞춰 도넛 구멍처럼 보이도록 */
+        }
+        .mystocks-pie-legend {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            flex: 0 1 280px;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .mystocks-pie-legend li {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            flex-wrap: nowrap;
+        }
+        .mystocks-pie-legend .name {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .mystocks-pie-legend .swatch {
+            flex: 0 0 auto;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+        .mystocks-pie-legend .pct {
+            flex: 0 0 auto;
+            white-space: nowrap;
+            color: #666;
+            flex: 0 0 auto;
+        }
+    </style>
 </head>
 <body class="page-stocks">
 <div class="top-bar" data-auto-hide="true">
@@ -42,6 +239,7 @@
                   d="M12 2.6c.4 0 .8.2 1 .6l2.4 4.9c.2.4.6.6 1 .7l5.4.8c.9.1 1.3 1.2.7 1.8l-3.9 3.8c-.3.3-.4.7-.3 1.1l.9 5.4c.2.9-.8 1.6-1.6 1.2l-4.8-2.5c-.4-.2-.8-.2-1.2 0L6.9 22c-.8.4-1.8-.3-1.6-1.2l.9-5.4c.1-.4-.1-.8-.3-1.1L2 11.5c-.6-.6-.2-1.7.7-1.8l5.4-.8c.4-.1.8-.3 1-.7l2.4-4.9c.2-.4.6-.6 1-.6z"/>
             </svg>
         </button>
+        <button class="tab-btn" data-target="#tab-mystocks">내 계좌</button>
 <!--        <button class="tab-btn" data-target="#tab-favorite2">-->
 <!--            <svg class="fav-icon fav-icon-heart" viewBox="0 0 24 24" aria-hidden="true" data-favorited="true">-->
 <!--            <path fill="currentColor"-->
@@ -57,7 +255,7 @@
         </select>
     </div>
 
-    <h3 class="section-title">검색 결과
+    <h3 class="section-title" id="searchResultsHeader">검색 결과
         <span class="badge" id="count">0건</span>
         <div class="view-toggle" role="tablist" aria-label="보기 전환">
             <button type="button" class="view-btn is-active" data-view="cards"
@@ -187,11 +385,94 @@
     <section id="tab-favorite" class="tab-panel" style="display:none;">
         <div class="table-scroller"></div>
     </section>
+
+    <!-- 탭 6: 내 종목 (키움 모의투자 대시보드) -->
+    <section id="tab-mystocks" class="tab-panel" style="display:none;">
+        <div class="mystocks-summary" id="mystocksSummary">
+            <div class="mystocks-stat"><span class="label">총자산</span><span class="value" id="ms-total-asset">-</span></div>
+            <div class="mystocks-stat"><span class="label">보유 현금</span><span class="value" id="ms-cash">-</span></div>
+            <div class="mystocks-stat">
+                <span class="label">평가</span>
+                <span class="value" id="ms-evlt-amt">-</span>
+                <span class="value value-sub" id="ms-evlt-pl">-</span>
+            </div>
+            <div class="mystocks-stat">
+                <span class="label">거래 수익</span>
+                <div class="mystocks-pnl-line"><span class="period">일</span><span class="value" id="ms-pnl-daily">-</span></div>
+                <div class="mystocks-pnl-line"><span class="period">주</span><span class="value" id="ms-pnl-weekly">-</span></div>
+                <div class="mystocks-pnl-line"><span class="period">월</span><span class="value" id="ms-pnl-monthly">-</span></div>
+            </div>
+        </div>
+
+        <!--<div class="mystocks-summary" id="mystocksPnl">
+            <div class="mystocks-stat">
+                <span class="label">거래 수익</span>
+                <div class="mystocks-pnl-line"><span class="period">일</span><span class="value" id="ms-pnl-daily">-</span></div>
+                <div class="mystocks-pnl-line"><span class="period">주</span><span class="value" id="ms-pnl-weekly">-</span></div>
+                <div class="mystocks-pnl-line"><span class="period">월</span><span class="value" id="ms-pnl-monthly">-</span></div>
+            </div>
+        </div>-->
+
+        <div class="mystocks-pie-wrap" id="ms-pie-wrap" style="display:none;">
+            <div class="mystocks-pie" id="ms-pie-chart"></div>
+            <ul class="mystocks-pie-legend" id="ms-pie-legend"></ul>
+        </div>
+
+        {% if current_user.get_id() != config.GUEST_USERNAME %}
+        <div class="mystocks-buy-row-wrap">
+            <div class="mystocks-buy-row">
+                <input type="text" id="ms-buy-code" placeholder="종목명/코드" autocomplete="off">
+                <input type="number" id="ms-buy-qty" placeholder="수량(생략시 가용현금 전액)" min="1">
+                <button type="button" class="btn btn-main" id="ms-buy-btn">매수</button>
+            </div>
+            <div class="mystocks-buy-price-preview" id="ms-buy-price-preview"></div>
+            <ul class="mystocks-code-suggestions" id="ms-buy-code-suggestions" style="display:none;"></ul>
+        </div>
+        {% endif %}
+
+        <h3 class="mystocks-subtitle">종목 상세</h3>
+        <div class="table-scroller">
+            <table class="table" id="table-mystocks-holdings">
+                <thead>
+                <tr>
+                    <th>종목명</th>
+                    <th class="right">매수가</th>
+                    <th class="right">현재가</th>
+                    <th class="right">수익률</th>
+                    <th class="right">수량</th>
+                    {% if current_user.get_id() != config.GUEST_USERNAME %}
+                    <th>액션</th>
+                    {% endif %}
+                </tr>
+                </thead>
+                <tbody><tr><td colspan="6" class="empty">불러오는 중...</td></tr></tbody>
+            </table>
+        </div>
+
+        <h3 class="mystocks-subtitle">거래 이력</h3>
+        <div class="table-scroller">
+            <table class="table" id="table-mystocks-history">
+                <thead>
+                <tr>
+                    <th>시간</th>
+                    <th>종목명</th>
+                    <th>구분</th>
+                    <th>사유</th>
+                    <th class="right">수량</th>
+                    <th class="right">가격</th>
+                    <th class="right">손익</th>
+                </tr>
+                </thead>
+                <tbody><tr><td colspan="7" class="empty">불러오는 중...</td></tr></tbody>
+            </table>
+        </div>
+    </section>
 </div>
 
 <script>
     let timer;
     let timer2;
+    let msTimer;
 
     const p = new Set();
     const s = new Set();
@@ -221,6 +502,16 @@
         ruleFilterEl.style.display = (tabId === 'tab-low') ? '' : 'none';
         if (tabId === 'tab-low') ruleFilterEl.value = ruleFilterEl.value || 'low_v2';
         else ruleFilterEl.value = '';
+
+        const isMyStocks = (tabId === 'tab-mystocks');
+
+        // '내 종목' 탭은 날짜 검색이 필요 없으므로 달력 숨김
+        startDateInputEl.style.display = isMyStocks ? 'none' : '';
+        if (isMyStocks) endDateInputEl.style.display = 'none';
+
+        // '내 종목' 탭은 검색 결과 카운트/보기전환 헤더가 의미 없으므로 숨김
+        const searchHeader = document.getElementById('searchResultsHeader');
+        if (searchHeader) searchHeader.style.display = isMyStocks ? 'none' : '';
     }
 
     // 탭 전환
@@ -232,15 +523,31 @@
             const target = document.querySelector(btn.dataset.target);
             if (target) target.style.display = 'block';
             updateTabExtras(target.id);
-            if (target.id === 'tab-summary'||target.id === 'tab-favorite') {
+            if (target.id === 'tab-mystocks') {
+                loadMyStocksData();
+                msStartTimer();
+            } else if (target.id === 'tab-summary'||target.id === 'tab-favorite') {
+                msStopTimer();
                 setDefaultDateToday(6, startDateInputEl);
                 loadData()
             } else {
+                msStopTimer();
                 setDefaultDateToday(0, startDateInputEl);
                 loadData()
             }
         });
     });
+
+    // '내 계좌' 탭이 활성화되어 있는 동안만 3초마다 자동 새로고침 (탭 전환 시 정지)
+    // 주기적 새로고침은 로딩 오버레이 없이 조용히 갱신 (화면 깜빡임 방지)
+    function msStartTimer() {
+        if (msTimer) clearInterval(msTimer);
+        msTimer = setInterval(() => loadMyStocksData(false), 3000);
+    }
+    function msStopTimer() {
+        if (msTimer) clearInterval(msTimer);
+        msTimer = null;
+    }
 
     ruleFilterEl.addEventListener('change', loadData);
 
@@ -506,6 +813,359 @@
         document.getElementById('count').textContent = `${rows.length}건`;
         bindImageToggles(document.getElementById('table-low'));
     }
+
+
+    // ── 내 종목 (키움 모의투자 대시보드) ──────────────────────────────────
+    const isGuestUser = {{ 'true' if current_user.get_id() == config.GUEST_USERNAME else 'false' }};
+    const MS_REASON_LABEL = { stop_loss: '손절', trailing: '트레일링', target: '목표가', manual: '수동' };
+
+    function msFmtWon(n) {
+        if (n == null || !isFinite(Number(n))) return '-';
+        return Math.round(Number(n)).toLocaleString('ko-KR') + '원';
+    }
+    function msFmtPct(n) {
+        if (n == null || !isFinite(Number(n))) return '-';
+        const v = Number(n) * 100;
+        return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    }
+    function msPnlClass(n) {
+        const v = Number(n);
+        return v > 0 ? 'ms-positive' : (v < 0 ? 'ms-negative' : '');
+    }
+
+    function renderMyStocksSummary(summary) {
+        document.getElementById('ms-total-asset').textContent = msFmtWon(summary.total_asset);
+        document.getElementById('ms-cash').textContent = msFmtWon(summary.total_asset - summary.tot_evlt_amt);
+
+        document.getElementById('ms-evlt-amt').textContent = msFmtWon(summary.tot_evlt_amt);
+
+        const pnl = summary.tot_evlt_pl;
+        const evltPlEl = document.getElementById('ms-evlt-pl');
+        evltPlEl.textContent = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)} (${msFmtPct(summary.tot_prft_rt)})`;
+        evltPlEl.className = 'value value-sub ' + msPnlClass(pnl);
+    }
+
+    function renderMyStocksPnl(pnlSummary) {
+        ['daily', 'weekly', 'monthly'].forEach(key => {
+            const el = document.getElementById(`ms-pnl-${key}`);
+            const b = (pnlSummary && pnlSummary[key]) || { pnl: 0, rate: 0 };
+            el.textContent = `${msFmtWon(b.pnl)} (${msFmtPct(b.rate)})`;
+            el.className = 'value ' + msPnlClass(b.pnl);
+        });
+    }
+
+    const MS_PIE_COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
+                           '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
+
+    function renderMyStocksPieChart(holdings) {
+        const wrap = document.getElementById('ms-pie-wrap');
+        const pie = document.getElementById('ms-pie-chart');
+        const legend = document.getElementById('ms-pie-legend');
+
+        const values = (holdings || []).map(h => ({
+            name: h.stk_nm ? `${h.stk_nm}(${h.stk_cd})` : h.stk_cd,
+            value: Math.max(0, Number(h.cur_price || 0) * Number(h.qty || 0)),
+        })).filter(v => v.value > 0).sort((a, b) => b.value - a.value);
+
+        const total = values.reduce((sum, v) => sum + v.value, 0);
+        if (!values.length || total <= 0) {
+            wrap.style.display = 'none';
+            return;
+        }
+        wrap.style.display = 'flex';
+
+        let acc = 0;
+        const stops = values.map((v, i) => {
+            const color = MS_PIE_COLORS[i % MS_PIE_COLORS.length];
+            const start = (acc / total) * 100;
+            acc += v.value;
+            const end = (acc / total) * 100;
+            return `${color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+        });
+        pie.style.background = `conic-gradient(${stops.join(', ')})`;
+
+        legend.innerHTML = values.map((v, i) => {
+            const color = MS_PIE_COLORS[i % MS_PIE_COLORS.length];
+            const pct = (v.value / total * 100).toFixed(1);
+            return `<li><span class="swatch" style="background:${color}"></span><span class="name">${v.name}</span><span class="pct">${msFmtWon(v.value)} (${pct}%)</span></li>`;
+        }).join('');
+    }
+
+    function renderMyStocksHoldings(holdings) {
+        const table = document.getElementById('table-mystocks-holdings');
+        const tbody = table.querySelector('tbody');
+        const thCount = table.querySelectorAll('thead tr th').length;
+        if (!holdings || !holdings.length) {
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">보유 종목이 없어요</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = holdings.map(h => {
+            const pnl = (Number(h.cur_price) - Number(h.avg_price)) * Number(h.qty || 0);
+            const pnlText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)}(${msFmtPct(h.profit_rate)})`;
+            return `
+        <tr>
+          <td>${h.stk_nm ?? ''}<br>(${h.stk_cd ?? ''})</td>
+          <td class="right">${msFmtWon(h.avg_price)}</td>
+          <td class="right ${msPnlClass(h.profit_rate)}">${msFmtWon(h.cur_price)}</td>
+          <td class="right ${msPnlClass(h.profit_rate)}">${pnlText}</td>
+          <td class="right">${h.qty ?? 0}주</td>
+          ${isGuestUser ? '' : `<td>
+            <button type="button" class="btn btn-secondary ms-add-buy" data-stk-cd="${h.stk_cd}" data-stk-nm="${h.stk_nm ?? ''}">추가매수</button>
+            <button type="button" class="btn btn-secondary ms-sell" data-stk-cd="${h.stk_cd}" data-stk-nm="${h.stk_nm ?? ''}" data-qty="${h.qty}">매도</button>
+          </td>`}
+        </tr>`;
+        }).join('');
+    }
+
+    function renderMyStocksHistory(history) {
+        const table = document.getElementById('table-mystocks-history');
+        const tbody = table.querySelector('tbody');
+        const thCount = table.querySelectorAll('thead tr th').length;
+        if (!history || !history.length) {
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">거래 이력이 없어요</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = history.map(ev => {
+            let pnlText = '-';
+            let pnlClass = '';
+            if (ev.side === 'sell') {
+                const cost = Number(ev.avg_price || 0) * Number(ev.qty || 0);
+                const rate = cost > 0 ? Number(ev.pnl || 0) / cost : 0;
+                pnlText = `${msFmtWon(ev.pnl)} (${msFmtPct(rate)})`;
+                pnlClass = msPnlClass(ev.pnl);
+            }
+            return `
+        <tr>
+          <td>${(ev.ts || '').replace('T', ' ')}</td>
+          <td>${ev.stk_nm ?? ''}(${ev.stk_cd ?? ''})</td>
+          <td>${ev.side === 'buy' ? '매수' : '매도'}</td>
+          <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}</td>
+          <td class="right">${ev.qty ?? 0}주</td>
+          <td class="right">${msFmtWon(ev.price)}</td>
+          <td class="right ${pnlClass}">${pnlText}</td>
+        </tr>`;
+        }).join('');
+    }
+
+    async function loadMyStocksData(showOverlay = true) {
+        if (showOverlay) renderLoadingOverlay();
+        try {
+            const [holdingsRes, historyRes] = await Promise.all([
+                fetch('/stocks/kiwoom/holdings'),
+                fetch('/stocks/kiwoom/history?limit=100'),
+            ]);
+            if (!holdingsRes.ok || !historyRes.ok) throw new Error('요청 실패');
+            const holdingsData = await holdingsRes.json();
+            const historyData = await historyRes.json();
+
+            renderMyStocksSummary(holdingsData.summary || {});
+            renderMyStocksHoldings(holdingsData.holdings || []);
+            renderMyStocksPieChart(holdingsData.holdings || []);
+            renderMyStocksPnl(holdingsData.asset_pnl || {});
+            renderMyStocksHistory(historyData.history || []);
+        } catch (e) {
+            console.error(e);
+            showDebugToast('내 종목 데이터를 불러오지 못했습니다');
+        } finally {
+            if (showOverlay) removeLoadingOverlay();
+        }
+    }
+
+    // 종목명 -> 종목코드 자동 변환 (ms-buy-code에 한글 종목명을 입력해도 매수 가능하도록)
+    const msBuyCodeInput = document.getElementById('ms-buy-code');
+    const msBuyCodeSuggestions = document.getElementById('ms-buy-code-suggestions');
+    const msBuyPricePreview = document.getElementById('ms-buy-price-preview');
+
+    function msIsStockCode(v) {
+        return /^\d{6}$/.test(v);
+    }
+
+    function msHideSuggestions() {
+        if (!msBuyCodeSuggestions) return;
+        msBuyCodeSuggestions.style.display = 'none';
+        msBuyCodeSuggestions.innerHTML = '';
+    }
+
+    function msShowSuggestions(matches) {
+        if (!msBuyCodeSuggestions) return;
+        msBuyCodeSuggestions.innerHTML = matches.map(m => `
+            <li data-code="${m.stock_code}"><span>${m.stock_name}</span><span class="code">${m.stock_code}</span></li>
+        `).join('');
+        msBuyCodeSuggestions.style.display = 'block';
+    }
+
+    let msBuyResolved = null; // { code, name, price }
+
+    function msRenderPricePreview() {
+        if (!msBuyPricePreview || !msBuyResolved) return;
+        const { code, name, price } = msBuyResolved;
+        let text = `${name || code}(${code}) 현재가: ${msFmtWon(price)}`;
+
+        const qtyRaw = document.getElementById('ms-buy-qty').value.trim();
+        const qty = Number(qtyRaw);
+        if (qtyRaw && qty > 0) {
+            text += ` × ${qty}주 = ${msFmtWon(price * qty)}`;
+        }
+        msBuyPricePreview.textContent = text;
+    }
+
+    async function msUpdatePricePreview(code) {
+        if (!msBuyPricePreview) return;
+        msBuyResolved = null;
+        msBuyPricePreview.textContent = '현재가 조회 중...';
+        try {
+            const res = await fetch(`/stocks/kiwoom/price?stk_cd=${encodeURIComponent(code)}`);
+            if (!res.ok) throw new Error('조회 실패');
+            const data = await res.json();
+            if (!data.price) {
+                msBuyPricePreview.textContent = '현재가 조회 실패';
+                return;
+            }
+            msBuyResolved = { code, name: data.stk_nm, price: data.price };
+            msRenderPricePreview();
+        } catch (e) {
+            msBuyPricePreview.textContent = '현재가 조회 실패';
+        }
+    }
+
+    // 수량 입력할 때마다 현재가 × 수량 합계를 다시 계산해서 표기
+    document.getElementById('ms-buy-qty')?.addEventListener('input', msRenderPricePreview);
+
+    // 코드/이름을 다시 입력하기 시작하면 이전 미리보기·제안목록은 무효화
+    msBuyCodeInput?.addEventListener('input', () => {
+        // 영문은 대문자로 통일 (일부 종목코드에 알파벳이 섞여 있음, 예: 0096B0)
+        const upper = msBuyCodeInput.value.toUpperCase();
+        if (upper !== msBuyCodeInput.value) {
+            const pos = msBuyCodeInput.selectionStart;
+            msBuyCodeInput.value = upper;
+            msBuyCodeInput.setSelectionRange(pos, pos);
+        }
+        msHideSuggestions();
+        msBuyResolved = null;
+        if (msBuyPricePreview) msBuyPricePreview.textContent = '';
+    });
+
+    // mousedown(포커스 이동/blur보다 먼저 발생)에서 처리해 blur와 충돌하지 않도록 함
+    msBuyCodeSuggestions?.addEventListener('mousedown', (e) => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        e.preventDefault();
+        msBuyCodeInput.value = li.dataset.code;
+        msHideSuggestions();
+        msUpdatePricePreview(li.dataset.code);
+    });
+
+    // 입력값이 6자리 코드가 아니면 종목명으로 간주해 조회, 매칭 1건이면 코드로 자동 치환
+    async function msResolveStockCode() {
+        const raw = msBuyCodeInput.value.trim();
+        if (!raw) return null;
+        if (msIsStockCode(raw)) {
+            msHideSuggestions();
+            msUpdatePricePreview(raw);
+            return raw;
+        }
+
+        try {
+            const res = await fetch(`/stocks/kiwoom/lookup-code?name=${encodeURIComponent(raw)}`);
+            if (!res.ok) throw new Error('조회 실패');
+            const data = await res.json();
+            const matches = data.matches || [];
+
+            if (matches.length === 0) {
+                msHideSuggestions();
+                showDebugToast(`'${raw}' 종목을 찾을 수 없습니다`);
+                return null;
+            }
+            if (matches.length === 1) {
+                msBuyCodeInput.value = matches[0].stock_code;
+                msHideSuggestions();
+                msUpdatePricePreview(matches[0].stock_code);
+                return matches[0].stock_code;
+            }
+            msShowSuggestions(matches);
+            return null;
+        } catch (e) {
+            console.error(e);
+            showDebugToast('종목 조회 실패');
+            return null;
+        }
+    }
+
+    msBuyCodeInput?.addEventListener('blur', () => { msResolveStockCode(); });
+
+    // stock_card.js의 전역 document keydown 핸들러가 포커스와 무관하게 Enter 등을 가로채므로
+    // (다른 탭의 카드뷰 단축키), 이 입력창들에서는 전파를 막고 여기서 직접 처리한다.
+    msBuyCodeInput?.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') { e.stopPropagation(); return; }
+        e.preventDefault();
+        e.stopPropagation();
+        msResolveStockCode();
+    });
+
+    document.getElementById('ms-buy-qty')?.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') { e.stopPropagation(); return; }
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('ms-buy-btn')?.click();
+    });
+
+    // 주문 직후 즉시 갱신 + 모의투자 서버 체결 반영 지연 대비 잠시 후 한 번 더 갱신
+    function msRefreshAfterOrder() {
+        loadMyStocksData();
+        setTimeout(loadMyStocksData, 1500);
+    }
+
+    document.getElementById('ms-buy-btn')?.addEventListener('click', async () => {
+        const code = await msResolveStockCode();
+        if (!code) return; // 조회 실패했거나 여러 종목 중 아직 선택 안 함
+        const qtyRaw = document.getElementById('ms-buy-qty').value.trim();
+        const display = msBuyResolved?.name ? `${msBuyResolved.name}(${code})` : code;
+        if (!confirm(`${display} ${qtyRaw ? qtyRaw + '주' : '가용 현금 전액'} 시장가로 매수할까요?`)) return;
+
+        try {
+            await axios.post('/stocks/kiwoom/buy', { stk_cd: code, qty: qtyRaw || null });
+            showDebugToast('매수 요청 완료');
+            msRefreshAfterOrder();
+        } catch (e) {
+            alert('매수 실패: ' + (e.response?.data?.message || e.message));
+        }
+    });
+
+    document.getElementById('table-mystocks-holdings')?.addEventListener('click', async (e) => {
+        const buyBtn = e.target.closest('.ms-add-buy');
+        const sellBtn = e.target.closest('.ms-sell');
+
+        if (buyBtn) {
+            const stkCd = buyBtn.dataset.stkCd;
+            const display = buyBtn.dataset.stkNm ? `${buyBtn.dataset.stkNm}(${stkCd})` : stkCd;
+            const qtyRaw = prompt(`${display} 추가 매수 수량을 입력하세요 (비우면 가용 현금 전액)`);
+            if (qtyRaw === null) return;
+            if (!confirm(`${display} ${qtyRaw ? qtyRaw + '주' : '가용 현금 전액'} 매수할까요?`)) return;
+            try {
+                await axios.post('/stocks/kiwoom/buy', { stk_cd: stkCd, qty: qtyRaw || null });
+                showDebugToast('매수 요청 완료');
+                msRefreshAfterOrder();
+            } catch (err) {
+                alert('매수 실패: ' + (err.response?.data?.message || err.message));
+            }
+        }
+
+        if (sellBtn) {
+            const stkCd = sellBtn.dataset.stkCd;
+            const maxQty = sellBtn.dataset.qty;
+            const display = sellBtn.dataset.stkNm ? `${sellBtn.dataset.stkNm}(${stkCd})` : stkCd;
+            const qtyRaw = prompt(`${display} 매도 수량을 입력하세요 (보유 ${maxQty}주)`, maxQty);
+            if (!qtyRaw) return;
+            if (!confirm(`${display} ${qtyRaw}주 매도할까요?`)) return;
+            try {
+                await axios.post('/stocks/kiwoom/sell', { stk_cd: stkCd, qty: qtyRaw });
+                showDebugToast('매도 요청 완료');
+                msRefreshAfterOrder();
+            } catch (err) {
+                alert('매도 실패: ' + (err.response?.data?.message || err.message));
+            }
+        }
+    });
 
 
     // 실시간 가격 업데이트 표시
@@ -774,11 +1434,14 @@
     }
 
     document.addEventListener('visibilitychange', () => {
+        const activeTabId = document.querySelector('.tab-bar .tab-btn.active')?.dataset.target;
         if (!document.hidden) { // 다시 브라우저를 방문하면 한 번만 실행된다
             startTimer();
+            if (activeTabId === '#tab-mystocks') msStartTimer();
         } else { // 창을 나가면
             stopTimer(timer);
             stopTimer(timer2);
+            msStopTimer();
         }
     })
 
