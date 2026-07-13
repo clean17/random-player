@@ -1,0 +1,384 @@
+"""
+키움 계좌 보유 종목 트레일링 스탑 자동 매매.
+
+기본 전략 (수정하려면 아래 상수만 변경):
+  - 손절            : -6%  → 전량 즉시 청산
+  - 목표가          : +10% / +15% / +20% 각 단계 도달 시마다 1/3씩 매도 (단계별 최초 1회만)
+  - 트레일링 활성화 : 수익률 +5% 도달 후 고점 추적 시작
+  - 트레일링 폭     : 고점 대비 -4%p 이탈 시 그 시점 잔여 수량의 1/3 매도
+  - 최소 익절 보호선 : +2% (트레일링 청산선이 +2% 밑으로 내려가지 않도록 고정)
+  - 한 종목당 최대 3회(3분할)까지만 매도 — 목표가 단계와 트레일링이 같은 3분할 예산을 공유함.
+    트레일링 매도는 "직전 매도 시점의 고점보다 더 높은 새 고점"을 갱신해야만 다시 트리거됨
+    (같은 고점에서 반복 매도되는 것 방지).
+
+장중 30초 간격으로 호출되는 것을 전제로 설계됨 (job/batch_runner.py에 등록).
+실전 투자 전 반드시 KIWOOM_ENV=mock(모의투자)으로 먼저 검증할 것.
+"""
+import os
+import json
+import logging
+import logging.handlers
+import datetime
+from typing import Dict, Optional
+from dotenv import load_dotenv, find_dotenv
+
+from job.kiwoom_api import get_holdings, sell_market, buy_market, get_current_price, dump_holdings_raw, \
+    get_account_credentials, get_account_summary
+from typing import List
+
+dotenv_path = find_dotenv(usecwd=True) or ".env"
+load_dotenv(dotenv_path=dotenv_path)
+
+# 앱의 logs/app/*.log는 logging 모듈(waitress/werkzeug 로거)에 붙은 큐 핸들러만 거치므로
+# print()는 그 파일에 남지 않는다. 실거래 이력은 반드시 남아야 해서 전용 파일로 별도 기록.
+_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'kiwoom_trading')
+os.makedirs(_LOG_DIR, exist_ok=True)
+
+_log = logging.getLogger('kiwoom_trailing_stop')
+if not _log.handlers:
+    _log.setLevel(logging.INFO)
+    _log.propagate = False  # 앱 root/waitress 로거로 전파 안 함 (logs/app 쪽에 중복 기록 방지)
+    _formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+
+    _file_handler = logging.handlers.TimedRotatingFileHandler(
+        os.path.join(_LOG_DIR, 'trading.log'), when='midnight', backupCount=180, encoding='utf-8'
+    )
+    _file_handler.setFormatter(_formatter)
+    _log.addHandler(_file_handler)
+
+    _console_handler = logging.StreamHandler()
+    _console_handler.setFormatter(_formatter)
+    _log.addHandler(_console_handler)
+
+STOP_LOSS_RATE = -0.06
+TARGET_RATES = [0.10, 0.15, 0.20]  # 단계별 목표가, 도달할 때마다 1/3씩 매도
+TRAIL_ACTIVATE_RATE = 0.05
+TRAIL_GAP = 0.04
+MIN_PROFIT_FLOOR = 0.02
+
+STATE_FILE = os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_state.json')
+TRADES_FILE = os.path.join(_LOG_DIR, 'trades.jsonl')  # 일별/주별/월별 집계, 이력 조회용 구조화 기록
+
+# KIWOOM_ENV(mock/real)에 맞는 계좌번호 쌍을 가져옴 — 모의/실전 계좌번호가 다르므로 직접 os.environ으로 읽지 않음
+ACNT_NO, ACNT_PWD = get_account_credentials()
+
+
+def is_market_open() -> bool:
+    now = datetime.datetime.now()
+    if now.weekday() >= 5:  # 토/일 제외
+        return False
+    t = now.time()
+    return datetime.time(9, 0) <= t <= datetime.time(15, 30)
+
+
+def _load_state() -> Dict:
+    if not os.path.exists(STATE_FILE):
+        return {}
+    try:
+        with open(STATE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_state(state: Dict):
+    with open(STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+
+def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
+                   qty: int, price: float, avg_price: float, pnl: float):
+    """매수/매도 1건을 거래 이력 파일에 append. 대시보드 이력/기간별 손익 집계에 사용."""
+    event = {
+        'ts': datetime.datetime.now().isoformat(timespec='seconds'),
+        'stk_cd': stk_cd,
+        'stk_nm': stk_nm or stk_cd,
+        'side': side,       # 'buy' / 'sell'
+        'reason': reason,   # 'stop_loss' / 'trailing' / 'target' / 'manual'
+        'qty': qty,
+        'price': price,
+        'avg_price': avg_price,
+        'pnl': pnl,
+    }
+    try:
+        with open(TRADES_FILE, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(event, ensure_ascii=False) + '\n')
+    except OSError as e:
+        _log.error(f'거래 기록 저장 실패: {e}')
+
+
+def get_trade_history(limit: int = 200) -> List[Dict]:
+    """최근 거래 이력 (최신순)."""
+    if not os.path.exists(TRADES_FILE):
+        return []
+    events = []
+    with open(TRADES_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    events.reverse()
+    return events[:limit]
+
+
+def get_pnl_summary() -> Dict:
+    """일별/주별/월별 실현손익 합계·수익률 (매도 이벤트 기준)."""
+    today = datetime.date.today()
+    week_start = today - datetime.timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    buckets = {
+        'daily': {'pnl': 0.0, 'cost': 0.0},
+        'weekly': {'pnl': 0.0, 'cost': 0.0},
+        'monthly': {'pnl': 0.0, 'cost': 0.0},
+    }
+
+    if os.path.exists(TRADES_FILE):
+        with open(TRADES_FILE, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if ev.get('side') != 'sell':
+                    continue
+                try:
+                    ev_date = datetime.datetime.fromisoformat(ev['ts']).date()
+                except (KeyError, ValueError):
+                    continue
+                pnl = ev.get('pnl', 0.0)
+                cost = ev.get('avg_price', 0.0) * ev.get('qty', 0)
+                if ev_date == today:
+                    buckets['daily']['pnl'] += pnl
+                    buckets['daily']['cost'] += cost
+                if ev_date >= week_start:
+                    buckets['weekly']['pnl'] += pnl
+                    buckets['weekly']['cost'] += cost
+                if ev_date >= month_start:
+                    buckets['monthly']['pnl'] += pnl
+                    buckets['monthly']['cost'] += cost
+
+    return {
+        key: {'pnl': b['pnl'], 'rate': (b['pnl'] / b['cost']) if b['cost'] > 0 else 0.0}
+        for key, b in buckets.items()
+    }
+
+
+def _fresh_position_state(qty: int) -> Dict:
+    return {
+        'original_qty': qty,
+        'tranche_qty': max(1, qty // 3),
+        'remaining_qty': qty,
+        'peak_rate': None,
+        'last_sold_peak': None,
+        'thirds_sold': 0,
+        'target_idx': 0,  # 다음에 확인할 TARGET_RATES 인덱스
+        'exited': False,
+    }
+
+
+def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
+    """holding 1건 평가 후 필요 시 매도 실행. 갱신된 pos_state 반환."""
+    stk_cd = holding['stk_cd']
+    stk_nm = holding.get('stk_nm') or stk_cd
+    qty = holding['qty']
+    rate = holding['profit_rate']
+    avg_price = holding['avg_price']
+    cur_price = holding['cur_price']
+
+    # 신규 종목이거나, 외부(수동)에서 재매수되어 수량이 이전 잔여 수량보다 많아진 경우 상태 리셋
+    if pos_state is None or pos_state.get('exited') or qty > pos_state.get('remaining_qty', 0):
+        pos_state = _fresh_position_state(qty)
+    elif qty < pos_state['remaining_qty']:
+        # 수동 매도 등으로 외부에서 수량이 줄어든 경우, 고점/분할 진행 상태는 유지하고 수량만 동기화
+        pos_state['remaining_qty'] = qty
+
+    if pos_state['remaining_qty'] <= 0:
+        pos_state['exited'] = True
+        return pos_state
+
+    # 1) 손절 — 다른 조건과 무관하게 잔여 수량 전량 즉시 청산
+    if rate <= STOP_LOSS_RATE:
+        sell_qty = pos_state['remaining_qty']
+        pnl = (cur_price - avg_price) * sell_qty
+        sell_market(stk_cd, sell_qty)
+        _log.info(f'[손절] {stk_nm}({stk_cd}) rate={rate:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
+                  f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원')
+        _record_trade(stk_cd, stk_nm, 'sell', 'stop_loss', sell_qty, cur_price, avg_price, pnl)
+        pos_state['remaining_qty'] = 0
+        pos_state['exited'] = True
+        return pos_state
+
+    # 2) 트레일링 고점 갱신 (+5% 이상에서만 추적 시작)
+    if rate >= TRAIL_ACTIVATE_RATE:
+        pos_state['peak_rate'] = rate if pos_state['peak_rate'] is None else max(pos_state['peak_rate'], rate)
+
+    peak_rate = pos_state['peak_rate']
+    trailing_armed = peak_rate is not None and peak_rate >= TRAIL_ACTIVATE_RATE
+    new_peak_since_last_sale = trailing_armed and (
+        pos_state['last_sold_peak'] is None or peak_rate > pos_state['last_sold_peak']
+    )
+    trigger_level = max(peak_rate - TRAIL_GAP, MIN_PROFIT_FLOOR) if trailing_armed else None
+    trailing_trigger = bool(trigger_level is not None and new_peak_since_last_sale and rate <= trigger_level)
+
+    # 3) 목표가(+10/15/20%) — 단계별로 최초 1회씩 트리거 (도달한 가장 높은 단계까지 한 번에 반영)
+    target_idx = pos_state['target_idx']
+    target_trigger = target_idx < len(TARGET_RATES) and rate >= TARGET_RATES[target_idx]
+    target_level = TARGET_RATES[target_idx] if target_trigger else None
+
+    if pos_state['thirds_sold'] < 3 and (trailing_trigger or target_trigger):
+        pos_state['thirds_sold'] += 1
+        # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
+        sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
+            else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
+
+        if sell_qty > 0:
+            pnl = (cur_price - avg_price) * sell_qty
+            sell_market(stk_cd, sell_qty)
+            reason = f'목표가{target_level:.0%}' if target_trigger else '트레일링'
+            _log.info(f'[{reason} {pos_state["thirds_sold"]}/3차] {stk_nm}({stk_cd}) rate={rate:.2%} '
+                      f'peak={peak_rate:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
+                      f'{sell_qty}주 매도, 손익={pnl:+,.0f}원, 잔여 {pos_state["remaining_qty"] - sell_qty}주')
+            _record_trade(stk_cd, stk_nm, 'sell', 'target' if target_trigger else 'trailing',
+                           sell_qty, cur_price, avg_price, pnl)
+            pos_state['remaining_qty'] -= sell_qty
+
+        if target_trigger:
+            pos_state['target_idx'] += 1
+        if trailing_trigger:
+            pos_state['last_sold_peak'] = peak_rate
+
+        if pos_state['remaining_qty'] <= 0 or pos_state['thirds_sold'] >= 3:
+            pos_state['exited'] = True
+
+    return pos_state
+
+
+def run_cycle():
+    if not (ACNT_NO and ACNT_PWD):
+        _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
+        return
+
+    holdings = get_holdings(ACNT_NO, ACNT_PWD)
+    if not holdings:
+        return
+
+    state = _load_state()
+    held_codes = set()
+
+    for holding in holdings:
+        stk_cd = holding['stk_cd']
+        held_codes.add(stk_cd)
+        state[stk_cd] = evaluate_and_trade(holding, state.get(stk_cd))
+
+    # 더 이상 보유하지 않는(전량 매도/청산된) 종목은 상태 정리
+    for stk_cd in list(state.keys()):
+        if stk_cd not in held_codes:
+            del state[stk_cd]
+
+    _save_state(state)
+
+
+def log_account_summary():
+    if not (ACNT_NO and ACNT_PWD):
+        _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
+        return
+    s = get_account_summary(ACNT_NO, ACNT_PWD)
+    _log.info(
+        f'[계좌현황] 총자산={s["total_asset"]:,.0f}원 매입={s["tot_pur_amt"]:,.0f}원 '
+        f'평가={s["tot_evlt_amt"]:,.0f}원 손익={s["tot_evlt_pl"]:+,.0f}원 수익률={s["tot_prft_rt"]:+.2%}'
+    )
+
+
+def manual_buy(stk_cd: str, qty: Optional[int] = None):
+    """수동 시장가 매수. qty 생략 시 가용 현금(총자산-보유종목평가금액) 전액으로 매수."""
+    if not (ACNT_NO and ACNT_PWD):
+        _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
+        return
+
+    price = get_current_price(stk_cd)
+    if price <= 0:
+        _log.error(f'[수동매수] {stk_cd} 현재가 조회 실패')
+        return
+
+    if qty is None:
+        s = get_account_summary(ACNT_NO, ACNT_PWD)
+        cash = s['total_asset'] - s['tot_evlt_amt']
+        qty = int(cash // price)
+
+    if qty <= 0:
+        _log.error(f'[수동매수] {stk_cd} 현재가={price:,}원, 매수 가능 수량 0')
+        return
+
+    result = buy_market(stk_cd, qty)
+    _log.info(f'[수동매수] {stk_cd} 현재가={price:,}원 {qty}주 → {result}')
+    _record_trade(stk_cd, None, 'buy', 'manual', qty, price, price, 0.0)
+    return result
+
+
+def manual_sell(stk_cd: str, qty: int):
+    """수동 시장가 매도. qty는 실제 보유수량으로 자동 제한됨."""
+    if not (ACNT_NO and ACNT_PWD):
+        _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
+        return
+
+    holdings = get_holdings(ACNT_NO, ACNT_PWD)
+    match = next((h for h in holdings if h['stk_cd'] == stk_cd), None)
+    if not match:
+        _log.error(f'[수동매도] {stk_cd} 보유 내역 없음')
+        return
+
+    sell_qty = min(qty, match['qty'])
+    if sell_qty <= 0:
+        _log.error(f'[수동매도] {stk_cd} 매도 가능 수량 0')
+        return
+
+    pnl = (match['cur_price'] - match['avg_price']) * sell_qty
+    result = sell_market(stk_cd, sell_qty)
+    _log.info(f'[수동매도] {match["stk_nm"]}({stk_cd}) 매입가={match["avg_price"]:,.0f}원 '
+              f'현재가={match["cur_price"]:,.0f}원 {sell_qty}주 매도, 손익={pnl:+,.0f}원 → {result}')
+    _record_trade(stk_cd, match['stk_nm'], 'sell', 'manual', sell_qty, match['cur_price'], match['avg_price'], pnl)
+    return result
+
+
+if __name__ == '__main__':
+    import sys
+    if '--token' in sys.argv:
+        # 토큰 수동 발급 (KIWOOM_ENV에 맞는 앱키/시크릿으로 발급 후 .env에 자동 저장)
+        from job.kiwoom_api import _refresh_token, KIWOOM_ENV
+        _refresh_token()
+        print(f'[{KIWOOM_ENV}] 토큰 발급 완료 (.env에 저장됨)')
+    elif '--dump' in sys.argv:
+        # 모의투자 응답 원본 필드명 확인용
+        dump_holdings_raw(ACNT_NO, ACNT_PWD)
+    elif '--buy' in sys.argv:
+        # 사용법: python -m job.kiwoom_trailing_stop --buy <종목코드> [수량]
+        # 수량 생략 시 가용 현금 전액으로 시장가 매수
+        idx = sys.argv.index('--buy')
+        args = sys.argv[idx + 1:]
+        if not args:
+            print('사용법: python -m job.kiwoom_trailing_stop --buy <종목코드> [수량]')
+        else:
+            _stk_cd = args[0]
+            _qty = int(args[1]) if len(args) > 1 else None
+            manual_buy(_stk_cd, _qty)
+    elif '--sell' in sys.argv:
+        # 사용법: python -m job.kiwoom_trailing_stop --sell <종목코드> <수량>
+        idx = sys.argv.index('--sell')
+        args = sys.argv[idx + 1:]
+        if len(args) < 2:
+            print('사용법: python -m job.kiwoom_trailing_stop --sell <종목코드> <수량>')
+        else:
+            manual_sell(args[0], int(args[1]))
+    else:
+        if is_market_open():
+            run_cycle()
+        else:
+            print('장 시간이 아님 (평일 09:00~15:30만 동작)')
