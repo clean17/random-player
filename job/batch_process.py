@@ -680,3 +680,13 @@ def run_kiwoom_trailing_stop():
         run_cycle()
     except Exception as e:
         _log.error(f'run_kiwoom_trailing_stop 실패: {e}')
+
+
+def log_kiwoom_account_summary():
+    from job.kiwoom_trailing_stop import log_account_summary, is_market_open, _log
+    if not is_market_open():
+        return
+    try:
+        log_account_summary()
+    except Exception as e:
+        _log.error(f'log_kiwoom_account_summary 실패: {e}')

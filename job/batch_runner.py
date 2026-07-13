@@ -10,7 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
-    find_low_stocks_v2, run_kiwoom_trailing_stop
+    find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -254,6 +254,15 @@ def create_scheduler():
         run_kiwoom_trailing_stop,
         trigger=IntervalTrigger(seconds=30),
         id="kiwoom_trailing_stop_30s",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-0-1) 키움 계좌 총자산 현황 로그 (장중 5분마다)
+    scheduler.add_job(
+        log_kiwoom_account_summary,
+        trigger=IntervalTrigger(minutes=5),
+        id="kiwoom_account_summary_5m",
         executor="io",
         replace_existing=True,
     )
