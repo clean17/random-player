@@ -10,7 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
-    find_low_stocks_v2
+    find_low_stocks_v2, run_kiwoom_trailing_stop
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -246,6 +246,16 @@ def create_scheduler():
         id="renew_token_daily",
         executor="io",
         replace_existing=True
+    )
+
+    # 2-0) 키움 트레일링 스탑 (장중 30초마다, 내부에서 장시간 아니면 즉시 리턴)
+    #      실전 전환 전 반드시 KIWOOM_ENV=mock으로 먼저 검증할 것 (job/kiwoom_trailing_stop.py 상단 주석 참고)
+    scheduler.add_job(
+        run_kiwoom_trailing_stop,
+        trigger=IntervalTrigger(seconds=30),
+        id="kiwoom_trailing_stop_30s",
+        executor="io",
+        replace_existing=True,
     )
 
     # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)

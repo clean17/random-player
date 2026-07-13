@@ -670,3 +670,13 @@ def generate_fullchain_pem_daily():
 
     if process.returncode != 0:
         print("returncode =", process.returncode)
+
+
+def run_kiwoom_trailing_stop():
+    from job.kiwoom_trailing_stop import run_cycle, is_market_open, _log
+    if not is_market_open():
+        return
+    try:
+        run_cycle()
+    except Exception as e:
+        _log.error(f'run_kiwoom_trailing_stop 실패: {e}')

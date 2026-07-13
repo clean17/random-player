@@ -18,6 +18,8 @@ env/
 app/tasks.json
 app/tasks.pkl
 data/data.json
+job/kiwoom_trailing_state.json
+logs/
 HELP.md
 .gradle
 build/
