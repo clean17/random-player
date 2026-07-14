@@ -1,6 +1,7 @@
 import os
 import time
 import re
+import threading
 from datetime import datetime, timezone
 from collections import defaultdict, deque
 from flask import Flask, session, send_file, render_template, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
@@ -458,15 +459,9 @@ def create_app():
             return True
         return False
 
-    import job.batch_runner as _batch_runner
-    if _batch_runner.scheduler is not None:
-        _batch_runner.scheduler.add_job(
-            warm_up_image_caches,
-            trigger='date',
-            run_date=datetime.now(),
-            executor='io',
-            id='warm_up_image_caches',
-            replace_existing=True,
-        )
+    # create_scheduler()는 create_app() 이후에 호출되므로(데드락 방지),
+    # 이 시점엔 job.batch_runner.scheduler가 아직 None이라 스케줄러에 맡길 수 없다.
+    # 별도 스레드로 바로 실행한다.
+    threading.Thread(target=warm_up_image_caches, daemon=True, name='warm_up_image_caches').start()
 
     return app
