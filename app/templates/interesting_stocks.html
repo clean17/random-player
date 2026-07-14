@@ -900,7 +900,7 @@
             return;
         }
         tbody.innerHTML = holdings.map(h => {
-            const pnl = (Number(h.cur_price) - Number(h.avg_price)) * Number(h.qty || 0);
+            const pnl = h.pnl != null ? Number(h.pnl) : (Number(h.cur_price) - Number(h.avg_price)) * Number(h.qty || 0);
             const pnlText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)}(${msFmtPct(h.profit_rate)})`;
             return `
         <tr>

@@ -157,6 +157,7 @@ FIELD_QTY = 'rmnd_qty'           # 보유수량
 FIELD_AVG_PRICE = 'pur_pric'     # 매입가(평균단가)
 FIELD_CUR_PRICE = 'cur_prc'      # 현재가
 FIELD_PROFIT_RATE = 'prft_rt'    # 수익률(%) — evltv_prft_rt 아님, evltv_prft(손익금액)와 혼동 주의
+FIELD_PROFIT_AMOUNT = 'evltv_prft'  # 평가손익금액(원). (cur_price-avg_price)*qty로 재계산하면 매입가 원단위 반올림 때문에 tot_evlt_pl 합계와 오차가 생겨 반드시 이 필드를 그대로 써야 함
 
 
 def dump_holdings_raw(acnt_no: str, acnt_pwd: str) -> dict:
@@ -193,12 +194,15 @@ def _parse_holdings(data: dict) -> List[Dict]:
         avg_price = _to_number(row.get(FIELD_AVG_PRICE))
         cur_price = _to_number(row.get(FIELD_CUR_PRICE))
         profit_rate = _to_number(row.get(FIELD_PROFIT_RATE)) / 100.0
+        pnl = _to_number(row.get(FIELD_PROFIT_AMOUNT))
         if avg_price <= 0:
             print(f'[WARN] get_holdings: 매입가 파싱 실패 stk_cd={row.get(FIELD_STK_CD)} row={row}')
             continue
         # API가 제공하는 손익률이 비정상(0 등)이면 직접 계산으로 보정
         if profit_rate == 0.0 and cur_price > 0:
             profit_rate = (cur_price - avg_price) / avg_price
+        if pnl == 0.0 and cur_price > 0:
+            pnl = (cur_price - avg_price) * qty
 
         raw_stk_cd = row.get(FIELD_STK_CD) or ''
         stk_cd = raw_stk_cd[1:] if raw_stk_cd.startswith('A') else raw_stk_cd
@@ -210,6 +214,7 @@ def _parse_holdings(data: dict) -> List[Dict]:
             'avg_price': avg_price,
             'cur_price': cur_price,
             'profit_rate': profit_rate,
+            'pnl': pnl,
         })
     return holdings
 
