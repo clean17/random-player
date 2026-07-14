@@ -1061,7 +1061,7 @@
         if (!raw) return null;
         if (msIsStockCode(raw)) {
             msHideSuggestions();
-            msUpdatePricePreview(raw);
+            await msUpdatePricePreview(raw);
             return raw;
         }
 
@@ -1079,7 +1079,7 @@
             if (matches.length === 1) {
                 msBuyCodeInput.value = matches[0].stock_code;
                 msHideSuggestions();
-                msUpdatePricePreview(matches[0].stock_code);
+                await msUpdatePricePreview(matches[0].stock_code);
                 return matches[0].stock_code;
             }
             msShowSuggestions(matches);

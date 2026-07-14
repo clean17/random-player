@@ -73,9 +73,21 @@ def _rate_limit_wait():
         _last_call_ts = time.time()
 
 
+def _is_invalid_token_response(resp) -> bool:
+    """키움은 토큰 만료를 HTTP 401이 아니라 200 + return_code!=0 (인증 실패 메시지)으로 내려줄 때가 있다.
+    그대로 두면 숫자 필드가 전부 조용히 0으로 파싱되므로 반드시 걸러내야 함."""
+    if resp.status_code != 200:
+        return False
+    try:
+        data = resp.json()
+    except ValueError:
+        return False
+    return data.get('return_code') not in (0, None) and '인증' in str(data.get('return_msg', ''))
+
+
 def _call(api_id: str, endpoint: str, body: dict,
           cont_yn: str = 'N', next_key: str = '', _max_429_retries: int = 3) -> dict:
-    """키움 REST API 공통 호출. 401 시 토큰 재발급 후 1회 재시도, 429 시 백오프 재시도."""
+    """키움 REST API 공통 호출. 401(또는 200+인증실패 응답) 시 토큰 재발급 후 1회 재시도, 429 시 백오프 재시도."""
     url = BASE_URL + endpoint
     headers = {
         'Content-Type': 'application/json;charset=UTF-8',
@@ -89,7 +101,7 @@ def _call(api_id: str, endpoint: str, body: dict,
         _rate_limit_wait()
         resp = requests.post(url, headers=headers, json=body, timeout=10)
 
-        if resp.status_code == 401:
+        if resp.status_code == 401 or _is_invalid_token_response(resp):
             _refresh_token()
             headers['authorization'] = f'Bearer {_get_token()}'
             _rate_limit_wait()
@@ -203,6 +215,9 @@ def _parse_holdings(data: dict) -> List[Dict]:
 
 
 def _parse_summary(data: dict) -> Dict:
+    if data.get('return_code') not in (0, None):
+        # 여기서 조용히 0을 반환하면 총자산=0으로 표시되고 일/주/월 손익 기준선까지 오염된다.
+        raise RuntimeError(f'kt00018 응답 오류: {data.get("return_msg")} (return_code={data.get("return_code")})')
     return {
         'total_asset': _to_number(data.get('prsm_dpst_aset_amt')),  # 추정예탁자산(총 계좌 자산)
         'tot_pur_amt': _to_number(data.get('tot_pur_amt')),         # 총매입금액
