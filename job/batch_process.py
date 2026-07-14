@@ -690,3 +690,14 @@ def log_kiwoom_account_summary():
         log_account_summary()
     except Exception as e:
         _log.error(f'log_kiwoom_account_summary 실패: {e}')
+
+
+def run_kiwoom_fire_buy():
+    from job.kiwoom_trailing_stop import is_market_open, _log
+    if not is_market_open():
+        return
+    try:
+        from job.kiwoom_fire_strategy import run_fire_buy_cycle
+        run_fire_buy_cycle()
+    except Exception as e:
+        _log.error(f'run_kiwoom_fire_buy 실패: {e}')

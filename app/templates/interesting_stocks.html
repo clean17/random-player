@@ -164,8 +164,8 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 30%;
-            height: 30%;
+            width: 36%;
+            height: 36%;
             transform: translate(-50%, -50%);
             border-radius: 50%;
             background: #f8f8f8; /* .mystocks-pie-wrap 배경과 동일하게 맞춰 도넛 구멍처럼 보이도록 */
@@ -817,7 +817,7 @@
 
     // ── 내 종목 (키움 모의투자 대시보드) ──────────────────────────────────
     const isGuestUser = {{ 'true' if current_user.get_id() == config.GUEST_USERNAME else 'false' }};
-    const MS_REASON_LABEL = { stop_loss: '손절', trailing: '트레일링', target: '목표가', manual: '수동' };
+    const MS_REASON_LABEL = { stop_loss: '손절', trailing: '트레일링', target: '목표가', manual: '수동', fire: 'fire자동' };
 
     function msFmtWon(n) {
         if (n == null || !isFinite(Number(n))) return '-';

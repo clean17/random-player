@@ -40,7 +40,10 @@ if not _log.handlers:
     _log.propagate = False  # 앱 root/waitress 로거로 전파 안 함 (logs/app 쪽에 중복 기록 방지)
     _formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 
-    _file_handler = logging.handlers.TimedRotatingFileHandler(
+    # 서버(run.py)와 CLI(-m job.kiwoom_*)가 같은 파일에 동시에 쓰므로,
+    # Windows에서 다중 프로세스 로테이션이 안전한 concurrent_log_handler 사용
+    from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
+    _file_handler = ConcurrentTimedRotatingFileHandler(
         os.path.join(_LOG_DIR, 'trading.log'), when='midnight', backupCount=180, encoding='utf-8'
     )
     _file_handler.setFormatter(_formatter)
@@ -215,26 +218,43 @@ def _save_baseline(data: Dict):
 
 
 def _ensure_baseline(current_total_asset: float) -> Dict:
-    """일/주/월이 바뀌면 그 시점 총자산을 새 기준선으로 기록. 실현손익 이력 누락과 무관하게
-    "실제 계좌 총자산이 얼마나 변했는지"를 정확히 측정하기 위한 기준값."""
+    """일/주/월이 바뀌면 새 기준선을 기록. 기준선은 '전일 마지막 관측 자산'(사실상 전일 종가 자산)을
+    사용한다 — 오늘 첫 조회 시점 자산으로 잡으면 그 전에 발생한 수익/손실이 0으로 묻히기 때문.
+    API 오류로 총자산이 0/음수로 들어오면 기준선을 건드리지 않는다."""
+    data = _load_baseline()
+    if not current_total_asset or current_total_asset <= 0:
+        return data
+
     today = datetime.date.today()
     week_start = today - datetime.timedelta(days=today.weekday())
     month_key = today.strftime('%Y-%m')
-
-    data = _load_baseline()
     changed = False
+
+    # 새 기간의 시작 기준선 = 직전(전일)까지 관측된 마지막 자산. 없으면 현재값으로 초기화.
+    rollover_base = data.get('last_asset') or current_total_asset
 
     if data.get('daily_date') != today.isoformat():
         data['daily_date'] = today.isoformat()
-        data['daily_start'] = current_total_asset
+        data['daily_start'] = rollover_base
         changed = True
     if data.get('weekly_date') != week_start.isoformat():
         data['weekly_date'] = week_start.isoformat()
-        data['weekly_start'] = current_total_asset
+        data['weekly_start'] = rollover_base
         changed = True
     if data.get('monthly_date') != month_key:
         data['monthly_date'] = month_key
-        data['monthly_start'] = current_total_asset
+        data['monthly_start'] = rollover_base
+        changed = True
+
+    # 과거 버그(API 오류 시 0.0 저장) 복구: 기준선이 0/None이면 복원
+    for key in ('daily_start', 'weekly_start', 'monthly_start'):
+        if not data.get(key) or data[key] <= 0:
+            data[key] = rollover_base
+            changed = True
+
+    if data.get('last_asset') != current_total_asset:
+        data['last_asset'] = current_total_asset
+        data['last_asset_date'] = today.isoformat()
         changed = True
 
     if changed:
@@ -245,10 +265,15 @@ def _ensure_baseline(current_total_asset: float) -> Dict:
 def get_asset_based_pnl(current_total_asset: float) -> Dict:
     """실제 총자산 변동 기준 일/주/월 손익. 거래 누락·수수료·세금과 무관하게 항상 정확함
     (trades.jsonl 기반 get_pnl_summary()의 실현손익 집계는 기록되지 않은 거래가 있으면 틀릴 수 있음)."""
+    zero = {'pnl': 0.0, 'rate': 0.0}
+    if not current_total_asset or current_total_asset <= 0:
+        # API 오류 등으로 총자산이 비정상이면 기준선을 오염시키지 않고 0 반환
+        return {'daily': dict(zero), 'weekly': dict(zero), 'monthly': dict(zero)}
+
     baseline = _ensure_baseline(current_total_asset)
 
     def calc(start):
-        start = start if start else current_total_asset
+        start = start if start and start > 0 else current_total_asset
         pnl = current_total_asset - start
         rate = (pnl / start) if start else 0.0
         return {'pnl': pnl, 'rate': rate}
