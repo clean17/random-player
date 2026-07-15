@@ -6,10 +6,16 @@
   - 목표가          : +10% / +15% / +20% 각 단계 도달 시마다 1/3씩 매도 (단계별 최초 1회만)
   - 트레일링 활성화 : 수익률 +5% 도달 후 고점 추적 시작
   - 트레일링 폭     : 고점 대비 -4%p 이탈 시 그 시점 잔여 수량의 1/3 매도
-  - 최소 익절 보호선 : +2% (트레일링 청산선이 +2% 밑으로 내려가지 않도록 고정)
+  - 최소 익절 보호선 : +2% (트레일링 청산선이 +2% 밑으로 내려가지 않도록 고정).
+    청산선이 이 보호선에 걸려서 트리거된 경우엔 분할 없이 잔여 수량 전량 청산(추가 하락 방지).
   - 한 종목당 최대 3회(3분할)까지만 매도 — 목표가 단계와 트레일링이 같은 3분할 예산을 공유함.
     트레일링 매도는 "직전 매도 시점의 고점보다 더 높은 새 고점"을 갱신해야만 다시 트리거됨
     (같은 고점에서 반복 매도되는 것 방지).
+  - 보유 중 추가 매수로 평단가가 바뀌면 고점/목표가 단계 등 진행상태는 리셋되고 새 평단가 기준으로
+    사다리/트레일링을 처음부터 다시 평가함 (rate가 평단가 기준 값이라 예전 %는 더 이상 같은 척도가 아님).
+  - 정체 보호: 트레일링 매도가 한 번 나간 뒤 그보다 더 높은 새 고점 없이 가격이 계속 흘러내리면
+    트레일링이 재발동되지 않아 잔여 물량이 손절선(-6%)까지 보호 없이 노출될 수 있음. 이를 막기 위해
+    그 매도에 쓰인 트리거선(고점-4%p 또는 보호선)보다 추가로 -6%p(STALL_GAP) 더 밀리면 잔여 전량 청산.
 
 장중 30초 간격으로 호출되는 것을 전제로 설계됨 (job/batch_runner.py에 등록).
 실전 투자 전 반드시 KIWOOM_ENV=mock(모의투자)으로 먼저 검증할 것.
@@ -22,7 +28,7 @@ import datetime
 from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
-from job.kiwoom_api import get_holdings, sell_market, buy_market, get_current_price, get_current_price_and_name, \
+from job.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
     dump_holdings_raw, get_account_credentials, get_account_summary
 from typing import List
 
@@ -58,6 +64,7 @@ TARGET_RATES = [0.10, 0.15, 0.20]  # 단계별 목표가, 도달할 때마다 1/
 TRAIL_ACTIVATE_RATE = 0.05
 TRAIL_GAP = 0.04
 MIN_PROFIT_FLOOR = 0.02
+STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고점 없이 그 트리거선보다 추가로 이만큼 더 밀리면 잔여 전량 청산
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_state.json')
 TRADES_FILE = os.path.join(_LOG_DIR, 'trades.jsonl')  # 실현손익 이력(승률/손익비 계산용) — 기록 누락 가능성 있음
@@ -91,8 +98,11 @@ def _save_state(state: Dict):
 
 
 def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
-                   qty: int, price: float, avg_price: float, pnl: float):
-    """매수/매도 1건을 거래 이력 파일에 append. 대시보드 이력/기간별 손익 집계에 사용."""
+                   qty: int, price: float, avg_price: float, pnl: float,
+                   asset_ratio: Optional[float] = None, holding_ratio: Optional[float] = None):
+    """매수/매도 1건을 거래 이력 파일에 append. 대시보드 이력/기간별 손익 집계에 사용.
+    asset_ratio  : 이 거래대금(qty*price)이 총자산에서 차지한 비율 (0.05 = 5%)
+    holding_ratio: 매도 시 그 종목 보유수량 대비 이번에 판 비율 (0.33 = 33%). 매수는 None."""
     event = {
         'ts': datetime.datetime.now().isoformat(timespec='seconds'),
         'stk_cd': stk_cd,
@@ -103,6 +113,8 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
         'price': price,
         'avg_price': avg_price,
         'pnl': pnl,
+        'asset_ratio': asset_ratio,
+        'holding_ratio': holding_ratio,
     }
     try:
         with open(TRADES_FILE, 'a', encoding='utf-8') as f:
@@ -298,8 +310,9 @@ def _fresh_position_state(qty: int) -> Dict:
     }
 
 
-def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
-    """holding 1건 평가 후 필요 시 매도 실행. 갱신된 pos_state 반환."""
+def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: float = 0.0) -> Dict:
+    """holding 1건 평가 후 필요 시 매도 실행. 갱신된 pos_state 반환.
+    total_asset: 자산기준 거래비율(asset_ratio) 계산용 총자산. 0/미상이면 비율 계산 생략."""
     stk_cd = holding['stk_cd']
     stk_nm = holding.get('stk_nm') or stk_cd
     qty = holding['qty']
@@ -307,7 +320,10 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
     avg_price = holding['avg_price']
     cur_price = holding['cur_price']
 
-    # 신규 종목이거나, 외부(수동)에서 재매수되어 수량이 이전 잔여 수량보다 많아진 경우 상태 리셋
+    # 신규 종목/완전 청산 후 재진입은 물론, 추가 매수로 수량이 늘어난 경우도 상태를 새로 만든다.
+    # rate(수익률)는 Kiwoom이 매번 평단가 기준으로 다시 계산해서 내려주므로, 추가매수로 평단가가
+    # 바뀌면 peak_rate/target_idx 같은 %기반 진행상태는 새 평단가와 더 이상 같은 척도가 아니게 됨
+    # → 보존하지 않고 새 평단가 기준으로 사다리/트레일링을 처음부터 다시 평가한다.
     if pos_state is None or pos_state.get('exited') or qty > pos_state.get('remaining_qty', 0):
         pos_state = _fresh_position_state(qty)
     elif qty < pos_state['remaining_qty']:
@@ -326,10 +342,14 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
     if rate <= STOP_LOSS_RATE:
         sell_qty = pos_state['remaining_qty']
         pnl = (cur_price - avg_price) * sell_qty
+        trade_value = cur_price * sell_qty
+        asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
+        holding_ratio = 1.0  # 손절은 항상 잔여 전량
         sell_market(stk_cd, sell_qty)
         _log.info(f'[손절] {stk_nm}({stk_cd}) rate={rate:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
-                  f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원')
-        _record_trade(stk_cd, stk_nm, 'sell', 'stop_loss', sell_qty, cur_price, avg_price, pnl)
+                  f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
+        _record_trade(stk_cd, stk_nm, 'sell', 'stop_loss', sell_qty, cur_price, avg_price, pnl,
+                      asset_ratio=asset_ratio, holding_ratio=holding_ratio)
         pos_state['remaining_qty'] = 0
         pos_state['exited'] = True
         return pos_state
@@ -345,6 +365,9 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
     )
     trigger_level = max(peak_rate - TRAIL_GAP, MIN_PROFIT_FLOOR) if trailing_armed else None
     trailing_trigger = bool(trigger_level is not None and new_peak_since_last_sale and rate <= trigger_level)
+    # 트레일링이 (고점-4%p)가 아니라 최소 보호선(+2%)에 걸려서 트리거된 경우 — 더 밀리면 손절선까지
+    # 내줄 수 있으므로 분할 매도 대신 잔여 수량 전량을 청산한다.
+    trailing_floor_trigger = trailing_trigger and trigger_level <= MIN_PROFIT_FLOOR + 1e-9
 
     # 3) 목표가(+10/15/20%) — 단계별로 최초 1회씩 트리거 (도달한 가장 높은 단계까지 한 번에 반영)
     target_idx = pos_state['target_idx']
@@ -353,19 +376,33 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
 
     if pos_state['thirds_sold'] < 3 and (trailing_trigger or target_trigger):
         pos_state['thirds_sold'] += 1
-        # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
-        sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
-            else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
+        if trailing_floor_trigger:
+            # 최소 보호선(+2%)까지 밀린 경우는 분할하지 않고 잔여 수량 전부 청산
+            sell_qty = pos_state['remaining_qty']
+        else:
+            # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
+            sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
+                else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
 
         if sell_qty > 0:
             pnl = (cur_price - avg_price) * sell_qty
+            trade_value = cur_price * sell_qty
+            asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
+            holding_ratio = sell_qty / pos_state['remaining_qty'] if pos_state['remaining_qty'] > 0 else 0.0
             sell_market(stk_cd, sell_qty)
-            reason = f'목표가{target_level:.0%}' if target_trigger else '트레일링'
+            if target_trigger:
+                reason = f'목표가{target_level:.0%}'
+            elif trailing_floor_trigger:
+                reason = '트레일링-보호선전량청산'
+            else:
+                reason = '트레일링'
             _log.info(f'[{reason} {pos_state["thirds_sold"]}/3차] {stk_nm}({stk_cd}) rate={rate:.2%} '
                       f'peak={peak_rate:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
-                      f'{sell_qty}주 매도, 손익={pnl:+,.0f}원, 잔여 {pos_state["remaining_qty"] - sell_qty}주')
+                      f'{sell_qty}주 매도, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원'
+                      f'(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}), 잔여 {pos_state["remaining_qty"] - sell_qty}주')
             _record_trade(stk_cd, stk_nm, 'sell', 'target' if target_trigger else 'trailing',
-                           sell_qty, cur_price, avg_price, pnl)
+                           sell_qty, cur_price, avg_price, pnl,
+                           asset_ratio=asset_ratio, holding_ratio=holding_ratio)
             pos_state['remaining_qty'] -= sell_qty
 
         if target_trigger:
@@ -376,6 +413,27 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict]) -> Dict:
         if pos_state['remaining_qty'] <= 0 or pos_state['thirds_sold'] >= 3:
             pos_state['exited'] = True
 
+    # 4) 정체 보호 — 트레일링이 한 번 나간 뒤(last_sold_peak 존재) 그 이후 새 고점 없이 그때 쓰인
+    # 트리거선보다 STALL_GAP만큼 더 밀리면 잔여 전량 청산. 트레일링/목표가가 이번 사이클에 이미
+    # 매도했다면(위 블록) 여기는 평가하지 않는다.
+    elif pos_state['thirds_sold'] < 3 and pos_state['remaining_qty'] > 0 and pos_state['last_sold_peak'] is not None:
+        gated = peak_rate is None or peak_rate <= pos_state['last_sold_peak']
+        if gated:
+            trig_used = max(pos_state['last_sold_peak'] - TRAIL_GAP, MIN_PROFIT_FLOOR)
+            if rate <= trig_used - STALL_GAP:
+                sell_qty = pos_state['remaining_qty']
+                pnl = (cur_price - avg_price) * sell_qty
+                trade_value = cur_price * sell_qty
+                asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
+                sell_market(stk_cd, sell_qty)
+                _log.info(f'[정체보호전량청산] {stk_nm}({stk_cd}) rate={rate:.2%} 직전고점={pos_state["last_sold_peak"]:.2%} '
+                          f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 {sell_qty}주 전량 청산, '
+                          f'손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
+                _record_trade(stk_cd, stk_nm, 'sell', 'stall', sell_qty, cur_price, avg_price, pnl,
+                              asset_ratio=asset_ratio, holding_ratio=1.0)
+                pos_state['remaining_qty'] = 0
+                pos_state['exited'] = True
+
     return pos_state
 
 
@@ -384,9 +442,10 @@ def run_cycle():
         _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
         return
 
-    holdings = get_holdings(ACNT_NO, ACNT_PWD)
+    holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
     if not holdings:
         return
+    total_asset = summary['total_asset']
 
     state = _load_state()
     held_codes = set()
@@ -394,7 +453,7 @@ def run_cycle():
     for holding in holdings:
         stk_cd = holding['stk_cd']
         held_codes.add(stk_cd)
-        state[stk_cd] = evaluate_and_trade(holding, state.get(stk_cd))
+        state[stk_cd] = evaluate_and_trade(holding, state.get(stk_cd), total_asset)
 
     # 더 이상 보유하지 않는(전량 매도/청산된) 종목은 상태 정리
     for stk_cd in list(state.keys()):
@@ -442,18 +501,23 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None):
         _log.error(f'[수동매수] {stk_cd} 현재가 조회 실패')
         return
 
+    s = get_account_summary(ACNT_NO, ACNT_PWD)
+    total_asset = s['total_asset']
     if qty is None:
-        s = get_account_summary(ACNT_NO, ACNT_PWD)
-        cash = s['total_asset'] - s['tot_evlt_amt']
+        cash = total_asset - s['tot_evlt_amt']
         qty = int(cash // price)
 
     if qty <= 0:
         _log.error(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원, 매수 가능 수량 0')
         return
 
+    trade_value = qty * price
+    asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
+
     result = buy_market(stk_cd, qty)
-    _log.info(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}')
-    _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0)
+    _log.info(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}, '
+              f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
+    _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0, asset_ratio=asset_ratio)
     return result
 
 
@@ -463,7 +527,7 @@ def manual_sell(stk_cd: str, qty: int):
         _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
         return
 
-    holdings = get_holdings(ACNT_NO, ACNT_PWD)
+    holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
     match = next((h for h in holdings if h['stk_cd'] == stk_cd), None)
     if not match:
         _log.error(f'[수동매도] {stk_cd} 보유 내역 없음')
@@ -475,10 +539,17 @@ def manual_sell(stk_cd: str, qty: int):
         return
 
     pnl = (match['cur_price'] - match['avg_price']) * sell_qty
+    trade_value = match['cur_price'] * sell_qty
+    total_asset = summary['total_asset']
+    asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
+    holding_ratio = sell_qty / match['qty'] if match['qty'] > 0 else 0.0
+
     result = sell_market(stk_cd, sell_qty)
     _log.info(f'[수동매도] {match["stk_nm"]}({stk_cd}) 매입가={match["avg_price"]:,.0f}원 '
-              f'현재가={match["cur_price"]:,.0f}원 {sell_qty}주 매도, 손익={pnl:+,.0f}원 → {result}')
-    _record_trade(stk_cd, match['stk_nm'], 'sell', 'manual', sell_qty, match['cur_price'], match['avg_price'], pnl)
+              f'현재가={match["cur_price"]:,.0f}원 {sell_qty}주 매도, 손익={pnl:+,.0f}원, '
+              f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}) → {result}')
+    _record_trade(stk_cd, match['stk_nm'], 'sell', 'manual', sell_qty, match['cur_price'], match['avg_price'], pnl,
+                  asset_ratio=asset_ratio, holding_ratio=holding_ratio)
     return result
 
 
