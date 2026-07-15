@@ -49,6 +49,10 @@
             font-weight: 500;
             color: #888;
         }
+        /* 종목 상세 테이블의 평가금 밑 수익률(손익)은 요약 박스보다 조금 크게 */
+        #table-mystocks-holdings .value-sub {
+            font-size: 13px;
+        }
         .mystocks-pnl-line {
             display: flex;
             justify-content: space-between;
@@ -132,6 +136,7 @@
         /* interest_stocks.css의 .table td { color: #111827 }가 특이도(요소+클래스)로 이겨버려서 별도 지정 */
         .table td.ms-positive { color: #d32f2f; }
         .table td.ms-negative { color: #1565c0; }
+        .ms-stock-name { cursor: pointer; }
 
         .mystocks-subtitle {
             font-size: 16px;
@@ -207,7 +212,7 @@
             flex: 0 0 auto;
         }
         .ms-history-scroller {
-            max-height: 360px;
+            max-height: 400px;
             overflow-y: auto;
         }
         .ms-history-scroller table thead th {
@@ -447,7 +452,7 @@
                     <th>종목명</th>
                     <th class="right">매수가</th>
                     <th class="right">현재가</th>
-                    <th class="right">수익률</th>
+                    <th class="right">평가금</th>
                     <th class="right">수량</th>
                     {% if current_user.get_id() != config.GUEST_USERNAME %}
                     <th>액션</th>
@@ -835,7 +840,16 @@
 
     // ── 내 종목 (키움 모의투자 대시보드) ──────────────────────────────────
     const isGuestUser = {{ 'true' if current_user.get_id() == config.GUEST_USERNAME else 'false' }};
-    const MS_REASON_LABEL = { stop_loss: '손절', trailing: '트레일링', target: '목표가', manual: '수동', fire: 'fire자동' };
+    const MS_REASON_LABEL = { stop_loss: '손절', trailing: '트레일링', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호' };
+
+    // 매도 시 그 종목 보유수량 대비 이번에 판 비율 표시용 (전량/1/3/1/2 등)
+    function msHoldingRatioText(ev) {
+        if (ev.side !== 'sell' || ev.holding_ratio == null) return '';
+        const pct = Number(ev.holding_ratio) * 100;
+        if (!isFinite(pct)) return '';
+        if (pct >= 99.5) return ' (전량)';
+        return ` (${Math.round(pct)}%)`;
+    }
 
     function msFmtWon(n) {
         if (n == null || !isFinite(Number(n))) return '-';
@@ -892,13 +906,26 @@
         }
         wrap.style.display = 'flex';
 
+        // 조각 사이 공백: wrap 배경(#f8f8f8)과 같은 색 구간을 끼워 넣어 틈처럼 보이게 함
+        const GAP_COLOR = '#f8f8f8';
+        const n = values.length;
+        const maxTotalGapDeg = 360 * 0.3;  // 종목이 많아도 공백이 전체의 30%를 넘지 않도록
+        const gapDeg = n > 1 ? Math.min(3, maxTotalGapDeg / n) : 0;
+        const totalGapDeg = gapDeg * n;
+
         let acc = 0;
-        const stops = values.map((v, i) => {
+        const stops = [];
+        values.forEach((v, i) => {
             const color = MS_PIE_COLORS[i % MS_PIE_COLORS.length];
-            const start = (acc / total) * 100;
-            acc += v.value;
-            const end = (acc / total) * 100;
-            return `${color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+            const segDeg = (v.value / total) * (360 - totalGapDeg);
+            const start = acc;
+            acc += segDeg;
+            stops.push(`${color} ${start.toFixed(2)}deg ${acc.toFixed(2)}deg`);
+            if (gapDeg > 0) {
+                const gapStart = acc;
+                acc += gapDeg;
+                stops.push(`${GAP_COLOR} ${gapStart.toFixed(2)}deg ${acc.toFixed(2)}deg`);
+            }
         });
         pie.style.background = `conic-gradient(${stops.join(', ')})`;
 
@@ -919,13 +946,14 @@
         }
         tbody.innerHTML = holdings.map(h => {
             const pnl = h.pnl != null ? Number(h.pnl) : (Number(h.cur_price) - Number(h.avg_price)) * Number(h.qty || 0);
-            const pnlText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)}(${msFmtPct(h.profit_rate)})`;
+            const evltAmt = Number(h.cur_price || 0) * Number(h.qty || 0);
+            const pnlSubText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)} (${msFmtPct(h.profit_rate)})`;
             return `
         <tr>
-          <td>${h.stk_nm ?? ''}<br>(${h.stk_cd ?? ''})</td>
+          <td><span class="ms-stock-name" data-stk-cd="${h.stk_cd}">${h.stk_nm ?? ''}<br>(${h.stk_cd ?? ''})</span></td>
           <td class="right">${msFmtWon(h.avg_price)}</td>
           <td class="right ${msPnlClass(h.profit_rate)}">${msFmtWon(h.cur_price)}</td>
-          <td class="right ${msPnlClass(h.profit_rate)}">${pnlText}</td>
+          <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ${msPnlClass(pnl)}">${pnlSubText}</span></td>
           <td class="right">${h.qty ?? 0}주</td>
           ${isGuestUser ? '' : `<td>
             <button type="button" class="btn btn-secondary ms-add-buy" data-stk-cd="${h.stk_cd}" data-stk-nm="${h.stk_nm ?? ''}">추가매수</button>
@@ -955,9 +983,9 @@
             return `
         <tr>
           <td>${(ev.ts || '').replace('T', ' ')}</td>
-          <td>${ev.stk_nm ?? ''}(${ev.stk_cd ?? ''})</td>
+          <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''}(${ev.stk_cd ?? ''})</span></td>
           <td>${ev.side === 'buy' ? '매수' : '매도'}</td>
-          <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}</td>
+          <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}</td>
           <td class="right">${ev.qty ?? 0}주</td>
           <td class="right">${msFmtWon(ev.price)}</td>
           <td class="right ${pnlClass}">${pnlText}</td>
@@ -1150,6 +1178,13 @@
     });
 
     document.getElementById('table-mystocks-holdings')?.addEventListener('click', async (e) => {
+        const nameCell = e.target.closest('.ms-stock-name');
+        if (nameCell) {
+            const stkCd = nameCell.dataset.stkCd;
+            if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
+            return;
+        }
+
         const buyBtn = e.target.closest('.ms-add-buy');
         const sellBtn = e.target.closest('.ms-sell');
 
@@ -1172,9 +1207,16 @@
             const stkCd = sellBtn.dataset.stkCd;
             const maxQty = sellBtn.dataset.qty;
             const display = sellBtn.dataset.stkNm ? `${sellBtn.dataset.stkNm}(${stkCd})` : stkCd;
-            const qtyRaw = prompt(`${display} 매도 수량을 입력하세요 (보유 ${maxQty}주)`, maxQty);
-            if (!qtyRaw) return;
-            if (!confirm(`${display} ${qtyRaw}주 매도할까요?`)) return;
+            let qtyRaw;
+            if (Number(maxQty) === 1) {
+                // 보유 1주면 수량 입력 없이 바로 확인만
+                if (!confirm(`${display} 1주를 매도하시겠습니까?`)) return;
+                qtyRaw = '1';
+            } else {
+                qtyRaw = prompt(`${display} 매도 수량을 입력하세요 (보유 ${maxQty}주)`, maxQty);
+                if (!qtyRaw) return;
+                if (!confirm(`${display} ${qtyRaw}주 매도할까요?`)) return;
+            }
             try {
                 await axios.post('/stocks/kiwoom/sell', { stk_cd: stkCd, qty: qtyRaw });
                 showDebugToast('매도 요청 완료');
@@ -1183,6 +1225,13 @@
                 alert('매도 실패: ' + (err.response?.data?.message || err.message));
             }
         }
+    });
+
+    document.getElementById('table-mystocks-history')?.addEventListener('click', (e) => {
+        const nameCell = e.target.closest('.ms-stock-name');
+        if (!nameCell) return;
+        const stkCd = nameCell.dataset.stkCd;
+        if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
     });
 
 
