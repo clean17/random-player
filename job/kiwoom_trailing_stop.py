@@ -410,8 +410,10 @@ def log_account_summary():
         return
     s = get_account_summary(ACNT_NO, ACNT_PWD)
 
-    # 실제 총자산 변동 기준(거래 기록 누락·수수료·세금과 무관하게 항상 정확함)
+    # 실제 총자산 변동 기준(거래 기록 누락·수수료·세금과 무관하게 항상 정확함, 미실현 손익 포함)
     asset_pnl = get_asset_based_pnl(s['total_asset'])
+    # 체결(완료된 매도) 기준 실현손익 — 대시보드 '거래 수익' 태그와 동일 소스. 보유종목 평가변동은 반영 안 됨
+    trade_pnl = get_pnl_summary()
 
     ratio = get_win_loss_ratio()
     ratio_str = f'{ratio:.2f}' if ratio is not None else '손실없음'
@@ -419,9 +421,12 @@ def log_account_summary():
     _log.info(
         f'[계좌현황] 총자산={s["total_asset"]:,.0f}원 매입={s["tot_pur_amt"]:,.0f}원 '
         f'평가={s["tot_evlt_amt"]:,.0f}원 손익={s["tot_evlt_pl"]:+,.0f}원 수익률={s["tot_prft_rt"]:+.2%} '
-        f'오늘손익={asset_pnl["daily"]["pnl"]:+,.0f}원({asset_pnl["daily"]["rate"]:+.2%}) '
-        f'주간손익={asset_pnl["weekly"]["pnl"]:+,.0f}원({asset_pnl["weekly"]["rate"]:+.2%}) '
-        f'월간손익={asset_pnl["monthly"]["pnl"]:+,.0f}원({asset_pnl["monthly"]["rate"]:+.2%}) '
+        f'오늘손익(자산기준)={asset_pnl["daily"]["pnl"]:+,.0f}원({asset_pnl["daily"]["rate"]:+.2%}) '
+        f'주간손익(자산기준)={asset_pnl["weekly"]["pnl"]:+,.0f}원({asset_pnl["weekly"]["rate"]:+.2%}) '
+        f'월간손익(자산기준)={asset_pnl["monthly"]["pnl"]:+,.0f}원({asset_pnl["monthly"]["rate"]:+.2%}) '
+        f'오늘손익(체결기준)={trade_pnl["daily"]["pnl"]:+,.0f}원({trade_pnl["daily"]["rate"]:+.2%}) '
+        f'주간손익(체결기준)={trade_pnl["weekly"]["pnl"]:+,.0f}원({trade_pnl["weekly"]["rate"]:+.2%}) '
+        f'월간손익(체결기준)={trade_pnl["monthly"]["pnl"]:+,.0f}원({trade_pnl["monthly"]["rate"]:+.2%}) '
         f'손익비={ratio_str}'
     )
 
