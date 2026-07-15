@@ -309,7 +309,6 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
                     return rev_links
 
                 url = "https://chickchick.kr/func/scrap-posts?urls="+origin_href
-                res = requests.get(url)
                 try:
                     res = requests.get(url, timeout=5)
                     data = res.json()
