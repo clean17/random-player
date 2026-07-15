@@ -258,13 +258,15 @@ def normalize_ig_post_url(url: str) -> str:
     return urlunsplit((s.scheme, s.netloc, new_path, s.query, s.fragment))
 
 
-async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) -> List[str]:
-    """프로필 페이지에서 스크롤하며 /p/, /reel/ 링크 수집 (상대경로 → 절대경로)"""
+async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, target_url: Optional[str] = None) -> List[str]:
+    """프로필 페이지에서 스크롤하며 /p/, /reel/ 링크 수집 (상대경로 → 절대경로)
+    target_url을 주면, 스크롤 도중 해당 게시물을 만나는 순간 더 스크롤하지 않고 즉시 반환한다."""
     links = []
     post_links: Set[str] = set()
     # stable_rounds = 0
     # last_count = 0
     already_collected_count = 0
+    target_norm = normalize_ig_post_url(target_url) if target_url else None
     await page.wait_for_selector("main", timeout=20000)
     # await asyncio.sleep(5)
 
@@ -297,6 +299,11 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
             # href = normalize_ig_post_url(href)
 
             if is_post_or_reel(href):
+                if target_norm and normalize_ig_post_url(href) == target_norm:
+                    print(f"[INFO] 목표 URL 도달, 스크롤 중단: {href}")
+                    rev_links = links[::-1]   # slicing, 원본 보존
+                    return rev_links
+
                 if already_collected_count > ALREADY_COLLECTED_COUNT:
                     rev_links = links[::-1]   # slicing, 원본 보존
                     return rev_links
@@ -304,10 +311,13 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE) 
                 url = "https://chickchick.kr/func/scrap-posts?urls="+origin_href
                 res = requests.get(url)
                 try:
+                    res = requests.get(url, timeout=5)
                     data = res.json()
-                except ValueError:  # JSONDecodeError도 ValueError 하위
-                    print("[WARN] https://chickchick.kr 서버 응답없음")
-                    return []
+                except (requests.exceptions.RequestException, ValueError) as e:
+                    # 서버 무응답/타임아웃/JSON 파싱 실패 - 지금까지 모은 링크를 날리지 않고
+                    # 이 링크는 '미등록'으로 간주해 계속 진행한다 (예전엔 여기서 return [] 하여 전체 수집이 사라졌음)
+                    print(f"[WARN] https://chickchick.kr 확인 실패({type(e).__name__}), 미등록으로 간주하고 계속: {origin_href}")
+                    data = {"result": False}
                 if data["result"]: # 등록되어 있음
                     already_collected_count += 1
                     continue
@@ -1062,14 +1072,14 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
 
 
 # ======== 메인 플로우 ========
-async def handle_account(page, account: str, preset_links: Optional[List[str]] = None, throttle: Optional[Dict] = None):
+async def handle_account(page, account: str, preset_links: Optional[List[str]] = None, throttle: Optional[Dict] = None, target_url: Optional[str] = None):
     if throttle is None:
         throttle = {"processed": 0}
 
     await ensure_login(page)
     await go_to_profile(page, account)
 
-    links = preset_links if preset_links is not None else await collect_post_links(page)
+    links = preset_links if preset_links is not None else await collect_post_links(page, target_url=target_url)
 
     if len(links) > 5:
         today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
@@ -1236,6 +1246,7 @@ async def run_scrap():
                 page = await context.new_page()
 
             try:
+                # rs = await handle_account(page, acc, throttle=throttle, target_url='https://www.instagram.com/xx_jaehee_xx/p/C6XxuO7Psuu/')
                 rs = await handle_account(page, acc, throttle=throttle)
             except Exception as e:
                 print(f"[ERROR-4] [{acc}] Error in processing: {e}")
