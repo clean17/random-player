@@ -17,7 +17,14 @@
     트레일링이 재발동되지 않아 잔여 물량이 손절선(-6%)까지 보호 없이 노출될 수 있음. 이를 막기 위해
     그 매도에 쓰인 트리거선(고점-4%p 또는 보호선)보다 추가로 -6%p(STALL_GAP) 더 밀리면 잔여 전량 청산.
 
-장중 30초 간격으로 호출되는 것을 전제로 설계됨 (job/batch_runner.py에 등록).
+30초 간격으로 호출되는 것을 전제로 설계됨 (job/batch_runner.py에 등록).
+실제 평가/매매는 is_market_open() 기준 월~금 아래 세 구간에서만 수행됨:
+  - 08:00~08:50 : 넥스트트레이드(NXT) 프리마켓
+  - 09:00~15:20 : KRX 정규장
+  - 15:30~20:00 : 넥스트트레이드(NXT) 애프터마켓
+08:50~09:00(동시호가)과 15:20~15:30(KRX 종가 단일가매매)은 연속체결이 아니라서 제외한다.
+주문 시 거래소 구분(dmst_stex_tp)은 current_exchange()로 시간대에 맞게 자동 선택됨
+(NXT 세션에선 'NXT', KRX 정규장에선 'KRX'). NXT 미지원 종목은 그 시간대 주문이 거부될 수 있음.
 실전 투자 전 반드시 KIWOOM_ENV=mock(모의투자)으로 먼저 검증할 것.
 """
 import os
@@ -74,12 +81,38 @@ BASELINE_FILE = os.path.join(_LOG_DIR, 'asset_baseline.json')  # 일/주/월 시
 ACNT_NO, ACNT_PWD = get_account_credentials()
 
 
+# 넥스트트레이드(NXT, 대체거래소) 세션. 종목별 NXT 거래가능 여부는 별도 확인 안 함 — 이 시간대에
+# 보유/매매 대상 종목이 NXT 미지원이면 주문이 거부될 수 있음. 정확한 경계는 변경될 수 있으니
+# 실거래 전 Kiwoom API 문서로 재확인할 것.
+NXT_PREMARKET_START = datetime.time(8, 0)
+NXT_PREMARKET_END = datetime.time(8, 50)      # 08:50~09:00은 NXT/KRX 둘 다 세션 없음
+NXT_AFTERMARKET_START = datetime.time(15, 30)
+NXT_AFTERMARKET_END = datetime.time(20, 0)
+KRX_REGULAR_START = datetime.time(9, 0)
+KRX_REGULAR_END = datetime.time(15, 20)       # 15:20~15:30은 KRX 종가 단일가매매(연속체결 아님)
+
+
 def is_market_open() -> bool:
     now = datetime.datetime.now()
     if now.weekday() >= 5:  # 토/일 제외
         return False
     t = now.time()
-    return datetime.time(9, 0) <= t <= datetime.time(15, 30)
+    if NXT_PREMARKET_START <= t < NXT_PREMARKET_END:
+        return True
+    if KRX_REGULAR_START <= t < KRX_REGULAR_END:
+        return True
+    if NXT_AFTERMARKET_START <= t <= NXT_AFTERMARKET_END:
+        return True
+    return False
+
+
+def current_exchange() -> str:
+    """현재 시각 기준 주문을 넣을 거래소 코드. is_market_open()이 False인 시간대에 호출하면
+    의미 없음(호출 전 is_market_open()으로 이미 걸러졌다고 가정)."""
+    t = datetime.datetime.now().time()
+    if KRX_REGULAR_START <= t < KRX_REGULAR_END:
+        return 'KRX'
+    return 'NXT'  # 프리마켓(08:00~08:50)/애프터마켓(15:30~20:00)
 
 
 def _load_state() -> Dict:
@@ -345,7 +378,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         trade_value = cur_price * sell_qty
         asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
         holding_ratio = 1.0  # 손절은 항상 잔여 전량
-        sell_market(stk_cd, sell_qty)
+        sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
         _log.info(f'[손절] {stk_nm}({stk_cd}) rate={rate:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
                   f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
         _record_trade(stk_cd, stk_nm, 'sell', 'stop_loss', sell_qty, cur_price, avg_price, pnl,
@@ -389,7 +422,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             trade_value = cur_price * sell_qty
             asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
             holding_ratio = sell_qty / pos_state['remaining_qty'] if pos_state['remaining_qty'] > 0 else 0.0
-            sell_market(stk_cd, sell_qty)
+            sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
             if target_trigger:
                 reason = f'목표가{target_level:.0%}'
             elif trailing_floor_trigger:
@@ -425,7 +458,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 pnl = (cur_price - avg_price) * sell_qty
                 trade_value = cur_price * sell_qty
                 asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
-                sell_market(stk_cd, sell_qty)
+                sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
                 _log.info(f'[정체보호전량청산] {stk_nm}({stk_cd}) rate={rate:.2%} 직전고점={pos_state["last_sold_peak"]:.2%} '
                           f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 {sell_qty}주 전량 청산, '
                           f'손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
@@ -514,7 +547,7 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None):
     trade_value = qty * price
     asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
 
-    result = buy_market(stk_cd, qty)
+    result = buy_market(stk_cd, qty, dmst_stex_tp=current_exchange())
     _log.info(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
     _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0, asset_ratio=asset_ratio)
@@ -544,7 +577,7 @@ def manual_sell(stk_cd: str, qty: int):
     asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
     holding_ratio = sell_qty / match['qty'] if match['qty'] > 0 else 0.0
 
-    result = sell_market(stk_cd, sell_qty)
+    result = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
     _log.info(f'[수동매도] {match["stk_nm"]}({stk_cd}) 매입가={match["avg_price"]:,.0f}원 '
               f'현재가={match["cur_price"]:,.0f}원 {sell_qty}주 매도, 손익={pnl:+,.0f}원, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}) → {result}')

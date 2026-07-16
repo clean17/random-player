@@ -282,9 +282,9 @@ def place_order(stk_cd: str, qty: int, price: int,
     return result
 
 
-def buy_market(stk_cd: str, qty: int) -> dict:
-    return place_order(stk_cd, qty, 0, side='1', trde_tp='3')
+def buy_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX') -> dict:
+    return place_order(stk_cd, qty, 0, side='1', trde_tp='3', dmst_stex_tp=dmst_stex_tp)
 
 
-def sell_market(stk_cd: str, qty: int) -> dict:
-    return place_order(stk_cd, qty, 0, side='2', trde_tp='3')
+def sell_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX') -> dict:
+    return place_order(stk_cd, qty, 0, side='2', trde_tp='3', dmst_stex_tp=dmst_stex_tp)
