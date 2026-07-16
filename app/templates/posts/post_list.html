@@ -10,6 +10,47 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
     <style>
+        .post-search-row {
+            display: flex;
+            align-items: stretch;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .post-search-row select,
+        .post-search-row input,
+        .post-search-row button {
+            box-sizing: border-box;
+            height: 38px;
+            font-family: inherit;
+            font-size: 14px;
+            border-radius: 6px;
+            outline: none;
+            margin: 0;
+        }
+        .post-search-row select {
+            padding: 0 6px;
+            border: 1px solid #ddd;
+        }
+        .post-search-row input {
+            flex: 1;
+            padding: 0 10px;
+            border: 1px solid #ddd;
+            min-width: 0;
+        }
+        .post-search-row button {
+            padding: 0 14px;
+            border: 1px solid #1a8cff;
+            background: #1a8cff;
+            color: #fff;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .post-list-empty {
+            text-align: center;
+            padding: 40px 0;
+            color: #888;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body class="page-post app-page">
@@ -36,6 +77,17 @@
         <button type="button" class="btn-main post-write-btn" onclick="window.location.href='/posts/create'">글쓰기</button>
     </div>
 
+    <div class="post-search-row">
+        <select id="post-search-type">
+            <option value="all" {{ 'selected' if search_type == 'all' else '' }}>전체</option>
+            <option value="title" {{ 'selected' if search_type == 'title' else '' }}>제목</option>
+            <option value="content" {{ 'selected' if search_type == 'content' else '' }}>내용</option>
+            <option value="author" {{ 'selected' if search_type == 'author' else '' }}>글쓴이</option>
+        </select>
+        <input type="text" id="post-search-input" placeholder="검색어를 입력하세요" value="{{ search or '' }}">
+        <button type="button" id="post-search-btn">검색</button>
+    </div>
+
     <div class="post-list">
         {% for post in posts %}
 <!--        <a href="/posts/{{ post.id }}">-->
@@ -49,20 +101,25 @@
                 </div>
             </div>
 <!--        </a>-->
+        {% else %}
+        <div class="post-list-empty">
+            {% if search %}검색 결과가 없습니다.{% else %}게시글이 없습니다.{% endif %}
+        </div>
         {% endfor %}
     </div>
 
     <div class="pagination">
+        {% set search_qs = ('&search=' + search | urlencode if search else '') + '&type=' + search_type %}
         {% if page > 1 %}
-        <a href="/posts?page=1">&laquo;</a>
-        <a href="/posts?page={{ page-1 }}">&lt;</a>
+        <a href="/posts?page=1{{ search_qs }}">&laquo;</a>
+        <a href="/posts?page={{ page-1 }}{{ search_qs }}">&lt;</a>
         {% endif %}
         {% for p in range(max(1, page - 2), min(max_page, page + 2) + 1) %}
-        <a href="/posts?page={{ p }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+        <a href="/posts?page={{ p }}{{ search_qs }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
         {% endfor %}
         {% if page < max_page %}
-        <a href="/posts?page={{ page+1 }}">&gt;</a>
-        <a href="/posts?page={{ max_page }}">&raquo;</a>
+        <a href="/posts?page={{ page+1 }}{{ search_qs }}">&gt;</a>
+        <a href="/posts?page={{ max_page }}{{ search_qs }}">&raquo;</a>
         {% endif %}
     </div>
 </div>
@@ -80,5 +137,19 @@
             location.href = '/posts/' + postId;
         })
     })
+
+    function doPostSearch() {
+        const q = (document.getElementById('post-search-input')?.value || '').trim();
+        const type = document.getElementById('post-search-type')?.value || 'all';
+        const url = new URL('/posts', location.origin);
+        url.searchParams.set('page', 1);
+        url.searchParams.set('type', type);
+        if (q) url.searchParams.set('search', q);
+        location.href = url.toString();
+    }
+    document.getElementById('post-search-btn')?.addEventListener('click', doPostSearch);
+    document.getElementById('post-search-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doPostSearch();
+    });
 </script>
 </html>

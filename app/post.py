@@ -11,13 +11,19 @@ from bs4 import BeautifulSoup
 
 posts = Blueprint('posts', __name__)
 
+SEARCH_TYPES = {'all', 'title', 'content', 'author'}
+
 @posts.route('/')
 @login_required
 def post_list():
     page = int(request.args.get('page', 1))
+    search = request.args.get('search', '').strip()
+    search_type = request.args.get('type', 'all')
+    if search_type not in SEARCH_TYPES:
+        search_type = 'all'
     per_page = 10
-    total = get_posts_count()
-    page_posts = find_post_list(page, per_page)
+    total = get_posts_count(search=search or None, search_type=search_type)
+    page_posts = find_post_list(page, per_page, search=search or None, search_type=search_type)
     for post in page_posts:
         soup = BeautifulSoup(post.content, "html.parser")
         first_img = soup.find("img")
@@ -26,12 +32,14 @@ def post_list():
         else:
             post.thumbnail = '/static/no-image.png'
 
-    max_page = (total - 1) // per_page + 1
+    max_page = (total - 1) // per_page + 1 if total else 1
     return render_template(
         "posts/post_list.html"
         , posts=page_posts
         , page=page
         , max_page=max_page
+        , search=search
+        , search_type=search_type
         , version=int(time.time())
     )
 

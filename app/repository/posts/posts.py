@@ -3,7 +3,7 @@ from nanoid import generate as generate_nanoid
 
 from app.repository.posts.PostDTO import PostDTO
 from config.db_connect import conn, db_transaction
-from typing import List
+from typing import List, Optional
 
 @db_transaction
 def insert_post(post: "PostDTO", conn=None) -> int:
@@ -50,26 +50,44 @@ def find_post(public_id: str, conn=None) -> List["PostDTO"]:
             return PostDTO(**row)
         return None
 
+SEARCH_TYPE_COLUMNS = {
+    'title': ['p.title'],
+    'content': ['p.content'],
+    'author': ['u.realname'],
+    'all': ['p.title', 'p.content', 'u.realname'],
+}
+
+def _build_search_clause(search: Optional[str], search_type: Optional[str]):
+    if not search:
+        return '', []
+    columns = SEARCH_TYPE_COLUMNS.get(search_type, SEARCH_TYPE_COLUMNS['all'])
+    like = f"%{search}%"
+    clause = 'WHERE (' + ' OR '.join(f'{col} ILIKE %s' for col in columns) + ') '
+    return clause, [like] * len(columns)
+
 @db_transaction
-def find_post_list(offset: int, limit: int, conn=None) -> List["PostDTO"]:
+def find_post_list(offset: int, limit: int, search: Optional[str] = None, search_type: Optional[str] = None, conn=None) -> List["PostDTO"]:
     posts = []
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-        cur.execute(
+        query = (
             "SELECT p.*, TO_CHAR(p.updated_at, 'YYYY-MM-DD HH24:MI') as updated_at, u.realname FROM posts p "
             "JOIN USERS u on u.id = p.user_id "
-            "ORDER BY p.id DESC OFFSET %s LIMIT %s;",
-            ((offset-1)*10, limit)
         )
+        clause, params = _build_search_clause(search, search_type)
+        query += clause
+        query += "ORDER BY p.id DESC OFFSET %s LIMIT %s;"
+        params += [(offset-1)*10, limit]
+        cur.execute(query, tuple(params))
         rows = cur.fetchall()
         for row in rows:
             posts.append(PostDTO(**row))
     return posts
 
 @db_transaction
-def get_posts_count(conn=None) -> int:
+def get_posts_count(search: Optional[str] = None, search_type: Optional[str] = None, conn=None) -> int:
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-        cur.execute(
-            "select count(1) from posts;"
-        )
+        clause, params = _build_search_clause(search, search_type)
+        query = "SELECT count(1) FROM posts p JOIN users u ON u.id = p.user_id " + clause + ";"
+        cur.execute(query, tuple(params))
         row = cur.fetchone()
     return row['count']
