@@ -477,3 +477,30 @@ $ python -m ensurepip --upgrade
 $ python -m pip install --upgrade pip
 
 ```
+
+# Coturn 서버
+- 외부 마운트 경로 확인
+
+```bash
+docker inspect coturn \
+  --format '{{range .Mounts}}{{println .Type ":" .Source "->" .Destination}}{{end}}'
+  
+bind : C:\nginx\nginx-1.26.2\ssl\chickchick.kr-key.pem -> /etc/coturn/privkey.pem
+bind : C:\Users\user\turnserver.conf -> /etc/coturn/turnserver.conf
+volume : /var/lib/docker/volumes/1958c59aaa327443c987d442380e353b5f6b6e142aedd09ed0f177ed2c575f48/_data -> /var/lib/coturn
+bind : C:\nginx\nginx-1.26.2\ssl\chickchick.kr-fullchain.pem -> /etc/coturn/fullchain.pem
+
+```
+
+## git 메세지 규칙
+
+feat: 새로운 기능 추가
+fix: 버그 수정
+docs: 문서 수정
+style: 코드 동작 변화 없는 스타일 수정
+refactor: 기능 변화 없는 구조 개선
+test: 테스트 추가/수정
+chore: 빌드, 설정, 패키지 같은 잡일
+perf: 성능 개선
+build: 빌드 시스템, 의존성 관련
+ci: CI/CD 설정 변경
