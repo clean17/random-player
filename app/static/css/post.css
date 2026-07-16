@@ -3758,3 +3758,26 @@ body.page-post-view .form-actions.post-bottom-actions {
         padding-bottom: calc(var(--post-final-action-h, 40px) + var(--post-final-action-bottom, 10px) + 10px) !important;
     }
 }
+
+/* List, view, edit container width unified, then narrowed ~10% (1120px -> 1008px). */
+body.page-post {
+    --post-shrink-max: 1008px;
+}
+body.page-post:not(.page-post-edit):not(.page-post-view) > .container {
+    width: min(var(--post-shrink-max), calc(100% - 28px)) !important;
+    max-width: var(--post-shrink-max) !important;
+}
+body.page-post-edit > .container,
+body.page-post-edit form.container {
+    width: min(var(--post-shrink-max), calc(100% - 16px)) !important;
+    max-width: var(--post-shrink-max) !important;
+}
+body.page-post-view > .container {
+    width: min(var(--post-shrink-max), calc(100% - 28px)) !important;
+    max-width: var(--post-shrink-max) !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    width: min(var(--post-shrink-max), calc(100% - 40px)) !important;
+    max-width: min(var(--post-shrink-max), calc(100% - 40px)) !important;
+}
