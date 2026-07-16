@@ -207,6 +207,38 @@ function getFilenameFromUrl(url) {
     return params.get('filename');
 }
 
+function appendUrlParam(url, key, value) {
+    const urlObj = new URL(url);
+    urlObj.searchParams.set(key, value);
+    return urlObj.toString();
+}
+
+// 채팅 이미지 클릭 시 원본 크기로 보기
+function openImageLightbox(fullSrc) {
+    const overlay = document.createElement('div');
+    overlay.className = 'chat-image-lightbox';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'close-lightbox';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', '닫기');
+    closeBtn.innerHTML = '&times;';
+
+    const fullImg = document.createElement('img');
+    fullImg.src = fullSrc;
+    fullImg.alt = 'Image Url';
+
+    overlay.appendChild(closeBtn);
+    overlay.appendChild(fullImg);
+
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', close);
+    closeBtn.addEventListener('click', close);
+    fullImg.addEventListener('click', (e) => e.stopPropagation());
+
+    document.body.appendChild(overlay);
+}
+
 // 태그 내부 text만 replace
 function replaceSpacesOutsideTags(html) {
     // 임시 컨테이너에 html 파싱
@@ -776,6 +808,7 @@ function addMessage(data, load = false) {
         // img.src = data.msg;
         img.src = '/static/no-image.png';
         img.dataset.src = data.msg; // preloadImage()가 지연 로딩 (태그가 뷰박스에 들어오면)
+        img.dataset.fullSrc = appendUrlParam(data.msg, 'original', '1'); // 클릭 시 원본 크기로 보기
         img.alt = 'Image Url';
         img.style.width = '100%';
         img.style.height = 'auto'; // 비율 유지 (이미지가 찌그러지지 않게)
@@ -784,6 +817,7 @@ function addMessage(data, load = false) {
             img.src = '/static/no-image.png';
             img.style.width = '200px';
         };
+        img.addEventListener('click', () => openImageLightbox(img.dataset.fullSrc));
         messageDiv.appendChild(img);
         messageDiv.classList.remove('px-[0.7rem]', 'py-[0.4rem]');
         messageDiv.classList.add('border');

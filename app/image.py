@@ -582,6 +582,7 @@ def get_image():
     filename = urllib.parse.unquote_plus(filename)
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir', '')
+    original = request.args.get('original', '') in ('1', 'true')
 
     market = request.args.get('market') or ''
     directory = DIRECTORY_MAP.get(market.lower())
@@ -604,6 +605,10 @@ def get_image():
             abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
     else:
         abort(400, 'Invalid dir')
+
+    if original:
+        # 원본 요청 시 썸네일을 건너뛰고 원본 파일을 바로 반환
+        return send_from_directory(base_dir, filename)
 
     # thumb 서브디렉토리에 동일 이름 .webp 있으면 우선 반환
     thumb_dir = os.path.join(base_dir, 'thumb')
