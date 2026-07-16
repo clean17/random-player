@@ -1,4 +1,5 @@
 import psycopg
+from nanoid import generate as generate_nanoid
 
 from app.repository.posts.PostDTO import PostDTO
 from config.db_connect import conn, db_transaction
@@ -6,42 +7,43 @@ from typing import List
 
 @db_transaction
 def insert_post(post: "PostDTO", conn=None) -> int:
+    public_id = generate_nanoid()
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO posts (user_id, type, title, content, created_at, updated_at) VALUES (%s, %s, %s, %s, now(), now()) RETURNING id;",
-            (post.user_id, None, post.title, post.content)
+            "INSERT INTO posts (user_id, type, title, content, public_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, now(), now()) RETURNING id;",
+            (post.user_id, None, post.title, post.content, public_id)
         )
         chat_id = cur.fetchone()[0]
         return chat_id
 
 @db_transaction
-def update_post(post: "PostDTO", conn=None) -> int:
+def update_post(post: "PostDTO", conn=None) -> str:
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE posts SET user_id = %s, title = %s, content = %s, updated_at = now() WHERE id = %s RETURNING id;",
-            (post.user_id, post.title, post.content, post.id)
+            "UPDATE posts SET user_id = %s, title = %s, content = %s, updated_at = now() WHERE public_id = %s RETURNING public_id;",
+            (post.user_id, post.title, post.content, post.public_id)
         )
-        post_id = cur.fetchone()[0]
-        return post_id
+        public_id = cur.fetchone()[0]
+        return public_id
 
 @db_transaction
-def delete_post(post: "PostDTO", conn=None) -> int:
+def delete_post(post: "PostDTO", conn=None) -> str:
     with conn.cursor() as cur:
         cur.execute(
-            "DELETE FROM posts WHERE id = %s RETURNING id;",
-            (post.id,)
+            "DELETE FROM posts WHERE public_id = %s RETURNING public_id;",
+            (post.public_id,)
         )
         row = cur.fetchone()
         return row[0] if row else None
 
 @db_transaction
-def find_post(post_id: str, conn=None) -> List["PostDTO"]:
+def find_post(public_id: str, conn=None) -> List["PostDTO"]:
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
             "SELECT p.*, TO_CHAR(p.updated_at, 'YYYY-MM-DD HH24:MI') as updated_at, u.realname FROM posts p "
             "JOIN users u ON u.id = p.user_id "
-            "WHERE p.id = %s ;",
-            (post_id,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
+            "WHERE p.public_id = %s ;",
+            (public_id,) # 한 개짜리 튜플은 (값, )처럼 반드시 콤마가 있어야 한다
         )
         row = cur.fetchone()
         if row:

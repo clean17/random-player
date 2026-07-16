@@ -3,6 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class PostDTO:
     id: int = None
+    public_id: str = None
     user_id: int = None
     type: str = None
     title: str = None

@@ -54,7 +54,7 @@
     <div class="form-actions post-bottom-actions">
         <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
         {% if post.user_id == user.id %}
-        <button type="button" class="post-action-btn post-action-edit" onclick="window.location.href='/posts/{{ post.id }}/edit'">수정</button>
+        <button type="button" class="post-action-btn post-action-edit" onclick="window.location.href='/posts/{{ post.public_id }}/edit'">수정</button>
         <button type="button" class="post-action-btn post-action-delete" id="delete-post">삭제</button>
         {% endif %}
     </div>
@@ -155,7 +155,7 @@
 
         deletePostBtn?.addEventListener('click', () => {
             if (confirm('삭제하시겠습니까?')) {
-                axios.post("/posts/{{ post.id }}/del", {}, {
+                axios.post("/posts/{{ post.public_id }}/del", {}, {
                     headers: {"Content-Type": "application/json"},
                     timeout: 3000 // 3초 초과시 자동 reject
                 }).then(async res => {

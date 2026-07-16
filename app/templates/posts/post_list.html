@@ -39,7 +39,7 @@
     <div class="post-list">
         {% for post in posts %}
 <!--        <a href="/posts/{{ post.id }}">-->
-            <div class="post-box" data-post-id="{{ post.id }}">
+            <div class="post-box" data-post-id="{{ post.public_id }}">
                 <div class="thumbnail">
                     <img src={{ post.thumbnail }}>
                 </div>
