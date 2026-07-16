@@ -231,10 +231,18 @@ function openImageLightbox(fullSrc) {
     overlay.appendChild(closeBtn);
     overlay.appendChild(fullImg);
 
-    const close = () => overlay.remove();
+    const onKeydown = (e) => {
+        if (e.key === 'Escape') close();
+    };
+
+    const close = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKeydown);
+    };
     overlay.addEventListener('click', close);
     closeBtn.addEventListener('click', close);
     fullImg.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('keydown', onKeydown);
 
     document.body.appendChild(overlay);
 }
