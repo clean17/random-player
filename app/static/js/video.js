@@ -57,6 +57,7 @@ function setVideoOptions(vodUrl, videoFileType) {
             remainingTimeDisplay: true, // 남은 시간 표시
             progressControl: true // 재생 진행바
         },
+        inactivityTimeout: 2000,
     };
     return videoOptions;
 }
@@ -85,7 +86,13 @@ function initVideoElem() {
         if (isVideoJs()) {
             let player = videojs.getPlayer(currentVideoPlayer.id);
             if (player) {
-                player.dispose(); // video.js 인스턴스 해제 > #videoPlayer도 자동으로 DOM에서 제거된다
+                try {
+                    player.dispose(); // video.js 인스턴스 해제 > #videoPlayer도 자동으로 DOM에서 제거된다
+                } catch (e) {
+                    currentVideoPlayer.remove();
+                }
+            } else {
+                currentVideoPlayer.remove();
             }
         } else {
             currentVideoPlayer.remove();
@@ -106,9 +113,9 @@ function initVideoSrc() {
             player.src({ src: '', type: 'video/mp4' });
             player.load();*/
             try { player.pause(); } catch {}
+            try { player.reset(); } catch {}
             const cur = player.currentSrc && player.currentSrc();
             if (cur && cur.startsWith('blob:')) URL.revokeObjectURL(cur);
-            player.reset(); // 필요 시 dispose()
         } else if (currentVideoPlayer) {
             currentVideoPlayer.pause();
             currentVideoPlayer.onloadedmetadata = null;
@@ -207,23 +214,42 @@ function getVideo() {
 }
 
 function playVideo(videoUrl) {
-    initVideoSrc()
+    // Fast path: Video.js가 이미 실행 중이면 사용자 제스처 컨텍스트 내에서 즉시 play()
+    // Android는 비동기 콜백(loadedmetadata → changeVideo)에서 play()를 차단하므로
+    // 기존 플레이어를 재활용해 동기적으로 호출한다
+    if (player && !player.isDisposed() && isVideoJs()) {
+        mimeType = currentVideo.split('.').pop() === 'ts' ? 'video/mp2t' : 'video/mp4';
+        pushVideoArr(currentVideo);
+        player.off('loadeddata');
+        player.one('loadeddata', function() {
+            filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl));
+        });
+        player.src({type: mimeType, src: videoUrl});
+        player.load();
+        player.volume(previousVolume);
+        player.loop(isLooping);
+        player.play().catch(() => {});
+        return;
+    }
+
+    // Slow path: Video.js 초기 세팅 (첫 영상 로드)
+    initVideoSrc();
     initVideoElem();
     if (videoSource) {
         videoSource.src = videoUrl;
     }
-    pushVideoArr(currentVideo)
-    /*console.log('-----------------------')
-    previousVideos.forEach(item => {
-        console.log(extractFilename(decodeURIComponent(item)))
-    })
-    console.log('-----------------------')*/
+    pushVideoArr(currentVideo);
     if (videoPlayer) {
         videoPlayer.volume = previousVolume;
         videoPlayer.loop = isLooping;
         videoPlayer.load();
+        const capturedElem = videoPlayer;
         videoPlayer.removeEventListener('loadedmetadata', getVideoEvent);
-        videoPlayer.addEventListener('loadedmetadata', getVideoEvent);
+        videoPlayer.addEventListener('loadedmetadata', function onMetadata() {
+            videoPlayer.removeEventListener('loadedmetadata', onMetadata);
+            if (videoPlayer !== capturedElem) return;
+            getVideoEvent();
+        });
     }
 }
 
@@ -351,29 +377,26 @@ function changeVideo() {
     mimeType = fileExtension === 'ts' ? 'video/mp2t' : 'video/mp4';
     // document.title = currentVideo.split('/')[1]
 
-    if (videojs.players['videoPlayer']) { // 재사용
-        player = videojs.players['videoPlayer'];
+    const existingPlayer = videojs.players['videoPlayer'];
+    if (existingPlayer && !existingPlayer.isDisposed()) {
+        player = existingPlayer;
     } else {
         player = videojs('videoPlayer', setVideoOptions(videoUrl, mimeType));
     }
 
+    player.off('loadeddata');
+    player.one('loadeddata', function () {
+        filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl));
+    });
     player.src({type: mimeType, src: videoUrl});
     player.load();
-    player.volume(previousVolume)
-    player.loop(isLooping)
-    player.off('loadeddata');
-    player.on('loadeddata', function () {
-        player.play();
-        filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl))
-    });
-    // player.off('ended');
-    // player.on('ended', function() {
-    //     if (isLooping) {
-    //         player.play();
-    //     }
-    // });
-    player.ready(function() {
-        let controlBar = player.controlBar;
+    player.volume(previousVolume);
+    player.loop(isLooping);
+    player.play().catch(() => {});
+    const readyPlayer = player;
+    readyPlayer.ready(function() {
+        if (readyPlayer.isDisposed()) return;
+        let controlBar = readyPlayer.controlBar;
 
         controlBar.on('keydown', function(event) {
             // page up key: 33, page down key: 34
@@ -381,6 +404,13 @@ function changeVideo() {
                 event.preventDefault();
             }
         });
+
+        const progressEl = controlBar.progressControl && controlBar.progressControl.el();
+        if (progressEl) {
+            progressEl.addEventListener('touchend', function() {
+                setTimeout(function() { if (!readyPlayer.isDisposed()) readyPlayer.userActive(false); }, 2000);
+            }, { passive: true });
+        }
     });
     player.off('timeupdate');
     player.on('timeupdate', function() {
@@ -473,6 +503,8 @@ function addVideoEvent() {
         videoPlayer.addEventListener('ended', getVideo);
         videoPlayer.removeEventListener('touchmove', showControls);
         videoPlayer.addEventListener('touchmove', showControls);
+        videoPlayer.removeEventListener('touchend', hideControls);
+        videoPlayer.addEventListener('touchend', hideControls);
         videoPlayer.removeEventListener('focus', function(event) {
             event.target.blur();
         });
@@ -805,29 +837,26 @@ function delayAudio() {
     if (video) {
         if (isVideoJs()) {
             // 비디오 요소가 로드된 후 Web Audio API 연결
-            player.ready(function() {
+            const audioPlayer = player;
+            audioPlayer.ready(function() {
+                if (audioPlayer.isDisposed()) return;
                 // Video.js의 HTML5 비디오 요소 참조
-                var videoElement = player.el().getElementsByTagName('video')[0];
+                var videoElement = audioPlayer.el().getElementsByTagName('video')[0];
 
                 // Web Audio API 초기화
-                var audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                var source = audioContext.createMediaElementSource(videoElement);
-                var gainNode = audioContext.createGain();
-
-                // 증폭률 설정 (1.0은 100%, 2.0은 200%)
-                gainNode.gain.value = 1.0;
-
-                // 오디오 노드를 연결
-                source.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-
-                toggleGainBtn?.addEventListener('click', function() {
-                    if (isClickGain) {
-                        gainNode.gain.value = 2.0;
-                    } else {
-                        gainNode.gain.value = 1.0;
-                    }
-                });
+                var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                try {
+                    var gainNode = audioCtx.createGain();
+                    var src = audioCtx.createMediaElementSource(videoElement);
+                    gainNode.gain.value = 1.0;
+                    src.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    toggleGainBtn?.addEventListener('click', function() {
+                        gainNode.gain.value = isClickGain ? 2.0 : 1.0;
+                    });
+                } catch (e) {
+                    try { audioCtx.close(); } catch (_) {}
+                }
             });
 
             /*video = videojs.getPlayer(video.id);
