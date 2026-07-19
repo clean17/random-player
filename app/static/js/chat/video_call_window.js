@@ -93,6 +93,7 @@ function openVideoCallWindow() {
 
     vcallIframe = document.createElement("iframe");
     vcallIframe.src = "/func/video-call/window";
+    vcallIframe.allow = "camera; microphone; autoplay; display-capture";
     vcallIframe.style.cssText = "width:100%;height:100%;border:none;flex:1";
 
     const resizeHandle = document.createElement("div");
