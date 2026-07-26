@@ -4,7 +4,13 @@ import json
 import statistics
 from datetime import datetime
 import matplotlib.pyplot as plt
+from datetime import datetime
 
+today = datetime.now().strftime("%Y%m%d")
+year = datetime.now().strftime("%Y")
+month = datetime.now().strftime("%m")
+day = datetime.now().strftime("%d")
+print(f"{today} {year} {month} {day}")
 
 INTERVAL = 10  # 초
 LOG_FILE = "system_usage.jsonl"
