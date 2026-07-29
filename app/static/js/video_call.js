@@ -264,10 +264,28 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         myStream = await navigator.mediaDevices.getUserMedia(constraints);
         // console.log("myStream 연결 완료: ", myStream);
 
-        const audioTrack = myStream.getAudioTracks()[0];
+        let audioTrack = myStream.getAudioTracks()[0];
         const audioSettings = audioTrack.getSettings();
         currentMicrophoneDeviceId = audioSettings.deviceId || null; // 필요없는지 테스트 필요
         console.log("🎤 현재 사용증인 마이크 deviceId:", currentMicrophoneDeviceId);
+
+        // deviceId 없이 잡은 최초 트랙은 OS 기본 통신 장치로 라우팅되어 먹먹하게 들리는 경우가 있어,
+        // 실제 deviceId를 알아낸 뒤 그 deviceId로 다시 명시적으로 잡아 교체한다 (마이크 전환 후 되돌렸을 때와 동일한 경로)
+        if (currentMicrophoneDeviceId) {
+            try {
+                const pinnedAudioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { deviceId: { exact: currentMicrophoneDeviceId } },
+                    video: false
+                });
+                const pinnedAudioTrack = pinnedAudioStream.getAudioTracks()[0];
+                myStream.removeTrack(audioTrack);
+                audioTrack.stop();
+                myStream.addTrack(pinnedAudioTrack);
+                audioTrack = pinnedAudioTrack;
+            } catch (pinErr) {
+                console.warn("마이크 deviceId 고정 재요청 실패, 기본 트랙 사용:", pinErr);
+            }
+        }
 
         const videoTrack = myStream?.getVideoTracks()[0];
         const videoSettings = videoTrack.getSettings();
