@@ -505,7 +505,8 @@ function deletePage(e) {
 
     axios.post("/image/delete-images?dir="+dir, {
         images: delImages,
-        page: page
+        page: page,
+        search: (typeof currentSearch !== 'undefined' && currentSearch) ? currentSearch : ''
     })
         .then(res => {
             // 응답 JSON의 redirect 사용 (절대 URL로 보장)

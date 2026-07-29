@@ -552,7 +552,10 @@ def delete_images():
     elif dir == 'refine' and refined_image_arr:
         refined_image_arr[:] = [p for p in refined_image_arr if p not in to_delete]
 
+    search = (data.get("search") or "").strip()
     page = int(data.get("page", 1))
+    if search:
+        page = 1
     # if dir == 'image2':
     #     global ig_image_arr
     #     ig_image_arr = ig_image_arr[LIMIT_PAGE_NUM:]
@@ -566,7 +569,7 @@ def delete_images():
 
     # return redirect(url_for('image.image_list', page=page, dir=dir))
     # return jsonify(redirect=url_for('image.image_list', page=page, dir=dir)), 200
-    return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir)}), 200 # 명시적 표기
+    return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir, search=search or None)}), 200 # 명시적 표기
 
 
 
