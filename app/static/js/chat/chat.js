@@ -809,14 +809,44 @@ function addMessage(data, load = false) {
         messageDiv.style.color = 'lightgray'; // 글자색 (카톡 다크모드)
     }
 
+    // 첨부(이미지/영상/파일) URL 아래에 캡션(텍스트)이 붙어있으면 분리 (첫 <br> 기준)
+    // 구분자로 원시 개행(\n)이 아닌 <br>을 쓴다 — 히스토리 로드 코드(위쪽 참고)가 \n을 strip 하기 때문
+    const _brIdx = data.msg.indexOf('<br>');
+    const msgUrlPart = _brIdx === -1 ? data.msg : data.msg.slice(0, _brIdx);
+    const msgCaptionPart = _brIdx === -1 ? '' : data.msg.slice(_brIdx + 4).trim();
+
+    // messageDiv는 flex(row)+items-center라서 자식을 그냥 나란히 붙이면 캡션이 이미지 옆으로 밀려 안 보인다.
+    // 이미지/영상/파일 + 캡션을 세로로 쌓을 별도 래퍼에 담아 messageDiv의 단일 flex 자식으로 붙인다.
+    function appendMediaWithCaption(mediaEl) {
+        if (!msgCaptionPart) {
+            messageDiv.appendChild(mediaEl);
+            return;
+        }
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.width = '100%';
+        wrapper.appendChild(mediaEl);
+
+        const captionSpan = document.createElement('span');
+        captionSpan.classList.add('attachment-caption');
+        // imageRenderer()가 버블 자체 padding(px-[0.7rem])을 지워서 이미지를 꽉 채우는데,
+        // 캡션 텍스트까지 여백 없이 붙으면 답답해 보여서 캡션에만 좌우 padding을 따로 준다
+        captionSpan.style.padding = '4px 0.7rem 0';
+        captionSpan.innerHTML = replaceSpacesOutsideTags(msgCaptionPart);
+        wrapper.appendChild(captionSpan);
+
+        messageDiv.appendChild(wrapper);
+    }
+
     // 스켈레톤 이미지 박스
     function imageRenderer() {
         // 이미지 첨부
         const img = document.createElement('img');
         // img.src = data.msg;
         img.src = '/static/no-image.png';
-        img.dataset.src = data.msg; // preloadImage()가 지연 로딩 (태그가 뷰박스에 들어오면)
-        img.dataset.fullSrc = appendUrlParam(data.msg, 'original', '1'); // 클릭 시 원본 크기로 보기
+        img.dataset.src = msgUrlPart; // preloadImage()가 지연 로딩 (태그가 뷰박스에 들어오면)
+        img.dataset.fullSrc = appendUrlParam(msgUrlPart, 'original', '1'); // 클릭 시 원본 크기로 보기
         img.alt = 'Image Url';
         img.style.width = '100%';
         img.style.height = 'auto'; // 비율 유지 (이미지가 찌그러지지 않게)
@@ -826,7 +856,7 @@ function addMessage(data, load = false) {
             img.style.width = '200px';
         };
         img.addEventListener('click', () => openImageLightbox(img.dataset.fullSrc));
-        messageDiv.appendChild(img);
+        appendMediaWithCaption(img);
         messageDiv.classList.remove('px-[0.7rem]', 'py-[0.4rem]');
         messageDiv.classList.add('border');
     }
@@ -848,9 +878,9 @@ function addMessage(data, load = false) {
              return s.match(imageExtRegex);
         }
 
-        if (data.msg.trim().startsWith('https://chickchick.kr/image/images')) {
+        if (msgUrlPart.trim().startsWith('https://chickchick.kr/image/images')) {
             imageRenderer();
-        } else if (data.msg.trim().startsWith('https://chickchick.kr/video/temp-video/')) {
+        } else if (msgUrlPart.trim().startsWith('https://chickchick.kr/video/temp-video/')) {
             // 비디오 첨부
             const video = document.createElement('video');
             video.classList.add('thumbnail');
@@ -858,19 +888,19 @@ function addMessage(data, load = false) {
             // video.style.height = '500px';
             const source = document.createElement('source');
             source.type = 'video/mp4';
-            source.src = data.msg;
+            source.src = msgUrlPart;
             video.appendChild(source);
             messageDiv.innerHTML = '';
-            messageDiv.appendChild(video);
+            appendMediaWithCaption(video);
             messageDiv.classList.remove('px-[0.7rem]', 'py-[0.4rem]');
             messageDiv.classList.remove('bg-gray-200')
             messageDiv.classList.remove('bg-blue-200')
             messageDiv.classList.add('border');
-        } else if (data.msg.trim().startsWith('https://chickchick.kr/file/files')) {
+        } else if (msgUrlPart.trim().startsWith('https://chickchick.kr/file/files')) {
             // 파일 첨부
             const link = document.createElement('a');
-            link.href = data.msg;
-            link.innerText = getFilenameFromUrl(data.msg);
+            link.href = msgUrlPart;
+            link.innerText = getFilenameFromUrl(msgUrlPart);
             link.target = '_blank';
             link.style.color = '#4da3ff';
             link.style.textDecoration = 'underline';
@@ -878,8 +908,8 @@ function addMessage(data, load = false) {
             link.onmouseenter = () => link.style.color = '#82c7ff';
             link.onmouseleave = () => link.style.color = '#4da3ff';
             messageDiv.innerHTML = '';
-            messageDiv.appendChild(link);
-        } else if (isImagePathUrl(data.msg.trim())) {
+            appendMediaWithCaption(link);
+        } else if (isImagePathUrl(msgUrlPart.trim())) {
             imageRenderer();
         } else {
             const messageSpan = document.createElement("span");

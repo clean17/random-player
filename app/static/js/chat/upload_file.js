@@ -1,6 +1,7 @@
 ////////////////////////// File Upload /////////////////////////////
 
-function uploadFile(event) {
+function uploadFile(event, caption) {
+    caption = typeof caption === 'string' ? caption.trim() : '';
     const files = event.target.files;
 
     if (!files || files.length === 0) {
@@ -58,7 +59,7 @@ function uploadFile(event) {
                 const files = response.files;
 
                 // files는 서버에서 json 형태로 만들어줘야 한다
-                files.forEach(file => {
+                files.forEach((file, idx) => {
                     const filename = file.name;
                     const isImage = file.type.startsWith("image/");
                     const isVideo = file.type.startsWith("video/");
@@ -77,7 +78,13 @@ function uploadFile(event) {
                         url = "https://chickchick.kr/file/files?filename="+filename+"&dir=temp&selected_dir=chat";
                     }
 
-                    const msg = url.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
+                    let msg = url.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");  // 마지막 모든 <br> 제거
+                    // 붙여넣기 시점에 입력창에 있던 텍스트를 이미지 밑에 캡션으로 붙임 (배치의 마지막 이미지에만)
+                    // 구분자로 원시 개행(\n) 대신 <br>을 쓴다 — 채팅 히스토리 로드 코드가 \n을 strip 해버리기 때문
+                    if (isImage && caption && idx === files.length - 1) {
+                        const safeCaption = caption.replace(/\n/g, "<br>").replace(/(<br>\s*)$/, "");
+                        msg = msg + "<br>" + safeCaption;
+                    }
                     if (msg !== "") {
                         socket.emit("new_msg", { username, msg, room: roomName });
                     }
@@ -116,7 +123,19 @@ function uploadPastedFiles(files) {
     files.forEach(file => dataTransfer.items.add(file));
     fileInputEl.files = dataTransfer.files;
 
-    uploadFile({ target: fileInputEl });
+    // 붙여넣기 시점에 입력창에 타이핑되어 있던 텍스트를 캡션으로 사용하고, 입력창은 비운다
+    const chatInputEl = document.getElementById('chat-input');
+    const caption = chatInputEl ? chatInputEl.value : '';
+    if (chatInputEl && caption) {
+        chatInputEl.value = '';
+        if (typeof resetChatTextareaToInitial === 'function') {
+            resetChatTextareaToInitial(chatInputEl);
+        } else if (typeof resizeChatTextarea === 'function') {
+            resizeChatTextarea(chatInputEl);
+        }
+    }
+
+    uploadFile({ target: fileInputEl }, caption);
 }
 
 (() => {
