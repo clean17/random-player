@@ -116,9 +116,9 @@ def run_crawl_ai_image():
         print("returncode =", process.returncode)
 
 def run_crawl_ig_image():
-    print('    ############################### run_crawl_ig_image ###############################')
+    print('    ############################### run_crawl_gm_image ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
-    py_script = r"C:\my-project\random-player\job\scrap\scrap_ig_playwrigit.py"
+    py_script = r"C:\my-project\random-player\job\scrap\scrap_gm_playwrigit.py"
 
     # subprocess 실행 (새로운 프로세스)
     process = subprocess.Popen(
@@ -670,3 +670,34 @@ def generate_fullchain_pem_daily():
 
     if process.returncode != 0:
         print("returncode =", process.returncode)
+
+
+def run_kiwoom_trailing_stop():
+    from job.kiwoom_trailing_stop import run_cycle, is_market_open, _log
+    if not is_market_open():
+        return
+    try:
+        run_cycle()
+    except Exception as e:
+        _log.error(f'run_kiwoom_trailing_stop 실패: {e}')
+
+
+def log_kiwoom_account_summary():
+    from job.kiwoom_trailing_stop import log_account_summary, is_market_open, _log
+    if not is_market_open():
+        return
+    try:
+        log_account_summary()
+    except Exception as e:
+        _log.error(f'log_kiwoom_account_summary 실패: {e}')
+
+
+def run_kiwoom_fire_buy():
+    from job.kiwoom_trailing_stop import is_market_open, _log
+    if not is_market_open():
+        return
+    try:
+        from job.kiwoom_fire_strategy import run_fire_buy_cycle
+        run_fire_buy_cycle()
+    except Exception as e:
+        _log.error(f'run_kiwoom_fire_buy 실패: {e}')

@@ -350,18 +350,25 @@ button.delete-button:hover {
 }
 #slideshow-modal .close-modal {
     position: absolute;
-    top: 30px;
+    top: 16px;
+    right: 16px;
+    width: auto;
+    height: auto;
+    padding: 6px 10px;
     font-size: 2.2em;
     color: #fff;
     cursor: pointer;
     background: none;
     border: none;
+    box-shadow: none;
     z-index: 100000;
     opacity: 0.7;
     transition: opacity 0.16s;
 }
 #slideshow-modal .close-modal:hover {
     opacity: 1;
+    box-shadow: none !important;
+    filter: none !important;
 }
 #slideshow-modal .slide-prev,
 #slideshow-modal .slide-next {
@@ -390,6 +397,50 @@ button.delete-button:hover {
 #slideshow-modal .slide-next:hover {
     opacity: 1;
     background: rgba(0, 0, 0, 0.6);
+}
+#slideshow-countdown {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100000;
+    color: #fff;
+    font-size: 14px;
+    font-family: monospace;
+    pointer-events: none;
+    background: rgba(0,0,0,0.35);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+#slideshow-label {
+    position: absolute;
+    bottom: 20px;
+    left: 16px;
+    z-index: 100000;
+    color: #fff;
+    font-size: 13px;
+    font-family: monospace;
+    pointer-events: none;
+    background: rgba(0,0,0,0.45);
+    padding: 2px 10px;
+    border-radius: 4px;
+    max-width: 35%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#slideshow-index {
+    position: absolute;
+    bottom: 20px;
+    right: 16px;
+    z-index: 100000;
+    color: #fff;
+    font-size: 13px;
+    font-family: monospace;
+    pointer-events: none;
+    background: rgba(0,0,0,0.45);
+    padding: 2px 10px;
+    border-radius: 4px;
 }
 body.slideshow-active .top-bar,
 body.slideshow-active .app-header {

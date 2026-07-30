@@ -3758,3 +3758,73 @@ body.page-post-view .form-actions.post-bottom-actions {
         padding-bottom: calc(var(--post-final-action-h, 40px) + var(--post-final-action-bottom, 10px) + 10px) !important;
     }
 }
+
+/* List, view, edit container width unified, then narrowed ~10% (1120px -> 1008px). */
+body.page-post {
+    --post-shrink-max: 1008px;
+    --post-shrink-gap: 16px;
+}
+body.page-post:not(.page-post-edit):not(.page-post-view) > .container {
+    width: min(var(--post-shrink-max), calc(100% - var(--post-shrink-gap))) !important;
+    max-width: var(--post-shrink-max) !important;
+}
+body.page-post-edit > .container,
+body.page-post-edit form.container {
+    width: min(var(--post-shrink-max), calc(100% - var(--post-shrink-gap))) !important;
+    max-width: var(--post-shrink-max) !important;
+}
+body.page-post-view > .container {
+    width: min(var(--post-shrink-max), calc(100% - var(--post-shrink-gap))) !important;
+    max-width: var(--post-shrink-max) !important;
+}
+body.page-post-view .form-actions.post-bottom-actions,
+body.page-post-edit .form-actions {
+    width: min(var(--post-shrink-max), calc(100% - 40px)) !important;
+    max-width: min(var(--post-shrink-max), calc(100% - 40px)) !important;
+}
+
+/* Container side padding reduced to 1/3 (18px -> 6px, mobile 12px -> 4px), then doubled. */
+body.page-post {
+    --post-card-pad-x: 12px;
+    --post-card-pad-x-mobile: 8px;
+}
+body.page-post:not(.page-post-edit):not(.page-post-view) > .container,
+body.page-post-edit > .container,
+body.page-post-edit form.container,
+body.page-post-view > .container {
+    padding-left: var(--post-card-pad-x) !important;
+    padding-right: var(--post-card-pad-x) !important;
+}
+@media (max-width: 560px) {
+    body.page-post:not(.page-post-edit):not(.page-post-view) > .container,
+    body.page-post-edit > .container,
+    body.page-post-edit form.container,
+    body.page-post-view > .container {
+        padding-left: var(--post-card-pad-x-mobile) !important;
+        padding-right: var(--post-card-pad-x-mobile) !important;
+    }
+}
+
+/* list heading: slightly larger plus left margin */
+body.page-post.page-post .post-count-heading.post-count-heading {
+    font-size: 19px !important;
+    margin-left: 10px !important;
+}
+@media (max-width: 560px) {
+    body.page-post.page-post:not(.page-post-view):not(.page-post-edit) .post-count-heading.post-count-heading {
+        font-size: 18px !important;
+        margin-left: 8px !important;
+    }
+}
+
+/* Clip the thumbnail image itself so it actually follows the rounded box corners. */
+body.page-post .thumbnail {
+    overflow: hidden !important;
+}
+
+/* post-box had no top/bottom padding, so the thumbnail touched the box edges
+   while the left/right sides had visible spacing from margin/padding. Add matching
+   vertical padding so all four sides feel even. */
+body.page-post .post-box {
+    padding: 8px 0 !important;
+}

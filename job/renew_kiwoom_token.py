@@ -12,10 +12,11 @@ M_APP_KEY = os.environ.get('M_APP_KEY')
 M_SECRET_KEY = os.environ.get('M_SECRET_KEY')
 
 # 접근토큰 발급
-def fn_au10001(data):
+# host / token_env_key를 지정하면 모의투자용 토큰도 동일 함수로 발급 가능 (기존 실전 호출부는 인자 생략 시 그대로 동작)
+def fn_au10001(data, host='https://api.kiwoom.com', token_env_key='MY_ACCESS_TOKEN'):
     # 1. 요청할 API URL
-    #host = 'https://mockapi.kiwoom.com' # 모의투자
-    host = 'https://api.kiwoom.com' # 실전투자
+    # host = 'https://mockapi.kiwoom.com' # 모의투자
+    # host = 'https://api.kiwoom.com' # 실전투자
     endpoint = '/oauth2/token'
     url =  host + endpoint
 
@@ -32,14 +33,17 @@ def fn_au10001(data):
     print('Header:', json.dumps({key: response.headers.get(key) for key in ['next-key', 'cont-yn', 'api-id']}, indent=4, ensure_ascii=False))
     body = json.dumps(response.json(), indent=4, ensure_ascii=False)
     data = json.loads(body)
-    token = data["token"]
-    print('Body:', body)  # JSON 응답을 파싱하여 출력
+    print('Body:', body)  # 실패 시에도 실제 응답 내용을 먼저 볼 수 있도록 파싱 전에 출력
+
+    if 'token' not in data:
+        raise RuntimeError(f'토큰 발급 실패 (host={host}): {body}')
+    token = data['token']
     print('Token:', token)
 
     # 5) 현재 프로세스 환경에도 반영 (즉시 사용 목적)
-    os.environ["MY_ACCESS_TOKEN"] = token
+    os.environ[token_env_key] = token
     # 6) .env 파일에도 저장(없으면 추가, 있으면 값 업데이트)
-    set_key(dotenv_path, "MY_ACCESS_TOKEN", token)
+    set_key(dotenv_path, token_env_key, token)
 
 # 실행 구간
 if __name__ == '__main__':

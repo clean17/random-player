@@ -106,6 +106,45 @@ function uploadFile(event) {
 
 
 
+////////////////////////// Paste Image Upload /////////////////////////////
+
+function uploadPastedFiles(files) {
+    const fileInputEl = document.getElementById('file-input');
+    if (!fileInputEl || submitted) return;
+
+    const dataTransfer = new DataTransfer();
+    files.forEach(file => dataTransfer.items.add(file));
+    fileInputEl.files = dataTransfer.files;
+
+    uploadFile({ target: fileInputEl });
+}
+
+(() => {
+    const chatInputEl = document.getElementById('chat-input');
+    if (!chatInputEl) return;
+
+    chatInputEl.addEventListener('paste', (e) => {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+
+        const imageFiles = [];
+        Array.from(items).forEach(item => {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const blob = item.getAsFile();
+                if (blob) {
+                    const ext = (item.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                    imageFiles.push(new File([blob], `paste_${Date.now()}_${imageFiles.length}.${ext}`, { type: item.type }));
+                }
+            }
+        });
+
+        if (imageFiles.length > 0) {
+            e.preventDefault(); // 이미지가 텍스트(파일 경로 등)로 붙여넣기 되는 것 방지
+            uploadPastedFiles(imageFiles);
+        }
+    });
+})();
+
 (() => {
     const container = document.querySelector('.container');
     const plusLabel = container.querySelector('label[for="file-input"]'); // 기존 ＋ 라벨

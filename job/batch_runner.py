@@ -10,7 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
-    find_low_stocks_v2
+    find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -246,6 +246,35 @@ def create_scheduler():
         id="renew_token_daily",
         executor="io",
         replace_existing=True
+    )
+
+    # 2-0) 키움 트레일링 스탑 (장중 30초마다, 내부에서 장시간 아니면 즉시 리턴)
+    #      실전 전환 전 반드시 KIWOOM_ENV=mock으로 먼저 검증할 것 (job/kiwoom_trailing_stop.py 상단 주석 참고)
+    scheduler.add_job(
+        run_kiwoom_trailing_stop,
+        trigger=IntervalTrigger(seconds=30),
+        id="kiwoom_trailing_stop_30s",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-0-1) 키움 계좌 총자산 현황 로그 (장중 10분마다)
+    scheduler.add_job(
+        log_kiwoom_account_summary,
+        trigger=IntervalTrigger(minutes=10),
+        id="kiwoom_account_summary_10m",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-0-2) fire 자동매수 (H2 필터 + 시장폭 레짐, 장중 10분마다)
+    #        pkl이 장중 :10/:30/:50 갱신되므로 그 직후(:15/:35/:55)에 평가
+    scheduler.add_job(
+        run_kiwoom_fire_buy,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-15", minute="15,35,55"),
+        id="kiwoom_fire_buy",
+        executor="io",
+        replace_existing=True,
     )
 
     # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)

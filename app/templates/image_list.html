@@ -237,7 +237,7 @@
             btn.addEventListener('click', e => {
                 const imageItem = e.target.closest('.image-item');
                 if (dir == 'refine') {
-                    deleteItem(imageItem);
+                    moveImageToPreviousStep(imageItem);
                 } else {
                     let filename = imageItem.querySelector('.thumbnail')?.alt;
                     if (imageItem) {

@@ -16,7 +16,7 @@
 <div class="top-bar" data-auto-hide="true">
     <div class="back app-header__left">
         {% if post %}
-        <a href="/posts/{{ post.id }}" class="app-back">Back</a>
+        <a href="/posts/{{ post.public_id }}" class="app-back">Back</a>
         {% else %}
         <a href="/posts" class="app-back">Back</a>
         {% endif %}
@@ -59,7 +59,7 @@
             {% if type == 'C' %}등록{% elif type == 'U' %}수정완료{% endif %}
         </button>
         {% if post %}
-        <button type="button" class="btn btn-secondary" onclick="window.location.href='/posts/{{ post.id }}'">취소</button>
+        <button type="button" class="btn btn-secondary" onclick="window.location.href='/posts/{{ post.public_id }}'">취소</button>
         {% else %}
         <button type="button" class="btn btn-secondary" onclick="window.location.href='/posts'">취소</button>
         {% endif %}

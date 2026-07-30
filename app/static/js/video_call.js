@@ -59,6 +59,8 @@ let currentMicrophoneDeviceId = null;
 let globalRecoder = null;
 let candidateQueue = [];
 let welcomeCount = 0;
+let prevViewportW = window.innerWidth;
+let prevViewportH = window.innerHeight;
 
 const iceTypeCount = { host: 0, srflx: 0, relay: 0, unknown: 0 };
 
@@ -271,14 +273,10 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         const videoSettings = videoTrack.getSettings();
         console.log("🎥 현재 사용 중인 카메라 deviceId:", videoSettings.deviceId);
 
-        // makeConnection() 함수가 스트림을 보낸다.
+        // enumerateDevices를 srcObject 설정 전에 호출 (일부 Android에서 카메라 스트림 표시 중 enumerateDevices가 카메라를 재초기화해 freeze 유발)
+        await getAudioInputs();
 
         myFace.srcObject = myStream;
-
-        /*if (audioDeviceId) {
-            await getAudioInputs();
-        }*/
-        await getAudioInputs();
 
         // 처음 연결 시 마이크 off
         if (!switchCamera) {
@@ -382,10 +380,13 @@ async function makeConnection() { // 연결을 만든다.
         rtcLog(`signalingState → ${myPeerConnection.signalingState}`);
     });
 
-    // 내 카메라/마이크 스트림을 WebRTC 연결에 추가
+    // addTrack을 requestAnimationFrame으로 지연 — 영상 엘리먼트가 최소 1프레임 렌더한 뒤에
+    // WebRTC 파이프라인이 트랙을 가져가도록 해 Android freeze 방지
     if (myStream) {
-        myStream.getTracks().forEach(track => {
-            myPeerConnection.addTrack(track, myStream); // 각각의 track(영상/음성)을 상대방에게 전송하도록 연결
+        requestAnimationFrame(() => {
+            myStream.getTracks().forEach(track => {
+                myPeerConnection.addTrack(track, myStream);
+            });
         });
     }
 };
@@ -505,26 +506,32 @@ async function handleCameraChange() {
         myStream.getVideoTracks().forEach(track => track.stop());
     }
 
-    let newVideoStream;
-
     currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+
+    let newVideoStream;
     const isIphone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isIphone) {
-        newVideoStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: currentFacingMode }});
-    } else {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const selectedCameraDeviceId = currentFacingMode === "user" ? devices[3].deviceId : devices[1].deviceId;
-        newVideoStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId: { exact: selectedCameraDeviceId } }});
+    try {
+        if (isIphone) {
+            newVideoStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: currentFacingMode } });
+        } else {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const selectedCameraDeviceId = currentFacingMode === "user" ? devices[3].deviceId : devices[1].deviceId;
+            newVideoStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId: { exact: selectedCameraDeviceId } } });
+        }
+    } catch (err) {
+        console.error("카메라 전환 실패:", err);
+        currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+        return;
     }
 
     const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-    // 기존 스트림에서 교체
     myStream.getVideoTracks().forEach(t => {
         myStream.removeTrack(t);
         t.stop();
     });
     myStream.addTrack(newVideoTrack);
+    myFace.srcObject = myStream;
 
     await updatePeerConnection();
     faceMirror(newVideoTrack);
@@ -600,6 +607,7 @@ function getClientPosition(e) {
 }
 
 function startDrag(e) {
+    if (e.target.closest('button')) return;
     isDragging = true;
     const pos = getClientPosition(e);
     offsetX = pos.x - myFaceWrapper.offsetLeft;
@@ -639,19 +647,34 @@ document.addEventListener("touchmove", onDrag, { passive: false });
 document.addEventListener("touchend", endDrag);
 
 function setSwitchCameraPos() {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile) {
+        switchCameraBtn.style.display = 'none';
+        return;
+    }
     switchCameraBtn.addEventListener("click", handleCameraChange);
-    setVideoCallButtonsOpacity(0.5);
 }
 
-// 뷰포트 크기 변화 시 myFace 위치 재클램프
+// 뷰포트 크기 변화 시 myFace 위치를 비율 기준으로 재조정
 function clampMyFacePosition() {
     const left = parseFloat(myFaceWrapper.style.left);
     const top  = parseFloat(myFaceWrapper.style.top);
     if (isNaN(left) || isNaN(top)) return; // CSS bottom/right 방식이면 건드리지 않음
-    const maxX = window.innerWidth  - myFaceWrapper.offsetWidth;
-    const maxY = window.innerHeight - myFaceWrapper.offsetHeight;
-    myFaceWrapper.style.left = Math.max(0, Math.min(left, maxX)) + "px";
-    myFaceWrapper.style.top  = Math.max(0, Math.min(top,  maxY)) + "px";
+
+    const newW = window.innerWidth;
+    const newH = window.innerHeight;
+
+    // 이전 viewport 대비 비율로 위치 스케일
+    const scaledLeft = left * (newW / prevViewportW);
+    const scaledTop  = top  * (newH / prevViewportH);
+
+    const maxX = newW - myFaceWrapper.offsetWidth;
+    const maxY = newH - myFaceWrapper.offsetHeight;
+    myFaceWrapper.style.left = Math.max(0, Math.min(scaledLeft, maxX)) + "px";
+    myFaceWrapper.style.top  = Math.max(0, Math.min(scaledTop,  maxY)) + "px";
+
+    prevViewportW = newW;
+    prevViewportH = newH;
 }
 
 // ResizeObserver: 특정 HTML 요소의 크기 변화를 감지하는 객체 > 콜백함수
@@ -705,6 +728,39 @@ function captureAndUpload() {
     }, 'image/png');
 }
 
+/////////////////////// Freeze Detection ///////////////////////
+
+function startFreezeDetection() {
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        let lastFrameTime = 0;
+
+        const onFrame = () => {
+            lastFrameTime = performance.now();
+            myFace.requestVideoFrameCallback(onFrame);
+        };
+        myFace.requestVideoFrameCallback(onFrame);
+
+        setInterval(() => {
+            if (!myStream || !myStream.active || lastFrameTime === 0) return;
+            if (performance.now() - lastFrameTime > 1000) {
+                console.warn('[freeze] 1초간 새 프레임 없음 → 복구');
+                lastFrameTime = performance.now();
+                myFace.srcObject = myStream;
+                myFace.play().catch(() => {});
+                myFace.requestVideoFrameCallback(onFrame);
+            }
+        }, 500);
+    } else {
+        // requestVideoFrameCallback 미지원 브라우저 폴백
+        setInterval(() => {
+            if (myFace.paused && myStream && myStream.active) {
+                console.warn('[freeze] paused 감지 → 복구');
+                myFace.play().catch(() => {});
+            }
+        }, 2000);
+    }
+}
+
 /////////////////////// Control Buttons Opacity ///////////////////////
 
 function setVideoCallButtonsOpacity(opacity) {
@@ -724,14 +780,19 @@ opacitySlider.addEventListener('input', (e) => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
-    await getMedia(); // stream 초기화, RTCrtpSender에 stream track 추가, 카메라 설정, 마이크 설정
+    await getMedia();
     await makeConnection();
     socket.emit('join_video_socket', roomName, username);
     setSwitchCameraPos();
-
-
-    // console.log('sender', myPeerConnection.getSenders())
+    startFreezeDetection();
 })
+
+// 탭 전환/화면 잠금 후 foreground 복귀 시 내 화면 resume
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && myFace.paused && myStream && myStream.active) {
+        myFace.play().catch(() => {});
+    }
+});
 
 // beforeunload: 브라우저가 닫히거나 새로고침되기 직전
 window.addEventListener("beforeunload", () => {

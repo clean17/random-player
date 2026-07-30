@@ -25,13 +25,11 @@ if __name__ == '__main__':
     # acquire_lock() # thread 중복 실행 방지
     # start_background_tasks() # thread
 
-    scheduler = create_scheduler()
-
-    # 'npm run dev' 실행 (백그라운드 실행)
-    node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
-
-    # 종료 핸들러
-    register_shutdown_handlers(scheduler, node_process)
+    # create_app()의 모듈 import가 끝나기 전에 스케줄러(백그라운드 스레드)가 먼저 같은 모듈을
+    # import 하려 들면 importlib 모듈 락이 스레드 간에 충돌해 데드락/KeyError가 날 수 있다.
+    # 그래서 앱 import(create_app)를 먼저 끝내고 나서 스케줄러를 시작한다.
+    scheduler = None
+    node_process = None
 
     try:
         if select_server == 0: # werkzeug, 개발
@@ -40,6 +38,13 @@ if __name__ == '__main__':
             logger.info("############################### Starting server.... ####################################")
             from app import create_app # Flask, # create_app 에서 WebSocket 기능을 추가함
             app = create_app()
+
+            scheduler = create_scheduler()
+            # 'npm run dev' 실행 (백그라운드 실행)
+            node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
+            # 종료 핸들러
+            register_shutdown_handlers(scheduler, node_process)
+
             # 실제 클라이언트 IP (X-Forwarded-For) 를 읽도록
             app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
             app.run(debug=True, host='0.0.0.0', port=8088, use_reloader=True, threaded=True)
@@ -51,6 +56,12 @@ if __name__ == '__main__':
             logger.info("############################### Starting server.... ####################################")
             from app import create_app
             app = create_app()
+
+            scheduler = create_scheduler()
+            # 'npm run dev' 실행 (백그라운드 실행)
+            node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
+            # 종료 핸들러
+            register_shutdown_handlers(scheduler, node_process)
 
             # Hop-by-Hop 헤더 필터 미들웨어 적용
             app.wsgi_app = HopByHopHeaderFilter(app.wsgi_app)

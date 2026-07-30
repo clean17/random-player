@@ -66,6 +66,7 @@ DIR_CONFIG: Final = {
     'image2': DirConfig(IMAGE_DIR2, ig_image_arr,   'image_list_masonry.html', 'ig'),
     'cos':    DirConfig(COS_DIR,    cos_image_arr,  'image_list_masonry.html'),
     'move':   DirConfig(MOVE_DIR,   moved_image_arr,'image_list_masonry.html'),
+    'refine': DirConfig(REF_IMAGE_DIR, refined_image_arr, 'image_list_masonry.html'),
 }
 
 
@@ -92,6 +93,7 @@ def initialize_shuffle_images():
     random.seed(time.time())
     random.shuffle(images)
     ref_shuffled_images = images
+    refined_image_arr[:] = images
 
 
 # 최초에는 정렬
@@ -349,6 +351,7 @@ def image_list():
     # print('selected_dir', selected_dir)
     if selected_dir in ("None", "null", "undefined", ""):
         selected_dir = None
+    search = request.args.get('search', '').strip()
     subdir_list = []
     images = []
     images_length = 0
@@ -389,23 +392,20 @@ def image_list():
     # 공통 기능 : 캐시 배열 슬라이싱 (풀스캔은 /fetch 에서만)
     elif dir in DIR_CONFIG:
         cfg = DIR_CONFIG[dir]
-        images = cfg.image_arr[start:start + LIMIT_PAGE_NUM]
-        if len(images) == 0:
+        source_arr = cfg.image_arr
+        if search:
+            source_arr = [f for f in source_arr if f.replace('\\', '/').startswith(search)]
+        images = source_arr[start:start + LIMIT_PAGE_NUM]
+        if len(images) == 0 and page > 1:
             page = page - 1
             start = (page - 1) * LIMIT_PAGE_NUM
-            images = cfg.image_arr[start:start + LIMIT_PAGE_NUM]
-        images_length = len(cfg.image_arr)
+            images = source_arr[start:start + LIMIT_PAGE_NUM]
+        images_length = len(source_arr)
         template_html = cfg.template
 
-    elif dir == 'refine':
-        images, page, start, images_length, template_html = get_image_page(
-            start, LIMIT_PAGE_NUM, page, REF_IMAGE_DIR, refined_image_arr, 'image_list.html'
-        )
-
-        isSlide = request.args.get('slide', '')
-        if isSlide == 'y':
-            images, page = get_images(0, images_length, page, REF_IMAGE_DIR)
-            return jsonify({"slide_show_images": images})
+        if dir == 'refine' and request.args.get('slide') == 'y':
+            slide_images, _ = get_images(0, images_length, page, REF_IMAGE_DIR)
+            return jsonify({"slide_show_images": slide_images})
 
     elif dir == 'stock':
         market = request.args.get('market') or ''
@@ -417,7 +417,8 @@ def image_list():
 
     return render_template(template_html, images=images, page=page,
                            total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, subdir_list=subdir_list, version=int(time.time()))
+                           selected_dir=selected_dir, subdir_list=subdir_list,
+                           search=search, version=int(time.time()))
 
 
 @image_bp.route('/fetch', methods=['GET'])
@@ -428,6 +429,7 @@ def fetch_image_list():
     selected_dir = request.args.get('selected_dir')
     if selected_dir in ("None", "null", "undefined", ""):
         selected_dir = None
+    search = request.args.get('search', '').strip()
     subdir_list = []
     images = []
     images_length = 0
@@ -436,13 +438,12 @@ def fetch_image_list():
 
     # 공통 기능 : 첫번째 페이지에서만 풀 스캔
     if dir in DIR_CONFIG:
-        images, page, start, images_length, template_html = resolve_dir_page(dir, page)
+        resolve_dir_page(dir, page)
+        if search:
+            pass  # 검색 필터는 /pages에서 처리
 
-    total_pages = (images_length + LIMIT_PAGE_NUM-1) // LIMIT_PAGE_NUM
-
-    return render_template(template_html, images=images, page=page,
-                           total_pages=total_pages, images_length=images_length, dir=dir,
-                           selected_dir=selected_dir, subdir_list=subdir_list, version=int(time.time()))
+    return redirect(url_for('image.image_list', dir=dir, page=page,
+                            selected_dir=selected_dir, search=search or None))
 
 
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
@@ -509,6 +510,12 @@ def move_image():
     if os.path.exists(src_path):
         # os.rename(src_path, dest_path) # OS ERROR : 다른 드라이브로 이동시킬 수 없다, shutil 사용을 권장
         shutil.move(src_path, dest_path) # src_path > dest_path 이동
+
+        raw_filename = urllib.parse.unquote(payload.get('filename', ''))
+        if imagepath in DIR_CONFIG:
+            arr = DIR_CONFIG[imagepath].image_arr
+            arr[:] = [p for p in arr if p != raw_filename]
+
         return jsonify({'status': 'success'})
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
@@ -545,7 +552,10 @@ def delete_images():
     elif dir == 'refine' and refined_image_arr:
         refined_image_arr[:] = [p for p in refined_image_arr if p not in to_delete]
 
+    search = (data.get("search") or "").strip()
     page = int(data.get("page", 1))
+    if search:
+        page = 1
     # if dir == 'image2':
     #     global ig_image_arr
     #     ig_image_arr = ig_image_arr[LIMIT_PAGE_NUM:]
@@ -559,7 +569,7 @@ def delete_images():
 
     # return redirect(url_for('image.image_list', page=page, dir=dir))
     # return jsonify(redirect=url_for('image.image_list', page=page, dir=dir)), 200
-    return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir)}), 200 # 명시적 표기
+    return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir, search=search or None)}), 200 # 명시적 표기
 
 
 
@@ -575,6 +585,7 @@ def get_image():
     filename = urllib.parse.unquote_plus(filename)
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir', '')
+    original = request.args.get('original', '') in ('1', 'true')
 
     market = request.args.get('market') or ''
     directory = DIRECTORY_MAP.get(market.lower())
@@ -597,6 +608,10 @@ def get_image():
             abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
     else:
         abort(400, 'Invalid dir')
+
+    if original:
+        # 원본 요청 시 썸네일을 건너뛰고 원본 파일을 바로 반환
+        return send_from_directory(base_dir, filename)
 
     # thumb 서브디렉토리에 동일 이름 .webp 있으면 우선 반환
     thumb_dir = os.path.join(base_dir, 'thumb')
