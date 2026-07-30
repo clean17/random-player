@@ -63,6 +63,7 @@ psutil==6.0.0
 psycopg==3.2.9
 psycopg-binary==3.2.9
 psycopg-pool==3.2.6
+py-vapid==1.8.2
 pyasn1==0.6.0
 pycparser==2.22
 pydivert==2.1.0
@@ -72,6 +73,8 @@ pyOpenSSL==24.2.1
 pyparsing==3.1.4
 pypdf==5.9.0
 PySocks==1.7.1
+pywebpush==2.1.2
+http-ece==1.2.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-engineio==4.11.2

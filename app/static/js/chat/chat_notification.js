@@ -1,25 +1,71 @@
 let userInteracted = false;
+let pushSubscriptionStarted = false;
 
-// 도메인 구입 전까지 서비스 워커 기능 비활성화 > PWA 기능 or FCM 추가해야함
-if ("serviceWorker" in navigator) {
-    // http + localhost, https(공인 ssl) 환경에서만 기동
-    navigator.serviceWorker.register('/service-worker.js?v={{ version }}')
-        .then(registration => {
-            // console.log('registered', registration)
+// VAPID 공개키(base64url) → PushManager가 요구하는 Uint8Array로 변환
+// (문자열을 그대로 넘기면 Safari 등 표준을 엄격히 따르는 브라우저에서 구독이 실패한다)
+function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function subscribeForPush() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    try {
+        // http + localhost, https(공인 ssl) 환경에서만 기동
+        const registration = await navigator.serviceWorker.register('/service-worker.js?v={{ version }}');
+        await navigator.serviceWorker.ready;
+
+        const keyRes = await fetch("/vapid-public-key");
+        const { publicKey } = await keyRes.json();
+        const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+        let subscription;
+        try {
             // 현재 브라우저를 푸시 수신 대상으로 등록, 성공하면 subscription 객체를 반환
-            return registration.pushManager.subscribe({
+            subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,   // 푸시를 보내면 사용자에게 보이는 알림을 반드시 띄워야 한다
-                applicationServerKey: "BM3Xq3X-hbmCtGvoJv3Dl-WmW1nTYenl4tKQtE4pdcMTK0XDxjrECQSmtFgnPd1aqUoBINRCKrLqfqwIdemSXZs" // VAPID 공개키, 서버에는 대응되는 개인키가 있어야 함
+                applicationServerKey       // 서버 VAPID 공개키, 서버에는 대응되는 개인키가 있어야 함
             });
-    }).then(subscription => {
+        } catch (err) {
+            // 예전에 다른 키로 구독된 상태면 InvalidStateError 발생 → 해지 후 새 키로 재구독
+            const existing = await registration.pushManager.getSubscription();
+            if (!existing) throw err;
+            await existing.unsubscribe();
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey
+            });
+        }
+
         console.log("Push Subscription:", JSON.stringify(subscription));
 
-        return fetch("/subscribe", {
+        await fetch("/subscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(subscription)
         });
-    }).catch(error => console.error("푸시 구독 실패:", error));
+    } catch (error) {
+        console.error("푸시 구독 실패:", error);
+    }
+}
+
+function trySubscribeForPushOnce() {
+    if (pushSubscriptionStarted) return;
+    pushSubscriptionStarted = true;
+    subscribeForPush();
+}
+
+// 이미 알림 권한이 허용된 상태면(재방문) 페이지 로드 시 바로 구독 시도
+if ("Notification" in window && Notification.permission === "granted") {
+    trySubscribeForPushOnce();
 }
 
 function requestNotificationPermission() {
@@ -28,9 +74,16 @@ function requestNotificationPermission() {
         return;
     }
 
+    // 이미 결정된 상태(허용/거부)면 다시 묻지 않는다 (Safari는 default가 아니면 재요청 시 예외 발생)
+    if (Notification.permission !== "default") {
+        if (Notification.permission === "granted") trySubscribeForPushOnce();
+        return;
+    }
+
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
             // console.log("알림 권한이 허용되었습니다 ㅅㅅ.");
+            trySubscribeForPushOnce();
         } else {
             // console.log("알림 권한이 거부되었습니다 ㅠㅠ.");
         }

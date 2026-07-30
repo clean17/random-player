@@ -1,5 +1,5 @@
 import psycopg
-from typing import Optional
+from typing import List, Optional
 
 from app.repository.users.UserDTO import UserDTO
 from config.db_connect import db_transaction
@@ -7,6 +7,12 @@ from config.db_connect import db_transaction
 
 
 # dict 반환: psycopg3는 row_factory로 처리
+
+@db_transaction
+def find_all_active_usernames(conn=None) -> List[str]:
+    with conn.cursor() as cur:
+        cur.execute("SELECT username FROM users WHERE is_active IS TRUE;")
+        return [row[0] for row in cur.fetchall()]
 
 @db_transaction
 def find_user_by_username(username: str, conn=None) -> Optional["UserDTO"]:

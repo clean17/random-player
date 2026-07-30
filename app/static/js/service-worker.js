@@ -35,12 +35,14 @@ self.addEventListener("notificationclick", function(event) {
     );
 });
 
-// https://geundung.dev/114#google_vignette 참조 웹푸시 구현 필요
 self.addEventListener("push", function (event) {
-    const data = event.data.json();
-    self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: "/static/favicon.ico",
-        badge: "/static/favicon.ico",
-    });
+    const data = event.data ? event.data.json() : { title: "새 알림", body: "" };
+    event.waitUntil(
+        self.registration.showNotification(data.title, {
+            body: data.body,
+            icon: "/static/favicon.ico",
+            badge: "/static/favicon.ico",
+            data: { url: data.url || "/func/chat" }
+        })
+    );
 });

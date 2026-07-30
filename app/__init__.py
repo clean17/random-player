@@ -24,6 +24,7 @@ from .file import file_bp
 from .admin import admin
 from .api import api
 from .post import posts
+from .push import push_bp
 import fnmatch
 from datetime import datetime, timedelta
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -177,6 +178,7 @@ def create_app():
     app.register_blueprint(file_bp, url_prefix='/file')
     app.register_blueprint(admin, url_prefix='/admin')
     app.register_blueprint(posts, url_prefix='/posts')
+    app.register_blueprint(push_bp, url_prefix='/')
     app.jinja_env.globals.update(max=max, min=min)
     # Jinja2 탬플릿 캐시 x
     app.jinja_env.auto_reload = True

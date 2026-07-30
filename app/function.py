@@ -14,7 +14,8 @@ from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_
     find_chat_indices_by_keyword, fetch_context_by_center
 from app.repository.scrap_posts.ScrapPostDTO import ScrapPostDTO
 from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap_post
-from app.repository.users.users import find_user_by_username
+from app.repository.users.users import find_user_by_username, find_all_active_usernames
+from app.push import send_push_to_user
 from job.batch_process import run_crawl_ai_image
 from job.buy_lotto import async_buy_lotto
 from utils.common import open_folder
@@ -387,6 +388,13 @@ def save_chat_message():
     chat.last_chat_id = inserted_id
     last_chat_id = update_chat_room(chat)
     update_last_chat_id_in_state(inserted_id)
+
+    try:
+        for other_username in find_all_active_usernames():
+            if other_username != username:
+                send_push_to_user(other_username, title=username, body=sanitized_message[:120])
+    except Exception as e:
+        logger.error(f"채팅 푸시 발송 실패: {e}")
 
     resp = jsonify({"status": "success", "inserted_id": inserted_id})
     # return {"status": "success", "inserted_id": inserted_id}, 200

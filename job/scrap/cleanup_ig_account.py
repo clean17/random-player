@@ -1,11 +1,13 @@
 from pathlib import Path
+import os
+import sys
 import asyncio
 from typing import Optional, List
 from playwright.async_api import async_playwright, Page, BrowserContext
 
 import configparser
 from pathlib import Path
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from job.scrap.scrap_gm_playwrigit import ensure_login
 
 config = configparser.ConfigParser()
