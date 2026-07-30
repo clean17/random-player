@@ -6,10 +6,11 @@ from playwright.async_api import async_playwright
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
+from job.scrap.scrap_gm_playwrigit import ensure_login
 
 # ======== 설정 ========
 # USER_DATA_DIR = str(Path("./ig_profile-2").resolve())  # fx015
-USER_DATA_DIR = str(Path("./ig_profile-14").resolve())
+USER_DATA_DIR = str(Path("./ig_profile-15").resolve())
 HEADLESS = False
 
 USERNAME = settings['SCRAP_USERNAME']
@@ -20,23 +21,6 @@ ACCOUNT = "test"   # 저장 폴더명: IMAGE_DIR2/{ACCOUNT}/images|reels/
 POST_URLS = [
     "https://www.instagram.com/fkaus014/p/DOuWTchj75b/",   # 테스트할 포스트 URI
 ]
-
-
-async def ensure_login(page):
-    await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
-    login_user = page.locator("input[name='username'], input[name='email']")
-    login_pass = page.locator("input[name='password'], input[name='pass']")
-    if await login_user.count() and await login_pass.count():
-        await login_user.fill(USERNAME)
-        await login_pass.fill(PASSWORD)
-        await login_pass.press("Enter")
-        await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(10)
-        for txt in ["나중에 하기", "Not Now"]:
-            btn = page.locator(f"button:has-text('{txt}')")
-            if await btn.count():
-                await btn.click()
-                await asyncio.sleep(1)
 
 
 async def main():

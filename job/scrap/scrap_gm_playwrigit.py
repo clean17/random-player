@@ -971,10 +971,12 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
                 print(f"[INFO] download_one OK ({resp.status})")
     except _Retry403:
         try:
+            is_image = "_img" in prefix
             pw_resp = await page.request.get(url, headers={
                 "Referer": "https://www.instagram.com/",
-                "Accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
-                "Sec-Fetch-Dest": "video",
+                "Accept": "image/avif,image/webp,image/png,image/*;q=0.9,*/*;q=0.8" if is_image
+                          else "video/mp4,video/*;q=0.9,*/*;q=0.8",
+                "Sec-Fetch-Dest": "image" if is_image else "video",
                 "Sec-Fetch-Mode": "no-cors",
                 "Sec-Fetch-Site": "cross-site",
             })

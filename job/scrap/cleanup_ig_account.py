@@ -6,6 +6,8 @@ from playwright.async_api import async_playwright, Page, BrowserContext
 import configparser
 from pathlib import Path
 
+from job.scrap.scrap_gm_playwrigit import ensure_login
+
 config = configparser.ConfigParser()
 
 cfg_path = Path(__file__).resolve().parent.parent.parent / "config" / "config.ini"
@@ -25,24 +27,6 @@ USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
 WAIT_SECOND = 60
 
 
-async def ensure_login(page):
-    await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
-    await asyncio.sleep(4)
-    # 로그인 폼 보이면 로그인
-    login_user = page.locator("input[name='username'], input[name='email']")
-    login_pass = page.locator("input[name='password'], input[name='pass']")
-    if await login_user.count() and await login_pass.count():
-        await login_user.fill(SCRAP_USERNAME)
-        await login_pass.fill(SCRAP_PASSWORD)
-        await login_pass.press("Enter")
-        await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(10)
-        # 팝업 닫기
-        for txt in ["나중에 하기", "Not Now"]:
-            btn = page.locator(f"button:has-text('{txt}')")
-            if await btn.count():
-                await btn.click()
-                await asyncio.sleep(1)
 
 async def get_focus_page(context: BrowserContext, focus_page: Optional[Page]) -> Page:
     # 1) 전달된 focus_page가 살아있으면 그대로 사용
