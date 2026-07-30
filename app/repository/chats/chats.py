@@ -65,6 +65,23 @@ def update_chat_room(chat: "ChatDTO", conn=None) -> int:
         last_chat_id = cur.fetchone()[0]
         return last_chat_id
 
+@db_transaction
+def find_chat_by_id(chat_id: int, conn=None) -> "ChatDTO":
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute("SELECT * FROM chats WHERE id = %s;", (chat_id,))
+        row = cur.fetchone()
+        if row:
+            return ChatDTO(**row)
+        return None
+
+@db_transaction
+def update_chat_message(chat_id: int, message: str, conn=None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE chats SET message = %s WHERE id = %s;",
+            (message, chat_id)
+        )
+
 # 기존 채팅 스크립트 구조로 변경해주는 함수
 def chats_to_line_list(chat_list):
     line_list = []

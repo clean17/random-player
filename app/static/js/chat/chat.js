@@ -339,6 +339,16 @@ function connectSocket() {
         }
     });
 
+    // 상대방이 이미지에 캡션을 추가/수정했을 때 실시간 반영 (best-effort — 중계 서버가 커스텀 이벤트를 relay 안 하면 새로고침 시에만 반영됨)
+    socket.on("edit_msg", function (data) {
+        const messageRow = chatContainer.querySelector(`.messageRow[data-chat-id="${data.chatId}"]`);
+        if (!messageRow) return;
+        const messageDiv = messageRow.querySelector('.messageDiv');
+        const img = messageDiv && messageDiv.querySelector('img');
+        if (!img) return;
+        applyCaptionToMessage(messageDiv, img, data.msg);
+    });
+
     // enter_room >> room_user_list
     socket.on("room_user_list", (userList) => {
         // console.log('현재 접속 중인 유저 목록:', userList);
@@ -1629,3 +1639,165 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(() => resetChatTextareaToInitial(input), 60);
     }
 });
+
+
+/////////////////////// 이미지 오른쪽으로 드래그 → 캡션 추가/수정 ///////////////////////
+
+// messageDiv 안에 캡션 span이 없으면(원래 캡션 없이 보낸 이미지) 세로 래퍼를 새로 만들어 끼워 넣는다
+function ensureCaptionWrapper(messageDiv, mediaEl) {
+    let wrapper = mediaEl.parentElement;
+    if (wrapper === messageDiv) {
+        wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.width = '100%';
+        messageDiv.replaceChild(wrapper, mediaEl);
+        wrapper.appendChild(mediaEl);
+    }
+    let captionSpan = wrapper.querySelector('.attachment-caption');
+    if (!captionSpan) {
+        captionSpan = document.createElement('span');
+        captionSpan.classList.add('attachment-caption');
+        captionSpan.style.padding = '4px 0.7rem 0';
+        wrapper.appendChild(captionSpan);
+    }
+    return captionSpan;
+}
+
+// 서버에 저장된 전체 메시지 문자열(url<br>caption)을 받아 화면에 캡션 부분만 반영
+function applyCaptionToMessage(messageDiv, img, fullMsg) {
+    const brIdx = fullMsg.indexOf('<br>');
+    const caption = brIdx === -1 ? '' : fullMsg.slice(brIdx + 4).trim();
+    if (caption) {
+        const captionSpan = ensureCaptionWrapper(messageDiv, img);
+        captionSpan.innerHTML = replaceSpacesOutsideTags(caption);
+    } else {
+        messageDiv.querySelector('.attachment-caption')?.remove();
+    }
+}
+
+(() => {
+    const DRAG_THRESHOLD = 56; // 이 이상 오른쪽으로 밀면 캡션 입력이 열림
+    const DRAG_MAX = 80;       // 드래그 중 시각적 이동 제한
+    let dragState = null;
+
+    function findDraggableImage(target) {
+        const img = target.closest && target.closest('img');
+        if (!img) return null;
+        const messageRow = img.closest('.messageRow');
+        if (!messageRow || !messageRow.classList.contains('is-mine')) return null; // 본인이 보낸 이미지만
+        const messageDiv = img.closest('.messageDiv');
+        if (!messageDiv) return null;
+        return { img, messageRow, messageDiv };
+    }
+
+    function onPointerDown(e) {
+        if (dragState) return;
+        const hit = findDraggableImage(e.target);
+        if (!hit) return;
+        dragState = {
+            ...hit,
+            startX: e.clientX,
+            deltaX: 0,
+            pointerId: e.pointerId
+        };
+    }
+
+    function onPointerMove(e) {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        const delta = e.clientX - dragState.startX;
+        dragState.deltaX = delta;
+        if (delta > 0) {
+            dragState.messageDiv.style.transition = 'none';
+            dragState.messageDiv.style.transform = `translateX(${Math.min(delta, DRAG_MAX)}px)`;
+        }
+    }
+
+    function resetTransform(messageDiv) {
+        messageDiv.style.transition = 'transform 0.15s ease';
+        messageDiv.style.transform = 'translateX(0)';
+    }
+
+    function onPointerUp(e) {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        const state = dragState;
+        dragState = null;
+        resetTransform(state.messageDiv);
+        if (state.deltaX >= DRAG_THRESHOLD) {
+            openCaptionEditor(state);
+        }
+    }
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', () => {
+        if (dragState) resetTransform(dragState.messageDiv);
+        dragState = null;
+    });
+
+    function openCaptionEditor({ messageRow, messageDiv, img }) {
+        document.querySelector('.caption-edit-popover')?.remove();
+
+        const chatId = messageRow.dataset.chatId;
+        const existingCaptionSpan = messageDiv.querySelector('.attachment-caption');
+        const existingCaption = existingCaptionSpan ? existingCaptionSpan.textContent.trim() : '';
+
+        const popover = document.createElement('div');
+        popover.className = 'caption-edit-popover';
+        popover.style.cssText = 'display:flex; gap:6px; width:100%; margin-top:4px; padding:0 0.7rem;';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = existingCaption;
+        input.placeholder = '캡션 추가...';
+        input.style.cssText = 'flex:1; min-width:0; padding:6px 8px; border-radius:6px; border:1px solid #ccc; font-size:0.85rem;';
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.textContent = '완료';
+        confirmBtn.style.cssText = 'padding:6px 10px; border-radius:6px; border:none; background:#1a8cff; color:#fff; font-size:0.85rem; white-space:nowrap;';
+
+        popover.appendChild(input);
+        popover.appendChild(confirmBtn);
+        messageDiv.appendChild(popover);
+        input.focus();
+        input.select();
+
+        let submitted = false;
+        function submit() {
+            if (submitted) return;
+            submitted = true;
+            const caption = input.value.trim();
+            popover.remove();
+            saveCaption(chatId, caption, messageDiv, img);
+        }
+
+        confirmBtn.addEventListener('click', submit);
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
+            if (ev.key === 'Escape') { ev.preventDefault(); submitted = true; popover.remove(); }
+        });
+        input.addEventListener('blur', () => {
+            setTimeout(() => { if (!submitted) { submitted = true; popover.remove(); } }, 150);
+        });
+    }
+
+    function saveCaption(chatId, caption, messageDiv, img) {
+        fetch('/func/chat/update-caption', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId, caption })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    showDebugToast('캡션 저장 실패');
+                    return;
+                }
+                applyCaptionToMessage(messageDiv, img, data.msg);
+                socket.emit('edit_msg', { chatId, msg: data.msg, room: roomName });
+            })
+            .catch(() => showDebugToast('캡션 저장 실패'));
+    }
+})();
