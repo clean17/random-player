@@ -19,6 +19,7 @@ VAPID_PRIVATE_KEY_PATH = os.path.join(DATA_DIR, "vapid_private_key.pem")
 SUBSCRIPTIONS_FILE_PATH = os.path.join(DATA_DIR, "push_subscriptions.json")
 LOCK_PATH = SUBSCRIPTIONS_FILE_PATH + ".lock"
 VAPID_CLAIMS_SUB = "mailto:admin@chickchick.kr"
+PUSH_TTL_SECONDS = 60 * 60 * 24  # (1일) 기기가 오프라인이어도 푸시 서비스가 이 시간만큼 보관 후 재전달
 
 os.makedirs(DATA_DIR, exist_ok=True)
 # 파일이 없으면 자동 생성, 있으면 로드 (py_vapid.Vapid.from_file 동작)
@@ -119,7 +120,8 @@ def send_push_to_user(username, title, body, url="/func/chat"):
                 subscription_info=sub,
                 data=payload,
                 vapid_private_key=VAPID_PRIVATE_KEY_PATH,
-                vapid_claims={"sub": VAPID_CLAIMS_SUB}
+                vapid_claims={"sub": VAPID_CLAIMS_SUB},
+                ttl=PUSH_TTL_SECONDS
             )
             remaining.append(sub)
         except WebPushException as e:
