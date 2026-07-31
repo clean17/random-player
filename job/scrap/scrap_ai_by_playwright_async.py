@@ -9,6 +9,7 @@ from io import BytesIO
 import uuid, os, requests
 import json
 import asyncio
+import base64
 from datetime import datetime
 
 def ts():
@@ -64,18 +65,39 @@ def save_image_with_uuid(img_name, img_url, save_dir):
     save_path = os.path.join(save_dir, unique_img_name)
     download_image(img_url, save_path)
 
-def save_video_with_uuid(video_name: str, video_url: str, save_dir: str):
+# 브라우저 자체 JS 엔진의 fetch()로 받아온다. requests / page.request 둘 다 이 CDN의 영상 경로에서
+# Cloudflare 챌린지(403)를 만나는데, 실제 페이지 렌더링과 동일한 네트워크 핑거프린트를 쓰는
+# page.evaluate() 안의 fetch()만 통과되는 것을 확인함.
+async def save_video_with_uuid(page, video_name: str, video_url: str, save_dir: str):
     ext = os.path.splitext(video_name)[1] or ".mp4"
     new_name = f"{uuid.uuid4().hex}{ext}"
     save_path = os.path.join(save_dir, new_name)
 
-    resp = requests.get(video_url, stream=True, timeout=60)
-    resp.raise_for_status()
+    try:
+        result = await page.evaluate("""
+            async (url) => {
+                const res = await fetch(url);
+                if (!res.ok) return { ok: false, status: res.status };
+                const buf = await res.arrayBuffer();
+                const bytes = new Uint8Array(buf);
+                let binary = '';
+                const chunkSize = 0x8000; // 32KB씩 나눠서 문자열 변환 (콜스택 한도 회피)
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                }
+                return { ok: true, base64: btoa(binary) };
+            }
+        """, video_url)
 
-    with open(save_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
+        if not result.get("ok"):
+            print(f"Failed to download {video_url}: HTTP {result.get('status')}")
+            return
+
+        data = base64.b64decode(result["base64"])
+        with open(save_path, "wb") as f:
+            f.write(data)
+    except Exception as e:
+        print(f"Failed to download {video_url}: {e}")
 
 CLOUDFLARE_TITLE_MARKERS = ("Just a moment", "Attention Required")
 
@@ -105,8 +127,15 @@ async def async_auto_scroll_page(page):
         async () => {
             return new Promise((resolve) => {
                 let totalHeight = 0;
-                const distance = 200; // px 단위로 조금씩 내리기
+                const distance = 160; // px 단위로 조금씩 내리기 (기존 200에서 20% 감속)
                 const timer = setInterval(() => {
+                    // id="comment" 요소가 나타나면(본문 끝, 댓글 영역 진입) 즉시 스크롤 중지
+                    if (document.getElementById('comment')) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+
                     const scrollHeight = document.body.scrollHeight;
                     window.scrollBy(0, distance);
                     totalHeight += distance;
@@ -213,7 +242,7 @@ async def async_crawl_images_from_page(page_num):
                     video_url = urljoin(url_host, video_url)
 
                 video_name = os.path.basename(video_url.split('?')[0])
-                save_video_with_uuid(video_name, video_url, IMAGE_DIR)
+                await save_video_with_uuid(page, video_name, video_url, IMAGE_DIR)
                 count = count + 1
             print(f"{ts()} download success : {count}", flush=True)
 
