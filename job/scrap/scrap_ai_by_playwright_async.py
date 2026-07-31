@@ -129,8 +129,10 @@ async def async_auto_scroll_page(page):
                 let totalHeight = 0;
                 const distance = 160; // px 단위로 조금씩 내리기 (기존 200에서 20% 감속)
                 const timer = setInterval(() => {
-                    // id="comment" 요소가 나타나면(본문 끝, 댓글 영역 진입) 즉시 스크롤 중지
-                    if (document.getElementById('comment')) {
+                    // id="comment"는 페이지 골격에 항상 존재하므로 "존재 여부"가 아니라
+                    // 실제로 뷰포트 안으로 스크롤되어 들어왔는지로 판단해야 함
+                    const commentEl = document.getElementById('comment');
+                    if (commentEl && commentEl.getBoundingClientRect().top <= window.innerHeight) {
                         clearInterval(timer);
                         resolve();
                         return;
