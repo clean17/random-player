@@ -21,6 +21,7 @@ IMAGE_DIR = settings['IMAGE_DIR']
 IMAGE_DIR2 = settings['IMAGE_DIR2']
 MOVE_DIR = settings['MOVE_DIR']
 REF_IMAGE_DIR = settings['REF_IMAGE_DIR']
+COS_DIR = settings['COS_DIR']
 
 WIN_SHARING_VIOLATION = -2144927705  # 0x80270027
 
@@ -98,6 +99,8 @@ def get_temp_video(filename):
         base_dir = MOVE_DIR
     elif dir_type == 'refine':
         base_dir = REF_IMAGE_DIR
+    elif dir_type == 'cos':
+        base_dir = COS_DIR
     else:
         abort(400)
 
