@@ -77,6 +77,29 @@ def save_video_with_uuid(video_name: str, video_url: str, save_dir: str):
             if chunk:
                 f.write(chunk)
 
+CLOUDFLARE_TITLE_MARKERS = ("Just a moment", "Attention Required")
+
+async def wait_for_cloudflare_clear(page, max_attempts=3, wait_ms=4000):
+    """
+    Cloudflare 봇 검증 페이지("Just a moment...")가 떠 있으면 몇 차례 대기+새로고침하며 풀리는지 확인.
+    실제 콘텐츠 페이지로 넘어가면 True, max_attempts 안에 못 풀면 False.
+    """
+    for attempt in range(max_attempts):
+        title = await page.title()
+        if not any(marker in title for marker in CLOUDFLARE_TITLE_MARKERS):
+            return True
+        print(f"{ts()} Cloudflare 검증 대기 중... (시도 {attempt + 1}/{max_attempts})", flush=True)
+        await page.wait_for_timeout(wait_ms)
+        try:
+            await page.reload(timeout=15000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(wait_ms)
+
+    title = await page.title()
+    return not any(marker in title for marker in CLOUDFLARE_TITLE_MARKERS)
+
+
 async def async_auto_scroll_page(page):
     await page.evaluate("""
         async () => {
@@ -101,16 +124,21 @@ async def async_crawl_images_from_page(page_num):
     pw = await async_playwright().start()
     browser = await pw.chromium.launch(
         headless=False,
-        args=["--window-size=10,10"],
+        # 10x10처럼 비정상적으로 작은 창/뷰포트는 Cloudflare 봇 탐지에 걸려 콘텐츠 대신
+        # "Just a moment..." 챌린지 페이지가 뜬다. 정상 크기를 유지하되 화면 밖으로 위치시켜 안 보이게 한다.
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--window-position=-3000,-3000",
+            "--window-size=1280,800",
+        ],
     )
-    context = await browser.new_context(viewport={"width": 10, "height": 10})
+    context = await browser.new_context(viewport={"width": 1280, "height": 800})
     page = await context.new_page()
 
     page_url = url_template.format(page_num)
     await page.goto(page_url, timeout=15000)
-    await page.wait_for_timeout(4000)
-    await page.reload()
-    await page.wait_for_timeout(4000)
+    if not await wait_for_cloudflare_clear(page):
+        print(f"{ts()} [page {page_num}] Cloudflare 검증을 통과하지 못해 목록을 가져오지 못함", flush=True)
 
     # 게시글 링크 추출
     links = await page.eval_on_selector_all(
@@ -137,6 +165,10 @@ async def async_crawl_images_from_page(page_num):
 
             await page.goto(post_url, timeout=15000)
 
+            if not await wait_for_cloudflare_clear(page):
+                print(f"{ts()} Cloudflare 검증을 통과하지 못해 건너뜀: {post_url}", flush=True)
+                continue
+
             # 천천히 자동 스크롤
             await async_auto_scroll_page(page)
 
@@ -149,7 +181,7 @@ async def async_crawl_images_from_page(page_num):
             img_urls = [
                 ('https:' + src if src and src.startswith('//') else src)
                 for src in srcs
-                if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
+                if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
             ]
 
             video_srcs = await page.eval_on_selector_all(
@@ -160,7 +192,7 @@ async def async_crawl_images_from_page(page_num):
             video_urls = [
                 ('https:' + src if src and src.startswith('//') else src)
                 for src in video_srcs
-                if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src)
+                if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
             ]
 
             count = 0
