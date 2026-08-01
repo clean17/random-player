@@ -3,13 +3,14 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
 from playwright.async_api import async_playwright
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qs
 from PIL import Image
 from io import BytesIO
 import uuid, os, requests
 import json
 import asyncio
 import base64
+import time
 from datetime import datetime
 
 def ts():
@@ -69,39 +70,62 @@ def save_image_with_uuid(img_name, img_url, save_dir):
     save_path = os.path.join(save_dir, unique_img_name)
     download_image(img_url, save_path)
 
+# 서명 URL(?expires=...&key=...)의 만료 여부를 먼저 확인 — 만료된 상태면 재시도해도 소용없으니
+# 로그에 남겨서 "네트워크 문제였는지 vs 이미 만료돼서였는지"를 바로 구분할 수 있게 한다.
+def _signed_url_expiry_info(url):
+    try:
+        qs = parse_qs(urlparse(url).query)
+        expires = int(qs.get("expires", [None])[0])
+    except (TypeError, ValueError, IndexError):
+        return None
+    remaining = expires - time.time()
+    return expires, remaining
+
 # 브라우저 자체 JS 엔진의 fetch()로 받아온다. requests / page.request 둘 다 이 CDN의 영상 경로에서
 # Cloudflare 챌린지(403)를 만나는데, 실제 페이지 렌더링과 동일한 네트워크 핑거프린트를 쓰는
 # page.evaluate() 안의 fetch()만 통과되는 것을 확인함.
-async def save_video_with_uuid(page, video_name: str, video_url: str, save_dir: str):
+async def save_video_with_uuid(page, video_name: str, video_url: str, save_dir: str, max_attempts=3):
     ext = os.path.splitext(video_name)[1] or ".mp4"
     new_name = f"{uuid.uuid4().hex}{ext}"
     save_path = os.path.join(save_dir, new_name)
 
-    try:
-        result = await page.evaluate("""
-            async (url) => {
-                const res = await fetch(url);
-                if (!res.ok) return { ok: false, status: res.status };
-                const buf = await res.arrayBuffer();
-                const bytes = new Uint8Array(buf);
-                let binary = '';
-                const chunkSize = 0x8000; // 32KB씩 나눠서 문자열 변환 (콜스택 한도 회피)
-                for (let i = 0; i < bytes.length; i += chunkSize) {
-                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-                }
-                return { ok: true, base64: btoa(binary) };
+    fetch_script = """
+        async (url) => {
+            const res = await fetch(url);
+            if (!res.ok) return { ok: false, status: res.status };
+            const buf = await res.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            const chunkSize = 0x8000; // 32KB씩 나눠서 문자열 변환 (콜스택 한도 회피)
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
             }
-        """, video_url)
+            return { ok: true, base64: btoa(binary) };
+        }
+    """
 
-        if not result.get("ok"):
-            print(f"Failed to download {video_url}: HTTP {result.get('status')}")
+    for attempt in range(1, max_attempts + 1):
+        try:
+            result = await page.evaluate(fetch_script, video_url)
+
+            if not result.get("ok"):
+                print(f"Failed to download {video_url}: HTTP {result.get('status')}")
+                return
+
+            data = base64.b64decode(result["base64"])
+            with open(save_path, "wb") as f:
+                f.write(data)
             return
-
-        data = base64.b64decode(result["base64"])
-        with open(save_path, "wb") as f:
-            f.write(data)
-    except Exception as e:
-        print(f"Failed to download {video_url}: {e}")
+        except Exception as e:
+            expiry_info = _signed_url_expiry_info(video_url)
+            if expiry_info and expiry_info[1] <= 0:
+                print(f"Failed to download {video_url}: {e} (서명 URL 만료됨, {-expiry_info[1]:.0f}초 지남 — 재시도해도 소용없음)")
+                return
+            if attempt < max_attempts:
+                print(f"Failed to download {video_url}: {e} (재시도 {attempt}/{max_attempts})")
+                await page.wait_for_timeout(1500)
+                continue
+            print(f"Failed to download {video_url}: {e} (재시도 {max_attempts}회 모두 실패)")
 
 CLOUDFLARE_TITLE_MARKERS = ("Just a moment", "Attention Required")
 
