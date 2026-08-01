@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
 import ctypes
-from flask_login import login_required
+from flask_login import login_required, current_user
 import zipfile
 import os
 import io
@@ -11,7 +11,7 @@ from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
     find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
-    find_chat_indices_by_keyword, fetch_context_by_center
+    find_chat_indices_by_keyword, fetch_context_by_center, find_chat_by_id, update_chat_message
 from app.repository.scrap_posts.ScrapPostDTO import ScrapPostDTO
 from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap_post
 from app.repository.users.users import find_user_by_username, find_all_active_usernames
@@ -392,7 +392,7 @@ def save_chat_message():
     try:
         for other_username in find_all_active_usernames():
             if other_username != username:
-                send_push_to_user(other_username, title=username, body=sanitized_message[:120])
+                send_push_to_user(other_username, title="새 알림", body="")
     except Exception as e:
         logger.error(f"채팅 푸시 발송 실패: {e}")
 
@@ -411,6 +411,30 @@ def save_chat_message():
         )
 
     return resp
+
+# 이미지 등 첨부 메시지에 캡션을 추가/수정 (본인이 보낸 메시지만 가능)
+@func.route("/chat/update-caption", methods=["POST"])
+@login_required
+def update_chat_caption():
+    data = request.get_json(silent=True) or {}
+    chat_id = data.get("chatId")
+    caption = (data.get("caption") or "").strip()
+    if not chat_id:
+        return jsonify({"status": "error", "message": "chatId is required"}), 400
+
+    chat = find_chat_by_id(int(chat_id))
+    if not chat:
+        return jsonify({"status": "error", "message": "chat not found"}), 404
+
+    fetch_user = find_user_by_username(current_user.get_id())
+    if not fetch_user or chat.user_id != fetch_user.id:
+        return jsonify({"status": "error", "message": "본인 메시지만 수정할 수 있습니다"}), 403
+
+    base_msg = chat.message.split('<br>', 1)[0]
+    new_message = f"{base_msg}<br>{sanitize_text(caption)}" if caption else base_msg
+    update_chat_message(int(chat_id), new_message)
+
+    return jsonify({"status": "success", "msg": new_message})
 
 # 비동기로 추가 채팅 로그 요청 API
 @func.route("/chat/load-more-chat", methods=["POST"])
