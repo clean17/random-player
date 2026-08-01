@@ -947,7 +947,7 @@ def safe_open_exclusive(path: str):
     # 존재 충돌 시 에러로 실패시키는 전용 오픈 (덮어쓰기 방지)
     return open(path, "xb")
 
-class _Retry403(Exception):
+class _RetryViaBrowser(Exception):
     """aiohttp → page.request 재시도 신호"""
     pass
 
@@ -957,9 +957,10 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
     ext = ".bin"
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-            if resp.status == 403 and page is not None:
-                # 브라우저 세션으로 재시도 (서명 URL은 세션 바인딩)
-                raise _Retry403()
+            if resp.status in (400, 403) and page is not None:
+                # 브라우저 세션으로 재시도 (서명 URL은 세션 바인딩 — 재구성한 Cookie 헤더로는
+                # 400/403이 나올 수 있어 실제 브라우저 컨텍스트로 재요청)
+                raise _RetryViaBrowser()
             if resp.status not in (200, 206):
                 print(f"[WARN] download_one HTTP {resp.status}: {url[:80]}")
                 return None
@@ -969,7 +970,7 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
             if resp.status != 200 and ("/reel/" in url or any(x in url for x in ("/o1/v/", "/v/t2.", "/v/t50."))):
                 # print(f"[INFO] download_one OK ({resp.status}): {url[:100]}")
                 print(f"[INFO] download_one OK ({resp.status})")
-    except _Retry403:
+    except _RetryViaBrowser:
         try:
             is_image = "_img" in prefix
             pw_resp = await page.request.get(url, headers={
