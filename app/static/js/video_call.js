@@ -255,8 +255,10 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         video: keepVideo ? { facingMode: currentFacingMode } : false
     };*/
 
+    // autoGainControl(AGC)은 통화 시작 직후 몇 초간 게인을 서서히 올리며 보정하는 동작이 있어,
+    // 이 구간에 "처음에만 잘 안 들린다"는 증상으로 나타날 수 있다. AGC를 꺼서 그 워밍업 구간을 없앤다.
     let constraints = {
-        audio: true, // 오디오 사용하겠다
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
         video: true  // 비디오 사용하겠다
     };
 
@@ -274,7 +276,12 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         if (currentMicrophoneDeviceId) {
             try {
                 const pinnedAudioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { deviceId: { exact: currentMicrophoneDeviceId } },
+                    audio: {
+                        deviceId: { exact: currentMicrophoneDeviceId },
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: false
+                    },
                     video: false
                 });
                 const pinnedAudioTrack = pinnedAudioStream.getAudioTracks()[0];
@@ -560,7 +567,15 @@ async function handleAudioInputChange() {
         // myStream.getAudioTracks().forEach(track => track.stop());
     }
 
-    const newAudioStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: audioInputSelect?.value } }, video: false });
+    const newAudioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+            deviceId: { exact: audioInputSelect?.value },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: false
+        },
+        video: false
+    });
     const newAudioTrack = newAudioStream.getAudioTracks()[0];
 
     // 기존 스트림에서 교체
