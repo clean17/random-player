@@ -114,6 +114,7 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         'COS_DIR': directories.get('cosplay_directory'),
 
         'CRAWL_URL': urls.get('crawl_url'),
+        'CRAWL_URL2': urls.get('crawl_url2'),
         'MUD_VPN': urls.get('mud_vpn'),
         'COOKIE': urls.get('cookie'),
         'CRAWL_HOST': urls.get('crawl_host'),
