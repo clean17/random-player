@@ -172,6 +172,15 @@
     const username = "{{ username }}";
     const MAX_FETCH_MESSAGE_SIZE = "{{ maxFetchMessageSize }}";
 </script>
+<script>
+    // 뒤로가기를 실수로 눌러도 바로 안 나가도록, 브라우저 표준 이탈 확인 다이얼로그를 띄운다.
+    // (문구는 브라우저가 자체적으로 표시하며 커스텀 텍스트는 최신 브라우저에서 무시됨 —
+    //  남용 방지를 위해 스펙에서 강제하는 부분이라 우리가 바꿀 수 없다)
+    window.addEventListener('beforeunload', function (e) {
+        e.preventDefault();
+        e.returnValue = '';
+    });
+</script>
 <script src="/static/js/chat/chat_notification.js?v={{ version }}"></script>
 <script src="/static/js/chat/video_call_window.js?v={{ version }}"></script>
 <script src="/static/js/chat/upload_file.js?v={{ version }}"></script>
