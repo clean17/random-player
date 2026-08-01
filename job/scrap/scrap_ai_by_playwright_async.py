@@ -26,8 +26,12 @@ sys.stderr = log_file
 # print("이건 파일로 감")
 # raise Exception("에러도 파일로 감")
 
-# 게시글 목록 페이지 URL 템플릿
-url_template = settings['CRAWL_URL']
+# 게시글 목록 페이지 URL 템플릿 (아래 목록 순서대로 게시판을 하나씩 끝까지 진행)
+BOARD_URL_TEMPLATES = [
+    settings['CRAWL_URL'],   # 기존 설정값 (aireal)
+    # settings['CRAWL_URL2'],  # aibansil
+    "https://arca.live/b/aibansil?mode=best&p={}",
+]
 url_host = settings['CRAWL_HOST']
 IMAGE_DIR = settings['IMAGE_DIR']
 # IMAGE_DIR = 'D:\\temp_img_dir'
@@ -151,7 +155,11 @@ async def async_auto_scroll_page(page):
     """)
 
 
-async def async_crawl_images_from_page(page_num):
+async def async_crawl_images_from_page(page_num, board_url_template):
+    """
+    이 함수가 True를 반환하면 이미 수집된 게시글에 도달했다는 뜻 —
+    호출 쪽(async_crawl_ai)에서 현재 게시판 순회를 멈추고 다음 게시판으로 넘어간다.
+    """
     pw = await async_playwright().start()
     browser = await pw.chromium.launch(
         headless=False,
@@ -166,111 +174,123 @@ async def async_crawl_images_from_page(page_num):
     context = await browser.new_context(viewport={"width": 1280, "height": 800})
     page = await context.new_page()
 
-    page_url = url_template.format(page_num)
-    await page.goto(page_url, timeout=15000)
-    if not await wait_for_cloudflare_clear(page):
-        print(f"{ts()} [page {page_num}] Cloudflare 검증을 통과하지 못해 목록을 가져오지 못함", flush=True)
+    reached_existing = False
 
-    # 게시글 링크 추출
-    links = await page.eval_on_selector_all(
-        "a.vrow.column:not(.notice)",
-        "els => els.map(e => e.getAttribute('href'))"
-    )
+    try:
+        page_url = board_url_template.format(page_num)
+        await page.goto(page_url, timeout=15000)
+        if not await wait_for_cloudflare_clear(page):
+            print(f"{ts()} [page {page_num}] Cloudflare 검증을 통과하지 못해 목록을 가져오지 못함", flush=True)
 
-    post_links = [url_host + link for link in links if link and link.startswith("/")]
+        # 게시글 링크 추출
+        links = await page.eval_on_selector_all(
+            "a.vrow.column:not(.notice)",
+            "els => els.map(e => e.getAttribute('href'))"
+        )
 
-    for i, post_url in enumerate(post_links, start=1):
-        try:
-            print(f"{ts()} [page {page_num}] ({i}/{len(post_links)}) {post_url}", flush=True)
-            current_url = post_url.split('?')[0]
-            account = current_url.split('/')[-2]
+        post_links = [url_host + link for link in links if link and link.startswith("/")]
 
-            # 수집한 적이 있는지 확인
-            url = "https://chickchick.kr/func/scrap-posts?urls="+current_url
-            res = requests.get(url)
-            data = res.json()
-            if data["result"]: # 등록되어 있음
-                print(f"{ts()} ##### Done: page {page_num} #####", flush=True)
-                log_file.flush()
-                os._exit(0)
-
-            await page.goto(post_url, timeout=15000)
-
-            if not await wait_for_cloudflare_clear(page):
-                print(f"{ts()} Cloudflare 검증을 통과하지 못해 건너뜀: {post_url}", flush=True)
-                continue
-
-            # 천천히 자동 스크롤
-            await async_auto_scroll_page(page)
-
-            # <p><a><img></a></p> 구조에서 img 태그의 src 추출
-            srcs = await page.eval_on_selector_all(
-                "div.article-body div.fr-view.article-content p a > img",
-                "els => els.map(img => img.getAttribute('src'))"
-            )
-
-            img_urls = [
-                ('https:' + src if src and src.startswith('//') else src)
-                for src in srcs
-                if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
-            ]
-
-            video_srcs = await page.eval_on_selector_all(
-                "div.article-body div.fr-view.article-content p video",
-                "els => els.map(video => video.getAttribute('src'))"
-            )
-
-            video_urls = [
-                ('https:' + src if src and src.startswith('//') else src)
-                for src in video_srcs
-                if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
-            ]
-
-            count = 0
-            for img_url in img_urls:
-                if img_url.startswith('//'):
-                    img_url = 'https:' + img_url
-                elif img_url.startswith('/'):
-                    img_url = urljoin(url_host, img_url)
-
-                img_name = os.path.basename(img_url.split('?')[0])
-                save_image_with_uuid(img_name, img_url, IMAGE_DIR)
-                count = count + 1
-
-            for video_url in video_urls:
-                if video_url.startswith('//'):
-                    video_url = 'https:' + video_url
-                elif video_url.startswith('/'):
-                    video_url = urljoin(url_host, video_url)
-
-                video_name = os.path.basename(video_url.split('?')[0])
-                await save_video_with_uuid(page, video_name, video_url, IMAGE_DIR)
-                count = count + 1
-            print(f"{ts()} download success : {count}", flush=True)
-
-            # 수집 후 url을 등록한다
+        for i, post_url in enumerate(post_links, start=1):
             try:
-                requests.post(
-                    'https://chickchick.kr/func/scrap-posts',
-                    json={
-                        "account": str(account),
-                        "post_urls": current_url,
-                        "type": 'ai',
-                    },
-                    timeout=(3, 20)  # (connect_timeout=3초, read_timeout=20초)
-                )
-            except Exception as e:
-                print(f"progress-update 요청 실패-ai: {e}")
-                pass  # 오류
+                print(f"{ts()} [page {page_num}] ({i}/{len(post_links)}) {post_url}", flush=True)
+                current_url = post_url.split('?')[0]
+                account = current_url.split('/')[-2]
 
-        except Exception as e:
-            print(f"{ts()} Error in {post_url}: {e}", flush=True)
+                # 수집한 적이 있는지 확인
+                url = "https://chickchick.kr/func/scrap-posts?urls="+current_url
+                res = requests.get(url)
+                data = res.json()
+                if data["result"]: # 등록되어 있음
+                    print(f"{ts()} ##### Done: page {page_num} #####", flush=True)
+                    log_file.flush()
+                    reached_existing = True
+                    break
+
+                await page.goto(post_url, timeout=15000)
+
+                if not await wait_for_cloudflare_clear(page):
+                    print(f"{ts()} Cloudflare 검증을 통과하지 못해 건너뜀: {post_url}", flush=True)
+                    continue
+
+                # 천천히 자동 스크롤
+                await async_auto_scroll_page(page)
+
+                # <p><a><img></a></p> 구조에서 img 태그의 src 추출
+                srcs = await page.eval_on_selector_all(
+                    "div.article-body div.fr-view.article-content p a > img",
+                    "els => els.map(img => img.getAttribute('src'))"
+                )
+
+                img_urls = [
+                    ('https:' + src if src and src.startswith('//') else src)
+                    for src in srcs
+                    if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
+                ]
+
+                video_srcs = await page.eval_on_selector_all(
+                    "div.article-body div.fr-view.article-content p video",
+                    "els => els.map(video => video.getAttribute('src'))"
+                )
+
+                video_urls = [
+                    ('https:' + src if src and src.startswith('//') else src)
+                    for src in video_srcs
+                    if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
+                ]
+
+                count = 0
+                for img_url in img_urls:
+                    if img_url.startswith('//'):
+                        img_url = 'https:' + img_url
+                    elif img_url.startswith('/'):
+                        img_url = urljoin(url_host, img_url)
+
+                    img_name = os.path.basename(img_url.split('?')[0])
+                    save_image_with_uuid(img_name, img_url, IMAGE_DIR)
+                    count = count + 1
+
+                for video_url in video_urls:
+                    if video_url.startswith('//'):
+                        video_url = 'https:' + video_url
+                    elif video_url.startswith('/'):
+                        video_url = urljoin(url_host, video_url)
+
+                    video_name = os.path.basename(video_url.split('?')[0])
+                    await save_video_with_uuid(page, video_name, video_url, IMAGE_DIR)
+                    count = count + 1
+                print(f"{ts()} download success : {count}", flush=True)
+
+                # 수집 후 url을 등록한다
+                try:
+                    requests.post(
+                        'https://chickchick.kr/func/scrap-posts',
+                        json={
+                            "account": str(account),
+                            "post_urls": current_url,
+                            "type": 'ai',
+                        },
+                        timeout=(3, 20)  # (connect_timeout=3초, read_timeout=20초)
+                    )
+                except Exception as e:
+                    print(f"progress-update 요청 실패-ai: {e}")
+                    pass  # 오류
+
+            except Exception as e:
+                print(f"{ts()} Error in {post_url}: {e}", flush=True)
+    finally:
+        await browser.close()
+
+    return reached_existing
 
 
 async def async_crawl_ai():
-    for page_num in range(1, 21):
-        print(f"{ts()} ##### Start: page {page_num} #####", flush=True)
-        await async_crawl_images_from_page(page_num)
+    for board_index, board_url_template in enumerate(BOARD_URL_TEMPLATES, start=1):
+        print(f"{ts()} ========== 게시판 {board_index}/{len(BOARD_URL_TEMPLATES)} 시작: {board_url_template} ==========", flush=True)
+        for page_num in range(1, 21):
+            print(f"{ts()} ##### Start: page {page_num} #####", flush=True)
+            reached_existing = await async_crawl_images_from_page(page_num, board_url_template)
+            if reached_existing:
+                break
 
     log_file.close()
 
