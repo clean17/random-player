@@ -213,6 +213,22 @@ function appendUrlParam(url, key, value) {
     return urlObj.toString();
 }
 
+function sizeLightboxImage(img) {
+    const naturalW = img.naturalWidth;
+    const naturalH = img.naturalHeight;
+    if (!naturalW || !naturalH) return;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const maxScale = Math.min((vw * 0.92) / naturalW, (vh * 0.92) / naturalH);
+    const minScale = Math.min((vw * 0.85) / naturalW, (vh * 0.85) / naturalH);
+    const scale = Math.max(Math.min(1, maxScale), minScale);
+
+    img.style.width = `${naturalW * scale}px`;
+    img.style.height = `${naturalH * scale}px`;
+}
+
 // 채팅 이미지 클릭 시 원본 크기로 보기
 function openImageLightbox(fullSrc) {
     const overlay = document.createElement('div');
@@ -225,12 +241,14 @@ function openImageLightbox(fullSrc) {
     closeBtn.innerHTML = '&times;';
 
     const fullImg = document.createElement('img');
-    fullImg.src = fullSrc;
     fullImg.alt = 'Image Url';
+    fullImg.addEventListener('load', () => sizeLightboxImage(fullImg));
+    fullImg.src = fullSrc;
 
     overlay.appendChild(closeBtn);
     overlay.appendChild(fullImg);
 
+    const onResize = () => sizeLightboxImage(fullImg);
     const onKeydown = (e) => {
         if (e.key === 'Escape') close();
     };
@@ -238,11 +256,13 @@ function openImageLightbox(fullSrc) {
     const close = () => {
         overlay.remove();
         document.removeEventListener('keydown', onKeydown);
+        window.removeEventListener('resize', onResize);
     };
     overlay.addEventListener('click', close);
     closeBtn.addEventListener('click', close);
     fullImg.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('keydown', onKeydown);
+    window.addEventListener('resize', onResize);
 
     document.body.appendChild(overlay);
 }
