@@ -64,6 +64,10 @@ let prevViewportH = window.innerHeight;
 
 const iceTypeCount = { host: 0, srflx: 0, relay: 0, unknown: 0 };
 
+// 모바일은 스피커폰(화면 보며 통화)이라 마이크와의 거리가 멀어 AGC(자동 게인)로 게인을 올려줘야
+// 목소리가 작게/멀게 들리지 않는다. 데스크톱은 반대로 AGC 워밍업 구간 때문에 꺼둔 상태를 유지한다.
+const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
 function rtcLog(label, ...args) {
     const state = myPeerConnection
         ? `[sig:${myPeerConnection.signalingState}|ice:${myPeerConnection.iceConnectionState}|conn:${myPeerConnection.connectionState}]`
@@ -255,10 +259,10 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         video: keepVideo ? { facingMode: currentFacingMode } : false
     };*/
 
-    // autoGainControl(AGC)은 통화 시작 직후 몇 초간 게인을 서서히 올리며 보정하는 동작이 있어,
-    // 이 구간에 "처음에만 잘 안 들린다"는 증상으로 나타날 수 있다. AGC를 꺼서 그 워밍업 구간을 없앤다.
+    // 데스크톱: autoGainControl(AGC) 워밍업 구간 때문에 "처음에만 잘 안 들린다" 증상이 있어 꺼둔다.
+    // 모바일: 스피커폰으로 화면을 보며 통화하면 마이크와 거리가 있어 AGC로 게인을 올려줘야 한다.
     let constraints = {
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: isMobileDevice },
         video: true  // 비디오 사용하겠다
     };
 
@@ -280,7 +284,7 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
                         deviceId: { exact: currentMicrophoneDeviceId },
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: false
+                        autoGainControl: isMobileDevice
                     },
                     video: false
                 });
@@ -572,7 +576,7 @@ async function handleAudioInputChange() {
             deviceId: { exact: audioInputSelect?.value },
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: false
+            autoGainControl: isMobileDevice
         },
         video: false
     });
