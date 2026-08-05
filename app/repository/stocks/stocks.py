@@ -391,7 +391,6 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
     target_condition = ""
     fire_condition = ""
     trading_value_condition = ""
-    params = []
 
     if user_id is not None:
         favorite_join = """
@@ -400,118 +399,132 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
         params = [user_id, date, endDate]
     else:
         trading_value_condition = """
-            and i.current_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
+            AND b.avg_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
+            AND b.last_trading_value > 4_000_000_000
         """
         target_condition = """
-            and i.target = 'interest'
+            AND i.target = 'interest'
         """
         fire_condition = """
-            where REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric > 5
-            and REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric > 8.5
-            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric < 20
-            and REGEXP_REPLACE(increase_per_day, '%%', '', 'g')::numeric > 3.8
-            and min < close
+            where 1=1
+            -- 아직 너무 많이 오르지는 않았지만 상승 흐름은 확인된 구간
+			AND b.total_rate_of_increase BETWEEN 8 AND 12
+			AND b.last_today_price_change_pct BETWEEN 3 AND 12
+            -- 너무 느린 종목과 급격하게 오른 종목 제외
+			-- AND b.increase_per_day BETWEEN 3 AND 6
+            AND min_close::numeric < current_close::numeric
+            -- 현재가가 조회 기간 최고 관측가격에서 3퍼센트 이상 밀리지 않은 종목
+            AND b.current_close >= b.high_close * 0.97
+            AND b.market_value > 70_000_000_000
+              /*
+               * 한국시간 기준:
+               *
+               * 1. endDate가 과거 날짜면 last_date 조건 미적용
+               * 2. endDate가 오늘이어도 09:00 이전이면 조건 미적용
+               * 3. endDate가 오늘이고 09:00 이후라면
+               *    오늘 interest 신호가 발생한 종목만 통과
+               */
+              AND (
+                     %s::date
+                         <> (
+                             CURRENT_TIMESTAMP
+                             AT TIME ZONE 'Asia/Seoul'
+                         )::date
+                  OR (
+                         CURRENT_TIMESTAMP
+                         AT TIME ZONE 'Asia/Seoul'
+                     )::time < TIME '09:00:00'
+                  OR b.last_date = %s::date
+              )
         """
-        params = [date, endDate]
+        params = [date, endDate, endDate, endDate]
 
     sql = f"""
     select 
         row_number() over (
-            order by count desc
-            , REGEXP_REPLACE(avg_change_pct, '%%', '', 'g')::numeric desc
-            , REGEXP_REPLACE(total_rate_of_increase, '%%', '', 'g')::numeric desc
+            order by total_rate_of_increase::numeric desc
         ) as rn
         , b.id
         , b.stock_name
         , b.stock_code
         , b.category
-        , b.count
-        , b.min
-        , b.last
-        , b.close
-        , b.avg_change_pct
-        , b.total_rate_of_increase
-        , b.increase_per_day
+        , b.signal_days AS count
+        , to_char(b.min_close, 'FM999,999,999') as min_close
+        , to_char(b.high_close, 'FM999,999,999') as high_close
+        , to_char(b.current_close, 'FM999,999,999') as current_close
+        , b.total_rate_of_increase ||'%%' as total_rate_of_increase
+        , b.increase_per_day || '%%' as increase_per_day
         , b.market_value
         , b.avg_trading_value
-        , last_i.last_trading_value_num as current_trading_value
+        , b.last_trading_value
         , b.first_date
         , b.last_date
         , b.logo_image_url
-        , coalesce(b.s_graph_file, last_i.graph_file) as graph_file
+        , coalesce(b.s_graph_file, b.last_graph_file) as graph_file
     from (
         select 
           max(i.id) as id
           , i.stock_code
-          , I.stock_name
-          , count(i.stock_code)
-          , to_char(min(current_price::numeric), 'FM999,999,999') as min
-          , to_char(
-              case 
-                when max(i.created_at)::date <> CURRENT_DATE 
-                  then max(i.current_price::numeric)
-                else s.close::numeric
-              end, 'FM999,999,999'
-            ) as last
-          , ROUND(
-              AVG(
-                COALESCE(
-                  NULLIF(REGEXP_REPLACE(i.today_price_change_pct, '%%', '', 'g'), '')::numeric, 0)
-               )
-            , 1)||'%%' AS avg_change_pct  
+          , i.stock_name
+          , COUNT(DISTINCT i.created_at::date) AS signal_days
+          , s.close::numeric as current_close
+          , min(i.current_price::numeric) as min_close
+          , MAX(i.current_price::numeric) as high_close
           , ROUND(
               100.0 * (
-                case when max(i.created_at)::date <> CURRENT_DATE 
-                     then max(i.current_price::numeric)
-                     else s.close::numeric
-                end 
-                - MIN(current_price::numeric)
-                ) / NULLIF(MIN(current_price::numeric), 0)
-            , 1)||'%%' AS total_rate_of_increase
+                s.close::numeric 
+                - MIN(i.current_price::numeric)
+                ) / NULLIF(MIN(i.current_price::numeric), 0)
+            , 1) AS total_rate_of_increase
           , ROUND(
               100.0 * (
-                case when max(i.created_at)::date <> CURRENT_DATE 
-                     then max(i.current_price::numeric)
-                     else s.close::numeric
-                end 
-                - MIN(current_price::numeric)
-              ) / NULLIF(MIN(current_price::numeric), 0) / count(i.stock_code)
-            , 1)||'%%' as increase_per_day
-          , (select market_value from interest_stocks is2
-            	where is2.created_at = max(i.created_at)
-            ) as market_value
-          , ROUND(avg(current_trading_value::numeric)) as avg_trading_value
+                s.close::numeric
+                - MIN(i.current_price::numeric)
+              ) / NULLIF(MIN(i.current_price::numeric), 0) / count(DISTINCT i.created_at::date)
+            , 1) as increase_per_day
+          , (
+                ARRAY_AGG(
+                    i.market_value::numeric
+                    ORDER BY i.created_at DESC, i.id DESC
+                )
+        	)[1] AS market_value
+          , ROUND(avg(i.current_trading_value::numeric)) as avg_trading_value
+          , (
+              ARRAY_AGG(
+                  i.current_trading_value::numeric
+                  ORDER BY i.created_at DESC, i.id DESC
+              )
+          )[1] AS last_trading_value
+          , (
+              ARRAY_AGG(
+                  i.graph_file
+                  ORDER BY i.created_at DESC, i.id DESC
+              )
+          )[1] AS last_graph_file
+          , (
+              ARRAY_AGG(
+                  i.today_price_change_pct::numeric
+                  ORDER BY i.created_at DESC, i.id DESC
+              )
+          )[1] AS last_today_price_change_pct
           , min(i.created_at)::date as first_date
           , max(i.created_at)::date as last_date
           , s.logo_image_url
           , s.category
           , s.graph_file as s_graph_file
-          , to_char(s.close::numeric, 'FM999,999,999') as close
         from interest_stocks i 
         join stocks s on s.stock_code = i.stock_code and s.flag = true
         {favorite_join}
         where 1=1
-        and i.market_value::numeric > 70_000_000_000 -- 시총 700억 이상만
-        {trading_value_condition}
-        --and i.created_at >= NOW() - INTERVAL '1 month'
-        --and i.created_at >= CURRENT_DATE - make_interval(days => (CURRENT_DATE - '날짜'::date + 1))
         and i.created_at >= %s::date
         and i.created_at < %s::date + interval '1 day'
-        and i.today_price_change_pct is not null
-        and i.target = 'interest'
         {target_condition}
         group by i.stock_code, i.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
-        having count(i.stock_code) >= 1
-        order by count(i.stock_code) desc, max(i.created_at) desc
+        having COUNT(DISTINCT i.created_at::date) >= 2
     ) as b
-    left join lateral (
-      select i2.current_trading_value::numeric as last_trading_value_num, i2.graph_file
-      from interest_stocks i2
-      where i2.stock_code = b.stock_code            
-      order by i2.created_at desc, i2.id desc
-      limit 1
-    ) last_i on true
     {fire_condition}
+    {trading_value_condition}
+    ORDER BY total_rate_of_increase::numeric DESC
     ;
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur: # namedtuple_row는 컬럼명을 속성명으로 쓴다

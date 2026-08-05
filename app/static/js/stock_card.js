@@ -142,11 +142,11 @@ function renderTradingCardHtml(track, rows) {
         const formatted_time = hhmmFromRfc1123Gmt(r.created_at);
 
         const avg5d = toFloat(r.avg5d_trading_value) ?? 0;
-        const curTv = toFloat(r.current_trading_value) ?? 0;
+        const curTv = toFloat(r.last_trading_value) ?? 0;
         const tvChg = toFloat(r.trading_value_change_pct) ?? 0;
         const yClose = toFloat(r.yesterday_close) ?? 0;
         // const cPrice = toFloat(r.current_price) ?? 0;
-        const cPrice = toFloat(r.close) ?? 0;
+        const cPrice = toFloat(r.current_close) ?? 0;
         const pChg = toFloat(r.today_price_change_pct) ?? 0;
 
         const hasImg = !!r.graph_file;
@@ -210,7 +210,7 @@ function renderSummaryCardHtml(track, rows) {
         // 날짜
         const d1 = new Date(String(r.first_date ?? ""));
         const d2 = new Date(String(r.last_date ?? ""));
-        const nClose = toFloat(r.close) ?? 0;
+        const nClose = toFloat(r.current_close) ?? 0;
         const formatted_date1 = fmtDate(d1);
         const formatted_date2 = fmtDate(d2);
 
@@ -245,8 +245,8 @@ function renderSummaryCardHtml(track, rows) {
           <div class="kv"><span class="k">집계 횟수</span><span class="v">${r.count ?? ""}</span></div>
           <div class="kv"><span class="k">집계 기간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
           <!--<div class="kv"><span class="k">시총</span><span class="v">${trValFmtWon(r.market_value) ?? ""}</span></div>-->
-          <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.current_trading_value) ?? ""})</span></div>
-          <div class="kv"><span class="k">종가 추이 (현재가)</span><span class="v">${fmt2(r.min)} ➡️ ${fmt2(r.last)} (${fmtKrClose(nClose)})</span></div>
+          <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.last_trading_value) ?? ""})</span></div>
+          <div class="kv"><span class="k">종가 추이 (현재가)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmt2(r.high_close)} (${fmtKrClose(nClose)})</span></div>
           <div class="kv"><span class="k">기간 총 상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일 평균 상승</span><span class="v">${r.increase_per_day ?? ""}</span></div>
         </div>
@@ -276,7 +276,7 @@ function renderFavoriteCardHtml(track, rows) {
         // 날짜
         const d1 = new Date(String(r.first_date ?? ""));
         const d2 = new Date(String(r.last_date ?? ""));
-        const nClose = toFloat(r.close) ?? 0;
+        const nClose = toFloat(r.current_close) ?? 0;
         const formatted_date1 = fmtDate(d1);
         const formatted_date2 = fmtDate(d2);
 
@@ -310,8 +310,8 @@ function renderFavoriteCardHtml(track, rows) {
           <div class="kv"><span class="k">집계 횟수</span><span class="v">${r.count ?? ""}</span></div>
           <div class="kv"><span class="k">집계 기간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
           <!--<div class="kv"><span class="k">시총</span><span class="v">${trValFmtWon(r.market_value) ?? ""}</span></div>-->
-          <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.current_trading_value) ?? ""})</span></div>
-          <div class="kv"><span class="k">종가 추이 (현재가)</span><span class="v">${fmt2(r.min)} ➡️ ${fmt2(r.last)} (${fmtKrClose(nClose)})</span></div>
+          <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.last_trading_value) ?? ""})</span></div>
+          <div class="kv"><span class="k">종가 추이 (현재가)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmt2(r.high_close)} (${fmtKrClose(nClose)})</span></div>
           <div class="kv"><span class="k">기간 총 상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일 평균 상승</span><span class="v">${r.increase_per_day ?? ""}</span></div>
         </div>
@@ -340,11 +340,11 @@ function renderLowCardHtml(track, rows) {
 
         // 숫자 문자열 안전 변환(있으면 사용)
         const avg5d  = toFloat(r.avg5d_trading_value) ?? 0;
-        const curTv  = toFloat(r.current_trading_value) ?? 0;
+        const curTv  = toFloat(r.last_trading_value) ?? 0;
         const pChg   = toFloat(r.today_price_change_pct) ?? 0;
         const yClose = toFloat(r.yesterday_close) ?? 0;
         const tClose = toFloat(r.current_price) ?? 0;
-        const nClose = toFloat(r.close) ?? 0;
+        const nClose = toFloat(r.current_close) ?? 0;
         const tvChg  = toFloat(r.trading_value_change_pct) ?? 0;
 
         // 이미지

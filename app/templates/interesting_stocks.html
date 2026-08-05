@@ -672,7 +672,7 @@
           <td class="stock_name">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right avg_amount" data-avg5d-amount="${r.avg5d_trading_value}">${trValFmtWon(r.avg5d_trading_value)}</td>
-          <td class="right cur_amount" data-current-amount="${r.current_trading_value}">${trValFmtWon(r.current_trading_value)}</td>
+          <td class="right cur_amount" data-current-amount="${r.last_trading_value}">${trValFmtWon(r.last_trading_value)}</td>
           <td class="right tv_change">${fmt2(r.trading_value_change_pct)}%</td>
           <td class="right yst_close">${fmt2(r.yesterday_close)}원</td>
           <td class="right cur_close">${fmt2(r.current_price)}원</td>
@@ -719,7 +719,7 @@
           <td class="">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right">${trValFmtWon(r.avg5d_trading_value)}</td>
-          <td class="right">${trValFmtWon(r.current_trading_value)}</td>
+          <td class="right">${trValFmtWon(r.last_trading_value)}</td>
           <td class="right">${fmt2(r.trading_value_change_pct)}%</td>
           <td class="right">${fmt2(r.yesterday_close)}원</td>
           <td class="right">${fmt2(r.current_price)}원</td>
@@ -769,11 +769,10 @@
 <!--          <td class="">${r.stock_code ?? ''}</td>-->
           <td class="stock_name2">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
-          <td class="right min_close">${fmt2(r.min)}</td>
-          <td class="right last_close">${fmt2(r.last)}</td>
+          <td class="right min_close">${fmt2(r.min_close)}</td>
+          <td class="right high_close">${fmt2(r.high_close)}</td>
           <td class="right">${r.total_rate_of_increase ?? ''}</td>
           <td class="right">${r.increase_per_day ?? ''}</td>
-<!--          <td class="right">${r.avg_change_pct ?? ''}</td>-->
           <td class="right chg_compare_peak"></td>
           <td class="right">${r.market_value ?? ''}</td>
           <td class="right">${r.avg_trading_value ?? ''}</td>
@@ -819,7 +818,7 @@
           <td class="stock_name">${r.stock_name ?? ''}<br>(${r.stock_code ?? ''})</td>
           <td class="">${r.category ?? ''}</td>
           <td class="right">${r.market_value ?? ''}</td>
-          <td class="right">${trValFmtWon(r.current_trading_value)}</td>
+          <td class="right">${trValFmtWon(r.last_trading_value)}</td>
           <td class="right">${fmt2(r.today_price_change_pct)}%</td>
           <td class="right">${fmt2(r.yesterday_close)}원</td>
           <td class="right yst_close">${fmt2(r.current_price)}원</td>
@@ -1467,10 +1466,10 @@
                     for (const i of stock_names2) {
                         if (i.textContent.split('(')[0] === stock_name) {
                             const tr = i.closest('tr');
-                            const last_close_el = tr.querySelector('.last_close');
+                            const high_close_el = tr.querySelector('.high_close');
                             const chg_compare_peak_rate_el = tr.querySelector('.chg_compare_peak');
-                            const calc_change_pct = (realtime_price - last_close_el.textContent.replace(/[^0-9.]/g, ''))
-                                / last_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
+                            const calc_change_pct = (realtime_price - high_close_el.textContent.replace(/[^0-9.]/g, ''))
+                                / high_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
                             await updateTdWithBlink(chg_compare_peak_rate_el, fmt2(calc_change_pct) + '%');
                         }
                     }
