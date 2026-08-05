@@ -267,11 +267,17 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-0-2) fire 자동매수 (H2 필터 + 시장폭 레짐, 장중 10분마다)
-    #        pkl이 장중 :10/:30/:50 갱신되므로 그 직후(:15/:35/:55)에 평가
+    # 2-0-2) fire 자동매수 (H2 필터 + 시장폭 레짐) — 장 마감 직전 1회만 실행.
+    #        근거: 백테스트(fire_backtest_result.csv)가 '신호일 종가 매수' 가정이고, H2 필터 자체가
+    #        일봉 지표(20일 신고가 대비/당일 등락률)라 장중에 평가하면 아직 절반만 만들어진 일봉으로
+    #        판단하게 된다. pkl 정규장 마지막 갱신이 15:10, KRX 정규장 종료가 15:20이므로 15:15에 평가.
+    #        예전엔 :15/:35/:55로 하루 21번 돌아 (1) 아침 급등 추격분이 MAX_BUYS_PER_DAY를 먼저
+    #        소진했고(실매수 5건 전부 09:35~10:55), (2) 15:35/15:55는 NXT 시간대인데 buy_market의
+    #        기본 거래소가 KRX라 세션 불일치 주문이 나갈 수 있었다.
+    #        스케줄러가 밀려 15:20을 넘기면 is_market_open()이 False라 주문 없이 그냥 스킵된다.
     scheduler.add_job(
         run_kiwoom_fire_buy,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-15", minute="15,35,55"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=15),
         id="kiwoom_fire_buy",
         executor="io",
         replace_existing=True,

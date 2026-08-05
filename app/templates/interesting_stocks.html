@@ -839,7 +839,7 @@
 
     // ── 내 종목 (키움 모의투자 대시보드) ──────────────────────────────────
     const isGuestUser = {{ 'true' if current_user.get_id() == config.GUEST_USERNAME else 'false' }};
-    const MS_REASON_LABEL = { stop_loss: '손절', trailing: '트레일링', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호' };
+    const MS_REASON_LABEL = { stop_loss: '손절', giveback_stop: '되돌림손절', trailing: '트레일링', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호' };
 
     // 매도 시 그 종목 보유수량 대비 이번에 판 비율 표시용 (전량/1/3/1/2 등)
     function msHoldingRatioText(ev) {
