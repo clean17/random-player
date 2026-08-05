@@ -2,18 +2,34 @@
 """
 fire(급상승 관심종목) 자동 매수 전략.
 
+매수 조건 (2026-08-05 기준):
+  1. 시장폭 레짐 ON      : 전 종목 중 종가>MA20 비율 >= 40% (BREADTH_MIN). 미만이면 그날 진입 전면 차단
+  2. fire 쿼리 상위 10   : get_interest_stocks_info(오늘-6일 ~ 오늘)를 총상승률 내림차순으로 받아
+                           앞에서 TOP_N(10)개. 쿼리 자체 조건(총상승률 8~12%, 당일 3~12%,
+                           고점 대비 -3% 이내, 시총 700억↑, 거래대금 40억↑ 등)은 SQL에 있음
+  3. 보유/쿨다운 제외    : 이미 보유 중이거나 COOLDOWN_DAYS(7일) 내 재매수면 skip
+  4. 사이징             : 기준은 총자산이 아니라 '가용 현금'(총자산 - 보유종목 평가금액).
+                           가용현금 × CASH_DEPLOY_RATIO(70%)까지만 쓰고 나머지 30%는 버퍼로 남긴다.
+                           그 금액을 BUY_SLOTS(7)등분 → 1픽당 가용현금의 10%, 하루 최대 7종목.
+                           TOP_N(10) > BUY_SLOTS(7)이라 보유중/쿨다운으로 걸러진 자리는 다음 순위가 채운다.
+                           1픽 예산보다 주가가 비싸면(1주도 못 삼) 그 종목은 skip하고 다음 후보로.
+
 백테스트 근거 (fire_backtest_result.csv, 2025-09 ~ 2026-07, 2,658건):
-  - fire 픽 전체 매수: 평균 +0.39%/건 (수수료 빼면 본전 이하) → 그대로 못 씀
+  - fire 픽 전체 매수: 평균 +0.39%/건 (수수료 빼면 본전 이하)
   - H2 필터(20일 신고가 -1.6% 이내 + 당일 등락률 +12% 이상): 평균 +2.75%, 승률 48.6%
-  - H2 + 시장폭 레짐(전 종목 중 종가>MA20 비율 >= 40%): 평균 +3.50%, 승률 53%,
-    9개월 전부 플러스. 레짐 OFF 구간(2026-07 같은 하락장)은 신규 진입 자체를 차단.
+  - H2 + 시장폭 레짐: 평균 +3.50%, 승률 53%, 9개월 전부 플러스
+
+  ⚠️ 2026-08-05 요청으로 H2 필터를 제거함. 위 백테스트 기준으로는 H2 없는 'fire 픽 전체 매수'가
+     평균 +0.39%/건(수수료 차감 시 본전 이하) 구간에 해당한다. 다만 그 수치는 fire 픽 전체를 대상으로
+     한 것이고 지금은 총상승률 상위 10개로 한정 + 레짐 필터가 남아 있어 완전히 같은 조건은 아니다.
+     성과는 재검증이 필요하며, 되돌리려면 get_fire_candidates()에 _daily_metrics() 조건을 다시 걸면 된다.
 
 진입 시점 (중요):
   백테스트의 매수가는 신호일 '종가'다(fire_backtest_result.csv의 buy 컬럼 = 해당일 종가로 확인됨).
   H2 필터도 20일 신고가 대비/당일 등락률이라 완성된 일봉을 전제한 지표다. 따라서 이 전략은
   장 마감 직전 1회만 평가/매수한다 (batch_runner의 kiwoom_fire_buy 잡, 평일 15:15).
   예전처럼 장중 :15/:35/:55로 21번 돌리면 아직 절반만 만들어진 일봉으로 판단하게 되고,
-  급등 중인 장중 고점을 추격해 MAX_BUYS_PER_DAY를 아침에 소진한다. 실제로 2026-07-24
+  급등 중인 장중 고점을 추격해 하루 매수 한도(BUY_SLOTS)를 아침에 소진한다. 실제로 2026-07-24
   HD현대에너지솔루션은 10:35에 196,600원에 샀는데 그날 종가가 164,000원(-16.6%),
   SK오션플랜트는 10:55에 20,450원에 샀는데 종가 18,350원(-10.3%)이었다.
 
@@ -33,12 +49,13 @@ from job.kiwoom_api import buy_market, get_holdings_and_summary, get_account_cre
 from job.kiwoom_trailing_stop import _log, _record_trade, is_market_open
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
-DIST_20D_HIGH_MIN = -1.6   # 종가가 20일 최고가 대비 -1.6% 이내 (신고가 근접/돌파)
-RET_1D_MIN = 12.0          # 당일 등락률 +12% 이상
+TOP_N = 10                 # fire 쿼리 결과(총상승률 desc 정렬) 중 상위 N종목까지 후보로 검토.
+                           # BUY_SLOTS보다 크게 둬서 보유중/쿨다운으로 걸러진 만큼 다음 순위가 채우게 함
 BREADTH_MIN = 0.40         # 시장폭 레짐: 전 종목 중 종가>MA20 비율 40% 이상일 때만 진입
 FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트 '관심' 탭과 동일)
-BUY_PORTION = 0.10         # 1픽당 총자산의 10% 매수
-MAX_BUYS_PER_DAY = 3       # 하루 최대 신규 매수 종목 수
+CASH_DEPLOY_RATIO = 0.70   # 가용 현금 중 자동매수에 쓸 최대 비율 (나머지 30%는 현금 버퍼로 남김)
+BUY_SLOTS = 7              # 위 금액을 7등분 → 1픽당 '가용현금 × 70% ÷ 7' = 가용현금의 10%.
+                           # 하루 최대 신규 매수 종목 수이기도 함
 COOLDOWN_DAYS = 7          # 같은 종목 재매수 금지 기간
 
 PKL_DIR = r'C:\my-project\AutoSales.py\data\pickle'
@@ -103,8 +120,9 @@ def get_market_breadth(force: bool = False) -> Optional[float]:
 
 # ── fire 후보 + H2 필터 ─────────────────────────────────────────────────────
 
-def _h2_metrics(stk_cd: str) -> Optional[Tuple[float, float]]:
-    """(dist_20d_high %, ret_1d %) 반환. pkl 데이터가 오늘자가 아니면 None (장중 20분 주기 갱신 전제)."""
+def _daily_metrics(stk_cd: str) -> Optional[Tuple[float, float]]:
+    """(dist_20d_high %, ret_1d %) 반환 — 로그/사후분석용 참고 지표. 매수 필터로는 쓰지 않는다.
+    pkl 데이터가 오늘자가 아니면 None (장중 20분 주기 갱신 전제)."""
     path = os.path.join(PKL_DIR, '{}.pkl'.format(stk_cd))
     if not os.path.exists(path):
         return None
@@ -130,26 +148,27 @@ def _h2_metrics(stk_cd: str) -> Optional[Tuple[float, float]]:
 
 
 def get_fire_candidates() -> List[Dict]:
-    """fire 쿼리 결과에 H2 필터를 적용한 매수 후보 목록."""
+    """fire 쿼리 결과 상위 TOP_N 종목을 매수 후보로 반환.
+    SQL이 ORDER BY total_rate_of_increase DESC로 내려주므로 앞에서 자르면 총상승률 상위 N개다.
+    (예전엔 여기서 H2 필터로 한 번 더 걸렀으나 2026-08-05 요청으로 제거 — 상단 docstring 참고)"""
     from app.repository.stocks.stocks import get_interest_stocks_info
     today = datetime.date.today()
     start = (today - datetime.timedelta(days=FIRE_WINDOW_DAYS)).isoformat()
     rows = get_interest_stocks_info(start, today.isoformat())
 
     candidates = []
-    for row in rows:
+    for row in rows[:TOP_N]:
         stk_cd = str(row.get('stock_code') or '').zfill(6)
-        metrics = _h2_metrics(stk_cd)
-        if metrics is None:
+        if not stk_cd or stk_cd == '000000':
             continue
-        dist, ret1d = metrics
-        if dist >= DIST_20D_HIGH_MIN and ret1d >= RET_1D_MIN:
-            candidates.append({
-                'stk_cd': stk_cd,
-                'stk_nm': row.get('stock_name'),
-                'dist_20d_high': round(dist, 2),
-                'ret_1d': round(ret1d, 2),
-            })
+        metrics = _daily_metrics(stk_cd)  # 참고 지표(로그용) — 없어도 매수는 진행
+        candidates.append({
+            'stk_cd': stk_cd,
+            'stk_nm': row.get('stock_name'),
+            'total_rate': row.get('total_rate_of_increase'),
+            'dist_20d_high': round(metrics[0], 2) if metrics else None,
+            'ret_1d': round(metrics[1], 2) if metrics else None,
+        })
     return candidates
 
 
@@ -191,16 +210,30 @@ def run_fire_buy_cycle():
     today = datetime.date.today()
     daily = state.get('_daily', {})
     buys_today = daily.get('count', 0) if daily.get('date') == today.isoformat() else 0
-    if buys_today >= MAX_BUYS_PER_DAY:
+    if buys_today >= BUY_SLOTS:
         return
 
     holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
     held = {h['stk_cd'] for h in holdings}
+
+    # 사이징 기준은 총자산이 아니라 '가용 현금'. 그중 CASH_DEPLOY_RATIO(70%)까지만 쓰고
+    # 나머지 30%는 손대지 않는다(버퍼). deploy_limit을 7등분한 금액이 1픽 예산이며,
+    # deployed 누적으로 총 사용액이 70%를 넘지 않도록 막는다.
     cash = summary['total_asset'] - summary['tot_evlt_amt']
-    budget = summary['total_asset'] * BUY_PORTION
+    deploy_limit = max(0.0, cash) * CASH_DEPLOY_RATIO
+    slot_budget = deploy_limit / BUY_SLOTS if BUY_SLOTS > 0 else 0.0
+    deployed = 0.0
+
+    if slot_budget <= 0:
+        _log.info(f'[fire] 가용 현금 부족 — 현금 {cash:,.0f}원, 매수 예산 {deploy_limit:,.0f}원')
+        return
+
+    _log.info(f'[fire] 후보 {len(candidates)}종목 / 가용현금 {cash:,.0f}원 → '
+              f'매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}) '
+              f'{BUY_SLOTS}등분 = 1픽당 {slot_budget:,.0f}원')
 
     for cand in candidates:
-        if buys_today >= MAX_BUYS_PER_DAY:
+        if buys_today >= BUY_SLOTS:
             break
         stk_cd = cand['stk_cd']
         if stk_cd in held:
@@ -217,22 +250,29 @@ def run_fire_buy_cycle():
         price = get_current_price(stk_cd)
         if price <= 0:
             continue
-        qty = int(min(budget, cash) // price)
+        # 1픽 예산과 '한도 잔액' 중 작은 쪽까지만 (마지막 슬롯이 한도를 넘지 않도록)
+        spendable = min(slot_budget, deploy_limit - deployed)
+        qty = int(spendable // price)
         if qty <= 0:
-            _log.info(f'[fire] {cand["stk_nm"]}({stk_cd}) 매수 예산 부족 (현금 {cash:,.0f}원)')
+            _log.info(f'[fire] {cand["stk_nm"]}({stk_cd}) 매수 예산 부족 '
+                      f'(1픽 예산 {spendable:,.0f}원 < 현재가 {price:,.0f}원)')
             continue
 
         trade_value = qty * price
         asset_ratio = (trade_value / summary['total_asset']) if summary['total_asset'] > 0 else 0.0
 
+        ref = ''
+        if cand['dist_20d_high'] is not None:
+            ref = f'신고가대비 {cand["dist_20d_high"]:+.1f}%, 당일 {cand["ret_1d"]:+.1f}%, '
         result = buy_market(stk_cd, qty)
-        _log.info(f'[fire매수] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
-                  f'(신고가대비 {cand["dist_20d_high"]:+.1f}%, 당일 {cand["ret_1d"]:+.1f}%, breadth={breadth:.0%}) '
-                  f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) → {result}')
+        deployed += trade_value
+        _log.info(f'[fire매수 {buys_today + 1}/{BUY_SLOTS}] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
+                  f'(총상승률 {cand["total_rate"]}, {ref}breadth={breadth:.0%}) '
+                  f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
+                  f'누적 {deployed:,.0f}/{deploy_limit:,.0f}원 → {result}')
         _record_trade(stk_cd, cand['stk_nm'], 'buy', 'fire', qty, price, price, 0.0, asset_ratio=asset_ratio)
 
         state[stk_cd] = today.isoformat()
-        cash -= qty * price
         buys_today += 1
         state['_daily'] = {'date': today.isoformat(), 'count': buys_today}
         _save_fire_state(state)
@@ -246,9 +286,12 @@ if __name__ == '__main__':
         print(f'시장폭: {b:.1%}' if b is not None else '시장폭 계산 실패',
               f'(레짐 {"ON" if b is not None and b >= BREADTH_MIN else "OFF"}, 기준 {BREADTH_MIN:.0%})')
         cands = get_fire_candidates()
-        print(f'H2 후보 {len(cands)}건:')
-        for c in cands:
-            print(f'  {c["stk_nm"]}({c["stk_cd"]}) 신고가대비 {c["dist_20d_high"]:+.1f}% 당일 {c["ret_1d"]:+.1f}%')
+        print(f'매수 후보 {len(cands)}건 (총상승률 상위 {TOP_N} 검토, '
+              f'가용현금의 {CASH_DEPLOY_RATIO:.0%}를 {BUY_SLOTS}등분하여 최대 {BUY_SLOTS}종목):')
+        for i, c in enumerate(cands, 1):
+            ref = (f' 신고가대비 {c["dist_20d_high"]:+.1f}% 당일 {c["ret_1d"]:+.1f}%'
+                   if c['dist_20d_high'] is not None else ' (pkl 오늘자 없음)')
+            print(f'  {i:2d}. {c["stk_nm"]}({c["stk_cd"]}) 총상승률 {c["total_rate"]}{ref}')
     elif '--run' in sys.argv:
         if is_market_open():
             run_fire_buy_cycle()
