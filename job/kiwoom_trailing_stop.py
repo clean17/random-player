@@ -3,19 +3,27 @@
 
 기본 전략 (수정하려면 아래 상수만 변경):
   - 손절            : -6%  → 전량 즉시 청산
+  - 되돌림 손절     : 한 번이라도 +5%를 찍었던(트레일링 활성화된) 종목은 손절선이 -3%로 좁아짐
+    → 전량 즉시 청산. 이익 구간까지 갔던 종목을 -6%까지 내주지 않기 위함(ARMED_GIVEBACK_STOP).
   - 목표가          : +10% / +15% / +20% 각 단계 도달 시마다 1/3씩 매도 (단계별 최초 1회만)
   - 트레일링 활성화 : 수익률 +5% 도달 후 고점 추적 시작
   - 트레일링 폭     : 고점 대비 -4%p 이탈 시 그 시점 잔여 수량의 1/3 매도
-  - 최소 익절 보호선 : +2% (트레일링 청산선이 +2% 밑으로 내려가지 않도록 고정).
-    청산선이 이 보호선에 걸려서 트리거된 경우엔 분할 없이 잔여 수량 전량 청산(추가 하락 방지).
+  - 최소 익절 보호선 : +1% (트레일링 청산선이 +1% 밑으로 내려가지 않도록 고정).
+    보호선에 걸려 트리거된 경우도 다른 트리거와 동일하게 1/3만 매도한다. 잔여 물량의 추가 하락은
+    되돌림 손절(-3%)과 아래 정체 보호가 담당.
+    (활성화선 5% - 트레일링폭 4%p = 보호선 1% 이라, 트레일링이 켜지는 시점의 청산선이 정확히
+     보호선과 만난다. 예전엔 보호선이 2%라 고점 5~6% 구간에서 청산선이 항상 보호선에 붙었고,
+     그 경우 전량 청산돼 "고점 5%대에서 밀리면 무조건 100% 매도"가 됐음.)
   - 한 종목당 최대 3회(3분할)까지만 매도 — 목표가 단계와 트레일링이 같은 3분할 예산을 공유함.
     트레일링 매도는 "직전 매도 시점의 고점보다 더 높은 새 고점"을 갱신해야만 다시 트리거됨
     (같은 고점에서 반복 매도되는 것 방지).
   - 보유 중 추가 매수로 평단가가 바뀌면 고점/목표가 단계 등 진행상태는 리셋되고 새 평단가 기준으로
     사다리/트레일링을 처음부터 다시 평가함 (rate가 평단가 기준 값이라 예전 %는 더 이상 같은 척도가 아님).
   - 정체 보호: 트레일링 매도가 한 번 나간 뒤 그보다 더 높은 새 고점 없이 가격이 계속 흘러내리면
-    트레일링이 재발동되지 않아 잔여 물량이 손절선(-6%)까지 보호 없이 노출될 수 있음. 이를 막기 위해
-    그 매도에 쓰인 트리거선(고점-4%p 또는 보호선)보다 추가로 -6%p(STALL_GAP) 더 밀리면 잔여 전량 청산.
+    트레일링이 재발동되지 않아 잔여 물량이 보호 없이 노출될 수 있음. 이를 막기 위해 그 매도에
+    쓰인 트리거선(고점-4%p 또는 보호선)보다 추가로 -6%p(STALL_GAP) 더 밀리면 잔여 전량 청산.
+    고점이 높았던 종목(예: 고점 20% → 트리거 16% → 10%에서 정리)에 주로 작동하고, 저고점 종목은
+    그 전에 되돌림 손절(-3%)이 먼저 잡는다.
   - 기업행위 방어: 액면분할·권리락 당일엔 증권사가 현재가만 먼저 조정하고 평단가/수량은 늦게
     조정하는 구간이 있어 손실률이 -50%대로 잘못 잡힐 수 있음. 일일 가격제한폭(±30%)을 넘는 급락이나
     정상적으로 도달 불가능한 손실률이 관측되면 매도하지 않고 경고만 남긴 뒤 자동매매를 일시 정지함
@@ -74,7 +82,10 @@ STOP_LOSS_RATE = -0.06
 TARGET_RATES = [0.10, 0.15, 0.20]  # 단계별 목표가, 도달할 때마다 1/3씩 매도
 TRAIL_ACTIVATE_RATE = 0.05
 TRAIL_GAP = 0.04
-MIN_PROFIT_FLOOR = 0.02
+MIN_PROFIT_FLOOR = 0.01
+# 한 번이라도 +5%(TRAIL_ACTIVATE_RATE)를 찍었던 종목은 이익을 손실로 되돌리지 않도록
+# 손절선을 -6%가 아닌 -3%로 좁혀서 잔여 전량 청산한다.
+ARMED_GIVEBACK_STOP = -0.03
 STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고점 없이 그 트리거선보다 추가로 이만큼 더 밀리면 잔여 전량 청산
 
 # ── 기업행위(액면분할·권리락)/데이터 이상 방어 ──────────────────────────────
@@ -439,17 +450,28 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
 
     pos_state['last_price'] = cur_price
 
-    # 1) 손절 — 다른 조건과 무관하게 잔여 수량 전량 즉시 청산
-    if rate <= STOP_LOSS_RATE:
+    # 1) 손절 — 다른 조건과 무관하게 잔여 수량 전량 즉시 청산.
+    #    단, 한 번이라도 +5%를 찍어 트레일링이 활성화됐던 종목은 이익을 손실로 되돌리지 않도록
+    #    손절선을 -3%(ARMED_GIVEBACK_STOP)로 좁힌다. peak_rate는 이전 사이클까지 누적된 값이라
+    #    이번 사이클의 고점 갱신(2번) 이전에 판단해도 문제 없음.
+    was_armed = (pos_state.get('peak_rate') is not None
+                 and pos_state['peak_rate'] >= TRAIL_ACTIVATE_RATE)
+    stop_level = ARMED_GIVEBACK_STOP if was_armed else STOP_LOSS_RATE
+
+    if rate <= stop_level:
         sell_qty = pos_state['remaining_qty']
         pnl = (cur_price - avg_price) * sell_qty
         trade_value = cur_price * sell_qty
         asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
         holding_ratio = 1.0  # 손절은 항상 잔여 전량
+        label = '되돌림손절' if was_armed else '손절'
+        peak_txt = f' 고점={pos_state["peak_rate"]:.2%}' if was_armed else ''
         sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
-        _log.info(f'[손절] {stk_nm}({stk_cd}) rate={rate:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
+        _log.info(f'[{label}] {stk_nm}({stk_cd}) rate={rate:.2%}{peak_txt} (손절선 {stop_level:.0%}) '
+                  f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
                   f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
-        _record_trade(stk_cd, stk_nm, 'sell', 'stop_loss', sell_qty, cur_price, avg_price, pnl,
+        _record_trade(stk_cd, stk_nm, 'sell', 'giveback_stop' if was_armed else 'stop_loss',
+                      sell_qty, cur_price, avg_price, pnl,
                       asset_ratio=asset_ratio, holding_ratio=holding_ratio)
         pos_state['remaining_qty'] = 0
         pos_state['exited'] = True
@@ -466,8 +488,12 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     )
     trigger_level = max(peak_rate - TRAIL_GAP, MIN_PROFIT_FLOOR) if trailing_armed else None
     trailing_trigger = bool(trigger_level is not None and new_peak_since_last_sale and rate <= trigger_level)
-    # 트레일링이 (고점-4%p)가 아니라 최소 보호선(+2%)에 걸려서 트리거된 경우 — 더 밀리면 손절선까지
-    # 내줄 수 있으므로 분할 매도 대신 잔여 수량 전량을 청산한다.
+    # 트레일링이 (고점-4%p)가 아니라 최소 보호선(+2%)에 걸려서 트리거된 경우 — 로그 구분용.
+    # 활성화선(+5%) - 트레일링폭(4%p) = +1% < 보호선(+2%)이라, 고점이 5~6% 구간이면 청산선이
+    # 항상 보호선에 붙는다. 예전엔 이 경우 잔여 전량을 청산해서 "고점 5%대에서 밀리면 무조건
+    # 100% 매도"가 됐고(2026-08-04 지엔씨에너지: 고점 5.18% → 매수 12분 만에 전량 종료),
+    # 문서상 3분할 설계와도 어긋났다. 지금은 다른 트리거와 동일하게 1/3만 매도하고,
+    # 남은 물량은 아래 정체 보호(청산선 -6%p 추가 하락 시 전량)가 받아준다.
     trailing_floor_trigger = trailing_trigger and trigger_level <= MIN_PROFIT_FLOOR + 1e-9
 
     # 3) 목표가(+10/15/20%) — 단계별로 최초 1회씩 트리거 (도달한 가장 높은 단계까지 한 번에 반영)
@@ -477,13 +503,9 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
 
     if pos_state['thirds_sold'] < 3 and (trailing_trigger or target_trigger):
         pos_state['thirds_sold'] += 1
-        if trailing_floor_trigger:
-            # 최소 보호선(+2%)까지 밀린 경우는 분할하지 않고 잔여 수량 전부 청산
-            sell_qty = pos_state['remaining_qty']
-        else:
-            # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
-            sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
-                else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
+        # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
+        sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
+            else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
 
         if sell_qty > 0:
             pnl = (cur_price - avg_price) * sell_qty
@@ -494,7 +516,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             if target_trigger:
                 reason = f'목표가{target_level:.0%}'
             elif trailing_floor_trigger:
-                reason = '트레일링-보호선전량청산'
+                reason = '트레일링-보호선'
             else:
                 reason = '트레일링'
             _log.info(f'[{reason} {pos_state["thirds_sold"]}/3차] {stk_nm}({stk_cd}) rate={rate:.2%} '
