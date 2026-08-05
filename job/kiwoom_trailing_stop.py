@@ -16,6 +16,10 @@
   - 정체 보호: 트레일링 매도가 한 번 나간 뒤 그보다 더 높은 새 고점 없이 가격이 계속 흘러내리면
     트레일링이 재발동되지 않아 잔여 물량이 손절선(-6%)까지 보호 없이 노출될 수 있음. 이를 막기 위해
     그 매도에 쓰인 트리거선(고점-4%p 또는 보호선)보다 추가로 -6%p(STALL_GAP) 더 밀리면 잔여 전량 청산.
+  - 기업행위 방어: 액면분할·권리락 당일엔 증권사가 현재가만 먼저 조정하고 평단가/수량은 늦게
+    조정하는 구간이 있어 손실률이 -50%대로 잘못 잡힐 수 있음. 일일 가격제한폭(±30%)을 넘는 급락이나
+    정상적으로 도달 불가능한 손실률이 관측되면 매도하지 않고 경고만 남긴 뒤 자동매매를 일시 정지함
+    (ANOMALY_DROP / ANOMALY_RATE). 값이 정상 범위로 돌아오면 자동 재개.
 
 30초 간격으로 호출되는 것을 전제로 설계됨 (job/batch_runner.py에 등록).
 실제 평가/매매는 is_market_open() 기준 월~금 아래 세 구간에서만 수행됨:
@@ -72,6 +76,18 @@ TRAIL_ACTIVATE_RATE = 0.05
 TRAIL_GAP = 0.04
 MIN_PROFIT_FLOOR = 0.02
 STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고점 없이 그 트리거선보다 추가로 이만큼 더 밀리면 잔여 전량 청산
+
+# ── 기업행위(액면분할·권리락)/데이터 이상 방어 ──────────────────────────────
+# 액면분할 당일 아침엔 증권사가 '현재가는 분할 후 가격, 평단가·수량은 아직 조정 전'으로 주는
+# 구간이 있다. 2026-07-16 티엘비(1:2 분할)에서 평단가 88,500 / 현재가 41,550으로 들어와
+# rate=-53.66%로 오인, 개장 34초 만에 20주 전량 시장가 청산되며 실제 손실이 아니던 -939,000원이
+# 확정된 사고가 있었다. 이런 값은 믿고 매매하면 안 되므로 아래 두 신호로 걸러 자동매매를 멈춘다.
+#  - ANOMALY_DROP : 국내 증시 일일 가격제한폭이 ±30%라, 직전 관측가 대비 이 이상 급락은
+#                   정상 시세 변동으로 설명되지 않는다(= 기업행위 또는 데이터 오류).
+#  - ANOMALY_RATE : -6% 손절이 30초마다 도는 구조상 이만큼 깊은 손실률은 정상 경로로 도달 불가.
+# 증권사가 평단가를 조정해 값이 정상 범위로 돌아오면 자동으로 매매를 재개한다.
+ANOMALY_DROP = 0.35
+ANOMALY_RATE = -0.25
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_state.json')
 TRADES_FILE = os.path.join(_LOG_DIR, 'trades.jsonl')  # 실현손익 이력(승률/손익비 계산용) — 기록 누락 가능성 있음
@@ -340,7 +356,26 @@ def _fresh_position_state(qty: int) -> Dict:
         'thirds_sold': 0,
         'target_idx': 0,  # 다음에 확인할 TARGET_RATES 인덱스
         'exited': False,
+        'last_price': None,  # 직전 사이클 관측 현재가 (기업행위 급락 감지용)
+        'halted': False,     # 데이터 이상으로 자동매매 정지된 상태인지
     }
+
+
+def _detect_data_anomaly(pos_state: Dict, rate: float, cur_price: float) -> Optional[str]:
+    """증권사 데이터가 기업행위(액면분할·권리락) 등으로 어긋났는지 판단. 사유 문자열 또는 None."""
+    if cur_price <= 0:
+        return f'현재가가 {cur_price}원으로 조회됨 (시세 조회 실패)'
+
+    last_price = pos_state.get('last_price')
+    if last_price and cur_price <= last_price * (1 - ANOMALY_DROP):
+        return (f'직전 관측가 {last_price:,.0f}원 → 현재가 {cur_price:,.0f}원 '
+                f'({cur_price / last_price - 1:.1%}, 일일 가격제한폭 ±30% 초과)')
+
+    if rate <= ANOMALY_RATE:
+        return (f'손실률 {rate:.2%} (손절선 {STOP_LOSS_RATE:.0%}가 30초마다 도는 구조상 '
+                f'정상적으로는 도달할 수 없는 값)')
+
+    return None
 
 
 def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: float = 0.0) -> Dict:
@@ -358,7 +393,18 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     # 바뀌면 peak_rate/target_idx 같은 %기반 진행상태는 새 평단가와 더 이상 같은 척도가 아니게 됨
     # → 보존하지 않고 새 평단가 기준으로 사다리/트레일링을 처음부터 다시 평가한다.
     if pos_state is None or pos_state.get('exited') or qty > pos_state.get('remaining_qty', 0):
+        # 액면분할이 반영되면 수량이 늘어 여기서 상태가 리셋되는데, 분할 감지에 쓰는 직전 관측가와
+        # 정지 상태까지 같이 날아가면 바로 다음 사이클에서 이상 징후를 놓친다. 계속 보유 중인
+        # 포지션일 때만 넘겨받는다 (완전 청산 후 재진입은 예전 가격과 무관하므로 제외).
+        carry_over = {}
+        if pos_state is not None and not pos_state.get('exited'):
+            carry_over = {
+                'last_price': pos_state.get('last_price'),
+                'halted': pos_state.get('halted', False),
+                'halt_reason': pos_state.get('halt_reason'),
+            }
         pos_state = _fresh_position_state(qty)
+        pos_state.update({k: v for k, v in carry_over.items() if v})
     elif qty < pos_state['remaining_qty']:
         # 수동 매도 등으로 외부에서 수량이 줄어든 경우, 고점/분할 진행 상태는 유지하고 수량만 동기화
         pos_state['remaining_qty'] = qty
@@ -370,6 +416,28 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     # 이전 버전(단일 목표가 target_hit) 상태 파일과의 호환: target_idx가 없으면 마이그레이션
     if 'target_idx' not in pos_state:
         pos_state['target_idx'] = 1 if pos_state.get('target_hit') else 0
+
+    # 0) 기업행위/데이터 이상 방어 — 손절·트레일링 등 어떤 매도보다 먼저 평가한다.
+    #    값이 신뢰할 수 없으면 매도하지 않고 경고만 남긴 뒤 그대로 보유 (실손실 확정 방지).
+    anomaly = _detect_data_anomaly(pos_state, rate, cur_price)
+    if anomaly:
+        if not pos_state.get('halted'):  # 30초마다 같은 경고가 쌓이지 않도록 최초 1회만
+            _log.error(f'[데이터이상-자동매매정지] {stk_nm}({stk_cd}) {anomaly} | '
+                       f'평단가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 {qty}주. '
+                       f'액면분할/권리락이면 증권사 평단가 조정 후 자동 재개됨. '
+                       f'아니면 수동 확인 필요 (자동 매도 안 함).')
+        pos_state['halted'] = True
+        pos_state['halt_reason'] = anomaly
+        pos_state['last_price'] = cur_price
+        return pos_state
+
+    if pos_state.get('halted'):
+        _log.info(f'[자동매매재개] {stk_nm}({stk_cd}) 데이터 정상화 확인 '
+                  f'(rate={rate:.2%} 평단가={avg_price:,.0f}원 현재가={cur_price:,.0f}원)')
+        pos_state['halted'] = False
+        pos_state.pop('halt_reason', None)
+
+    pos_state['last_price'] = cur_price
 
     # 1) 손절 — 다른 조건과 무관하게 잔여 수량 전량 즉시 청산
     if rate <= STOP_LOSS_RATE:
