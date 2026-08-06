@@ -467,7 +467,7 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
             where 1=1
             -- 아직 너무 많이 오르지는 않았지만 상승 흐름은 확인된 구간
 			AND b.total_rate_of_increase BETWEEN 8 AND 12
-			AND b.last_today_price_change_pct BETWEEN 3 AND 11
+			-- AND b.last_today_price_change_pct BETWEEN 3 AND 11
             -- 너무 느린 종목과 급격하게 오른 종목 제외
 			-- AND b.increase_per_day BETWEEN 3 AND 6
             AND min_close::numeric < current_close::numeric
