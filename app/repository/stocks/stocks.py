@@ -154,6 +154,60 @@ def upsert_favorite_stocks(stock: "StockDTO", conn=None) -> int:
         return row[0] if row else None
 
 
+# ── reserved_stocks (자동매수 대상으로 직접 체크한 종목) ─────────────────────
+# favorite_stocks와 동일 구조(id/created_at/updated_at/user_id/stock_code/flag,
+# (stock_code, user_id) 유니크). 즐겨찾기는 '보기 편하려고' 담는 것이고,
+# reserved는 'fire 자동매수 대상으로 쓰겠다'는 의미라 테이블을 분리해서 쓴다.
+
+@db_transaction
+def get_reserved_stocks(user_id, conn=None):
+    sql = """
+    select stock_code from reserved_stocks
+    where user_id = %s
+    and flag = True;
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(sql, (user_id,))
+        rows = cur.fetchall()
+    return rows
+
+
+@db_transaction
+def get_reserved_stock_codes(conn=None) -> set:
+    """flag=true인 reserved 종목코드 전체(사용자 무관) — 배치(자동매수) 잡에서 사용.
+    스케줄러에는 로그인 세션이 없어 user_id를 특정할 수 없고, 이 계좌는 단일 사용자 기준이라
+    get_favorite_stocks_info_api()와 동일하게 user 필터 없이 조회한다."""
+    with conn.cursor() as cur:
+        cur.execute("select distinct stock_code from reserved_stocks where flag = True;")
+        return {str(r[0]).zfill(6) for r in cur.fetchall() if r[0]}
+
+
+@db_transaction
+def upsert_reserved_stocks(stock: "StockDTO", conn=None) -> int:
+    with conn.cursor() as cur:
+        sql = """
+        INSERT INTO reserved_stocks (
+            created_at, updated_at, user_id, stock_code, flag
+        )
+        VALUES (
+            now(), now(), %s, %s, True
+        )
+        ON CONFLICT (stock_code, user_id)
+        DO UPDATE SET
+            updated_at               = now(),
+            flag                     = NOT reserved_stocks.flag
+        RETURNING id;
+        """
+        cur.execute(
+            sql,
+            (
+                stock.user_id, stock.stock_code
+            )
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
 # 관심 종목 insert, EXCLUDED: 새로 들어온 값
 @db_transaction
 def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
@@ -385,16 +439,20 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", rule: str
 
 # 최근 상승주 검색
 @db_transaction
-def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=None):
-    # user_id 있을 때만: favorite join + current_trading_value 컬럼 추가
+def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, source: str = 'favorite', conn=None):
+    # user_id 있을 때만: favorite/reserved join + current_trading_value 컬럼 추가
     favorite_join = ""
     target_condition = ""
     fire_condition = ""
     trading_value_condition = ""
 
     if user_id is not None:
-        favorite_join = """
-            join favorite_stocks f on f.stock_code = s.stock_code and f.flag = true and f.user_id = %s
+        # SQL 인젝션 방지: 외부 문자열을 그대로 넣지 않고 화이트리스트로만 테이블명 결정
+        member_table = {'favorite': 'favorite_stocks', 'reserved': 'reserved_stocks'}.get(source)
+        if member_table is None:
+            raise ValueError(f'지원하지 않는 source: {source}')
+        favorite_join = f"""
+            join {member_table} f on f.stock_code = s.stock_code and f.flag = true and f.user_id = %s
         """
         params = [user_id, date, endDate]
     else:
@@ -409,7 +467,7 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
             where 1=1
             -- 아직 너무 많이 오르지는 않았지만 상승 흐름은 확인된 구간
 			AND b.total_rate_of_increase BETWEEN 8 AND 12
-			AND b.last_today_price_change_pct BETWEEN 3 AND 12
+			AND b.last_today_price_change_pct BETWEEN 3 AND 11
             -- 너무 느린 종목과 급격하게 오른 종목 제외
 			-- AND b.increase_per_day BETWEEN 3 AND 6
             AND min_close::numeric < current_close::numeric
@@ -472,14 +530,33 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, conn=
           , MAX(i.current_price::numeric) as high_close
           , ROUND(
               100.0 * (
-                s.close::numeric 
-                - MIN(i.current_price::numeric)
-                ) / NULLIF(MIN(i.current_price::numeric), 0)
-            , 1) AS total_rate_of_increase
+                  CASE
+                      WHEN MAX(i.created_at)::date <> CURRENT_DATE
+                      THEN (
+                          ARRAY_AGG(
+                              i.current_price::numeric
+                              ORDER BY i.created_at DESC, i.id DESC
+                          )
+                      )[1]
+                      ELSE s.close::numeric
+                  END
+                  - MIN(i.current_price::numeric)
+              )
+              / NULLIF(MIN(i.current_price::numeric), 0)
+          , 1) AS total_rate_of_increase
           , ROUND(
               100.0 * (
-                s.close::numeric
-                - MIN(i.current_price::numeric)
+                  CASE
+                      WHEN MAX(i.created_at)::date <> CURRENT_DATE
+                      THEN (
+                          ARRAY_AGG(
+                              i.current_price::numeric
+                              ORDER BY i.created_at DESC, i.id DESC
+                          )
+                      )[1]
+                      ELSE s.close::numeric
+                  END
+                  - MIN(i.current_price::numeric)
               ) / NULLIF(MIN(i.current_price::numeric), 0) / count(DISTINCT i.created_at::date)
             , 1) as increase_per_day
           , (

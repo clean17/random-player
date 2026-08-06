@@ -6,7 +6,8 @@ from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
-    update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix
+    update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix, \
+    upsert_reserved_stocks, get_reserved_stocks
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
@@ -276,6 +277,38 @@ def get_favorite_heart_stocks_data():
 
     stocks = get_interest_stocks_info(date, endDate, user_id)
     return stocks
+
+@stock.route("/reserved", methods=["POST"])
+@login_required
+def upsert_reserved_stock():
+    """자동매수 대상 토글 (favorite와 동일하게 flag를 뒤집는 upsert)."""
+    s = StockDTO.from_json(request.json)
+    s.user_id = find_user_by_username(session["_user_id"]).id
+    result = upsert_reserved_stocks(s)
+    return {"status": "success", "result": result}, 200
+
+
+@stock.route("/reserved", methods=["GET"])
+@login_required
+def fetch_reserved_stocks():
+    fetch_user = find_user_by_username(session["_user_id"])
+    stocks = get_reserved_stocks(fetch_user.id)
+    return jsonify(stocks)
+
+
+@stock.route("/interest/data/reserved", methods=["POST"])
+@login_required
+def get_reserved_stocks_data():
+    data = request.json
+    date = data.get("date")
+    endDate = data.get("endDate")
+
+    fetch_user = find_user_by_username(session["_user_id"])
+    user_id = fetch_user.id if fetch_user is not None else None
+
+    stocks = get_interest_stocks_info(date, endDate, user_id, source='reserved')
+    return stocks
+
 
 @stock.route("/interest/data/favorite/schedule", methods=["POST"])
 def get_favorite_stocks_data_schedule():

@@ -4,14 +4,18 @@ fire(급상승 관심종목) 자동 매수 전략.
 
 매수 조건 (2026-08-05 기준):
   1. 시장폭 레짐 ON      : 전 종목 중 종가>MA20 비율 >= 40% (BREADTH_MIN). 미만이면 그날 진입 전면 차단
-  2. fire 쿼리 상위 10   : get_interest_stocks_info(오늘-6일 ~ 오늘)를 총상승률 내림차순으로 받아
-                           앞에서 TOP_N(10)개. 쿼리 자체 조건(총상승률 8~12%, 당일 3~12%,
-                           고점 대비 -3% 이내, 시총 700억↑, 거래대금 40억↑ 등)은 SQL에 있음
-  3. 보유/쿨다운 제외    : 이미 보유 중이거나 COOLDOWN_DAYS(7일) 내 재매수면 skip
-  4. 사이징             : 기준은 총자산이 아니라 '가용 현금'(총자산 - 보유종목 평가금액).
+  2. fire 쿼리 통과      : get_interest_stocks_info(오늘-6일 ~ 오늘)를 총상승률 내림차순으로 받음.
+                           쿼리 자체 조건(총상승률 8~12%, 당일 3~12%, 고점 대비 -3% 이내,
+                           시총 700억↑, 거래대금 40억↑ 등)은 SQL에 있음
+  3. reserved 교집합     : 위를 통과한 종목 중, 관심종목 화면에서 '자동매수 대상'으로 체크한
+                           종목(reserved_stocks, flag=true)만 남긴다. 체크한 게 없으면 그날 매수 없음.
+                           체크했어도 fire 조건을 못 넘기면 사지 않는다(교집합).
+                           스케줄러엔 로그인 세션이 없어 user 구분 없이 flag=true 전체를 본다.
+  4. 보유/쿨다운 제외    : 이미 보유 중이거나 COOLDOWN_DAYS(7일) 내 재매수면 skip
+  5. 사이징             : 기준은 총자산이 아니라 '가용 현금'(총자산 - 보유종목 평가금액).
                            가용현금 × CASH_DEPLOY_RATIO(70%)까지만 쓰고 나머지 30%는 버퍼로 남긴다.
                            그 금액을 BUY_SLOTS(7)등분 → 1픽당 가용현금의 10%, 하루 최대 7종목.
-                           TOP_N(10) > BUY_SLOTS(7)이라 보유중/쿨다운으로 걸러진 자리는 다음 순위가 채운다.
+                           교집합이 7종목보다 많으면 총상승률 높은 순으로 7개까지만.
                            1픽 예산보다 주가가 비싸면(1주도 못 삼) 그 종목은 skip하고 다음 후보로.
 
 백테스트 근거 (fire_backtest_result.csv, 2025-09 ~ 2026-07, 2,658건):
@@ -27,14 +31,14 @@ fire(급상승 관심종목) 자동 매수 전략.
 진입 시점 (중요):
   백테스트의 매수가는 신호일 '종가'다(fire_backtest_result.csv의 buy 컬럼 = 해당일 종가로 확인됨).
   H2 필터도 20일 신고가 대비/당일 등락률이라 완성된 일봉을 전제한 지표다. 따라서 이 전략은
-  장 마감 직전 1회만 평가/매수한다 (batch_runner의 kiwoom_fire_buy 잡, 평일 15:15).
+  장 마감 직전 1회만 평가/매수한다 (batch_runner의 kiwoom_fire_buy 잡, 평일 15:18).
   예전처럼 장중 :15/:35/:55로 21번 돌리면 아직 절반만 만들어진 일봉으로 판단하게 되고,
   급등 중인 장중 고점을 추격해 하루 매수 한도(BUY_SLOTS)를 아침에 소진한다. 실제로 2026-07-24
   HD현대에너지솔루션은 10:35에 196,600원에 샀는데 그날 종가가 164,000원(-16.6%),
   SK오션플랜트는 10:55에 20,450원에 샀는데 종가 18,350원(-10.3%)이었다.
 
 매수 후 청산은 kiwoom_trailing_stop.py의 30초 잡이 자동으로 담당한다
-(손절 -6% / 되돌림손절 -3% / 목표 10·15·20% 1/3씩 / 트레일링).
+(손절 -6.5% / 되돌림손절 -3% / 목표 10·15·20% 1/3씩 / 트레일링).
 
 실전 전 반드시 KIWOOM_ENV=mock으로 검증할 것.
 """
@@ -49,8 +53,7 @@ from job.kiwoom_api import buy_market, get_holdings_and_summary, get_account_cre
 from job.kiwoom_trailing_stop import _log, _record_trade, is_market_open
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
-TOP_N = 10                 # fire 쿼리 결과(총상승률 desc 정렬) 중 상위 N종목까지 후보로 검토.
-                           # BUY_SLOTS보다 크게 둬서 보유중/쿨다운으로 걸러진 만큼 다음 순위가 채우게 함
+CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
 BREADTH_MIN = 0.40         # 시장폭 레짐: 전 종목 중 종가>MA20 비율 40% 이상일 때만 진입
 FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트 '관심' 탭과 동일)
 CASH_DEPLOY_RATIO = 0.70   # 가용 현금 중 자동매수에 쓸 최대 비율 (나머지 30%는 현금 버퍼로 남김)
@@ -147,17 +150,21 @@ def _daily_metrics(stk_cd: str) -> Optional[Tuple[float, float]]:
     return dist, ret1d
 
 
-def get_fire_candidates() -> List[Dict]:
-    """fire 쿼리 결과 상위 TOP_N 종목을 매수 후보로 반환.
-    SQL이 ORDER BY total_rate_of_increase DESC로 내려주므로 앞에서 자르면 총상승률 상위 N개다.
+def get_fire_candidates(limit: Optional[int] = None) -> List[Dict]:
+    """fire 쿼리(SQL 조건 통과) 결과를 총상승률 내림차순으로 반환.
+    SQL이 ORDER BY total_rate_of_increase DESC로 내려주므로 순서를 그대로 쓴다.
+    limit은 출력용 제한일 뿐, 매수 경로에서는 자르지 않는다 — 자르면 내가 체크한(reserved) 종목이
+    순위가 낮다는 이유로 조용히 제외돼 '체크했는데 왜 안 사지?'가 되기 때문.
     (예전엔 여기서 H2 필터로 한 번 더 걸렀으나 2026-08-05 요청으로 제거 — 상단 docstring 참고)"""
     from app.repository.stocks.stocks import get_interest_stocks_info
     today = datetime.date.today()
     start = (today - datetime.timedelta(days=FIRE_WINDOW_DAYS)).isoformat()
     rows = get_interest_stocks_info(start, today.isoformat())
+    if limit is not None:
+        rows = rows[:limit]
 
     candidates = []
-    for row in rows[:TOP_N]:
+    for row in rows:
         stk_cd = str(row.get('stock_code') or '').zfill(6)
         if not stk_cd or stk_cd == '000000':
             continue
@@ -203,6 +210,27 @@ def run_fire_buy_cycle():
         return  # 레짐 OFF: 조용히 스킵 (레짐 상태는 breadth 계산 시 하루 1회 로그됨)
 
     candidates = get_fire_candidates()
+    if not candidates:
+        return
+
+    # 자동매수 대상(reserved) 교집합 — 화면(관심종목 뷰)에서 체크한 종목만 실제로 매수한다.
+    # fire SQL 조건을 통과한 것 중에서 고르는 방식이라, 체크했더라도 그날 조건을 못 넘기면 안 산다.
+    from app.repository.stocks.stocks import get_reserved_stock_codes
+    try:
+        reserved = get_reserved_stock_codes()
+    except Exception as e:
+        # 조회 실패 시 '전 종목 매수'로 흘러가면 안 되므로 보수적으로 중단
+        _log.error(f'[fire] reserved 목록 조회 실패 — 매수 보류: {e}')
+        return
+
+    if not reserved:
+        _log.info('[fire] 자동매수 대상(reserved)으로 체크된 종목이 없어 매수하지 않음')
+        return
+
+    passed = len(candidates)
+    candidates = [c for c in candidates if c['stk_cd'] in reserved]
+    _log.info(f'[fire] fire 조건 통과 {passed}종목 / reserved {len(reserved)}종목 '
+              f'→ 교집합 {len(candidates)}종목')
     if not candidates:
         return
 
@@ -285,13 +313,23 @@ if __name__ == '__main__':
         b = get_market_breadth(force='--force' in sys.argv)
         print(f'시장폭: {b:.1%}' if b is not None else '시장폭 계산 실패',
               f'(레짐 {"ON" if b is not None and b >= BREADTH_MIN else "OFF"}, 기준 {BREADTH_MIN:.0%})')
-        cands = get_fire_candidates()
-        print(f'매수 후보 {len(cands)}건 (총상승률 상위 {TOP_N} 검토, '
-              f'가용현금의 {CASH_DEPLOY_RATIO:.0%}를 {BUY_SLOTS}등분하여 최대 {BUY_SLOTS}종목):')
+        cands = get_fire_candidates(limit=CHECK_DISPLAY_LIMIT)
+        try:
+            from app.repository.stocks.stocks import get_reserved_stock_codes
+            reserved = get_reserved_stock_codes()
+        except Exception as e:
+            reserved = set()
+            print(f'  (reserved 목록 조회 실패: {e})')
+
+        hit = [c for c in cands if c['stk_cd'] in reserved]
+        print(f'fire 조건 통과 {len(cands)}건(최대 {CHECK_DISPLAY_LIMIT} 표시) / '
+              f'reserved {len(reserved)}종목 → 매수 대상 {len(hit)}건 '
+              f'(가용현금의 {CASH_DEPLOY_RATIO:.0%}를 {BUY_SLOTS}등분, 최대 {BUY_SLOTS}종목)')
         for i, c in enumerate(cands, 1):
             ref = (f' 신고가대비 {c["dist_20d_high"]:+.1f}% 당일 {c["ret_1d"]:+.1f}%'
                    if c['dist_20d_high'] is not None else ' (pkl 오늘자 없음)')
-            print(f'  {i:2d}. {c["stk_nm"]}({c["stk_cd"]}) 총상승률 {c["total_rate"]}{ref}')
+            mark = '★매수대상' if c['stk_cd'] in reserved else '         '
+            print(f'  {i:2d}. {mark} {c["stk_nm"]}({c["stk_cd"]}) 총상승률 {c["total_rate"]}{ref}')
     elif '--run' in sys.argv:
         if is_market_open():
             run_fire_buy_cycle()

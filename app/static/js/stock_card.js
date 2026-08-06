@@ -173,6 +173,13 @@ function renderTradingCardHtml(track, rows) {
               aria-pressed="false"
               aria-label="즐겨찾기 추가"
             ></button>
+            <button
+              class="reserve-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-reserved="false"
+              aria-pressed="false"
+              aria-label="자동매수 대상 추가"
+            ></button>
           </div>
         </div>
 
@@ -238,6 +245,13 @@ function renderSummaryCardHtml(track, rows) {
               aria-pressed="false"
               aria-label="즐겨찾기 추가"
             ></button>
+            <button
+              class="reserve-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-reserved="false"
+              aria-pressed="false"
+              aria-label="자동매수 대상 추가"
+            ></button>
           </div>
         </div>
 
@@ -302,6 +316,13 @@ function renderFavoriteCardHtml(track, rows) {
               data-shape="star"
               aria-pressed="false"
               aria-label="즐겨찾기 추가"
+            ></button>
+            <button
+              class="reserve-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-reserved="false"
+              aria-pressed="false"
+              aria-label="자동매수 대상 추가"
             ></button>
           </div>
         </div>
@@ -384,6 +405,13 @@ function renderLowCardHtml(track, rows) {
               aria-pressed="false"
               aria-label="즐겨찾기 추가"
             ></button>
+            <button
+              class="reserve-btn"
+              data-stock-code="${r.stock_code ?? ""}"
+              data-reserved="false"
+              aria-pressed="false"
+              aria-label="자동매수 대상 추가"
+            ></button>
           </div>
         </div>
 
@@ -443,7 +471,10 @@ function renderTradingCards(rows, section, tableName) {
     if (tableName === 'table-summary') renderSummaryCardHtml(track, rows);
     if (tableName === 'table-low') renderLowCardHtml(track, rows);
     if (tableName === 'table-favorite') renderFavoriteCardHtml(track, rows);
+    // reserved 탭은 favorite과 동일한 쿼리(get_interest_stocks_info) 결과라 카드 렌더러를 재사용
+    if (tableName === 'table-reserved') renderFavoriteCardHtml(track, rows);
     initFavoriteButtons();
+    initReserveButtons();
 
     track.addEventListener("click", (e) => {
         if (isDragging) return;
@@ -776,6 +807,80 @@ async function requestToggleFavorite({ stockCode, next }) {
     return res.json().catch(() => ({}));
 
 
+}
+
+// ── 자동매수 대상(reserved) 토글 ──────────────────────────────────────────
+// 즐겨찾기(별)와 구분되도록 장바구니 담기 느낌의 '+/체크 원형' 아이콘을 쓴다.
+function getReserveIconSVG(reserved) {
+    return reserved
+        ? `<svg class="fav-icon" viewBox="0 0 24 24" aria-hidden="true">
+         <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.7 7.3-5.4 5.4a1 1 0 0 1-1.4 0l-2.6-2.6a1 1 0 0 1 1.4-1.4l1.9 1.9 4.7-4.7a1 1 0 0 1 1.4 1.4z"/>
+       </svg>`
+        : `<svg class="fav-icon" viewBox="0 0 24 24" aria-hidden="true">
+         <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
+         <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 8v8M8 12h8"/>
+       </svg>`;
+}
+
+function renderReserveButton(btn) {
+    const reserved = btn.dataset.reserved === "true";
+    btn.innerHTML = getReserveIconSVG(reserved);
+    btn.setAttribute("aria-pressed", String(reserved));
+    btn.setAttribute("aria-label", reserved ? "자동매수 대상 해제" : "자동매수 대상 추가");
+    btn.classList.toggle("is-reserved", reserved);
+}
+
+async function requestToggleReserved({ stockCode }) {
+    const res = await fetch("/stocks/reserved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "stock_code": stockCode })
+    });
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || "Server request failed");
+    }
+    return res.json().catch(() => ({}));
+}
+
+function initReserveButtons() {
+    document.querySelectorAll(".reserve-btn").forEach((btn) => {
+        const stockCode = btn.dataset.stockCode;
+        if (typeof reservedStocks !== "undefined" && reservedStocks.includes(stockCode)) {
+            btn.dataset.reserved = "true";
+        }
+        renderReserveButton(btn);
+
+        btn.addEventListener("click", async () => {
+            if (btn.disabled) return;
+            const code = btn.dataset.stockCode;
+            const current = btn.dataset.reserved === "true";
+            const next = !current;
+
+            // optimistic UI
+            btn.dataset.reserved = String(next);
+            renderReserveButton(btn);
+            btn.disabled = true;
+
+            try {
+                await requestToggleReserved({ stockCode: code });
+                // 다른 카드/탭에서도 같은 상태를 보도록 로컬 캐시 동기화
+                if (typeof reservedStocks !== "undefined") {
+                    const i = reservedStocks.indexOf(code);
+                    if (next && i === -1) reservedStocks.push(code);
+                    if (!next && i !== -1) reservedStocks.splice(i, 1);
+                }
+                showDebugToast(next ? "자동매수 대상 추가" : "자동매수 대상 해제");
+            } catch (e) {
+                btn.dataset.reserved = String(current);   // 실패 시 rollback
+                renderReserveButton(btn);
+                console.error(e);
+                alert("자동매수 대상 변경에 실패했어요. 다시 시도해주세요.");
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
 }
 
 function initFavoriteButtons() {

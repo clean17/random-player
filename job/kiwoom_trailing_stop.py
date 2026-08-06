@@ -2,9 +2,9 @@
 키움 계좌 보유 종목 트레일링 스탑 자동 매매.
 
 기본 전략 (수정하려면 아래 상수만 변경):
-  - 손절            : -6%  → 전량 즉시 청산
+  - 손절            : -6.5%  → 전량 즉시 청산
   - 되돌림 손절     : 한 번이라도 +5%를 찍었던(트레일링 활성화된) 종목은 손절선이 -3%로 좁아짐
-    → 전량 즉시 청산. 이익 구간까지 갔던 종목을 -6%까지 내주지 않기 위함(ARMED_GIVEBACK_STOP).
+    → 전량 즉시 청산. 이익 구간까지 갔던 종목을 -6.5%까지 내주지 않기 위함(ARMED_GIVEBACK_STOP).
   - 목표가          : +10% / +15% / +20% 각 단계 도달 시마다 1/3씩 매도 (단계별 최초 1회만)
   - 트레일링 활성화 : 수익률 +5% 도달 후 고점 추적 시작
   - 트레일링 폭     : 고점 대비 -4%p 이탈 시 그 시점 잔여 수량의 1/3 매도
@@ -78,13 +78,13 @@ if not _log.handlers:
     _console_handler.setFormatter(_formatter)
     _log.addHandler(_console_handler)
 
-STOP_LOSS_RATE = -0.06
+STOP_LOSS_RATE = -0.065
 TARGET_RATES = [0.10, 0.15, 0.20]  # 단계별 목표가, 도달할 때마다 1/3씩 매도
 TRAIL_ACTIVATE_RATE = 0.05
 TRAIL_GAP = 0.04
 MIN_PROFIT_FLOOR = 0.01
 # 한 번이라도 +5%(TRAIL_ACTIVATE_RATE)를 찍었던 종목은 이익을 손실로 되돌리지 않도록
-# 손절선을 -6%가 아닌 -3%로 좁혀서 잔여 전량 청산한다.
+# 손절선을 -6.5%가 아닌 -3%로 좁혀서 잔여 전량 청산한다.
 ARMED_GIVEBACK_STOP = -0.03
 STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고점 없이 그 트리거선보다 추가로 이만큼 더 밀리면 잔여 전량 청산
 
@@ -95,7 +95,7 @@ STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고�
 # 확정된 사고가 있었다. 이런 값은 믿고 매매하면 안 되므로 아래 두 신호로 걸러 자동매매를 멈춘다.
 #  - ANOMALY_DROP : 국내 증시 일일 가격제한폭이 ±30%라, 직전 관측가 대비 이 이상 급락은
 #                   정상 시세 변동으로 설명되지 않는다(= 기업행위 또는 데이터 오류).
-#  - ANOMALY_RATE : -6% 손절이 30초마다 도는 구조상 이만큼 깊은 손실률은 정상 경로로 도달 불가.
+#  - ANOMALY_RATE : -6.5% 손절이 30초마다 도는 구조상 이만큼 깊은 손실률은 정상 경로로 도달 불가.
 # 증권사가 평단가를 조정해 값이 정상 범위로 돌아오면 자동으로 매매를 재개한다.
 ANOMALY_DROP = 0.35
 ANOMALY_RATE = -0.25
@@ -383,7 +383,7 @@ def _detect_data_anomaly(pos_state: Dict, rate: float, cur_price: float) -> Opti
                 f'({cur_price / last_price - 1:.1%}, 일일 가격제한폭 ±30% 초과)')
 
     if rate <= ANOMALY_RATE:
-        return (f'손실률 {rate:.2%} (손절선 {STOP_LOSS_RATE:.0%}가 30초마다 도는 구조상 '
+        return (f'손실률 {rate:.2%} (손절선 {STOP_LOSS_RATE:.1%}가 30초마다 도는 구조상 '
                 f'정상적으로는 도달할 수 없는 값)')
 
     return None
@@ -467,7 +467,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         label = '되돌림손절' if was_armed else '손절'
         peak_txt = f' 고점={pos_state["peak_rate"]:.2%}' if was_armed else ''
         sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
-        _log.info(f'[{label}] {stk_nm}({stk_cd}) rate={rate:.2%}{peak_txt} (손절선 {stop_level:.0%}) '
+        _log.info(f'[{label}] {stk_nm}({stk_cd}) rate={rate:.2%}{peak_txt} (손절선 {stop_level:.1%}) '
                   f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
                   f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
         _record_trade(stk_cd, stk_nm, 'sell', 'giveback_stop' if was_armed else 'stop_loss',

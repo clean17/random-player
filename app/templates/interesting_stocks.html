@@ -253,6 +253,12 @@
                   d="M12 2.6c.4 0 .8.2 1 .6l2.4 4.9c.2.4.6.6 1 .7l5.4.8c.9.1 1.3 1.2.7 1.8l-3.9 3.8c-.3.3-.4.7-.3 1.1l.9 5.4c.2.9-.8 1.6-1.6 1.2l-4.8-2.5c-.4-.2-.8-.2-1.2 0L6.9 22c-.8.4-1.8-.3-1.6-1.2l.9-5.4c.1-.4-.1-.8-.3-1.1L2 11.5c-.6-.6-.2-1.7.7-1.8l5.4-.8c.4-.1.8-.3 1-.7l2.4-4.9c.2-.4.6-.6 1-.6z"/>
             </svg>
         </button>
+        <button class="tab-btn" data-target="#tab-reserved" title="자동매수 대상">
+            <svg class="fav-icon fav-icon-reserved" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor"
+                  d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.7 7.3-5.4 5.4a1 1 0 0 1-1.4 0l-2.6-2.6a1 1 0 0 1 1.4-1.4l1.9 1.9 4.7-4.7a1 1 0 0 1 1.4 1.4z"/>
+            </svg>
+        </button>
         <button class="tab-btn" data-target="#tab-mystocks">내 계좌</button>
 <!--        <button class="tab-btn" data-target="#tab-favorite2">-->
 <!--            <svg class="fav-icon fav-icon-heart" viewBox="0 0 24 24" aria-hidden="true" data-favorited="true">-->
@@ -400,6 +406,11 @@
         <div class="table-scroller"></div>
     </section>
 
+    <!-- 자동매수 대상(reserved)으로 체크한 종목 -->
+    <section id="tab-reserved" class="tab-panel" style="display:none;">
+        <div class="table-scroller"></div>
+    </section>
+
     <!-- 탭 6: 내 종목 (키움 모의투자 대시보드) -->
     <section id="tab-mystocks" class="tab-panel" style="display:none;">
         <div class="mystocks-summary" id="mystocksSummary">
@@ -505,6 +516,7 @@
     const mm = String(today.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
     const dd = String(today.getDate()).padStart(2, '0');
     const favoriteStocks = [];
+    const reservedStocks = [];   // 자동매수 대상으로 체크한 종목코드 (stock_card.js의 reserve-btn이 참조)
     const startDateInputEl = document.getElementById('dateInputStart');
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
@@ -549,7 +561,7 @@
             if (target.id === 'tab-mystocks') {
                 loadMyStocksData();
                 msStartTimer();
-            } else if (target.id === 'tab-summary'||target.id === 'tab-favorite') {
+            } else if (target.id === 'tab-summary'||target.id === 'tab-favorite'||target.id === 'tab-reserved') {
                 msStopTimer();
                 setDefaultDateToday(6, startDateInputEl);
                 loadData()
@@ -1266,6 +1278,7 @@
         const url2 = 'https://chickchick.kr/stocks/interest/data/fire';
         const url3 = 'https://chickchick.kr/stocks/interest/data/low';
         const url4 = 'https://chickchick.kr/stocks/interest/data/favorite';
+        const url5 = 'https://chickchick.kr/stocks/interest/data/reserved';
         const payload = { date: yyyymmdd, endDate: yyyymmdd2 };
 
         try {
@@ -1338,7 +1351,20 @@
                 renderTradingView(data4);
             }
 
-            if (target !== 'tab-summary' && target !== 'tab-favorite') {
+            if (target === 'tab-reserved') {
+                endDateInputEl.style.display = 'block';
+                const res5 = await fetch(url5, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res5.ok) throw new Error(`HTTP ${res5.status}`);
+                const data5 = await res5.json();
+                removeLoadingOverlay();
+                renderTradingView(data5);
+            }
+
+            if (target !== 'tab-summary' && target !== 'tab-favorite' && target !== 'tab-reserved') {
                 endDateInputEl.style.display = 'none';
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
@@ -1488,7 +1514,7 @@
     }
 
     function getFavoriteStocks() {
-        axios.get('/stocks/favorite').then(res => {
+        return axios.get('/stocks/favorite').then(res => {
             data = res.data
             favoriteStocks.length = 0;
             data.forEach(item=>{
@@ -1496,6 +1522,18 @@
             })
         }).catch(error => {
             throw error; // 기타 에러는 그대로 던짐
+        });
+    }
+
+    function getReservedStocks() {
+        return axios.get('/stocks/reserved').then(res => {
+            reservedStocks.length = 0;
+            (res.data || []).forEach(item => {
+                reservedStocks.push(item["stock_code"])
+            })
+        }).catch(error => {
+            // reserved 조회 실패해도 화면 나머지는 정상 동작해야 함 (버튼만 미체크 상태로 보임)
+            console.error('reserved 목록 조회 실패', error);
         });
     }
 
@@ -1516,11 +1554,13 @@
     endDateInputEl.addEventListener('change', loadData);
 
     // 첫 진입 시 현재 날짜로 자동 로드
-    window.addEventListener('DOMContentLoaded', _ => {
+    // 즐겨찾기/자동매수 목록을 먼저 받아둔 뒤 카드를 그린다 — 렌더 시점에 목록이 비어 있으면
+    // 별/체크 아이콘이 해제 상태로 그려진다(기존엔 loadData가 먼저 호출돼 이 문제가 있었음).
+    window.addEventListener('DOMContentLoaded', async _ => {
         setDefaultDateToday(0, startDateInputEl);
         setDefaultDateToday(0, endDateInputEl);
+        await Promise.all([getFavoriteStocks(), getReservedStocks()]);
         loadData();
-        getFavoriteStocks();
     });
 </script>
 

@@ -237,6 +237,25 @@
 .fav-icon-star{ color:#f5c400; }
 .fav-icon-heart{  color:#F54A00; }
 
+/* 자동매수 대상(reserved) 버튼 — 즐겨찾기(별) 옆에 나란히 */
+.reserve-btn{
+    border: 0;
+    background: transparent;
+    padding: 4px;
+    cursor: pointer;
+    line-height: 0;
+}
+.reserve-btn:hover{
+    background: transparent;
+}
+.reserve-btn svg,
+.reserve-btn svg * {
+    pointer-events: none;
+}
+.reserve-btn[data-reserved="false"]{ color:#b8b8b8; } /* 회색 + 아이콘 */
+.reserve-btn[data-reserved="true"]{  color:#1a8cff; } /* 파란 체크 = 자동매수 대상 */
+.fav-icon-reserved{ color:#1a8cff; }
+
 
 /* 실제 데이터 카드가 1개뿐이어도 빈 상태 배경이 적용되지 않게 보정 */
 .table-scroller article.trade-card,
