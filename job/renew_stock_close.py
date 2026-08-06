@@ -177,6 +177,45 @@ def is_valid_number_value(value):
 #     conn2.close()
 
 
+# ── Toss API 직접 호출 (헤어핀 제거) ─────────────────────────────────────────
+# 자기 웹서버(waitress 12스레드)에 요청을 넣고 그 응답을 기다리는 동안 실제 사용자 요청을 처리할 스레드를 스스로 잡아먹는 구조였다.
+# 여기서는 Toss를 곧바로 호출해 그 왕복을 없앤다. URL/헤더는 utils/request_toss_api.py와 동일하게
+# 맞춰서 응답 형태(raw Toss JSON)가 그대로 유지되도록 했다(아래 파싱 코드는 바꿀 필요 없음).
+_TOSS_HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json, text/plain, */*",
+    "Content-Type": "application/json",
+    "Origin": "https://tossinvest.com",
+    "Referer": "https://tossinvest.com/",
+}
+_TOSS_INFO_URL = "https://wts-info-api.tossinvest.com/api/v3/search-all/wts-auto-complete"
+_TOSS_AMOUNT_URL = "https://wts-info-api.tossinvest.com/api/v1/c-chart/kr-s/{}/day:1"
+
+
+def _toss_search_stock_info(stock_name_or_ticker):
+    res = requests.post(
+        _TOSS_INFO_URL,
+        json={
+            "query": str(stock_name_or_ticker),
+            "sections": [
+                {"type": "SCREENER"},
+                {"type": "PRODUCT", "option": {"addIntegratedSearchResult": True}},
+                {"type": "TICS"},
+            ],
+        },
+        headers=_TOSS_HEADERS,
+        timeout=10,
+    )
+    res.raise_for_status()
+    return res.json()
+
+
+def _toss_get_amount(product_code):
+    res = requests.get(_TOSS_AMOUNT_URL.format(str(product_code)), headers=_TOSS_HEADERS, timeout=10)
+    res.raise_for_status()
+    return res.json()
+
+
 def renew_interest_stocks_close():
     if not is_korean_stock_business_day(verbose=False):
         return
@@ -197,14 +236,10 @@ def renew_interest_stocks_close():
     for i, row in enumerate(rows):
         time.sleep(0.05)  # 50ms 대기
         ticker = row['stock_code']
+        product_name = None  # 매 루프마다 초기화 — 안 하면 실패 시 이전 종목명이 그대로 로그에 남음
 
         try:
-            res = requests.post(
-                'https://chickchick.kr/stocks/info',
-                json={"stock_name": str(ticker)},
-                timeout=10
-            )
-            json_data = res.json() or {}
+            json_data = _toss_search_stock_info(str(ticker))
             result = json_data["result"]
 
             # 거래정지는 데이터를 주지 않는다
@@ -221,12 +256,7 @@ def renew_interest_stocks_close():
 
         # 현재 종가 가져오기
         try:
-            res4 = requests.post(
-                'https://chickchick.kr/stocks/amount',
-                json={"product_code": str(product_code)},
-                timeout=10
-            )
-            json_data = res4.json() or {}
+            json_data = _toss_get_amount(product_code)
             last_close = json_data["result"]["candles"][0]["close"]
         except Exception as e:
             print(f"renew_interest_stocks_close [info 요청 실패4]: {str(ticker)} {str(product_name)} {e}")
