@@ -218,12 +218,12 @@ function renderSummaryCardHtml(track, rows) {
         const d1 = new Date(String(r.first_date ?? ""));
         const d2 = new Date(String(r.last_date ?? ""));
         const nClose = toFloat(r.current_close) ?? 0;
+        const pChg = toFloat(r.today_price_change_pct) ?? 0;
         const formatted_date1 = fmtDate(d1);
         const formatted_date2 = fmtDate(d2);
 
         const hasImg = !!r.graph_file;
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
-        console.log(encoded_url)
         const imgHtml = hasImg
             ? `<img class="preview" src="https://chickchick.kr/image/stock-graphs/interest/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
@@ -260,7 +260,7 @@ function renderSummaryCardHtml(track, rows) {
           <div class="kv"><span class="k">집계 기간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
           <!--<div class="kv"><span class="k">시총</span><span class="v">${trValFmtWon(r.market_value) ?? ""}</span></div>-->
           <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.last_trading_value) ?? ""})</span></div>
-          <div class="kv"><span class="k">종가 추이 (현재가)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmt2(r.high_close)} (${fmtKrClose(nClose)})</span></div>
+          <div class="kv"><span class="k">종가 추이 (금일 등락률)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmtKrClose(nClose)} (${fmt1(pChg)}%)</span></div>
           <div class="kv"><span class="k">기간 총 상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일 평균 상승</span><span class="v">${r.increase_per_day ?? ""}</span></div>
         </div>
@@ -291,6 +291,7 @@ function renderFavoriteCardHtml(track, rows) {
         const d1 = new Date(String(r.first_date ?? ""));
         const d2 = new Date(String(r.last_date ?? ""));
         const nClose = toFloat(r.current_close) ?? 0;
+        const pChg = toFloat(r.today_price_change_pct) ?? 0;
         const formatted_date1 = fmtDate(d1);
         const formatted_date2 = fmtDate(d2);
 
@@ -332,7 +333,7 @@ function renderFavoriteCardHtml(track, rows) {
           <div class="kv"><span class="k">집계 기간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
           <!--<div class="kv"><span class="k">시총</span><span class="v">${trValFmtWon(r.market_value) ?? ""}</span></div>-->
           <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.last_trading_value) ?? ""})</span></div>
-          <div class="kv"><span class="k">종가 추이 (현재가)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmt2(r.high_close)} (${fmtKrClose(nClose)})</span></div>
+          <div class="kv"><span class="k">종가 추이 (금일 등락률)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmtKrClose(nClose)} (${fmt1(pChg)}%)</span></div>
           <div class="kv"><span class="k">기간 총 상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일 평균 상승</span><span class="v">${r.increase_per_day ?? ""}</span></div>
         </div>
@@ -657,6 +658,15 @@ function removeTradingCards(section) {
 }
 
 
+// 현재 선택된 탭의 대상 셀렉터('#tab-xxx')를 반환.
+// 탭 UI가 버튼에서 드롭다운(#tabSelect)으로 바뀌어서, 활성 탭을 읽는 곳은 모두 이 함수를 쓴다.
+// (예전 .tab-btn.active 마크업이 남아 있는 경우를 대비해 폴백도 둔다)
+function getActiveTabTarget() {
+    const sel = document.getElementById('tabSelect');
+    if (sel && sel.value) return sel.value;
+    return document.querySelector('.tab-bar .tab-btn.active')?.dataset.target || '#tab-trading';
+}
+
 function renderTradingView(tradingRows) {
     globalTradingRows = tradingRows;
 
@@ -666,7 +676,7 @@ function renderTradingView(tradingRows) {
 
     // const section = el.closest('section');
 
-    const activeTable = document.querySelector('.tab-bar .tab-btn.active').dataset.target;
+    const activeTable = getActiveTabTarget();
     const section = document.querySelector(activeTable);
     const tableName = 'table-'+section.id.split('-')[1];
     const viewToggleBtn = document.querySelector('.view-toggle .is-active');
@@ -724,9 +734,13 @@ setTimeout(()=>{
         document.addEventListener('keydown', function(event) {
             switch (event.key) {
                 case 'ArrowLeft':
+                    // preventDefault 없으면 포커스가 #tabSelect(드롭다운) 등 폼 요소에 있을 때
+                    // 캐러셀 이동과 동시에 브라우저 기본 동작(드롭다운 값 변경)도 같이 일어난다.
+                    event.preventDefault();
                     leftCarouselBtn.click();
                     break;
                 case 'ArrowRight':
+                    event.preventDefault();
                     rightCarouselBtn.click();
                     break;
                 case 'Home':

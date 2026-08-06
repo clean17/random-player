@@ -384,10 +384,10 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", rule: str
         , s.category        
         , i.yesterday_close
         , i.current_price
-        , s.close
+        , s.close as current_close
         , i.today_price_change_pct
         , i.avg5d_trading_value
-        , i.current_trading_value
+        , i.current_trading_value as last_trading_value
         , i.trading_value_change_pct
         , i.pred_price_change_3d_pct
         , i.graph_file
@@ -466,14 +466,15 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
         fire_condition = """
             where 1=1
             -- 아직 너무 많이 오르지는 않았지만 상승 흐름은 확인된 구간
-			AND b.total_rate_of_increase BETWEEN 8 AND 12
-			-- AND b.last_today_price_change_pct BETWEEN 3 AND 11
+			AND b.total_rate_of_increase BETWEEN 8 AND 50
+			-- AND b.today_price_change_pct BETWEEN 3 AND 8
             -- 너무 느린 종목과 급격하게 오른 종목 제외
 			-- AND b.increase_per_day BETWEEN 3 AND 6
             AND min_close::numeric < current_close::numeric
             -- 현재가가 조회 기간 최고 관측가격에서 3퍼센트 이상 밀리지 않은 종목
             AND b.current_close >= b.high_close * 0.97
             AND b.market_value > 70_000_000_000
+            AND b.signal_days BETWEEN 2 AND 4
               /*
                * 한국시간 기준:
                *
@@ -510,6 +511,7 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
         , to_char(b.min_close, 'FM999,999,999') as min_close
         , to_char(b.high_close, 'FM999,999,999') as high_close
         , to_char(b.current_close, 'FM999,999,999') as current_close
+        , b.today_price_change_pct
         , b.total_rate_of_increase ||'%%' as total_rate_of_increase
         , b.increase_per_day || '%%' as increase_per_day
         , b.market_value
@@ -583,7 +585,7 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
                   i.today_price_change_pct::numeric
                   ORDER BY i.created_at DESC, i.id DESC
               )
-          )[1] AS last_today_price_change_pct
+          )[1] AS today_price_change_pct
           , min(i.created_at)::date as first_date
           , max(i.created_at)::date as last_date
           , s.logo_image_url

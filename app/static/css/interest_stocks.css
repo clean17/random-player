@@ -69,6 +69,24 @@ body {
     color: #fff;
 }
 
+/* 탭 드롭다운 (기존 .tab-btn 버튼들을 대체) */
+.tab-select {
+    height: 34px;
+    min-width: 148px;
+    padding: 0 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+}
+.tab-select:hover { border-color: #2563eb; }
+.tab-select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+.tab-select option { background: #fff; color: #111827; font-weight: 500; }
+
 /* 기존 전역 button을 쓰더라도 탭과 구분 */
 button.primary {
     background-color: #2563eb;

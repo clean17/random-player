@@ -38,7 +38,7 @@ fire(급상승 관심종목) 자동 매수 전략.
   SK오션플랜트는 10:55에 20,450원에 샀는데 종가 18,350원(-10.3%)이었다.
 
 매수 후 청산은 kiwoom_trailing_stop.py의 30초 잡이 자동으로 담당한다
-(손절 -5% / 되돌림손절 -3% / 목표 10·15·20% 1/3씩 / 트레일링).
+(손절 -3% / 목표가 사다리 없음 / 익절은 트레일링 -2%p 일임).
 
 실전 전 반드시 KIWOOM_ENV=mock으로 검증할 것.
 """
@@ -54,11 +54,13 @@ from job.kiwoom_trailing_stop import _log, _record_trade, is_market_open
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
 CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
-BREADTH_MIN = 0.50         # 시장폭 레짐: 전 종목 중 종가>MA20 비율 50% 이상일 때만 진입.
-                           # 0.40은 검증기간(2026-05~07) 성과가 본전(+0.01%)에 그쳤고 2026-03 하락장을
-                           # 못 막았다(315건 -2.73%). 0.50이면 3월 거래 0건 + 검증 +0.32%로 개선됨.
+BREADTH_MIN = 0.0          # 시장폭 레짐 게이트. 0 이하면 게이트를 아예 끈다(현재 OFF).
+                           # breadth 값은 참고/로그용으로 계속 계산된다.
+                           # 켤 때 참고한 검증치(2026-06~08 데이터, 3,045건):
+                           #   0.40 → 2026-07에 135건 통과시켜 -3.06%, 2026-03도 못 막음(-2.73%)
+                           #   0.50 → 6·7월 거래 0건으로 차단, 다만 42거래일 중 진입 가능일이 2일뿐
                            # breadth 방향(전일대비 상승/이평 상회)을 쓰는 안도 테스트했으나
-                           # 검증기간 전부 마이너스(-1.6~-2.1%)라 폐기 — 수준(level)만 유효.
+                           # 검증기간 전부 마이너스(-1.6~-2.1%)라 폐기 — 수준(level)만 유효했다.
 FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트 '관심' 탭과 동일)
 CASH_DEPLOY_RATIO = 0.70   # 가용 현금 중 자동매수에 쓸 최대 비율 (나머지 30%는 현금 버퍼로 남김)
 BUY_SLOTS = 7              # 위 금액을 7등분 → 1픽당 '가용현금 × 70% ÷ 7' = 가용현금의 10%.
@@ -206,12 +208,15 @@ def run_fire_buy_cycle():
         _log.error('[fire] 계좌 정보 미설정')
         return
 
+    # BREADTH_MIN <= 0 이면 레짐 게이트 자체를 끈다. 이때 breadth 계산 실패(None)로도 매수를
+    # 막지 않는다 — 게이트를 껐는데 계산 실패 때문에 조용히 안 사는 상황을 피하기 위함.
     breadth = get_market_breadth()
-    if breadth is None:
-        _log.error('[fire] 시장폭 계산 실패 — 진입 보류')
-        return
-    if breadth < BREADTH_MIN:
-        return  # 레짐 OFF: 조용히 스킵 (레짐 상태는 breadth 계산 시 하루 1회 로그됨)
+    if BREADTH_MIN > 0:
+        if breadth is None:
+            _log.error('[fire] 시장폭 계산 실패 — 진입 보류')
+            return
+        if breadth < BREADTH_MIN:
+            return  # 레짐 OFF: 조용히 스킵 (레짐 상태는 breadth 계산 시 하루 1회 로그됨)
 
     candidates = get_fire_candidates()
     if not candidates:
@@ -244,6 +249,8 @@ def run_fire_buy_cycle():
     buys_today = daily.get('count', 0) if daily.get('date') == today.isoformat() else 0
     if buys_today >= BUY_SLOTS:
         return
+
+    bd_txt = f'{breadth:.0%}' if breadth is not None else 'n/a'  # 레짐 OFF면 None일 수 있음
 
     holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
     held = {h['stk_cd'] for h in holdings}
@@ -299,7 +306,7 @@ def run_fire_buy_cycle():
         result = buy_market(stk_cd, qty)
         deployed += trade_value
         _log.info(f'[fire매수 {buys_today + 1}/{BUY_SLOTS}] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
-                  f'(총상승률 {cand["total_rate"]}, {ref}breadth={breadth:.0%}) '
+                  f'(총상승률 {cand["total_rate"]}, {ref}breadth={bd_txt}) '
                   f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
                   f'누적 {deployed:,.0f}/{deploy_limit:,.0f}원 → {result}')
         _record_trade(stk_cd, cand['stk_nm'], 'buy', 'fire', qty, price, price, 0.0, asset_ratio=asset_ratio)
