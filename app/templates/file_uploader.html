@@ -217,6 +217,22 @@
             titleInput.value = previous_title;
         }
 
+        // 파일을 많이/크게 선택하면 change 이벤트가 오기 전(다이얼로그가 닫히고 파일 목록을
+        // 내부적으로 적재하는 구간)에 화면이 멈춘 것처럼 보인다. change 시점에는 이미 멈춤이
+        // 끝난 뒤라 늦으므로, 다이얼로그를 여는 click 시점부터 오버레이를 띄워 그 구간을 덮는다.
+        const fileInputEl = document.getElementById('fileInput');
+        fileInputEl?.addEventListener('click', () => {
+            renderLoadingOverlay();
+        });
+        fileInputEl?.addEventListener('change', () => {
+            // 두 프레임 뒤에 닫아 오버레이가 실제로 한 번 그려지도록 보장
+            requestAnimationFrame(() => requestAnimationFrame(() => removeLoadingOverlay()));
+        });
+        // 파일 선택을 취소한 경우에도 오버레이가 남아있지 않도록 처리
+        fileInputEl?.addEventListener('cancel', () => {
+            removeLoadingOverlay();
+        });
+
         uploadForm.addEventListener('submit', function (e) {
             e.preventDefault(); // 기본 제출 막기
 
@@ -250,7 +266,8 @@
 
             xhr.open('POST', '/upload/', true);
 
-            // 진행률 표시
+            // 진행률 표시 (네트워크 전송량 기준 — 전송이 끝나도 서버가 파일을 저장하는 동안은
+            // 100%에 그대로 멈춰 보이므로, 그 구간은 아래 upload.onload에서 별도로 표시한다)
             xhr.upload.onprogress = function (e) {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
@@ -260,8 +277,16 @@
                 }
             };
 
+            // 전송 자체는 끝났지만 서버가 응답하기 전(디스크에 파일을 적재하는 중)까지의 대기 표시.
+            // 대용량 파일일수록 이 구간이 전송 시간보다 더 오래 걸릴 수 있다.
+            xhr.upload.onload = function () {
+                document.getElementById('percentText').textContent = '서버에 저장 중...';
+                renderLoadingOverlay();
+            };
+
             // 완료 후 리다이렉트
             xhr.onload = function () {
+                removeLoadingOverlay();
                 // submitted = false; // 다시 전송 가능하게
                 if (xhr.status === 200) {
                     submitted = false; // 다시 전송 가능하게
@@ -283,6 +308,7 @@
             };
 
             xhr.onerror = function () {
+                removeLoadingOverlay();
                 submitted = false;
                 alert('서버에 연결할 수 없습니다.');
                 if (button) {

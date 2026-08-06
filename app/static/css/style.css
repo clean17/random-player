@@ -1435,3 +1435,20 @@ body.page-verify .verify-card button[type="submit"]:focus {
     color: #fff !important;
     filter: none !important;
 }
+
+/* ===== Disabled buttons: 남아있는 hover/focus 상태와 무관하게 항상 같은 모습 ===== */
+.btn-w100:disabled,
+button.btn-w100:disabled,
+input[type="submit"].btn-w100:disabled,
+body.page-login #loginForm .btn-w100:disabled,
+body.page-login #loginForm button[type="submit"]:disabled,
+body.page-verify .verify-card .btn-w100:disabled,
+body.page-verify .verify-card button[type="submit"]:disabled {
+    background-color: #93c5fd !important;
+    border-color: #93c5fd !important;
+    color: #eff6ff !important;
+    filter: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    cursor: not-allowed !important;
+}

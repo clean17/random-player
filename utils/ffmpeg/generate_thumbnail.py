@@ -16,18 +16,18 @@ THUMB_MIN_SIZE_BYTES = 120 * 1024  # 120KB
 # 최대 썸네일 가로 너비
 max_width = 720
 
-def convert_file(file_path):
+def convert_file(file_path, index=None, total=None):
     file_lower = str(file_path).lower()
     if file_lower.endswith(VALID_IMAGE_EXTENSIONS):
-        convert_image_file(file_path)
+        convert_image_file(file_path, index, total)
     elif file_lower.endswith(VALID_VIDEO_EXTENSIONS):
-        convert_video_file(file_path)
+        convert_video_file(file_path, index, total)
     else:
         print(f"지원하지 않는 파일: {file_path}")
 
 
 # 비디오 파일의 중간 프레임을 webp파일로 변환
-def convert_video_file(file_path):
+def convert_video_file(file_path, index=None, total=None):
     dir_path = Path(file_path).parent
     thumb_dir = os.path.join(dir_path, 'thumb')
     os.makedirs(thumb_dir, exist_ok=True)
@@ -56,7 +56,7 @@ def convert_video_file(file_path):
             .run(quiet=True)
         )
         # 썸네일 이미지 후처리(리사이즈 등) 기존 이미지 로직 재사용
-        convert_image_file(temp_jpg)
+        convert_image_file(temp_jpg, index, total)
         # webp 변환 결과는 thumb 폴더에 같은 이름의 .webp로 생성됨
         os.remove(temp_jpg)  # 임시파일 삭제
     except Exception as e:
@@ -66,7 +66,7 @@ def convert_video_file(file_path):
 
 
 # 이미지 파일을 webp파일로 변환
-def convert_image_file(file_path):
+def convert_image_file(file_path, index=None, total=None):
     try:
         if os.path.getsize(file_path) <= THUMB_MIN_SIZE_BYTES:
             return
@@ -111,7 +111,8 @@ def convert_image_file(file_path):
             img.convert("RGB").save(save_path, "webp", quality=80)
 
             # print(f"✅ 썸네일 생성: {save_path}")
-            print(f"✅ 썸네일 생성")
+            progress = f" ({index}/{total})" if index is not None and total is not None else ""
+            print(f"✅ 썸네일 생성{progress}")
 
     except UnidentifiedImageError:
         print(f"❌ 이미지 열기 실패: {filename}")
@@ -122,11 +123,15 @@ def generate_thumbnails(root_dir):
     thumb_dir = os.path.join(root_dir, 'thumb')
     os.makedirs(thumb_dir, exist_ok=True)
 
-    # 루트 디렉토리 기준으로 하위 폴더들을 가져옴
-    for name in os.listdir(root_dir):
-        sub_dir_path = os.path.join(root_dir, name)
-        if os.path.isfile(sub_dir_path):
-            convert_file(sub_dir_path)
+    # 루트 디렉토리 기준 파일 목록을 먼저 모아 총 개수를 구한 뒤 순회 (진행률 표시용)
+    file_paths = [
+        os.path.join(root_dir, name)
+        for name in os.listdir(root_dir)
+        if os.path.isfile(os.path.join(root_dir, name))
+    ]
+    total = len(file_paths)
+    for index, file_path in enumerate(file_paths, start=1):
+        convert_file(file_path, index, total)
 
 
 def batch_convert_from_root(root_dir):
