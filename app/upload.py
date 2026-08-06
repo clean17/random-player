@@ -47,7 +47,8 @@ def upload_file():
 
         os.makedirs(target_dir, exist_ok=True)  # 디렉토리 생성
 
-        for file in uploaded_files:
+        total_files = len(uploaded_files)
+        for index, file in enumerate(uploaded_files, start=1):
             if file and file.filename:  # 파일명이 있는 경우 저장
                 # filename = secure_filename(file.filename)
                 filename = file.filename
@@ -67,18 +68,21 @@ def upload_file():
                         with ZipFile(archive_path, 'r') as zip_ref:
                             zip_ref.extractall(target_dir)
                             # zip 파일 내 모든 파일 경로 추가 (디렉터리 구조 유지)
-                            for extracted_file in zip_ref.namelist():
-                                extracted_path = os.path.join(target_dir, extracted_file)
-                                # 파일인 경우에만 추가
-                                if os.path.isfile(extracted_path):
-                                    convert_file(extracted_path)
-                                    # saved_files.append(extracted_path)
-                                    mime_type, _ = guess_type(filename)
-                                    file_info ={
-                                        "name": filename,
-                                        "type": mime_type or "application/octet-stream"
-                                    }
-                                    saved_files.append(file_info)
+                            extracted_paths = [
+                                os.path.join(target_dir, extracted_file)
+                                for extracted_file in zip_ref.namelist()
+                                if os.path.isfile(os.path.join(target_dir, extracted_file))
+                            ]
+                            zip_total = len(extracted_paths)
+                            for zip_index, extracted_path in enumerate(extracted_paths, start=1):
+                                convert_file(extracted_path, zip_index, zip_total)
+                                # saved_files.append(extracted_path)
+                                mime_type, _ = guess_type(filename)
+                                file_info ={
+                                    "name": filename,
+                                    "type": mime_type or "application/octet-stream"
+                                }
+                                saved_files.append(file_info)
                     except Exception as e:
                         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
                         print(f"### {current_time} - Error while extracting {archive_path}: {e}")
@@ -108,7 +112,7 @@ def upload_file():
                 else:
                     file_path = os.path.join(target_dir, f"{uuid_filename}")
                     file.save(file_path)
-                    convert_file(file_path)
+                    convert_file(file_path, index, total_files)
                     # saved_files.append(file_path)
                     mime_type, _ = guess_type(uuid_filename)
                     params = {
