@@ -3,6 +3,8 @@ import time
 import json
 import statistics
 from datetime import datetime
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
 
