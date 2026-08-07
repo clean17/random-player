@@ -7,7 +7,7 @@ from app.repository.stocks.stocks import merge_daily_interest_stocks, get_intere
     update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
     update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix, \
-    upsert_reserved_stocks, get_reserved_stocks
+    upsert_reserved_stocks, get_reserved_stocks, clear_reserved_stocks
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
@@ -294,6 +294,15 @@ def fetch_reserved_stocks():
     fetch_user = find_user_by_username(session["_user_id"])
     stocks = get_reserved_stocks(fetch_user.id)
     return jsonify(stocks)
+
+
+@stock.route("/reserved/clear-all", methods=["POST"])
+@login_required
+def clear_all_reserved_stocks():
+    """자동매수 대상 전체를 flag=false로 일괄 해제."""
+    fetch_user = find_user_by_username(session["_user_id"])
+    count = clear_reserved_stocks(fetch_user.id)
+    return {"status": "success", "cleared": count}, 200
 
 
 @stock.route("/interest/data/reserved", methods=["POST"])
