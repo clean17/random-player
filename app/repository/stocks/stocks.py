@@ -563,16 +563,13 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
         """
         fire_condition = """
             where 1=1
-            -- 아직 너무 많이 오르지는 않았지만 상승 흐름은 확인된 구간
-			AND b.total_rate_of_increase BETWEEN 8 AND 50
+			-- AND b.total_rate_of_increase <= 20
 			-- AND b.today_price_change_pct BETWEEN 3 AND 8
-            -- 너무 느린 종목과 급격하게 오른 종목 제외
 			-- AND b.increase_per_day BETWEEN 3 AND 6
-            AND min_close::numeric < current_close::numeric
-            -- 현재가가 조회 기간 최고 관측가격에서 3퍼센트 이상 밀리지 않은 종목
-            AND b.current_close >= b.high_close * 0.97
+            -- AND min_close::numeric < current_close::numeric
             AND b.market_value > 70_000_000_000
-            AND b.signal_days BETWEEN 2 AND 4
+            AND b.signal_days BETWEEN 2 AND 3
+            and b.last_trading_value/b.avg_trading_value > 0.5
               /*
                * 한국시간 기준:
                *
