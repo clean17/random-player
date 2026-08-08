@@ -544,6 +544,15 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
         group by s.stock_code, s.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
         """
         params = [user_id]
+
+        # 즐겨찾기/자동매수 대상 최소 조건: 시가총액 700억 이상, 평균 거래대금 40억 이상
+        # (interest_stocks 신호 이력이 없어 market_value/avg_trading_value가 NULL이면
+        #  조건을 만족하지 못한 것으로 보고 함께 제외된다)
+        fire_condition = """
+            where 1=1
+            AND b.market_value > 70_000_000_000
+            AND b.avg_trading_value::numeric > 4_000_000_000
+        """
     else:
         trading_value_condition = """
             AND b.avg_trading_value::numeric > 4_000_000_000 -- 최소 거래대금 수정 40억
