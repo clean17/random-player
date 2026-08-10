@@ -137,6 +137,7 @@
         .table td.ms-positive { color: #d32f2f; }
         .table td.ms-negative { color: #1565c0; }
         .ms-stock-name { cursor: pointer; }
+        .ms-reason-detail { color: #6b7280; font-size: 12px; }
 
         .mystocks-subtitle {
             font-size: 16px;
@@ -704,7 +705,9 @@
         }).join('');
         tbody.innerHTML = html;
         document.getElementById('count').textContent = `${rows.length}건`;
-        bindImageToggles(document.getElementById('table-trading'));
+        // 하드코딩된 'table-trading' 대신 위에서 조회한 tradingTable을 써야
+        // 즐겨찾기 탭(table-favorite)처럼 같은 렌더러를 다른 tableName으로 재사용할 때도 맞는 테이블에 바인딩된다.
+        bindImageToggles(tradingTable);
     }
 
     // 테이블 렌더: 금일 등락
@@ -859,7 +862,7 @@
 
     // ── 내 종목 (키움 모의투자 대시보드) ──────────────────────────────────
     const isGuestUser = {{ 'true' if current_user.get_id() == config.GUEST_USERNAME else 'false' }};
-    const MS_REASON_LABEL = { stop_loss: '손절', giveback_stop: '되돌림손절', trailing: '트레일링', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호' };
+    const MS_REASON_LABEL = { stop_loss: '손절', giveback_stop: '되돌림손절', trailing: '트레일링', trailing_gap: '트레일링', trailing_floor: '트레일링-보호선', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호' };
 
     // 매도 시 그 종목 보유수량 대비 이번에 판 비율 표시용 (전량/1/3/1/2 등)
     function msHoldingRatioText(ev) {
@@ -868,6 +871,21 @@
         if (!isFinite(pct)) return '';
         if (pct >= 99.5) return ' (전량)';
         return ` (${Math.round(pct)}%)`;
+    }
+
+    // "사유" 칸에 tranche/고점/트리거선을 덧붙여, reason 라벨 하나로는 안 보이던
+    // "몇 분할째, 어느 고점에서, 어느 선에 걸려 팔렸는지"를 바로 보이게 한다.
+    function msReasonDetailText(ev) {
+        if (ev.side !== 'sell') return '';
+        const pct = (v) => isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(1)}%` : null;
+        const peak = pct(ev.peak_rate);
+        const trig = pct(ev.trigger_level);
+        const parts = [];
+        if (ev.tranche) parts.push(`${ev.tranche}차`);
+        if (peak && trig) parts.push(`고점${peak}→트리거${trig}`);
+        else if (peak) parts.push(`고점${peak}`);
+        else if (trig) parts.push(`트리거${trig}`);
+        return parts.length ? ` <span class="ms-reason-detail">(${parts.join(', ')})</span>` : '';
     }
 
     function msFmtWon(n) {
@@ -1004,7 +1022,7 @@
           <td>${(ev.ts || '').replace('T', ' ')}</td>
           <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''}(${ev.stk_cd ?? ''})</span></td>
           <td>${ev.side === 'buy' ? '매수' : '매도'}</td>
-          <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}</td>
+          <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}${msReasonDetailText(ev)}</td>
           <td class="right">${ev.qty ?? 0}주</td>
           <td class="right">${msFmtWon(ev.price)}</td>
           <td class="right ${pnlClass}">${pnlText}</td>

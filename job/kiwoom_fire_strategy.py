@@ -11,7 +11,12 @@ fire(급상승 관심종목) 자동 매수 전략.
                            종목(reserved_stocks, flag=true)만 남긴다. 체크한 게 없으면 그날 매수 없음.
                            체크했어도 fire 조건을 못 넘기면 사지 않는다(교집합).
                            스케줄러엔 로그인 세션이 없어 user 구분 없이 flag=true 전체를 본다.
-  4. 보유/쿨다운 제외    : 이미 보유 중이거나 COOLDOWN_DAYS(7일) 내 재매수면 skip
+  4. 쿨다운 제외         : COOLDOWN_DAYS(3일) 내 재매수면 skip (1일에 샀으면 4일에 재매수 가능).
+                           이미 보유 중인 종목도 fire 조건을
+                           다시 통과하고 쿨다운만 지나면 추가 매수한다(2026-08-10부터, 종전엔 보유
+                           중이면 무조건 skip). 추가매수로 평단가가 바뀌면 트레일링 상태는
+                           kiwoom_trailing_stop.py의 evaluate_and_trade()가 새 평단가 기준으로
+                           자동 리셋한다.
   5. 사이징             : 기준은 총자산이 아니라 '가용 현금'(총자산 - 보유종목 평가금액).
                            가용현금 × CASH_DEPLOY_RATIO(70%)까지만 쓰고 나머지 30%는 버퍼로 남긴다.
                            그 금액을 BUY_SLOTS(7)등분 → 1픽당 가용현금의 10%, 하루 최대 7종목.
@@ -65,7 +70,9 @@ FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트
 CASH_DEPLOY_RATIO = 0.70   # 가용 현금 중 자동매수에 쓸 최대 비율 (나머지 30%는 현금 버퍼로 남김)
 BUY_SLOTS = 7              # 위 금액을 7등분 → 1픽당 '가용현금 × 70% ÷ 7' = 가용현금의 10%.
                            # 하루 최대 신규 매수 종목 수이기도 함
-COOLDOWN_DAYS = 7          # 같은 종목 재매수 금지 기간
+COOLDOWN_DAYS = 3          # 같은 종목 재매수 금지 기간. 1일에 샀으면 4일에 재매수 가능
+                           # (아래 조건이 "<"라서: diff=(오늘-마지막매수일).days, diff < 3이면 skip.
+                           #  1일 매수 → 2일 diff1 skip, 3일 diff2 skip, 4일 diff3 → 재매수 허용)
 
 PKL_DIR = r'C:\my-project\AutoSales.py\data\pickle'
 _LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'kiwoom_trading')
@@ -277,8 +284,7 @@ def run_fire_buy_cycle():
 
     bd_txt = f'{breadth:.0%}' if breadth is not None else 'n/a'  # 레짐 OFF면 None일 수 있음
 
-    holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
-    held = {h['stk_cd'] for h in holdings}
+    _, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
 
     # 사이징 기준은 총자산이 아니라 '가용 현금'. 그중 CASH_DEPLOY_RATIO(70%)까지만 쓰고
     # 나머지 30%는 손대지 않는다(버퍼). deploy_limit을 7등분한 금액이 1픽 예산이며,
@@ -300,12 +306,12 @@ def run_fire_buy_cycle():
         if buys_today >= BUY_SLOTS:
             break
         stk_cd = cand['stk_cd']
-        if stk_cd in held:
-            continue
         last_buy = state.get(stk_cd)
         if last_buy:
             try:
-                if (today - datetime.date.fromisoformat(last_buy)).days <= COOLDOWN_DAYS:
+                # "<="였다면 COOLDOWN_DAYS=3에도 1일 매수 시 5일에야 재매수됐다(4일 diff=3<=3 skip).
+                # "<"로 바꿔서 1일 매수 → 4일(diff=3) 재매수 허용이 되게 함.
+                if (today - datetime.date.fromisoformat(last_buy)).days < COOLDOWN_DAYS:
                     continue
             except ValueError:
                 pass

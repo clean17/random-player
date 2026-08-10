@@ -2,29 +2,37 @@
 키움 계좌 보유 종목 트레일링 스탑 자동 매매.
 
 기본 전략 (수정하려면 아래 상수만 변경):
-  - 손절            : -5%  → 전량 즉시 청산
-  - 되돌림 손절     : 한 번이라도 +5%를 찍었던(트레일링 활성화된) 종목도 손절선은 동일하게 -5%
+  - 손절            : -6%  → 전량 즉시 청산
+  - 되돌림 손절     : 한 번이라도 +5%를 찍었던(트레일링 활성화된) 종목도 손절선은 동일하게 -6%
     → 전량 즉시 청산. 이익 구간까지 갔던 종목을 더 내주지 않기 위함(ARMED_GIVEBACK_STOP).
     ※ 현재 두 값이 같아 실질적인 동작 차이는 없다. 되돌림만 더 좁게 가져가려면
       ARMED_GIVEBACK_STOP만 STOP_LOSS_RATE보다 작은 폭으로 바꾸면 된다.
   - 목표가          : 비활성화(TARGET_RATES=[]). 익절은 전적으로 트레일링이 담당.
     고정 사다리(10/15/20%)는 상승 종목을 일찍 끊어 성과를 깎는 것으로 검증돼 껐다.
-  - 트레일링 활성화 : 수익률 +5% 도달 후 고점 추적 시작
-  - 트레일링 폭     : 고점 대비 -3%p 이탈 시 그 시점 잔여 수량의 1/3 매도
-  - 최소 익절 보호선 : +1% (트레일링 청산선이 +1% 밑으로 내려가지 않도록 고정).
-    보호선에 걸려 트리거된 경우도 다른 트리거와 동일하게 1/3만 매도한다.
-    현재 값(활성화 5% - 폭 3%p = 2%)에서는 트리거선이 아직 보호선(1%)보다 위라 실제로는
-    보호선이 걸릴 일이 없다. 폭을 4%p 넘게 넓히면 다시 의미를 갖는다.
-  - 한 종목당 최대 3회(3분할)까지만 매도 — 목표가를 껐으므로 사실상 트레일링이 3분할을 다 쓴다.
+  - 트레일링 활성화 : 수익률 +7% 도달 후 고점 추적 시작
+  - 트레일링 폭     : 고점 대비 -5%p 이탈 시 그 시점 잔여 수량의 1/3 매도
+  - 최소 익절 보호선 : +3% (트레일링 청산선이 +3% 밑으로 내려가지 않도록 고정).
+    활성화(+7%) - 폭(5%p) = +2% < 보호선(+3%)이라, 고점이 7~8% 구간이면 청산선이 항상
+    보호선(3%)에 붙는다 — 고점이 8%를 넘어야 트리거선이 보호선 위로 올라가 정상적인
+    고점-5%p 트레일링이 된다.
+    ※ 보호선에 걸린 경우는 다른 트리거(1/3만 매도)와 달리 잔여 전량을 정리한다 — "발동선을
+    갓 넘겼다가 바로 꺾이는 약한 모멘텀"이라 남겨봤자 대개 정체보호/되돌림손절로 이어진다는
+    재검증 결과(1년 재현 데이터 87건 기준, 기하평균 +0.199%→+0.220%로 개선). 예전엔 반대로
+    "1/3만 매도"로 바꾼 적이 있는데, 그때는 활성화 5%/보호선 1%라 거의 모든 트레일링이
+    보호선에 걸리는 구조였다(지엔씨에너지 사례). 지금은 활성화·보호선을 같이 올려서 보호선이
+    선택적으로만 걸리므로 전량청산이 유리하다.
+  - 한 종목당 최대 3회(3분할)까지만 매도 — 목표가를 껐으므로 사실상 트레일링이 3분할을 다 쓴다
+    (단, 보호선 트리거는 예외적으로 1회에 전량 정리).
     트레일링 매도는 "직전 매도 시점의 고점보다 더 높은 새 고점"을 갱신해야만 다시 트리거됨
     (같은 고점에서 반복 매도되는 것 방지).
   - 보유 중 추가 매수로 평단가가 바뀌면 고점/목표가 단계 등 진행상태는 리셋되고 새 평단가 기준으로
     사다리/트레일링을 처음부터 다시 평가함 (rate가 평단가 기준 값이라 예전 %는 더 이상 같은 척도가 아님).
-  - 정체 보호: 트레일링 매도가 한 번 나간 뒤 그보다 더 높은 새 고점 없이 가격이 계속 흘러내리면
-    트레일링이 재발동되지 않아 잔여 물량이 보호 없이 노출될 수 있음. 이를 막기 위해 그 매도에
-    쓰인 트리거선(고점-3%p 또는 보호선)보다 추가로 -6%p(STALL_GAP) 더 밀리면 잔여 전량 청산.
-    고점이 높았던 종목(예: 고점 20% → 트리거 17% → 11%에서 정리)에 주로 작동하고, 저고점 종목은
-    그 전에 되돌림 손절(-5%)이 먼저 잡는다.
+  - 정체 보호: 트레일링 매도(갭 트리거)가 한 번 나간 뒤 그보다 더 높은 새 고점 없이 가격이
+    계속 흘러내리면 트레일링이 재발동되지 않아 잔여 물량이 보호 없이 노출될 수 있음. 이를
+    막기 위해 그 매도에 쓰인 트리거선(고점-5%p)보다 추가로 -6%p(STALL_GAP) 더 밀리면 잔여
+    전량 청산. 고점이 높았던 종목(예: 고점 20% → 트리거 15% → 9%에서 정리)에 주로 작동한다.
+    ※ 보호선 트리거는 애초에 1회에 전량 정리되므로(위 참고) 정체 보호가 뒤이어 평가될 잔여
+    물량 자체가 없다 — 정체 보호는 사실상 갭 트리거로 시작한 포지션에만 해당한다.
   - 기업행위 방어: 액면분할·권리락 당일엔 증권사가 현재가만 먼저 조정하고 평단가/수량은 늦게
     조정하는 구간이 있어 손실률이 -50%대로 잘못 잡힐 수 있음. 일일 가격제한폭(±30%)을 넘는 급락이나
     정상적으로 도달 불가능한 손실률이 관측되면 매도하지 않고 경고만 남긴 뒤 자동매매를 일시 정지함
@@ -79,36 +87,50 @@ if not _log.handlers:
     _console_handler.setFormatter(_formatter)
     _log.addHandler(_console_handler)
 
-# ── 청산 파라미터 (2026-08-10 재검증으로 손절/갭 확대) ────────────────────────
-# 종전 -0.03 / 갭 0.02 는 모든 축에서 최적점보다 '좁은' 쪽이라 너무 일찍 끊고 있었다.
+# ── 청산 파라미터 (2026-08-10 손절-6%/갭5%p로 재조정 — 복리성장률 기준) ────────
+# 1차 조정(-0.03→-0.05, 갭 0.02→0.03)까지는 "평균 수익률(산술평균)"만 보고 골랐는데,
+# 그 뒤 실거래 47건을 라운드트립(매수~완전청산) 단위로 다시 보니 산술평균이나 손익비만으로는
+# "계좌가 실제로 얼마나 빨리 크는가"를 못 잡아낸다는 게 드러났다 — 변동성이 크면 산술평균이
+# 양수여도 복리로는 깎아먹는다(변동성 마모). 그래서 실제 기하평균(=매매를 순서대로 복리
+# 재투자했을 때의 평균 성장률, E[log(1+r)]로 계산)을 기준으로 다시 스윕했다.
 #
 # 검증 방법: 2_finding_stocks_with_increased_volume.py 의 신호 로직을 최근 1년 일봉(pkl)에
 # 그대로 재현해 신호 37,151건 → fire 후보 19,293건(246거래일)을 복원하고, 기본조건 + 총상승률
 # 낮은순 상위 7종목(n=1,700)에 실제 청산로직을 적용. 체결은 보수적으로 가정했다
 # (손절은 시가가 이미 손절선 아래면 시가 체결 = 갭하락 반영, 트레일링은 트리거가 아닌 종가 체결).
-# 종전 백테스트는 이 두 가정이 없어 결과가 약 1.4%p 낙관 편향돼 있었다.
 #
-#   손절 -2%  +0.14%(승률20.5%)   손절 -5%  +0.40%(승률34.4%)
-#   손절 -3%  +0.26%(승률25.7%)   손절 -7%  +0.45%(승률40.8%)
-#   손절 -4%  +0.27%(승률29.9%)   손절 -10% +0.32%(승률45.9%)
-#   갭 1%  +0.16%   갭 2%  +0.26%   갭 3%  +0.40%   갭 5%  +0.42%
-#   최종 조합(손절-5·발동5·갭3, 20일): +0.53% 승률33.0% — 종전(+0.26%, 25.7%)의 약 2배.
+#   [기하평균(복리성장률), 발동5%p 고정, 손절\갭]
+#              3%p      4%p      5%p      6%p      7%p      8%p
+#   -5%     +0.125%  +0.101%  +0.118%  +0.176%  +0.192%  +0.198%
+#   -6%     +0.153%  +0.135%  +0.159%  +0.207%  +0.237%  +0.256%   ← 그리드 안에서 전체 최고
+#   -7%     +0.096%  +0.091%  +0.127%  +0.161%  +0.185%  +0.192%
 #
-# -7%가 수치상 더 높지만 최근 분기에서 가장 나빠(과적합 신호) -5%를 택했다.
-# 주의: 확대안은 25Q3~26Q2에서 우세하나 26Q3에서는 종전(-0.6%p 열위)보다 나빴다.
-STOP_LOSS_RATE = -0.05
+# 갭을 넓힐수록(6→8%p) 전체 숫자는 계속 좋아지지만, 분기별로 쪼개보면 그 개선이 전부
+# 2025Q3(과거)에서 나오고 가장 최근 분기(26Q3)는 넓힐수록 더 나빠진다(과적합 신호,
+# -5%/3%p 26Q3 -0.92% → -6%/8%p 26Q3 -2.02%). 그래서 그리드 최고점(-6%/8%p) 대신, 전체
+# 개선과 최근 분기 악화의 균형이 맞는 손절-6%/갭5%p(기하평균 +0.159%, 26Q3 -1.75%)를 택했다.
+# 손절 -7% 이상은 산술평균은 버틸만해도 변동성이 더 커져 기하평균이 오히려 꺾인다.
+STOP_LOSS_RATE = -0.06
 # 고정 목표가 사다리는 비활성화 — 익절을 트레일링에 일임한다.
 # 2026-06~08 데이터(3,045건)로 실제 청산로직을 재현해 검증한 결과, 10/15/20% 사다리는
 # 상승 종목을 너무 일찍 끊어 오히려 성과를 깎았다(목표가 켬 -0.21% vs 끔 +0.08%).
 # 다시 켜려면 [0.10, 0.15, 0.20] 처럼 값을 채우면 된다(빈 리스트면 목표가 트리거가 아예 안 걸림).
 TARGET_RATES = []
-# 발동을 7%/10%로 올리면 수치는 더 오르나(+0.60%/+0.71%) 최근 분기 낙폭이 커져 5%를 유지한다.
-TRAIL_ACTIVATE_RATE = 0.05
-TRAIL_GAP = 0.03
-MIN_PROFIT_FLOOR = 0.01
-# 한 번이라도 +5%(TRAIL_ACTIVATE_RATE)를 찍었던 종목은 이익을 손실로 되돌리지 않도록
+# ── 트레일링 발동/보호선 (2026-08-10 발동5%→7%, 보호선1%→3%로 재조정) ─────────
+# 발동을 7%로 올리면(갭5%p 고정) 승률/손익비는 거의 그대로인데 기하평균이 +0.159%→+0.198%로
+# 개선된다 — "5%를 찍고 6%를 못 넘기는 애매한 종목"이 트레일링에 덜 걸리고 손절/만기청산으로
+# 자연히 정리되면서, 정말 강하게 뻗는 종목만 트레일링을 타게 되기 때문.
+#
+# 보호선은 발동을 올리면 같이 올려야 한다 — 트리거선 = max(고점-갭, 보호선)인데, 고점이
+# 발동선(=7%)일 때 갭(5%p)만으로 나오는 자연스러운 최소값이 7%-5%=2%다. 보호선이 이보다
+# 낮으면(예: 옛 값 1%) 절대 안 걸리는 죽은 코드가 된다. 보호선을 3%로 올려야 다시 의미를 갖는다
+# (1년 재현 데이터 1,700건 중 87건이 실제로 이 보호선에 걸림).
+TRAIL_ACTIVATE_RATE = 0.07
+TRAIL_GAP = 0.05
+MIN_PROFIT_FLOOR = 0.03
+# 한 번이라도 +7%(TRAIL_ACTIVATE_RATE)를 찍었던 종목은 이익을 손실로 되돌리지 않도록
 # 손절선을 일반 손절과 같은 폭으로 잡아 잔여 전량 청산한다.
-ARMED_GIVEBACK_STOP = -0.05
+ARMED_GIVEBACK_STOP = -0.06
 STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고점 없이 그 트리거선보다 추가로 이만큼 더 밀리면 잔여 전량 청산
 
 # ── 기업행위(액면분할·권리락)/데이터 이상 방어 ──────────────────────────────
@@ -118,7 +140,7 @@ STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고�
 # 확정된 사고가 있었다. 이런 값은 믿고 매매하면 안 되므로 아래 두 신호로 걸러 자동매매를 멈춘다.
 #  - ANOMALY_DROP : 국내 증시 일일 가격제한폭이 ±30%라, 직전 관측가 대비 이 이상 급락은
 #                   정상 시세 변동으로 설명되지 않는다(= 기업행위 또는 데이터 오류).
-#  - ANOMALY_RATE : -5% 손절이 30초마다 도는 구조상 이만큼 깊은 손실률은 정상 경로로 도달 불가.
+#  - ANOMALY_RATE : -6% 손절이 30초마다 도는 구조상 이만큼 깊은 손실률은 정상 경로로 도달 불가.
 # 증권사가 평단가를 조정해 값이 정상 범위로 돌아오면 자동으로 매매를 재개한다.
 ANOMALY_DROP = 0.35
 ANOMALY_RATE = -0.25
@@ -182,22 +204,34 @@ def _save_state(state: Dict):
 
 def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
                    qty: int, price: float, avg_price: float, pnl: float,
-                   asset_ratio: Optional[float] = None, holding_ratio: Optional[float] = None):
+                   asset_ratio: Optional[float] = None, holding_ratio: Optional[float] = None,
+                   rate: Optional[float] = None, peak_rate: Optional[float] = None,
+                   trigger_level: Optional[float] = None, tranche: Optional[str] = None):
     """매수/매도 1건을 거래 이력 파일에 append. 대시보드 이력/기간별 손익 집계에 사용.
     asset_ratio  : 이 거래대금(qty*price)이 총자산에서 차지한 비율 (0.05 = 5%)
-    holding_ratio: 매도 시 그 종목 보유수량 대비 이번에 판 비율 (0.33 = 33%). 매수는 None."""
+    holding_ratio: 매도 시 그 종목 보유수량 대비 이번에 판 비율 (0.33 = 33%). 매수는 None.
+    rate         : 매도 시점 수익률(예: -0.05). "작게 여러 번 이기고 크게 한 번 진다"처럼
+                   reason만으로는 안 보이는 걸 사후 분석하려면 필요.
+    peak_rate    : 이 종목이 보유 중 찍었던 최고 수익률. armed 안 된 채 바로 손절된 건지,
+                   한 번 올랐다가 되돌림으로 손절된 건지 구분하는 데 쓴다.
+    trigger_level: 이 매도를 발동시킨 청산선(트레일링 트리거가/손절선).
+    tranche      : 3분할 중 몇 번째인지 ('1/3'~'3/3'). 트레일링/목표가에만 사용."""
     event = {
         'ts': datetime.datetime.now().isoformat(timespec='seconds'),
         'stk_cd': stk_cd,
         'stk_nm': stk_nm or stk_cd,
         'side': side,       # 'buy' / 'sell'
-        'reason': reason,   # 'stop_loss' / 'trailing' / 'target' / 'manual'
+        'reason': reason,   # 'stop_loss' / 'giveback_stop' / 'trailing_gap' / 'trailing_floor' / 'target' / 'stall' / 'manual' / 'fire'
         'qty': qty,
         'price': price,
         'avg_price': avg_price,
         'pnl': pnl,
         'asset_ratio': asset_ratio,
         'holding_ratio': holding_ratio,
+        'rate': rate,
+        'peak_rate': peak_rate,
+        'trigger_level': trigger_level,
+        'tranche': tranche,
     }
     try:
         with open(TRADES_FILE, 'a', encoding='utf-8') as f:
@@ -495,7 +529,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                   f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
         _record_trade(stk_cd, stk_nm, 'sell', 'giveback_stop' if was_armed else 'stop_loss',
                       sell_qty, cur_price, avg_price, pnl,
-                      asset_ratio=asset_ratio, holding_ratio=holding_ratio)
+                      asset_ratio=asset_ratio, holding_ratio=holding_ratio,
+                      rate=rate, peak_rate=pos_state.get('peak_rate'), trigger_level=stop_level)
         pos_state['remaining_qty'] = 0
         pos_state['exited'] = True
         return pos_state
@@ -511,12 +546,14 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     )
     trigger_level = max(peak_rate - TRAIL_GAP, MIN_PROFIT_FLOOR) if trailing_armed else None
     trailing_trigger = bool(trigger_level is not None and new_peak_since_last_sale and rate <= trigger_level)
-    # 트레일링이 (고점-4%p)가 아니라 최소 보호선(+2%)에 걸려서 트리거된 경우 — 로그 구분용.
-    # 활성화선(+5%) - 트레일링폭(4%p) = +1% < 보호선(+2%)이라, 고점이 5~6% 구간이면 청산선이
-    # 항상 보호선에 붙는다. 예전엔 이 경우 잔여 전량을 청산해서 "고점 5%대에서 밀리면 무조건
-    # 100% 매도"가 됐고(2026-08-04 지엔씨에너지: 고점 5.18% → 매수 12분 만에 전량 종료),
-    # 문서상 3분할 설계와도 어긋났다. 지금은 다른 트리거와 동일하게 1/3만 매도하고,
-    # 남은 물량은 아래 정체 보호(청산선 -6%p 추가 하락 시 전량)가 받아준다.
+    # 트레일링이 (고점-갭)이 아니라 보호선(MIN_PROFIT_FLOOR)에 걸려서 트리거된 경우 — 로그 구분 +
+    # 아래에서 1/3 대신 잔여 전량 매도로 처리하는 데 쓴다.
+    # 2026-08-04엔 "보호선 걸리면 전량청산" → "1/3만 매도"로 바꾼 적 있다(당시 발동5%/보호선1%라
+    # 거의 모든 트레일링이 보호선에 걸려, 약하게 오른 종목도 무조건 전량 매도돼버렸음 — 지엔씨에너지
+    # 고점 5.18% → 매수 12분 만에 전량 종료 사례). 2026-08-10 발동7%/보호선3%로 같이 올리면서
+    # 재검증한 결과, 지금은 보호선이 "발동 직후 바로 꺾이는 약한 모멘텀"에만 선택적으로 걸리고
+    # (1년 재현 데이터 1,700건 중 87건), 이 경우 1/3만 팔고 남기는 것보다 전량 정리가 승률·기하평균·
+    # 최근 분기 안정성 모두 더 낫다(기하평균 +0.199%→+0.220%). 그래서 다시 전량청산으로 되돌렸다.
     trailing_floor_trigger = trailing_trigger and trigger_level <= MIN_PROFIT_FLOOR + 1e-9
 
     # 3) 목표가(+10/15/20%) — 단계별로 최초 1회씩 트리거 (도달한 가장 높은 단계까지 한 번에 반영)
@@ -525,10 +562,16 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     target_level = TARGET_RATES[target_idx] if target_trigger else None
 
     if pos_state['thirds_sold'] < 3 and (trailing_trigger or target_trigger):
-        pos_state['thirds_sold'] += 1
-        # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
-        sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
-            else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
+        # 보호선 트리거는 1/3 분할이 아니라 잔여 전량을 정리한다 (위 trailing_floor_trigger 주석 참고).
+        floor_full_exit = trailing_floor_trigger and not target_trigger
+        if floor_full_exit:
+            pos_state['thirds_sold'] = 3
+            sell_qty = pos_state['remaining_qty']
+        else:
+            pos_state['thirds_sold'] += 1
+            # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
+            sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
+                else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
 
         if sell_qty > 0:
             pnl = (cur_price - avg_price) * sell_qty
@@ -536,19 +579,26 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
             holding_ratio = sell_qty / pos_state['remaining_qty'] if pos_state['remaining_qty'] > 0 else 0.0
             sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+            tranche_txt = f'{pos_state["thirds_sold"]}/3'
             if target_trigger:
                 reason = f'목표가{target_level:.0%}'
+                reason_key = 'target'
             elif trailing_floor_trigger:
                 reason = '트레일링-보호선'
+                reason_key = 'trailing_floor'  # 트리거선이 보호선(+1%)에 붙어 발동 — 갭 트리거보다 이익이 작음
             else:
                 reason = '트레일링'
-            _log.info(f'[{reason} {pos_state["thirds_sold"]}/3차] {stk_nm}({stk_cd}) rate={rate:.2%} '
-                      f'peak={peak_rate:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
+                reason_key = 'trailing_gap'    # 고점-갭 트리거선에서 정상 발동
+            trigger_txt = f'{trigger_level:.2%}' if trigger_level is not None else 'N/A'
+            peak_txt2 = f'{peak_rate:.2%}' if peak_rate is not None else 'N/A'
+            _log.info(f'[{reason} {tranche_txt}차] {stk_nm}({stk_cd}) rate={rate:.2%} '
+                      f'peak={peak_txt2} 트리거선={trigger_txt} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
                       f'{sell_qty}주 매도, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원'
                       f'(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}), 잔여 {pos_state["remaining_qty"] - sell_qty}주')
-            _record_trade(stk_cd, stk_nm, 'sell', 'target' if target_trigger else 'trailing',
+            _record_trade(stk_cd, stk_nm, 'sell', reason_key,
                            sell_qty, cur_price, avg_price, pnl,
-                           asset_ratio=asset_ratio, holding_ratio=holding_ratio)
+                           asset_ratio=asset_ratio, holding_ratio=holding_ratio,
+                           rate=rate, peak_rate=peak_rate, trigger_level=trigger_level, tranche=tranche_txt)
             pos_state['remaining_qty'] -= sell_qty
 
         if target_trigger:
@@ -573,10 +623,12 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
                 sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
                 _log.info(f'[정체보호전량청산] {stk_nm}({stk_cd}) rate={rate:.2%} 직전고점={pos_state["last_sold_peak"]:.2%} '
-                          f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 {sell_qty}주 전량 청산, '
+                          f'트리거선={trig_used - STALL_GAP:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 {sell_qty}주 전량 청산, '
                           f'손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
                 _record_trade(stk_cd, stk_nm, 'sell', 'stall', sell_qty, cur_price, avg_price, pnl,
-                              asset_ratio=asset_ratio, holding_ratio=1.0)
+                              asset_ratio=asset_ratio, holding_ratio=1.0,
+                              rate=rate, peak_rate=pos_state['last_sold_peak'],
+                              trigger_level=trig_used - STALL_GAP)
                 pos_state['remaining_qty'] = 0
                 pos_state['exited'] = True
 
