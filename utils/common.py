@@ -9,11 +9,10 @@ import logging
 from concurrent.futures import ProcessPoolExecutor
 
 from config.db_connect import db_pool
-from job.batch_runner import executors
+import job.batch_runner as batch_runner
 
 already_cleaned = False
 node_process = None
-_executors = executors
 
 def auto_endpoint(bp_or_app):
     def route_wrapper(rule, **options):
@@ -28,15 +27,14 @@ def register_shutdown_handlers(scheduler=None, node_process=None):
     def handler(sig, frame):
         cleanup(scheduler=scheduler, node_process=node_process)
 
-        # pid = os.getpid()
-        # os.kill(pid, signal.SIGTERM) # 다른 파이썬 종료시키지 않고 자신만 종료
-
-        # ✅ 여기서 kill 하지 말고 즉시 종료로 빠짐
-        raise SystemExit(0)
-
-        # 정리 로그 출력할 시간 조금 주고
-        # time.sleep(0.2)
-        # os._exit(0)  # ✅ 어떤 스레드가 살아있든 프로세스 즉시 종료
+        # raise SystemExit(0)은 "정상 종료 절차"를 타서, concurrent.futures가 등록해둔
+        # atexit 훅(_python_exit)이 "io" ThreadPoolExecutor의 워커 스레드들을 join()하며
+        # 대기한다. find_stocks/update_interest_stocks 같은 job은 subprocess가 끝날 때까지
+        # (수 분) 그 스레드를 붙잡고 있어서, 마침 그 job이 도는 중에 Ctrl+C를 누르면 프로세스가
+        # 안 죽는 것처럼 보였다(그래서 한 번 더 종료해야 했음). os._exit는 atexit/스레드 join을
+        # 전부 건너뛰고 즉시 종료하므로 이 대기가 없다 — cleanup()이 위에서 이미 스케줄러/DB/
+        # 자식 프로세스를 정리했으니 안전하다.
+        os._exit(0)
 
     signal.signal(signal.SIGINT, handler)   # Ctrl+C
     signal.signal(signal.SIGTERM, handler)  # docker stop / 서비스 종료
@@ -50,7 +48,7 @@ def signal_handler(sig, frame):
     # sys.exit(0)
 
 def cleanup(scheduler=None, node_process=None):
-    global already_cleaned, _executors
+    global already_cleaned
     if already_cleaned:
         return
     already_cleaned = True
@@ -65,7 +63,11 @@ def cleanup(scheduler=None, node_process=None):
         print("scheduler shutdown error:", e)
 
     # 2) executor(스레드풀, 프로세스풀 등) 확실히 shutdown (중요)
+    # (이전엔 `from job.batch_runner import executors`로 import 시점 값(None)을 캡처해서
+    #  create_scheduler()가 나중에 채워도 여기선 항상 None이라 이 블록이 통째로 스킵되고 있었다.
+    #  모듈 속성으로 매번 최신 값을 읽도록 수정)
     try:
+        _executors = batch_runner.executors
         if _executors:
             for name, ex in _executors.items():
                 print(f"🧹 executor 종료: {name} ({type(ex).__name__})")
@@ -77,6 +79,17 @@ def cleanup(scheduler=None, node_process=None):
                     ex.shutdown(wait=False)
     except Exception as e:
         print("executors shutdown error:", e)
+
+    # 2-1) "io" executor가 돌리던 AutoSales.py 자식 프로세스(find_stocks/update_interest_stocks 등)
+    # 강제 종료. executor.shutdown()은 이미 시작된 작업을 취소하지 못해서, 이걸 안 하면 서버가
+    # 죽어도 자식은 살아남아 고아가 된 채 계속 pickle 파일을 건드린다 — 이게 스케줄을 고쳐도
+    # "파일 교체 실패"가 재발한 실제 원인이었다.
+    try:
+        print("🧹 서버 종료 중: AutoSales.py 자식 프로세스 정리")
+        from job.batch_process import kill_all_active_processes
+        kill_all_active_processes()
+    except Exception as e:
+        print("batch process cleanup error:", e)
 
     # 3) DB 커넥션 풀 종료
     try:
