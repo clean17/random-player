@@ -372,9 +372,13 @@ def create_scheduler():
     )
 
     # 3-1) 월~금 5분마다 오늘 급상승 종목 데이터 파일 갱신  (update_interest_stocks)
+    # 분 오프셋을 2로 둔 이유: find_stocks(0,20,40분)·find_low_stocks(5,15,25,35,45,55분)와
+    # 같은 pickle 파일에 동시에 safe_replace_pickle()을 시도해 "액세스가 거부되었습니다"
+    # (WinError 5) 재시도 실패가 반복됐다. "*/5"(0,5,10,...,55)는 두 스케줄과 전부 겹쳤어서
+    # 아무 데도 안 걸리는 2,7,12,...,57 그리드로 옮겼다.
     scheduler.add_job(
         run_cumtom_time_only,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="*/5"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-20", minute="2-59/5"),
         id="weekday_every_5min_update_interest_stocks",
         executor="io",
         replace_existing=True,
