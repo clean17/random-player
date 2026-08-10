@@ -450,6 +450,54 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", rule: str
     return rows
 
 
+# 즐겨찾기 종목별 interest_stocks 최신(마지막) 1건만 반환.
+# 기존엔 signal_days/total_rate_of_increase 등 기간 집계를 보여줬으나(get_interest_stocks_info),
+# 즐겨찾기는 "지금 이 종목 상태"가 궁금한 용도라 실시간 탭(get_interest_stocks, mode='normal')과
+# 동일한 컬럼 형태로 최신 스냅샷만 보여주도록 변경 (2026-08-10).
+@db_transaction
+def get_favorite_stocks_latest(user_id: int, conn=None):
+    sql = """
+    SELECT
+        i.id
+        , s.stock_code
+        , s.stock_name
+        , s.category
+        , i.yesterday_close
+        , i.current_price
+        , s.close as current_close
+        , i.today_price_change_pct
+        , i.avg5d_trading_value
+        , i.current_trading_value as last_trading_value
+        , i.trading_value_change_pct
+        , i.pred_price_change_3d_pct
+        , i.graph_file
+        , i.market_value
+        , i.created_at
+        , i.updated_at
+        , s.logo_image_url
+        , s.product_code
+        , i.target
+        , i.find_rule
+    FROM stocks s
+    JOIN favorite_stocks f ON f.stock_code = s.stock_code AND f.flag = TRUE AND f.user_id = %s
+    LEFT JOIN LATERAL (
+        SELECT *
+        FROM interest_stocks i2
+        WHERE i2.stock_code = s.stock_code
+        ORDER BY i2.created_at DESC, i2.id DESC
+        LIMIT 1
+    ) i ON TRUE
+    WHERE s.flag = TRUE
+    ORDER BY i.today_price_change_pct::numeric DESC NULLS LAST
+    """
+
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(sql, (user_id,))
+        rows = cur.fetchall()
+
+    return rows
+
+
 # 최근 상승주 검색
 @db_transaction
 def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, source: str = 'favorite', conn=None):
@@ -666,8 +714,8 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
         from interest_stocks i
         join stocks s on s.stock_code = i.stock_code and s.flag = true
         where 1=1
-        and i.created_at >= %s::date
-        and i.created_at < %s::date + interval '1 day'
+        and i.created_at::date >= %s::date
+        and i.created_at::date <= %s::date
         {target_condition}
         group by i.stock_code, i.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
         having COUNT(DISTINCT i.created_at::date) >= 2

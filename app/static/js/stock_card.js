@@ -18,6 +18,27 @@ const TRADING_TABLE_HTML = `
 </table>
 `;
 
+// 즐겨찾기는 실시간 탭과 같은 형태(get_favorite_stocks_latest)의 데이터를 쓰므로
+// TRADING_TABLE_HTML과 동일한 컬럼 구성으로 별도 id만 다르게 둔다.
+const FAVORITE_TABLE_HTML = `
+<table class="table" id="table-favorite">
+  <thead>
+    <tr>
+      <th>그래프</th>
+      <th>종목명</th>
+      <th>카테고리</th>
+      <th class="right">거래대금(5일 평균)</th>
+      <th class="right">거래대금(실시간)</th>
+      <th class="right">거래대금 증감</th>
+      <th class="right">전일 종가</th>
+      <th class="right">현재가</th>
+      <th class="right">금일 등락</th>
+    </tr>
+  </thead>
+  <tbody><!-- JS 렌더링 --></tbody>
+</table>
+`;
+
 const SUMMARY_TABLE_HTML = `
 <table class="table" id="table-summary">
     <thead>
@@ -471,8 +492,9 @@ function renderTradingCards(rows, section, tableName) {
     if (tableName === 'table-trading') renderTradingCardHtml(track, rows);
     if (tableName === 'table-summary') renderSummaryCardHtml(track, rows);
     if (tableName === 'table-low') renderLowCardHtml(track, rows);
-    if (tableName === 'table-favorite') renderFavoriteCardHtml(track, rows);
-    // reserved 탭은 favorite과 동일한 쿼리(get_interest_stocks_info) 결과라 카드 렌더러를 재사용
+    // 즐겨찾기는 기간 집계 대신 종목별 최신 스냅샷 1건을 보여주므로 실시간 탭과 동일한 카드 렌더러를 쓴다
+    if (tableName === 'table-favorite') renderTradingCardHtml(track, rows);
+    // reserved 탭은 favorite과 동일했던 쿼리(get_interest_stocks_info) 결과라 카드 렌더러를 재사용
     if (tableName === 'table-reserved') renderFavoriteCardHtml(track, rows);
     initFavoriteButtons();
     initReserveButtons();
@@ -642,6 +664,7 @@ function ensureTradingTableExists(section, tableName) {
         if (tableName === 'table-trading') tableHtml = TRADING_TABLE_HTML;
         if (tableName === 'table-summary') tableHtml = SUMMARY_TABLE_HTML;
         if (tableName === 'table-low') tableHtml = LOW_TABLE_HTML;
+        if (tableName === 'table-favorite') tableHtml = FAVORITE_TABLE_HTML;
         scroller.insertAdjacentHTML("beforeend", tableHtml);
     }
     return document.getElementById(tableName);
@@ -688,6 +711,8 @@ function renderTradingView(tradingRows) {
         if (tableName === 'table-trading') renderTradingTable(tradingRows, tableName);
         if (tableName === 'table-summary') renderSummaryTable(tradingRows, tableName);
         if (tableName === 'table-low') renderLowTable(tradingRows, tableName);
+        // 즐겨찾기도 실시간 탭과 같은 데이터 형태라 renderTradingTable을 그대로 재사용
+        if (tableName === 'table-favorite') renderTradingTable(tradingRows, tableName);
     } else {
         removeTradingTable(tableName);
         renderTradingCards(tradingRows, section, tableName);

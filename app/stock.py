@@ -6,6 +6,7 @@ from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
+    get_favorite_stocks_latest, \
     update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix, \
     upsert_reserved_stocks, get_reserved_stocks, clear_reserved_stocks
 from app.repository.users.users import find_user_by_username
@@ -246,20 +247,11 @@ def fetch_favorite_stocks():
 @stock.route("/interest/data/favorite", methods=["POST"])
 @login_required
 def get_favorite_stocks_data():
-    data = request.json
-    date = data.get("date")
-    endDate = data.get("endDate")
-
-    # print("_user_id =", session.get("_user_id"))
-    # print("current_user.id =", getattr(current_user, "id", None))
-
+    # 즐겨찾기는 기간 집계가 아니라 종목별 최신 스냅샷 1건만 보여준다 (실시간 탭과 동일한 형태).
     fetch_user = find_user_by_username(session["_user_id"])
-    if fetch_user is not None:
-        user_id = fetch_user.id
-    else:
-        user_id = None
+    user_id = fetch_user.id if fetch_user is not None else None
 
-    stocks = get_interest_stocks_info(date, endDate, user_id)
+    stocks = get_favorite_stocks_latest(user_id)
     return stocks
 
 @stock.route("/interest/data/favorite/heart", methods=["POST"])
