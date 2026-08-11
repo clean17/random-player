@@ -176,6 +176,20 @@
             border-radius: 50%;
             background: #f8f8f8; /* .mystocks-pie-wrap 배경과 동일하게 맞춰 도넛 구멍처럼 보이도록 */
         }
+        .mystocks-pie-count {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .mystocks-pie-count .num {
+            display: block;
+            font-size: 18px;
+            font-weight: 700;
+        }
         .mystocks-pie-legend {
             list-style: none;
             margin: 0;
@@ -440,7 +454,11 @@
         </div>-->
 
         <div class="mystocks-pie-wrap" id="ms-pie-wrap" style="display:none;">
-            <div class="mystocks-pie" id="ms-pie-chart"></div>
+            <div class="mystocks-pie" id="ms-pie-chart">
+                <div class="mystocks-pie-count">
+                    <span class="num" id="ms-pie-count-num">-</span>
+                </div>
+            </div>
             <ul class="mystocks-pie-legend" id="ms-pie-legend"></ul>
         </div>
 
@@ -941,6 +959,8 @@
         const wrap = document.getElementById('ms-pie-wrap');
         const pie = document.getElementById('ms-pie-chart');
         const legend = document.getElementById('ms-pie-legend');
+
+        document.getElementById('ms-pie-count-num').textContent = (holdings || []).length;
 
         const values = (holdings || []).map(h => ({
             name: h.stk_nm ? `${h.stk_nm}(${h.stk_cd})` : h.stk_cd,
