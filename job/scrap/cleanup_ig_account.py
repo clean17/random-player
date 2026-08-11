@@ -9,6 +9,7 @@ import configparser
 from pathlib import Path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from job.scrap.scrap_gm_playwrigit import ensure_login
+from config.db_connect import db_pool
 
 config = configparser.ConfigParser()
 
@@ -97,6 +98,16 @@ async def open_one(context, url):
     return page
 
 async def main():
+    try:
+        await _main()
+    finally:
+        # 이 스크립트는 DB를 쓰지 않지만, import 체인(ensure_login -> config.config -> config.db_connect)
+        # 때문에 커넥션 풀이 이미 켜져 있다. 명시적으로 닫지 않으면 종료 시 워커/스케줄러 스레드가
+        # 5초 타임아웃 안에 못 멈췄다는 경고가 남는다.
+        db_pool.close()
+
+
+async def _main():
     async with async_playwright() as pw:
         # browser = await pw.chromium.launch(headless=False)
         context = await pw.chromium.launch_persistent_context(
