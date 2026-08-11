@@ -11,7 +11,8 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
-    find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy
+    find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
+    reconcile_kiwoom_fills
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -259,6 +260,18 @@ def create_scheduler():
         replace_existing=True,
     )
 
+    # 2-0-0) 체결 정산 — 거래이력에 실제 체결가/체결수량/수수료/세금/슬리피지를 채워넣는다.
+    #        ka10076이 '당일분'만 주므로 같은 날 안에 돌려야 한다. NXT 애프터마켓(20:00) 종료 후
+    #        20:10에 한 번 돌려 그날 모든 체결을 잡는다. 조회 전용이라 장 시간 체크를 하지 않는다.
+    #        이미 정산된 건은 건너뛰므로 여러 번 돌아도 안전하다(idempotent).
+    scheduler.add_job(
+        reconcile_kiwoom_fills,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=10),
+        id="kiwoom_reconcile_fills",
+        executor="io",
+        replace_existing=True,
+    )
+
     # 2-0-1) 키움 계좌 총자산 현황 로그 (장중 10분마다)
     scheduler.add_job(
         log_kiwoom_account_summary,
@@ -285,10 +298,10 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 1시 전체 종목 데이터 fetch)
+    # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 2시 전체 종목 데이터 fetch)
     scheduler.add_job(
         update_stock_data_daily,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=1, minute=0),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=2, minute=0),
         id="update_stock_data_daily",
         executor="io",
         replace_existing=True,

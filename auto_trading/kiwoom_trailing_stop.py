@@ -57,7 +57,7 @@ from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
 from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
-    dump_holdings_raw, get_account_credentials, get_account_summary
+    dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -215,8 +215,9 @@ def order_accepted(result) -> bool:
            {'return_msg': '[2000](RC4058:모의투자 장종료)', 'return_code': 20}
     거부 응답에는 ord_no가 없고 return_code가 0이 아니다. 둘 다 확인한다.
 
-    ⚠️ 이건 '주문 접수' 성공이지 '체결 완료'가 아니다. 시장가는 정규장에서 대개 전량
-       체결되지만 보장은 아니며, 부분체결/미체결을 걸러내려면 체결조회 API가 필요하다.
+    ⚠️ 이건 '주문 접수' 성공이지 '체결 완료'가 아니다. 실제 체결 수량·단가는
+       reconcile_fills()가 당일 체결내역(ka10076)을 조회해 사후에 채운다.
+       (2026-08-11 실측 21건은 전부 전량 체결·미체결 0건이었으나 보장은 아니다.)
     """
     if not isinstance(result, dict):
         return False   # 예외로 None이 돌아온 경우 등
@@ -232,7 +233,8 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
                    qty: int, price: float, avg_price: float, pnl: float,
                    asset_ratio: Optional[float] = None, holding_ratio: Optional[float] = None,
                    rate: Optional[float] = None, peak_rate: Optional[float] = None,
-                   trigger_level: Optional[float] = None, tranche: Optional[str] = None):
+                   trigger_level: Optional[float] = None, tranche: Optional[str] = None,
+                   ord_no: Optional[str] = None):
     """매수/매도 1건을 거래 이력 파일에 append. 대시보드 이력/기간별 손익 집계에 사용.
     asset_ratio  : 이 거래대금(qty*price)이 총자산에서 차지한 비율 (0.05 = 5%)
     holding_ratio: 매도 시 그 종목 보유수량 대비 이번에 판 비율 (0.33 = 33%). 매수는 None.
@@ -241,7 +243,13 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
     peak_rate    : 이 종목이 보유 중 찍었던 최고 수익률. armed 안 된 채 바로 손절된 건지,
                    한 번 올랐다가 되돌림으로 손절된 건지 구분하는 데 쓴다.
     trigger_level: 이 매도를 발동시킨 청산선(트레일링 트리거가/손절선).
-    tranche      : 3분할 중 몇 번째인지 ('1/3'~'3/3'). 트레일링/목표가에만 사용."""
+    tranche      : 3분할 중 몇 번째인지 ('1/3'~'3/3'). 트레일링/목표가에만 사용.
+    ord_no       : 주문번호. reconcile_fills()가 실제 체결내역(ka10076)과 이 건을 매칭하는 키다.
+                   같은 종목·같은 수량을 하루에 두 번 거래할 수 있어(예: 2026-08-11 코칩 매도 2건)
+                   종목+수량으로는 매칭이 어긋난다 — 반드시 ord_no로 붙여야 한다.
+
+    ⚠️ price/qty는 '주문 시점 조회가'와 '주문 수량'이다. 실제 체결가·체결수량이 아니다.
+       reconcile_fills()가 나중에 fill_* 필드를 채워 넣는다(아래 참고)."""
     event = {
         'ts': datetime.datetime.now().isoformat(timespec='seconds'),
         'stk_cd': stk_cd,
@@ -258,12 +266,164 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
         'peak_rate': peak_rate,
         'trigger_level': trigger_level,
         'tranche': tranche,
+        'ord_no': ord_no,
     }
     try:
         with open(TRADES_FILE, 'a', encoding='utf-8') as f:
             f.write(json.dumps(event, ensure_ascii=False) + '\n')
     except OSError as e:
         _log.error(f'거래 기록 저장 실패: {e}')
+
+
+def _match_legacy(ev: Dict, fills: List[Dict], used: set) -> Optional[Dict]:
+    """ord_no가 없는 과거 기록용 폴백 매칭 — (종목, 매수/매도, 체결수량, 시각 근접) 으로 붙인다.
+
+    수량만으로는 어긋난다(2026-08-11 코칩 매도 2건이 둘 다 9주). 주문시각(ord_tm, HHMMSS)과
+    기록 시각의 차이가 가장 작은 것을 택하고, 120초를 넘으면 포기한다.
+    이미 다른 기록에 붙은 체결(used)은 재사용하지 않는다.
+    """
+    try:
+        t = datetime.datetime.fromisoformat(ev['ts'])
+    except (KeyError, ValueError):
+        return None
+    ev_sec = t.hour * 3600 + t.minute * 60 + t.second
+    code = str(ev.get('stk_cd') or '').zfill(6)
+    best, best_gap = None, None
+    for f in fills:
+        if id(f) in used or f['stk_cd'] != code or f['side'] != ev.get('side'):
+            continue
+        if f['cntr_qty'] != ev.get('qty'):
+            continue
+        tm = f['ord_tm']
+        if len(tm) < 6:
+            continue
+        f_sec = int(tm[:2]) * 3600 + int(tm[2:4]) * 60 + int(tm[4:6])
+        gap = abs(f_sec - ev_sec)
+        if best_gap is None or gap < best_gap:
+            best, best_gap = f, gap
+    if best is not None and best_gap is not None and best_gap <= 120:
+        return best
+    return None
+
+
+def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -> Dict:
+    """당일 체결내역(ka10076)을 조회해 trades.jsonl 기록에 실제 체결 데이터를 채워 넣는다.
+
+    왜 주문 직후가 아니라 사후 정산인가:
+      1. 시장가라도 체결까지 지연이 있어 주문 직후 조회하면 미체결로 보일 수 있다.
+      2. 주문 루프(fire 매수는 15:18~15:20 2분 안에 최대 20건)에 조회 호출을 끼우면
+         0.35초 rate limit × 건수만큼 늘어나 KRX 마감을 넘길 위험이 생긴다.
+      3. 정산이 실패해도 주문 시점 기록은 이미 남아 있어 이력이 유실되지 않는다.
+
+    ka10076은 날짜 파라미터가 없어 '당일분'만 준다 → 반드시 같은 날(장 마감 후) 실행해야 한다.
+    이미 정산된 건(fill_qty 존재)은 건너뛰므로 여러 번 돌려도 안전하다(idempotent).
+
+    채워 넣는 필드:
+      fill_qty    실제 체결수량
+      fill_price  실제 체결단가
+      unfilled    미체결수량 (0이 아니면 부분체결)
+      cmsn / tax  수수료 / 거래세
+      slippage    주문 시점 조회가 대비 체결가의 유리한 정도(%). 매수는 싸게, 매도는 비싸게
+                  체결되면 양수. 시장가 주문의 실질 비용을 재는 유일한 수단이다.
+      fill_pnl    체결가 기준 손익 (매도만). 기존 pnl은 조회가 기준이라 값이 다를 수 있다.
+    """
+    if not (ACNT_NO and ACNT_PWD):
+        _log.error('[정산] 계좌 정보 미설정')
+        return {'error': 'no_credentials'}
+    if not os.path.exists(TRADES_FILE):
+        return {'error': 'no_trades_file'}
+
+    try:
+        fills = get_filled_orders(ACNT_NO, ACNT_PWD)
+    except Exception as e:
+        _log.error(f'[정산] 체결내역 조회 실패: {e}')
+        return {'error': str(e)}
+
+    by_ord = {f['ord_no']: f for f in fills if f['ord_no']}
+    # ka10076은 '당일분'만 준다. 기본 대상은 오늘 기록이지만, 자정을 넘겨 돌리거나 과거
+    # 세션을 소급 보정할 때는 session_date로 날짜를 명시한다.
+    today = session_date or datetime.date.today().isoformat()
+    used = set()
+
+    lines = []
+    with open(TRADES_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                lines.append(line)
+
+    updated = matched = skipped = no_ord_no = not_found = partial = legacy = 0
+    out = []
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            out.append(line)
+            continue
+
+        # 당일 기록만 대상 (ka10076이 당일분만 주므로 과거 건은 손댈 수 없다)
+        if not str(ev.get('ts', '')).startswith(today):
+            out.append(line)
+            continue
+        if ev.get('fill_qty') is not None:
+            skipped += 1
+            out.append(line)
+            continue
+        ord_no = ev.get('ord_no')
+        fill = by_ord.get(str(ord_no)) if ord_no else None
+        via = 'ord_no'
+        if fill is None:
+            # ord_no가 없거나(과거 기록) 체결내역에서 못 찾은 경우 폴백 매칭
+            fill = _match_legacy(ev, fills, used)
+            via = 'legacy'
+            if fill is None:
+                if ord_no:
+                    not_found += 1
+                else:
+                    no_ord_no += 1
+                out.append(line)
+                continue
+            legacy += 1
+        used.add(id(fill))
+        matched += 1
+        fp, fq = fill['cntr_pric'], fill['cntr_qty']
+        ordered_price = float(ev.get('price') or 0)
+        # 매수는 싸게, 매도는 비싸게 체결되면 유리(양수)
+        slip = None
+        if ordered_price > 0 and fp > 0:
+            diff = (ordered_price - fp) if ev.get('side') == 'buy' else (fp - ordered_price)
+            slip = round(diff / ordered_price * 100, 4)
+
+        ev['fill_qty'] = fq
+        ev['fill_price'] = fp
+        ev['unfilled'] = fill['oso_qty']
+        ev['cmsn'] = fill['cmsn']
+        ev['tax'] = fill['tax']
+        ev['slippage'] = slip
+        ev['fill_src'] = via          # 'ord_no' = 정확 매칭 / 'legacy' = 종목+수량+시각 근접 매칭
+        if ev.get('side') == 'sell' and ev.get('avg_price'):
+            ev['fill_pnl'] = round((fp - float(ev['avg_price'])) * fq, 2)
+        if fill['oso_qty']:
+            partial += 1
+            _log.error(f"[정산] 부분체결 감지 {ev.get('stk_nm')}({ev.get('stk_cd')}) "
+                       f"ord_no={ord_no} 주문 {ev.get('qty')}주 → 체결 {fq}주, 미체결 {fill['oso_qty']}주")
+        updated += 1
+        out.append(json.dumps(ev, ensure_ascii=False))
+
+    stats = {'대상일': today, '체결내역': len(fills), '이력': len(lines), '매칭': matched,
+             '폴백매칭': legacy, '갱신': updated, '이미정산': skipped, 'ord_no없음': no_ord_no,
+             '체결내역에없음': not_found, '부분체결': partial}
+    if dry_run:
+        _log.info(f'[정산-dry_run] {stats}')
+        return stats
+
+    if updated:
+        tmp = TRADES_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(out) + '\n')
+        os.replace(tmp, TRADES_FILE)   # 원자적 교체 — 쓰다가 죽어도 원본이 남는다
+    _log.info(f'[정산] {stats}')
+    return stats
 
 
 def get_trade_history(limit: int = 200) -> List[Dict]:
@@ -563,7 +723,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         _record_trade(stk_cd, stk_nm, 'sell', 'giveback_stop' if was_armed else 'stop_loss',
                       sell_qty, cur_price, avg_price, pnl,
                       asset_ratio=asset_ratio, holding_ratio=holding_ratio,
-                      rate=rate, peak_rate=pos_state.get('peak_rate'), trigger_level=stop_level)
+                      rate=rate, peak_rate=pos_state.get('peak_rate'), trigger_level=stop_level,
+                      ord_no=res.get('ord_no'))
         pos_state['remaining_qty'] = 0
         pos_state['exited'] = True
         return pos_state
@@ -638,7 +799,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             _record_trade(stk_cd, stk_nm, 'sell', reason_key,
                            sell_qty, cur_price, avg_price, pnl,
                            asset_ratio=asset_ratio, holding_ratio=holding_ratio,
-                           rate=rate, peak_rate=peak_rate, trigger_level=trigger_level, tranche=tranche_txt)
+                           rate=rate, peak_rate=peak_rate, trigger_level=trigger_level, tranche=tranche_txt,
+                           ord_no=res.get('ord_no'))
             pos_state['remaining_qty'] -= sell_qty
         else:
             # 팔 수량이 0인 경우엔 주문 자체가 없으므로 분할 횟수만 기존과 동일하게 반영
@@ -675,7 +837,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 _record_trade(stk_cd, stk_nm, 'sell', 'stall', sell_qty, cur_price, avg_price, pnl,
                               asset_ratio=asset_ratio, holding_ratio=1.0,
                               rate=rate, peak_rate=pos_state['last_sold_peak'],
-                              trigger_level=trig_used - STALL_GAP)
+                              trigger_level=trig_used - STALL_GAP, ord_no=res.get('ord_no'))
                 pos_state['remaining_qty'] = 0
                 pos_state['exited'] = True
 
@@ -767,7 +929,8 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None):
         return result
     _log.info(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
-    _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0, asset_ratio=asset_ratio)
+    _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0, asset_ratio=asset_ratio,
+                  ord_no=result.get('ord_no'))
     return result
 
 
@@ -803,7 +966,7 @@ def manual_sell(stk_cd: str, qty: int):
               f'현재가={match["cur_price"]:,.0f}원 {sell_qty}주 매도, 손익={pnl:+,.0f}원, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}) → {result}')
     _record_trade(stk_cd, match['stk_nm'], 'sell', 'manual', sell_qty, match['cur_price'], match['avg_price'], pnl,
-                  asset_ratio=asset_ratio, holding_ratio=holding_ratio)
+                  asset_ratio=asset_ratio, holding_ratio=holding_ratio, ord_no=result.get('ord_no'))
     return result
 
 
@@ -817,6 +980,18 @@ if __name__ == '__main__':
     elif '--dump' in sys.argv:
         # 모의투자 응답 원본 필드명 확인용
         dump_holdings_raw(ACNT_NO, ACNT_PWD)
+    elif '--fills' in sys.argv:
+        # 당일 체결내역 조회 (ka10076) — 정산 없이 확인만
+        for _f in get_filled_orders(ACNT_NO, ACNT_PWD):
+            print(f"{_f['ord_tm']:>8} {_f['ord_no']:>9} {str(_f['stk_nm'])[:10]:<12} {_f['side']:<5} "
+                  f"주문{_f['ord_qty']:>4} 체결{_f['cntr_qty']:>4} 미체결{_f['oso_qty']:>3} "
+                  f"@{_f['cntr_pric']:>10,.0f} 수수료{_f['cmsn']:>7,.0f} 세금{_f['tax']:>6,.0f}")
+    elif '--reconcile' in sys.argv:
+        # 당일 거래이력에 실제 체결 데이터 채워넣기. --dry-run이면 통계만.
+        _d = None
+        if '--date' in sys.argv:
+            _d = sys.argv[sys.argv.index('--date') + 1]
+        print(reconcile_fills(dry_run='--dry-run' in sys.argv, session_date=_d))
     elif '--buy' in sys.argv:
         # 사용법: python -m auto_trading.kiwoom_trailing_stop --buy <종목코드> [수량]
         # 수량 생략 시 가용 현금 전액으로 시장가 매수

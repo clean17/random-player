@@ -445,7 +445,8 @@ def run_fire_buy_cycle():
                   f'(총상승률 {cand["total_rate"]}, {ref}breadth={bd_txt}) '
                   f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
                   f'누적 {deployed:,.0f}/{deploy_limit:,.0f}원 → {result}')
-        _record_trade(stk_cd, cand['stk_nm'], 'buy', 'fire', qty, price, price, 0.0, asset_ratio=asset_ratio)
+        _record_trade(stk_cd, cand['stk_nm'], 'buy', 'fire', qty, price, price, 0.0, asset_ratio=asset_ratio,
+                      ord_no=result.get('ord_no'))
 
         state[stk_cd] = today.isoformat()
         buys_today += 1

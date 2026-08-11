@@ -288,3 +288,68 @@ def buy_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX') -> dict:
 
 def sell_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX') -> dict:
     return place_order(stk_cd, qty, 0, side='2', trde_tp='3', dmst_stex_tp=dmst_stex_tp)
+
+
+# ── 체결 조회 (ka10076) ──────────────────────────────────────────────────────
+# 모의투자 실응답으로 검증 완료 (2026-08-12). 응답 구조:
+#   {'cntr': [ {...}, ... ], 'return_code': 0, 'return_msg': ' 조회가 완료되었습니다.'}
+# 항목 필드(전부 문자열):
+#   ord_no        주문번호        ← place_order() 응답의 ord_no와 매칭되는 키
+#   stk_cd        종목코드        (조회 응답에는 'A' 접두사가 없었으나 방어적으로 lstrip)
+#   stk_nm        종목명
+#   io_tp_nm      '+매수' / '-매도'
+#   ord_qty       주문수량
+#   ord_pric      주문단가        (시장가는 '0')
+#   cntr_qty      체결수량        ★
+#   cntr_pric     체결단가        ★
+#   oso_qty       미체결수량      ★ 0이 아니면 부분체결
+#   tdy_trde_cmsn 당일 매매수수료
+#   tdy_trde_tax  당일 매매세금   (매수는 0, 매도에만 거래세)
+#   ord_stt       주문상태        ('체결')
+#   trde_tp       '시장가' / '보통'
+#   ord_tm        주문시각        ('151822' = HHMMSS)
+#   stex_tp/_txt  거래소구분      ('1'/'KRX')
+# 주의: 날짜 파라미터가 없어 '당일분'만 돌려준다 → 소급 정산은 같은 날에만 가능하다.
+#      (kt00007에 ord_dt가 있으나 모의투자에서 '해당조회내역이 없습니다'로 비어서 쓰지 않는다.)
+CNTR_LIST_KEY = 'cntr'
+
+
+def get_filled_orders(acnt_no: str, acnt_pwd: str, stk_cd: str = '') -> List[Dict]:
+    """당일 체결 내역(ka10076). stk_cd를 주면 그 종목만.
+
+    반환: [{'ord_no','stk_cd','stk_nm','side','ord_qty','cntr_qty','oso_qty',
+            'cntr_pric','cmsn','tax','ord_stt','ord_tm'}] — 숫자는 float/int로 변환됨.
+    """
+    body = {
+        'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd,
+        'stk_cd': stk_cd, 'qry_tp': '0', 'sell_tp': '0', 'ord_no': '', 'stex_tp': '0',
+    }
+    data = _call('ka10076', '/api/dostk/acnt', body)
+    out = []
+    for r in (data.get(CNTR_LIST_KEY) or []):
+        io = str(r.get('io_tp_nm') or '')
+        out.append({
+            'ord_no': str(r.get('ord_no') or '').strip(),
+            'stk_cd': str(r.get('stk_cd') or '').lstrip('A'),
+            'stk_nm': r.get('stk_nm'),
+            'side': 'buy' if '매수' in io else ('sell' if '매도' in io else None),
+            'ord_qty': int(_to_number(r.get('ord_qty'))),
+            'cntr_qty': int(_to_number(r.get('cntr_qty'))),
+            'oso_qty': int(_to_number(r.get('oso_qty'))),
+            'cntr_pric': _to_number(r.get('cntr_pric')),
+            'cmsn': _to_number(r.get('tdy_trde_cmsn')),
+            'tax': _to_number(r.get('tdy_trde_tax')),
+            'ord_stt': r.get('ord_stt'),
+            'ord_tm': str(r.get('ord_tm') or ''),
+        })
+    return out
+
+
+def get_unfilled_orders(acnt_no: str, acnt_pwd: str) -> List[Dict]:
+    """미체결 주문(ka10075). 응답 리스트 키는 'oso'. 시장가만 쓰는 동안은 보통 빈 리스트다."""
+    body = {
+        'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd,
+        'all_stk_tp': '0', 'trde_tp': '0', 'stk_cd': '', 'stex_tp': '0',
+    }
+    data = _call('ka10075', '/api/dostk/acnt', body)
+    return data.get('oso') or []
