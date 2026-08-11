@@ -8,12 +8,12 @@ dotenv_path = find_dotenv(usecwd=True) or ".env"
 load_dotenv(dotenv_path=dotenv_path)
 # load_dotenv()  # .env 파일을 현재 환경변수로 로드
 
-M_APP_KEY = os.environ.get('M_APP_KEY')
-M_SECRET_KEY = os.environ.get('M_SECRET_KEY')
+KIWOOM_APP_KEY = os.environ.get('KIWOOM_APP_KEY')
+KIWOOM_SECRET_KEY = os.environ.get('KIWOOM_SECRET_KEY')
 
 # 접근토큰 발급
 # host / token_env_key를 지정하면 모의투자용 토큰도 동일 함수로 발급 가능 (기존 실전 호출부는 인자 생략 시 그대로 동작)
-def fn_au10001(data, host='https://api.kiwoom.com', token_env_key='MY_ACCESS_TOKEN'):
+def fn_au10001(data, host='https://api.kiwoom.com', token_env_key='KIWOOM_ACCESS_TOKEN'):
     # 1. 요청할 API URL
     # host = 'https://mockapi.kiwoom.com' # 모의투자
     # host = 'https://api.kiwoom.com' # 실전투자
@@ -50,8 +50,8 @@ if __name__ == '__main__':
     # 1. 요청 데이터
     params = {
         'grant_type': 'client_credentials',  # grant_type
-        'appkey': M_APP_KEY,  # 앱키
-        'secretkey': M_SECRET_KEY,  # 시크릿키
+        'appkey': KIWOOM_APP_KEY,  # 앱키
+        'secretkey': KIWOOM_SECRET_KEY,  # 시크릿키
     }
 
     # 2. API 실행

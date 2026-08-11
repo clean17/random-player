@@ -24,9 +24,9 @@ _ENV_CONFIG = {
     },
     'real': {
         'base_url': 'https://api.kiwoom.com',
-        'app_key_env': 'M_APP_KEY',
-        'secret_key_env': 'M_SECRET_KEY',
-        'token_env': 'MY_ACCESS_TOKEN',
+        'app_key_env': 'KIWOOM_APP_KEY',
+        'secret_key_env': 'KIWOOM_SECRET_KEY',
+        'token_env': 'KIWOOM_ACCESS_TOKEN',
         'acnt_no_env': 'KIWOOM_ACNT_NO',
         'acnt_pwd_env': 'KIWOOM_ACNT_PWD',
     },

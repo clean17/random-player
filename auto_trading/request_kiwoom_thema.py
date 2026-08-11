@@ -8,7 +8,7 @@ dotenv_path = find_dotenv(usecwd=True) or ".env"
 load_dotenv(dotenv_path=dotenv_path)
 # load_dotenv()  # .env 파일을 현재 환경변수로 로드
 
-MY_ACCESS_TOKEN = os.environ.get('MY_ACCESS_TOKEN')
+KIWOOM_ACCESS_TOKEN = os.environ.get('KIWOOM_ACCESS_TOKEN')
 
 
 # 테마그룹별요청
@@ -39,8 +39,7 @@ def fn_ka90001(token, data, cont_yn='N', next_key=''):
 # 실행 구간
 if __name__ == '__main__':
     # 1. 토큰 설정
-    # MY_ACCESS_TOKEN = '사용자 AccessToken' # 접근토큰
-    MY_ACCESS_TOKEN = os.environ.get('MY_ACCESS_TOKEN')
+    KIWOOM_ACCESS_TOKEN = os.environ.get('KIWOOM_ACCESS_TOKEN')
 
     # 2. 요청 데이터
     params = {
@@ -53,7 +52,7 @@ if __name__ == '__main__':
     }
 
     # 3. API 실행
-    fn_ka90001(token=MY_ACCESS_TOKEN, data=params)
+    fn_ka90001(token=KIWOOM_ACCESS_TOKEN, data=params)
 
 # next-key, cont-yn 값이 있을 경우
-# fn_ka90001(token=MY_ACCESS_TOKEN, data=params, cont_yn='Y', next_key='nextkey..')
+# fn_ka90001(token=KIWOOM_ACCESS_TOKEN, data=params, cont_yn='Y', next_key='nextkey..')
