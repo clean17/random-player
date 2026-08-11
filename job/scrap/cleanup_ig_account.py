@@ -23,11 +23,10 @@ ACCOUNTS = [
 
 ]
 
-# USER_DATA_DIR = str(Path("./ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
-# USER_DATA_DIR = str(Path("./ig_profile-15").resolve())  # fx015
-USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016
-WAIT_SECOND = 60
-
+# USER_DATA_DIR = str(Path("./data/ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
+USER_DATA_DIR = str(Path("./data/ig_profile-15").resolve())  # fx015
+# USER_DATA_DIR = str(Path("./data/ig_profile-16").resolve())  # fx016
+WAIT_SECOND = 40
 
 
 async def get_focus_page(context: BrowserContext, focus_page: Optional[Page]) -> Page:

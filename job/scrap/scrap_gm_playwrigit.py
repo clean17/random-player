@@ -27,9 +27,9 @@ BASE_SAVE_DIR = IMAGE_DIR2
 # BASE_SAVE_DIR = r"D:\temp"
 
 # ======== 설정 ========
-USER_DATA_DIR = str(Path("./ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014 // dlsdn317!
-# USER_DATA_DIR = str(Path("./ig_profile-1").resolve())  # fx015
-# USER_DATA_DIR = str(Path("./ig_profile-16").resolve())  # fx016.. 사용하지마_법무부_
+USER_DATA_DIR = str(Path("./data/ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014 // dlsdn317!
+# USER_DATA_DIR = str(Path("./data/ig_profile-1").resolve())  # fx015
+# USER_DATA_DIR = str(Path("./data/ig_profile-16").resolve())  # fx016.. 사용하지마_법무부_
 HEADLESS = False
 
 USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
