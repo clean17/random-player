@@ -250,7 +250,7 @@ def create_scheduler():
     )
 
     # 2-0) 키움 트레일링 스탑 (장중 30초마다, 내부에서 장시간 아니면 즉시 리턴)
-    #      실전 전환 전 반드시 KIWOOM_ENV=mock으로 먼저 검증할 것 (job/kiwoom_trailing_stop.py 상단 주석 참고)
+    #      실전 전환 전 반드시 KIWOOM_ENV=mock으로 먼저 검증할 것 (auto_trading/kiwoom_trailing_stop.py 상단 주석 참고)
     scheduler.add_job(
         run_kiwoom_trailing_stop,
         trigger=IntervalTrigger(seconds=30),
@@ -303,7 +303,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-3) 데이터 파일 (pkl) 전체 갱신 >>> 저점 계산에 사용 - 20분 간격
+    # 2-3) 데이터 파일 (pkl) 전체 갱신 >>> 관심종목, 저점 계산에 사용 - 20분 간격
     scheduler.add_job(
         fetch_stock_data,
         trigger=CronTrigger(day_of_week="mon-fri", hour="09-15", minute="10,30,50"),

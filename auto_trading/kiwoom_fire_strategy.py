@@ -73,8 +73,8 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from job.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials
-from job.kiwoom_trailing_stop import _log, _record_trade, is_market_open
+from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials
+from auto_trading.kiwoom_trailing_stop import _log, _record_trade, is_market_open, order_accepted
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
 CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
@@ -401,4 +401,4 @@ if __name__ == '__main__':
         else:
             print('장 시간이 아님')
     else:
-        print('사용법: python -m job.kiwoom_fire_strategy --check | --run')
+        print('사용법: python -m auto_trading.kiwoom_fire_strategy --check | --run')

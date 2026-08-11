@@ -126,7 +126,7 @@ def kill_all_active_processes():
 def renew_kiwoom_token_job():
     print('    ############################### renew_kiwoom_token ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
-    py_script = r"C:\my-project\random-player\job\renew_kiwoom_token.py"
+    py_script = r"C:\my-project\random-player\auto_trading\renew_kiwoom_token.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\random-player")
 
 
@@ -230,7 +230,7 @@ def generate_fullchain_pem_daily():
 
 
 def run_kiwoom_trailing_stop():
-    from job.kiwoom_trailing_stop import run_cycle, is_market_open, _log
+    from auto_trading.kiwoom_trailing_stop import run_cycle, is_market_open, _log
     if not is_market_open():
         return
     try:
@@ -240,7 +240,7 @@ def run_kiwoom_trailing_stop():
 
 
 def log_kiwoom_account_summary():
-    from job.kiwoom_trailing_stop import log_account_summary, is_market_open, _log
+    from auto_trading.kiwoom_trailing_stop import log_account_summary, is_market_open, _log
     if not is_market_open():
         return
     try:
@@ -250,11 +250,11 @@ def log_kiwoom_account_summary():
 
 
 def run_kiwoom_fire_buy():
-    from job.kiwoom_trailing_stop import is_market_open, _log
+    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
     if not is_market_open():
         return
     try:
-        from job.kiwoom_fire_strategy import run_fire_buy_cycle
+        from auto_trading.kiwoom_fire_strategy import run_fire_buy_cycle
         run_fire_buy_cycle()
     except Exception as e:
         _log.error(f'run_kiwoom_fire_buy 실패: {e}')

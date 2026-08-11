@@ -99,7 +99,7 @@ def find_stocks_by_name_prefix(name_prefix: str, conn=None) -> List[dict]:
         return cur.fetchall()
 
 
-# 종가를 갱신할 때 조회
+# 종가를 갱신할 때 조회, 최근 30일간 한번이라도 스캔된 종목이 있다면 조회
 @db_transaction
 def get_interest_stock_list(conn=None):
     sql = """

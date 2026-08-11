@@ -56,7 +56,7 @@ import datetime
 from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
-from job.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
+from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
     dump_holdings_raw, get_account_credentials, get_account_summary
 from typing import List
 
@@ -74,7 +74,7 @@ if not _log.handlers:
     _log.propagate = False  # 앱 root/waitress 로거로 전파 안 함 (logs/app 쪽에 중복 기록 방지)
     _formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 
-    # 서버(run.py)와 CLI(-m job.kiwoom_*)가 같은 파일에 동시에 쓰므로,
+    # 서버(run.py)와 CLI(-m auto_trading.kiwoom_*)가 같은 파일에 동시에 쓰므로,
     # Windows에서 다중 프로세스 로테이션이 안전한 concurrent_log_handler 사용
     from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
     _file_handler = ConcurrentTimedRotatingFileHandler(
@@ -755,29 +755,29 @@ if __name__ == '__main__':
     import sys
     if '--token' in sys.argv:
         # 토큰 수동 발급 (KIWOOM_ENV에 맞는 앱키/시크릿으로 발급 후 .env에 자동 저장)
-        from job.kiwoom_api import _refresh_token, KIWOOM_ENV
+        from auto_trading.kiwoom_api import _refresh_token, KIWOOM_ENV
         _refresh_token()
         print(f'[{KIWOOM_ENV}] 토큰 발급 완료 (.env에 저장됨)')
     elif '--dump' in sys.argv:
         # 모의투자 응답 원본 필드명 확인용
         dump_holdings_raw(ACNT_NO, ACNT_PWD)
     elif '--buy' in sys.argv:
-        # 사용법: python -m job.kiwoom_trailing_stop --buy <종목코드> [수량]
+        # 사용법: python -m auto_trading.kiwoom_trailing_stop --buy <종목코드> [수량]
         # 수량 생략 시 가용 현금 전액으로 시장가 매수
         idx = sys.argv.index('--buy')
         args = sys.argv[idx + 1:]
         if not args:
-            print('사용법: python -m job.kiwoom_trailing_stop --buy <종목코드> [수량]')
+            print('사용법: python -m auto_trading.kiwoom_trailing_stop --buy <종목코드> [수량]')
         else:
             _stk_cd = args[0]
             _qty = int(args[1]) if len(args) > 1 else None
             manual_buy(_stk_cd, _qty)
     elif '--sell' in sys.argv:
-        # 사용법: python -m job.kiwoom_trailing_stop --sell <종목코드> <수량>
+        # 사용법: python -m auto_trading.kiwoom_trailing_stop --sell <종목코드> <수량>
         idx = sys.argv.index('--sell')
         args = sys.argv[idx + 1:]
         if len(args) < 2:
-            print('사용법: python -m job.kiwoom_trailing_stop --sell <종목코드> <수량>')
+            print('사용법: python -m auto_trading.kiwoom_trailing_stop --sell <종목코드> <수량>')
         else:
             manual_sell(args[0], int(args[1]))
     else:

@@ -15,8 +15,8 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
     request_stock_volume_and_amount, request_stock_category
 from job.batch_runner import predict_stock_graph
 from config.config import settings
-from job.kiwoom_api import get_holdings_and_summary, get_account_credentials, get_current_price_and_name
-from job.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell
+from auto_trading.kiwoom_api import get_holdings_and_summary, get_account_credentials, get_current_price_and_name
+from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell
 
 stock = Blueprint('stocks', __name__)
 
@@ -127,12 +127,13 @@ def update_low_stocks_graph():
     result = update_low_stock_graph(StockDTO.from_json(request.json))
     return {"status": "success", "result": result}, 200
 
+# 1_periodically_update_today_interest_stocks.py 에서 호출하여 가격을 주기적으로 갱신하기 위함
 @stock.route("/interest/data/today", methods=["POST"])
 def get_interesting_stocks():
     data = request.json
     date = data.get("date")
     target = data.get("target") or 'interest'
-    stocks = get_interest_stocks(date, date,"normal")
+    stocks = get_interest_stocks(date, date, "normal", target_value=target)
     return stocks
 
 @stock.route("/interest/data/fire", methods=["POST"])

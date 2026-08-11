@@ -49,7 +49,7 @@ def _get_token() -> str:
 
 
 def _refresh_token():
-    from job.renew_kiwoom_token import fn_au10001
+    from auto_trading.renew_kiwoom_token import fn_au10001
     params = {
         'grant_type': 'client_credentials',
         'appkey': os.environ.get(_cfg['app_key_env']),
