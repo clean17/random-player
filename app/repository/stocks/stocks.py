@@ -500,7 +500,14 @@ def get_favorite_stocks_latest(user_id: int, conn=None):
 
 # 최근 상승주 검색
 @db_transaction
-def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, source: str = 'favorite', conn=None):
+def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, source: str = 'favorite',
+                              target_value: str = 'interest', conn=None):
+    # user_id가 None일 때(관심종목/fire 조회)만 쓰는 신호 버전 — 저점매수 탭의 룰 V1/V2와 같은 방식으로
+    # target='interest'(기존 2_)와 'interest_v2'(2_finding_stocks_advanced, 상대강도 밴드 추가판)를
+    # 화면에서 골라볼 수 있게 함(2026-08-11). SQL 인젝션 방지를 위해 화이트리스트로만 값을 받는다.
+    if target_value not in ('interest', 'interest_v2'):
+        raise ValueError(f'지원하지 않는 target_value: {target_value}')
+
     # user_id 있을 때만: favorite/reserved join + current_trading_value 컬럼 추가
     target_condition = ""
     fire_condition = ""
@@ -607,7 +614,7 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
             AND b.last_trading_value > 4_000_000_000
         """
         target_condition = """
-            AND i.target = 'interest'
+            AND i.target = %s
         """
         fire_condition = """
             where 1=1
@@ -639,7 +646,8 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
                   OR b.last_date = %s::date
               )
         """
-        params = [date, endDate, endDate, endDate]
+        # %s 순서: base_query의 date/endDate → target_condition(target_value) → fire_condition의 endDate×2
+        params = [date, endDate, target_value, endDate, endDate]
 
         base_query = f"""
         select
@@ -806,9 +814,9 @@ def get_today_low_stocks(conn=None):
 @db_transaction
 def get_today_interest_stocks(conn=None):
     sql = """
-    select id, updated_at, nation, stock_code, stock_name, target 
-    from interest_stocks 
-    where target = 'interest'
+    select id, updated_at, nation, stock_code, stock_name, target
+    from interest_stocks
+    where target in ('interest', 'interest_v2')
       and created_at::date = now()::date
       and updated_at <= now() - interval '15 minutes'
     """

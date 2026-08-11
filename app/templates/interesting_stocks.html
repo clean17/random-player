@@ -261,6 +261,10 @@
             <option value="low_v1">룰 V1</option>
             <option value="low_v2" selected>룰 V2</option>
         </select>
+        <select id="interestVersionFilter" class="rule-filter" style="display:none">
+            <option value="interest" selected>V1</option>
+            <option value="interest_v2">V2</option>
+        </select>
     </div>
 
     <h3 class="section-title" id="searchResultsHeader">검색 결과
@@ -517,6 +521,7 @@
     const startDateInputEl = document.getElementById('dateInputStart');
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
+    const interestVersionFilterEl = document.getElementById('interestVersionFilter');
 
     const today_yyyymmdd = `${yyyy}${mm}${dd}`;
     const fmt = new Intl.DateTimeFormat("ko-KR", {
@@ -534,6 +539,11 @@
         ruleFilterEl.style.display = (tabId === 'tab-low') ? '' : 'none';
         if (tabId === 'tab-low') ruleFilterEl.value = ruleFilterEl.value || 'low_v2';
         else ruleFilterEl.value = '';
+
+        // 관심종목 탭: 저점매수의 룰 V1/V2와 같은 방식으로, 신호 버전(target='interest'/'interest_v2')을 선택
+        interestVersionFilterEl.style.display = (tabId === 'tab-summary') ? '' : 'none';
+        if (tabId === 'tab-summary') interestVersionFilterEl.value = interestVersionFilterEl.value || 'interest';
+        else interestVersionFilterEl.value = 'interest';
 
         const isMyStocks = (tabId === 'tab-mystocks');
         const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved');
@@ -592,6 +602,7 @@
     }
 
     ruleFilterEl.addEventListener('change', loadData);
+    interestVersionFilterEl.addEventListener('change', loadData);
 
     // 오늘 날짜 기본값
     function setDefaultDateToday(interval=0, dateEl){
@@ -1331,6 +1342,7 @@
 
             if (target === 'tab-summary') {
                 endDateInputEl.style.display = 'block';
+                payload.target = interestVersionFilterEl.value || 'interest';
                 const res2 = await fetch(url2, {
                     method: 'POST',
                     headers: { 'Content-Type':'application/json', 'Accept':'application/json' },

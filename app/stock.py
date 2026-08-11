@@ -140,7 +140,8 @@ def get_interesting_stocks_info():
     data = request.json
     date = data.get("date")
     endDate = data.get("endDate", datetime.today())
-    stocks = get_interest_stocks_info(date, endDate)
+    target_value = data.get("target") or 'interest'
+    stocks = get_interest_stocks_info(date, endDate, target_value=target_value)
     return stocks
 
 @stock.route("/interest/data/low", methods=["POST"])
