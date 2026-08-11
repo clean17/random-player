@@ -387,7 +387,8 @@ def update_low_stock_graph(stock: "StockDTO", conn=None) -> None:
 
 # 실시간, 저점 데이터 조회
 @db_transaction
-def get_interest_stocks(date: str, endDate: str, mode: str = "normal", rule: str = None, conn=None):
+def get_interest_stocks(date: str, endDate: str, mode: str = "normal", rule: str = None,
+                         target_value: str = 'interest', conn=None):
     base_sql = """
     SELECT 
         --row_number() over (order by i.id) as rn 
@@ -421,13 +422,16 @@ def get_interest_stocks(date: str, endDate: str, mode: str = "normal", rule: str
     params = [date, endDate]
 
     if mode == "normal":
+        if target_value not in ('interest', 'interest_v2'):
+            raise ValueError(f'지원하지 않는 target_value: {target_value}')
         base_sql += """
           AND i.today_price_change_pct::float >= 4
           AND i.current_trading_value::numeric > 5_000_000_000
-          AND i.target = 'interest'
+          AND i.target = %s
         ORDER BY i.today_price_change_pct::numeric DESC,
                  i.current_trading_value::numeric DESC
         """
+        params.append(target_value)
 
     elif mode == "low":
         if rule in ("low_v1", "low_v2"):
@@ -519,9 +523,14 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
         if member_table is None:
             raise ValueError(f'지원하지 않는 source: {source}')
 
-        # 즐겨찾기/자동매수 대상은 날짜 검색을 하지 않는다 — 화면에도 날짜 입력이 없고,
-        # 여기서도 date/endDate를 아예 안 쓴다. stocks/멤버 테이블을 기준으로 interest_stocks를
-        # 전체 기간 LEFT JOIN하며, 신호 이력이 없어도(=0일) HAVING으로 걸러내지 않고 그대로 노출한다.
+        # 즐겨찾기는 날짜 검색을 하지 않는다 — 화면에도 날짜 입력이 없고, stocks/멤버 테이블을
+        # 기준으로 interest_stocks를 전체 기간 LEFT JOIN하며, 신호 이력이 없어도(=0일)
+        # HAVING으로 걸러내지 않고 그대로 노출한다.
+        # 자동매수 대상(reserved)은 관심종목과 동일하게 기간(date~endDate)으로 LEFT JOIN 대상을
+        # 제한한다(2026-08-11). WHERE가 아니라 JOIN ON에 걸어야 신호 이력이 0일인 종목도 계속 노출된다.
+        member_interest_date_filter = "and i.created_at::date >= %s::date and i.created_at::date <= %s::date" \
+            if source == 'reserved' else ""
+
         base_query = f"""
         select
               max(i.id) as id
@@ -594,11 +603,11 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
             , s.graph_file as s_graph_file
         from stocks s
         join {member_table} f on f.stock_code = s.stock_code and f.flag = true and f.user_id = %s
-        left join interest_stocks i on i.stock_code = s.stock_code
+        left join interest_stocks i on i.stock_code = s.stock_code {member_interest_date_filter}
         where s.flag = true
         group by s.stock_code, s.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
         """
-        params = [user_id]
+        params = [user_id, date, endDate] if source == 'reserved' else [user_id]
 
         # 즐겨찾기/자동매수 대상 최소 조건: 시가총액 700억 이상, 평균 거래대금 40억 이상
         # (interest_stocks 신호 이력이 없어 market_value/avg_trading_value가 NULL이면

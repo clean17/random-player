@@ -542,11 +542,13 @@
     const ruleFilterEl = document.getElementById('ruleFilter');
     const interestVersionFilterEl = document.getElementById('interestVersionFilter');
     const stockSearchInputEl = document.getElementById('stockSearchInput');
-    let summaryDataFull = [];
+    // 검색창이 노출되는 탭(실시간/관심종목)에서 서버로부터 받은 원본 데이터.
+    // 검색은 서버 재조회 없이 이 배열을 필터링해서 다시 그린다.
+    let searchableDataFull = [];
 
     function applyStockSearchFilter() {
         const q = (stockSearchInputEl.value || '').trim().toLowerCase();
-        const filtered = !q ? summaryDataFull : summaryDataFull.filter(r =>
+        const filtered = !q ? searchableDataFull : searchableDataFull.filter(r =>
             (r.stock_name || '').toLowerCase().includes(q) ||
             (r.stock_code || '').toLowerCase().includes(q)
         );
@@ -575,17 +577,18 @@
         if (tabId === 'tab-summary') interestVersionFilterEl.value = interestVersionFilterEl.value || 'interest';
         else interestVersionFilterEl.value = 'interest';
 
-        // 관심종목 탭에서만 종목명/코드 검색창 노출
-        stockSearchInputEl.style.display = (tabId === 'tab-summary') ? '' : 'none';
-        if (tabId !== 'tab-summary') stockSearchInputEl.value = '';
+        // 실시간/관심종목 탭에서만 종목명/코드 검색창 노출.
+        // 탭마다 데이터셋이 달라 검색어를 유지할 이유가 없으므로 탭 전환 시 항상 비운다.
+        stockSearchInputEl.style.display = (tabId === 'tab-trading' || tabId === 'tab-summary') ? '' : 'none';
+        stockSearchInputEl.value = '';
 
         const isMyStocks = (tabId === 'tab-mystocks');
-        const isFavorite = (tabId === 'tab-favorite');
+        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved');
 
-        // '내 종목'/즐겨찾기 탭은 날짜 검색이 필요 없으므로 달력 숨김
-        // 자동매수 대상은 관심종목과 같은 기간 검색을 사용하므로 달력을 유지한다.
-        startDateInputEl.style.display = (isMyStocks || isFavorite) ? 'none' : '';
-        if (isMyStocks || isFavorite) endDateInputEl.style.display = 'none';
+        // '내 종목'/즐겨찾기/자동매수 대상 탭은 날짜 검색 UI를 노출하지 않는다.
+        // 자동매수 대상은 화면에 달력만 안 보일 뿐, 내부적으로는 관심종목과 같은 기본 기간으로 조회한다.
+        startDateInputEl.style.display = (isMyStocks || isFavoriteOrReserved) ? 'none' : '';
+        if (isMyStocks || isFavoriteOrReserved) endDateInputEl.style.display = 'none';
 
         // '내 종목' 탭은 검색 결과 카운트/보기전환 헤더가 의미 없으므로 숨김
         const searchHeader = document.getElementById('searchResultsHeader');
@@ -608,10 +611,16 @@
         if (target.id === 'tab-mystocks') {
             loadMyStocksData();
             msStartTimer();
-        } else if (target.id === 'tab-summary' || target.id === 'tab-reserved') {
-            // 자동매수 대상은 관심종목과 동일한 기간 기본값(최근 6일)을 사용
+        } else if (target.id === 'tab-summary') {
             msStopTimer();
             setDefaultDateToday(6, startDateInputEl);
+            loadData()
+        } else if (target.id === 'tab-reserved') {
+            // 자동매수 대상은 관심종목과 동일한 기간 기본값(최근 6일~오늘)을 쓰지만 달력은 숨겨둔다.
+            // 달력이 안 보이는 만큼 endDate도 직접 채워야 한다(관심종목은 사용자가 달력으로 채움).
+            msStopTimer();
+            setDefaultDateToday(6, startDateInputEl);
+            setDefaultDateToday(0, endDateInputEl);
             loadData()
         } else if (target.id === 'tab-favorite') {
             // 즐겨찾기는 날짜 검색을 하지 않으므로 날짜 기본값을 설정하지 않음
@@ -1374,7 +1383,8 @@
                 // console.log('tradingRows', tradingRows);
                 // renderTradingTable(tradingRows);
                 // renderTradingCards(tradingRows);
-                renderTradingView(tradingRows);
+                searchableDataFull = tradingRows;
+                applyStockSearchFilter();
 
                 // renderTodayTable(todayRows); // 금일변동
             }
@@ -1392,7 +1402,7 @@
                 removeLoadingOverlay();
                 // console.log('summary:', data2);
                 // renderSummaryTable(data2);
-                summaryDataFull = data2 || [];
+                searchableDataFull = data2 || [];
                 applyStockSearchFilter();
             }
 
@@ -1438,7 +1448,7 @@
                 renderTradingView(data5);
             }
 
-            if (target !== 'tab-summary' && target !== 'tab-reserved') {
+            if (target !== 'tab-summary') {
                 endDateInputEl.style.display = 'none';
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
@@ -1659,6 +1669,9 @@
     // 즐겨찾기/자동매수 목록을 먼저 받아둔 뒤 카드를 그린다 — 렌더 시점에 목록이 비어 있으면
     // 별/체크 아이콘이 해제 상태로 그려진다(기존엔 loadData가 먼저 호출돼 이 문제가 있었음).
     window.addEventListener('DOMContentLoaded', async _ => {
+        // 첫 진입은 activateTab을 거치지 않으므로, 초기 탭의 부가 UI(검색창 등)를 직접 맞춰준다.
+        const initialTabId = document.querySelector(getActiveTabTarget())?.id;
+        if (initialTabId) updateTabExtras(initialTabId);
         setDefaultDateToday(0, startDateInputEl);
         setDefaultDateToday(0, endDateInputEl);
         await Promise.all([getFavoriteStocks(), getReservedStocks()]);
