@@ -279,6 +279,7 @@
             <option value="interest" selected>V1</option>
             <option value="interest_v2">V2</option>
         </select>
+        <input id="stockSearchInput" class="date" type="text" placeholder="종목명/코드 검색" style="display:none" autocomplete="off">
     </div>
 
     <h3 class="section-title" id="searchResultsHeader">검색 결과
@@ -540,6 +541,17 @@
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
     const interestVersionFilterEl = document.getElementById('interestVersionFilter');
+    const stockSearchInputEl = document.getElementById('stockSearchInput');
+    let summaryDataFull = [];
+
+    function applyStockSearchFilter() {
+        const q = (stockSearchInputEl.value || '').trim().toLowerCase();
+        const filtered = !q ? summaryDataFull : summaryDataFull.filter(r =>
+            (r.stock_name || '').toLowerCase().includes(q) ||
+            (r.stock_code || '').toLowerCase().includes(q)
+        );
+        renderTradingView(filtered);
+    }
 
     const today_yyyymmdd = `${yyyy}${mm}${dd}`;
     const fmt = new Intl.DateTimeFormat("ko-KR", {
@@ -563,12 +575,17 @@
         if (tabId === 'tab-summary') interestVersionFilterEl.value = interestVersionFilterEl.value || 'interest';
         else interestVersionFilterEl.value = 'interest';
 
-        const isMyStocks = (tabId === 'tab-mystocks');
-        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved');
+        // 관심종목 탭에서만 종목명/코드 검색창 노출
+        stockSearchInputEl.style.display = (tabId === 'tab-summary') ? '' : 'none';
+        if (tabId !== 'tab-summary') stockSearchInputEl.value = '';
 
-        // '내 종목'/즐겨찾기/자동매수 대상 탭은 날짜 검색이 필요 없으므로 달력 숨김
-        startDateInputEl.style.display = (isMyStocks || isFavoriteOrReserved) ? 'none' : '';
-        if (isMyStocks || isFavoriteOrReserved) endDateInputEl.style.display = 'none';
+        const isMyStocks = (tabId === 'tab-mystocks');
+        const isFavorite = (tabId === 'tab-favorite');
+
+        // '내 종목'/즐겨찾기 탭은 날짜 검색이 필요 없으므로 달력 숨김
+        // 자동매수 대상은 관심종목과 같은 기간 검색을 사용하므로 달력을 유지한다.
+        startDateInputEl.style.display = (isMyStocks || isFavorite) ? 'none' : '';
+        if (isMyStocks || isFavorite) endDateInputEl.style.display = 'none';
 
         // '내 종목' 탭은 검색 결과 카운트/보기전환 헤더가 의미 없으므로 숨김
         const searchHeader = document.getElementById('searchResultsHeader');
@@ -591,12 +608,13 @@
         if (target.id === 'tab-mystocks') {
             loadMyStocksData();
             msStartTimer();
-        } else if (target.id === 'tab-summary') {
+        } else if (target.id === 'tab-summary' || target.id === 'tab-reserved') {
+            // 자동매수 대상은 관심종목과 동일한 기간 기본값(최근 6일)을 사용
             msStopTimer();
             setDefaultDateToday(6, startDateInputEl);
             loadData()
-        } else if (target.id === 'tab-favorite' || target.id === 'tab-reserved') {
-            // 즐겨찾기/자동매수 대상은 날짜 검색을 하지 않으므로 날짜 기본값을 설정하지 않음
+        } else if (target.id === 'tab-favorite') {
+            // 즐겨찾기는 날짜 검색을 하지 않으므로 날짜 기본값을 설정하지 않음
             msStopTimer();
             loadData()
         } else {
@@ -621,6 +639,7 @@
 
     ruleFilterEl.addEventListener('change', loadData);
     interestVersionFilterEl.addEventListener('change', loadData);
+    stockSearchInputEl.addEventListener('input', applyStockSearchFilter);
 
     // 오늘 날짜 기본값
     function setDefaultDateToday(interval=0, dateEl){
@@ -1373,7 +1392,8 @@
                 removeLoadingOverlay();
                 // console.log('summary:', data2);
                 // renderSummaryTable(data2);
-                renderTradingView(data2);
+                summaryDataFull = data2 || [];
+                applyStockSearchFilter();
             }
 
             if (target === 'tab-low') {
@@ -1406,11 +1426,11 @@
             }
 
             if (target === 'tab-reserved') {
-                // 자동매수 대상도 날짜 검색을 하지 않으므로 date/endDate 없이 요청
+                // 관심종목과 동일하게 기간(date/endDate)을 포함해 요청
                 const res5 = await fetch(url5, {
                     method: 'POST',
                     headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify(payload),
                 });
                 if (!res5.ok) throw new Error(`HTTP ${res5.status}`);
                 const data5 = await res5.json();
@@ -1418,7 +1438,7 @@
                 renderTradingView(data5);
             }
 
-            if (target !== 'tab-summary') {
+            if (target !== 'tab-summary' && target !== 'tab-reserved') {
                 endDateInputEl.style.display = 'none';
             }
             document.body.style.pointerEvents = "auto"; // 화면 이벤트 복원
