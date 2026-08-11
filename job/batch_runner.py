@@ -7,7 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from job.batch_process import predict_stock_graph, find_stocks, find_low_stocks, update_interest_stocks, \
+from job.batch_process import predict_stock_graph, find_stocks, find_stocks_advanced, find_low_stocks, \
+    update_interest_stocks, \
     renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy
@@ -367,6 +368,38 @@ def create_scheduler():
         find_stocks,
         trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=15),
         id="2000_find_stocks",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 3-0) 신호 재설계 병행검증(target='interest_v2') — find_stocks와 완전히 같은 빈도로,
+    # 분만 +4 오프셋(다른 쓰기/읽기 스케줄 어디에도 안 걸리는 자리). safe_replace_pickle에 걸린
+    # 상호배제 락 덕에 겹쳐도 데이터는 안전하지만, 굳이 겹쳐서 서로 대기시킬 필요는 없어 분리했다.
+    scheduler.add_job(
+        find_stocks_advanced,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=4),
+        id="korea_open_0904_find_stocks_advanced",
+        executor="io",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        find_stocks_advanced,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute="24,44"),
+        id="0930_find_stocks_advanced",
+        executor="io",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        find_stocks_advanced,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="4,24,44"),
+        id="every_30min_1000_1530_find_stocks_advanced",
+        executor="io",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        find_stocks_advanced,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=19),
+        id="2000_find_stocks_advanced",
         executor="io",
         replace_existing=True,
     )

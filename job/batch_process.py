@@ -171,6 +171,14 @@ def find_stocks():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+# 신호 재설계 병행검증(target='interest_v2') — find_stocks(기존 2_)와 완전히 분리된 트랙.
+# 기존 화면/자동매수는 target='interest'만 보므로 이 결과는 실거래에 영향을 주지 않는다.
+def find_stocks_advanced():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\2_finding_stocks_advanced.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
 def find_low_stocks():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\4_find_low_point.py"
