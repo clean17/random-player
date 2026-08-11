@@ -202,6 +202,32 @@ def _save_state(state: Dict):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
+def order_accepted(result) -> bool:
+    """주문 API 응답이 '접수 성공'인지. 거래 이력을 남기기 전에 반드시 통과시켜야 한다.
+
+    2026-08-11: 주문이 거부돼도 _record_trade가 무조건 호출돼서, 체결되지 않은 주문이
+    거래 이력에 남고 손익 집계까지 오염시켰다(예: 15:53 수동매수 3건이 NXT 미지원으로
+    거부됐는데 매수 1주로 기록됨).
+
+    키움 응답 형태:
+      성공 {'ord_no': '0157630', 'dmst_stex_tp': 'KRX', 'return_code': 0, 'return_msg': '모의투자 매수주문완료'}
+      거부 {'return_msg': '[2000](RC9000:모의투자에서는 해당업무가 제공되지 않습니다.)', 'return_code': 20}
+           {'return_msg': '[2000](RC4058:모의투자 장종료)', 'return_code': 20}
+    거부 응답에는 ord_no가 없고 return_code가 0이 아니다. 둘 다 확인한다.
+
+    ⚠️ 이건 '주문 접수' 성공이지 '체결 완료'가 아니다. 시장가는 정규장에서 대개 전량
+       체결되지만 보장은 아니며, 부분체결/미체결을 걸러내려면 체결조회 API가 필요하다.
+    """
+    if not isinstance(result, dict):
+        return False   # 예외로 None이 돌아온 경우 등
+    try:
+        if int(result.get('return_code', -1)) != 0:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return bool(result.get('ord_no'))
+
+
 def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
                    qty: int, price: float, avg_price: float, pnl: float,
                    asset_ratio: Optional[float] = None, holding_ratio: Optional[float] = None,
@@ -523,7 +549,14 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         holding_ratio = 1.0  # 손절은 항상 잔여 전량
         label = '되돌림손절' if was_armed else '손절'
         peak_txt = f' 고점={pos_state["peak_rate"]:.2%}' if was_armed else ''
-        sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+        res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+        if not order_accepted(res):
+            # 주문이 거부됐으면 이력도 남기지 않고 상태도 건드리지 않는다 —
+            # exited로 바꿔버리면 이 종목이 다음 사이클부터 관리 대상에서 빠져 무방비가 된다.
+            # 30초 뒤 사이클에서 같은 조건으로 재시도된다.
+            _log.error(f'[{label}-주문거부] {stk_nm}({stk_cd}) rate={rate:.2%} {sell_qty}주 → {res} '
+                       f'(이력 미기록, 다음 사이클에 재시도)')
+            return pos_state
         _log.info(f'[{label}] {stk_nm}({stk_cd}) rate={rate:.2%}{peak_txt} (손절선 {stop_level:.1%}) '
                   f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
                   f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
@@ -563,14 +596,16 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
 
     if pos_state['thirds_sold'] < 3 and (trailing_trigger or target_trigger):
         # 보호선 트리거는 1/3 분할이 아니라 잔여 전량을 정리한다 (위 trailing_floor_trigger 주석 참고).
+        # 주문이 거부될 수 있으므로 상태(thirds_sold 등)는 '접수 성공' 확인 후에만 반영한다.
+        # 미리 올려놓고 거부되면 분할 횟수만 소진돼 남은 물량이 관리에서 빠진다.
         floor_full_exit = trailing_floor_trigger and not target_trigger
         if floor_full_exit:
-            pos_state['thirds_sold'] = 3
+            next_thirds = 3
             sell_qty = pos_state['remaining_qty']
         else:
-            pos_state['thirds_sold'] += 1
+            next_thirds = pos_state['thirds_sold'] + 1
             # 마지막(3번째) 트리거는 나눗셈 나머지까지 포함해 잔여 수량 전부 정리
-            sell_qty = pos_state['remaining_qty'] if pos_state['thirds_sold'] >= 3 \
+            sell_qty = pos_state['remaining_qty'] if next_thirds >= 3 \
                 else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
 
         if sell_qty > 0:
@@ -578,7 +613,12 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             trade_value = cur_price * sell_qty
             asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
             holding_ratio = sell_qty / pos_state['remaining_qty'] if pos_state['remaining_qty'] > 0 else 0.0
-            sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+            res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+            if not order_accepted(res):
+                _log.error(f'[트레일링/목표가-주문거부] {stk_nm}({stk_cd}) rate={rate:.2%} '
+                           f'{sell_qty}주 → {res} (이력 미기록, 상태 유지, 다음 사이클에 재시도)')
+                return pos_state
+            pos_state['thirds_sold'] = next_thirds
             tranche_txt = f'{pos_state["thirds_sold"]}/3'
             if target_trigger:
                 reason = f'목표가{target_level:.0%}'
@@ -600,6 +640,9 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                            asset_ratio=asset_ratio, holding_ratio=holding_ratio,
                            rate=rate, peak_rate=peak_rate, trigger_level=trigger_level, tranche=tranche_txt)
             pos_state['remaining_qty'] -= sell_qty
+        else:
+            # 팔 수량이 0인 경우엔 주문 자체가 없으므로 분할 횟수만 기존과 동일하게 반영
+            pos_state['thirds_sold'] = next_thirds
 
         if target_trigger:
             pos_state['target_idx'] += 1
@@ -621,7 +664,11 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 pnl = (cur_price - avg_price) * sell_qty
                 trade_value = cur_price * sell_qty
                 asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
-                sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+                res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+                if not order_accepted(res):
+                    _log.error(f'[정체보호-주문거부] {stk_nm}({stk_cd}) rate={rate:.2%} {sell_qty}주 → {res} '
+                               f'(이력 미기록, 상태 유지, 다음 사이클에 재시도)')
+                    return pos_state
                 _log.info(f'[정체보호전량청산] {stk_nm}({stk_cd}) rate={rate:.2%} 직전고점={pos_state["last_sold_peak"]:.2%} '
                           f'트리거선={trig_used - STALL_GAP:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 {sell_qty}주 전량 청산, '
                           f'손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
@@ -713,6 +760,11 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None):
     asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
 
     result = buy_market(stk_cd, qty, dmst_stex_tp=current_exchange())
+    if not order_accepted(result):
+        # 모의투자는 NXT 주문(프리/애프터마켓)과 장종료 후 주문을 거부한다 → 이력에 남기지 않는다.
+        _log.error(f'[수동매수-주문거부] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result} '
+                   f'(거래 이력에 기록하지 않음)')
+        return result
     _log.info(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
     _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0, asset_ratio=asset_ratio)
@@ -743,6 +795,10 @@ def manual_sell(stk_cd: str, qty: int):
     holding_ratio = sell_qty / match['qty'] if match['qty'] > 0 else 0.0
 
     result = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+    if not order_accepted(result):
+        _log.error(f'[수동매도-주문거부] {match["stk_nm"]}({stk_cd}) {sell_qty}주 → {result} '
+                   f'(거래 이력에 기록하지 않음)')
+        return result
     _log.info(f'[수동매도] {match["stk_nm"]}({stk_cd}) 매입가={match["avg_price"]:,.0f}원 '
               f'현재가={match["cur_price"]:,.0f}원 {sell_qty}주 매도, 손익={pnl:+,.0f}원, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}) → {result}')

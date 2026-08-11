@@ -18,10 +18,15 @@ fire(급상승 관심종목) 자동 매수 전략.
                            kiwoom_trailing_stop.py의 evaluate_and_trade()가 새 평단가 기준으로
                            자동 리셋한다.
   5. 사이징             : 기준은 총자산이 아니라 '가용 현금'(총자산 - 보유종목 평가금액).
-                           가용현금 × CASH_DEPLOY_RATIO(70%)까지만 쓰고 나머지 30%는 버퍼로 남긴다.
-                           그 금액을 BUY_SLOTS(20)등분 → 1픽당 가용현금의 3.5%, 하루 최대 20종목.
-                           교집합이 20종목보다 많으면 총상승률 낮은 순으로 20개까지만.
-                           1픽 예산보다 주가가 비싸면(1주도 못 삼) 그 종목은 skip하고 다음 후보로.
+                           가용현금 × CASH_DEPLOY_RATIO(70%)가 그날 매수한도(deploy_limit).
+                           예산은 후보마다 '남은 한도 ÷ 남은 후보 수'로 재계산하고,
+                           종목당 상한 = 한도 ÷ POS_CAP_DIVISOR(12) = 가용현금의 5.8%로 제한한다.
+                           하루 최대 BUY_SLOTS(20)종목. 배정 예산보다 주가가 비싸면(1주도 못 삼)
+                           그 종목은 skip하고 그 예산은 뒤 후보로 흘러간다.
+                           ⚠️ CASH_DEPLOY_RATIO는 '보유 목표 비율'이 아니라 '그날 남은 현금 중
+                              신규 매수에 쓸 최대 비율'이다. 평균 보유 2.28일이면 정상상태 보유비율은
+                              u = h·r/(1+h·r)이라 r=0.70의 이론 상한이 61.5%다 — r=0.70으로
+                              '자산의 70% 보유'는 구조적으로 불가능하다.
 
 쿨다운/슬롯 재검증 (2026-08-10, 포트폴리오 레벨 재시뮬레이션 — 246거래일 하루 단위 현금흐름 +
 보유중 추가매수 반영. 1차는 초기자본 1000만원, 2차는 3천만원 가정):
@@ -42,6 +47,52 @@ fire(급상승 관심종목) 자동 매수 전략.
      실제로 3천만원 근처가 되면 슬롯을 20→25로 다시 올리는 걸 검토할 것(2026-08-10 기준 계좌는
      아직 700만원대라 지금은 20 유지).
 
+사이징 재검증 (2026-08-11, auto_trading/backtest/fire_sizing_backtest.py — 201거래일 하루단위 현금흐름):
+  계기: 2026-08-11 15:18 실매매에서 후보 18종목 중 7종목이 '1픽 예산(131,276원) < 현재가'로 skip돼
+  11종목·한도의 47.5%만 집행하고 250만원이 남았다. 원인은 slot_budget을 루프 밖에서 한 번만
+  계산해 skip된 슬롯 예산이 재분배되지 않는 것이었다.
+  - 예산 재분배 방식은 '순차(남은한도/남은후보)'가 '균등(살 수 있는 후보 수로 나눠 동일 배분)'보다
+    일관되게 우수했다. 균등안은 2026-04~07 구간에서 -6.9%로 현행(-6.8%)보다도 나빠 기각.
+  - 종목당 상한은 필수다. 상한 없이 재분배하면 후보가 1개인 날(201일 중 7일)에 한도 전액이 한
+    종목에 들어가 단일종목이 자본의 83%가 되고 MDD가 -13.8% → -26.9%로 2배가 된다.
+  - reserved 20종목 유지를 전제로 divisor는 10으로 확정했다. 후보를 reserved 규모(20)로 제한하고
+    랜덤 선정 5회 평균(760만원, r=0.70):
+      divisor  8 : 총수익 34.4%  Sharpe 1.82  MDD -15.1%  한도소진 78.1%  현금 30.1%
+      divisor 10 : 총수익 35.2%  Sharpe 1.98  MDD -13.2%  한도소진 71.8%  현금 34.3%  ← 채택
+      divisor 12 : 총수익 33.9%  Sharpe 2.05  MDD -12.4%  한도소진 65.9%  현금 38.3%
+      divisor 14 : 총수익 32.0%  Sharpe 2.06  MDD -12.0%  한도소진 60.6%  현금 42.0%
+      divisor 20 : 총수익 25.0%  Sharpe 2.00  MDD -11.4%  한도소진 45.9%  현금 52.6%
+    10이 총수익 1위이고 '낮은순으로만 reserved를 고른' 케이스에서도 1위(28.8%)라 선정 방식에
+    robust하다. 12가 Sharpe·MDD는 약간 낫다(2.05/-12.4) — 현금을 더 남기는 대신 안정성을
+    택하려면 12로 되돌리면 된다.
+  - BUY_SLOTS는 20 유지. reserved 20종목이면 후보가 20을 넘지 못해 슬롯 25는 결과가 완전히
+    동일하다(총수익·Sharpe·체결수 소수점까지 같음). 슬롯을 늘리는 건 reserved를 20개보다
+    많이 유지할 때만 의미가 있다.
+  - 아래 표는 후보를 제한하지 않은(fire 픽 전체 = 일평균 13.2종목) 조건이라 reserved 20 전제와
+    다르다. divisor 선택은 위 표를 근거로 했고, 아래는 상한 자체의 필요성 근거로만 본다:
+      현행(한도/20 고정)  총수익 19.5%  Sharpe 1.60  MDD -13.8%  보유비율 48.5%
+      순차+상한20         21.7%        1.90        -12.2%       45.5%
+      순차+상한12         32.0%        2.05        -12.2%       58.9%   ← 채택
+      순차+상한10         33.5%        1.98        -12.9%       62.8%
+      순차+상한8          33.2%        1.83        -14.3%       66.9%
+    8 이하는 하락 구간(2026-04~07, 3천만원)에서 -8.1%로 현행 -7.0%보다 나빠져 배제했다. 상한을
+    풀면 순차 재분배의 정렬 편향(금액가중 total_rate가 16.79까지, 현행 15.48)이 커지는데 그게
+    하락장에서 독이 된다 — 위 '정렬방향: 높은순 -35%'와 방향이 같다.
+  - 계좌 규모 효과가 아니다: 300만~3억까지 훑어도 상한12 우위가 +11~+19%p로 유지된다.
+    nocash율은 19.0%(300만) → 0.0%(3억)로 사라지는데 우위는 그대로다.
+  - 노출(보유비율) 확대 효과도 아니다: 보유비율을 ~60%로 맞춰 비교하면
+      현행 + ratio 1.00   보유 62.1%  총수익 19.1%  Sharpe 1.26  MDD -16.9%
+      상한12 + ratio 0.70 보유 58.9%  총수익 32.0%  Sharpe 2.05  MDD -12.2%
+    같은 노출에서 13%p 차이난다. '남은한도/남은후보'가 후보 수에 반비례하는 자동 사이징이어서,
+    후보가 적은 날(신호 희소)엔 크게 후보가 많은 날(시장 과열)엔 작게 산다. 후보수 구간별 투입은
+    수익구간(후보 20개 이하, +0.45~0.64%/건) +16~19%, 손실구간(후보 31개+, -0.94%/건) -52%로
+    이동한다. 반대로 현행에서 CASH_DEPLOY_RATIO만 올리면 모든 구간에 균등하게 더 넣어
+    손실구간 투입까지 늘어 Sharpe가 1.60 → 1.26으로 무너진다.
+  ⚠️ 한계: reserved 교집합을 재현할 수 없어 fire 픽 전체를 후보로 가정했다(그래서 위 '쿨다운/슬롯
+     재검증'의 수치와 재현되지 않는다 — 현행 슬롯20이 여기선 +19.5%, 거기선 +3.0%. 두 표를
+     나란히 비교하면 안 된다). 보유 포지션을 취득원가로 평가해 노출 큰 설정의 MDD가 과소평가된다.
+     왕복비용 0.2%를 넣으면 현행 19.5→8.3%, 상한12 32.0→약 절반으로 깎인다(고회전 2,100건).
+
 백테스트 근거 (fire_backtest_result.csv, 2025-09 ~ 2026-07, 2,658건):
   - fire 픽 전체 매수: 평균 +0.39%/건 (수수료 빼면 본전 이하)
   - H2 필터(20일 신고가 -1.6% 이내 + 당일 등락률 +12% 이상): 평균 +2.75%, 승률 48.6%
@@ -61,8 +112,10 @@ fire(급상승 관심종목) 자동 매수 전략.
   HD현대에너지솔루션은 10:35에 196,600원에 샀는데 그날 종가가 164,000원(-16.6%),
   SK오션플랜트는 10:55에 20,450원에 샀는데 종가 18,350원(-10.3%)이었다.
 
-매수 후 청산은 kiwoom_trailing_stop.py의 30초 잡이 자동으로 담당한다
-(손절 -3% / 목표가 사다리 없음 / 익절은 트레일링 -2%p 일임).
+매수 후 청산은 kiwoom_trailing_stop.py의 30초 잡이 자동으로 담당한다.
+2026-08-11 확인한 실제 값 (기존 '손절 -3% / 트레일링 -2%p' 표기는 코드와 달라 수정):
+  STOP_LOSS_RATE=-0.06, TARGET_RATES=[](목표가 없음),
+  TRAIL_ACTIVATE_RATE=+0.07 / TRAIL_GAP=0.05 / MIN_PROFIT_FLOOR=0.03.
 
 실전 전 반드시 KIWOOM_ENV=mock으로 검증할 것.
 """
@@ -87,9 +140,21 @@ BREADTH_MIN = 0.0          # 시장폭 레짐 게이트. 0 이하면 게이트�
                            # 검증기간 전부 마이너스(-1.6~-2.1%)라 폐기 — 수준(level)만 유효했다.
 FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트 '관심' 탭과 동일)
 CASH_DEPLOY_RATIO = 0.70   # 가용 현금 중 자동매수에 쓸 최대 비율 (나머지 30%는 현금 버퍼로 남김)
-BUY_SLOTS = 20             # 위 금액을 20등분 → 1픽당 '가용현금 × 70% ÷ 20' = 가용현금의 3.5%.
-                           # 하루 최대 신규 매수 종목 수이기도 함. 7→20 (2026-08-10, 포트폴리오
-                           # 재시뮬레이션 근거는 위 docstring "쿨다운/슬롯 재검증" 참고)
+BUY_SLOTS = 20             # 하루 최대 신규 매수 종목 수. 7→20 (2026-08-10, 포트폴리오
+                           # 재시뮬레이션 근거는 위 docstring "쿨다운/슬롯 재검증" 참고).
+                           # 2026-08-11부터 '1픽 예산의 분모'가 아니라 종목 수 상한으로만 쓴다
+                           # (예산은 POS_CAP_DIVISOR가 결정).
+POS_CAP_DIVISOR = BUY_SLOTS  # 종목당 상한 = 매수한도 / 20 = 가용현금의 3.5%.
+                           # ⚠️ 2026-08-11: 한때 10으로 내렸다가 되돌렸다. 근거였던
+                           # fire_backtest_result.csv가 목표가 +15%가 살아 있던 구버전 규칙이라
+                           # 건당 기대값을 +0.39%로 과대평가하고 있었다. 현재 청산규칙으로 재생성한
+                           # CSV(auto_trading/backtest/fire_backtest_regen.py)에서는 기대값이 0 근처(-0.74% ~ +0.16%,
+                           # 일중 근사의 비관/낙관 극단)이고, 그 조건에서는 상한을 풀수록 손실이
+                           # 커진다(divisor 10이 20보다 비관 -12.2%p / 낙관 -17.0%p 나쁨).
+                           # 기대값이 0 이하인 전략에서는 노출을 늘리는 쪽이 항상 불리하다.
+                           # 상한을 다시 풀려면 기대값이 확실히 플러스임을 먼저 입증해야 한다.
+                           # reserved가 20개 이하인 동안 이 값(=BUY_SLOTS)은 아래 순차 재분배를
+                           # 무력화해 2026-08-11 이전 동작과 정확히 같아진다.
 COOLDOWN_DAYS = 2          # 같은 종목 재매수 금지 기간. 1일에 샀으면 3일에 재매수 가능. 3→2
                            # (아래 조건이 "<"라서: diff=(오늘-마지막매수일).days, diff < 2이면 skip.
                            #  1일 매수 → 2일 diff1 skip, 3일 diff2 → 재매수 허용)
@@ -307,48 +372,59 @@ def run_fire_buy_cycle():
     _, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
 
     # 사이징 기준은 총자산이 아니라 '가용 현금'. 그중 CASH_DEPLOY_RATIO(70%)까지만 쓰고
-    # 나머지 30%는 손대지 않는다(버퍼). deploy_limit을 7등분한 금액이 1픽 예산이며,
-    # deployed 누적으로 총 사용액이 70%를 넘지 않도록 막는다.
+    # 나머지는 손대지 않는다(버퍼). deployed 누적으로 총 사용액이 그 한도를 넘지 않도록 막는다.
     cash = summary['total_asset'] - summary['tot_evlt_amt']
     deploy_limit = max(0.0, cash) * CASH_DEPLOY_RATIO
-    slot_budget = deploy_limit / BUY_SLOTS if BUY_SLOTS > 0 else 0.0
+    # 종목당 상한 (2026-08-11 도입). 재분배가 소수 종목에 몰리는 것을 막는 안전장치이자
+    # 실질 사이징 기준. 근거는 위 docstring '사이징 재검증' 참고.
+    pos_cap = deploy_limit / POS_CAP_DIVISOR if POS_CAP_DIVISOR > 0 else deploy_limit
     deployed = 0.0
 
-    if slot_budget <= 0:
+    if pos_cap <= 0:
         _log.info(f'[fire] 가용 현금 부족 — 현금 {cash:,.0f}원, 매수 예산 {deploy_limit:,.0f}원')
         return
 
-    _log.info(f'[fire] 후보 {len(candidates)}종목 / 가용현금 {cash:,.0f}원 → '
-              f'매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}) '
-              f'{BUY_SLOTS}등분 = 1픽당 {slot_budget:,.0f}원')
-
+    # 쿨다운 제외는 예산 배분 '전에' 끝내야 한다 — 아래 재분배 분모가 '남은 후보 수'라서,
+    # 어차피 사지 않을 종목이 분모에 남아 있으면 예산이 실제보다 잘게 쪼개진다.
+    # 2026-08-10 재검증: 쿨다운을 0일(완전 제거)로 뺐다가 도로 2일로 되돌림 — 포트폴리오
+    # 시뮬레이션(3천만원/슬롯20)에서 0일이 2일보다 더 나빴다(-0.6% vs +2.2%). 쿨다운이 없으면
+    # 낮은순위 후보 하나에 추가매수가 거의 매일 몰려(추가매수 641건 vs 530건) 집중도가 과해지고
+    # 분산 효과가 줄었다 — 쿨다운이 자연스러운 분산 장치로도 작동하고 있었다는 뜻.
+    live = []
     for cand in candidates:
-        if buys_today >= BUY_SLOTS:
-            break
-        stk_cd = cand['stk_cd']
-        last_buy = state.get(stk_cd)
+        last_buy = state.get(cand['stk_cd'])
         if last_buy:
             try:
-                # 2026-08-10 재검증: 쿨다운을 0일(완전 제거)로 뺐다가 도로 2일로 되돌림 —
-                # 포트폴리오 시뮬레이션(3천만원/슬롯20)에서 0일이 2일보다 더 나빴다(-0.6% vs +2.2%).
-                # 쿨다운이 없으면 낮은순위 후보 하나에 추가매수가 거의 매일 몰려(추가매수 641건 vs
-                # 530건) 오히려 집중도가 과해지고 분산 효과가 줄었다 — 쿨다운이 자연스러운 분산
-                # 장치로도 작동하고 있었다는 뜻.
                 if (today - datetime.date.fromisoformat(last_buy)).days < COOLDOWN_DAYS:
                     continue
             except ValueError:
                 pass
+        live.append(cand)
 
-        from job.kiwoom_api import get_current_price
+    _log.info(f'[fire] 후보 {len(candidates)}종목(쿨다운 제외 후 {len(live)}종목) / '
+              f'가용현금 {cash:,.0f}원 → 매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}), '
+              f'종목당 상한 {pos_cap:,.0f}원(한도/{POS_CAP_DIVISOR}), 최대 {BUY_SLOTS}종목')
+
+    for k, cand in enumerate(live):
+        if buys_today >= BUY_SLOTS:
+            break
+        stk_cd = cand['stk_cd']
+
+        from auto_trading.kiwoom_api import get_current_price
         price = get_current_price(stk_cd)
         if price <= 0:
             continue
-        # 1픽 예산과 '한도 잔액' 중 작은 쪽까지만 (마지막 슬롯이 한도를 넘지 않도록)
-        spendable = min(slot_budget, deploy_limit - deployed)
+
+        # 남은 한도를 '남은 후보 수'로 재분할 → 비싸서 못 산 종목의 예산이 뒤 후보로 흘러간다.
+        # 종목당 상한(pos_cap)과 한도 잔액으로 이중 제한.
+        # 주의: get_current_price 실패로 skip된 종목은 분모에 남아 있어 예산이 약간 보수적으로
+        #      계산된다(실패는 드물고, 과대 배정보다 안전한 방향이라 그대로 둔다).
+        budget = (deploy_limit - deployed) / max(1, len(live) - k)
+        spendable = min(budget, pos_cap, deploy_limit - deployed)
         qty = int(spendable // price)
         if qty <= 0:
             _log.info(f'[fire] {cand["stk_nm"]}({stk_cd}) 매수 예산 부족 '
-                      f'(1픽 예산 {spendable:,.0f}원 < 현재가 {price:,.0f}원)')
+                      f'(배정 예산 {spendable:,.0f}원 < 현재가 {price:,.0f}원)')
             continue
 
         trade_value = qty * price
@@ -358,6 +434,12 @@ def run_fire_buy_cycle():
         if cand['dist_20d_high'] is not None:
             ref = f'신고가대비 {cand["dist_20d_high"]:+.1f}%, 당일 {cand["ret_1d"]:+.1f}%, '
         result = buy_market(stk_cd, qty)
+        if not order_accepted(result):
+            # 주문 거부(장종료·NXT 미지원 등)는 체결이 아니므로 이력에 남기지 않고
+            # deployed(한도 소진)에도 반영하지 않는다 — 반영하면 뒤 후보 예산이 잘못 줄어든다.
+            _log.error(f'[fire매수-주문거부] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
+                       f'→ {result} (이력 미기록, 슬롯 미소진)')
+            continue
         deployed += trade_value
         _log.info(f'[fire매수 {buys_today + 1}/{BUY_SLOTS}] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
                   f'(총상승률 {cand["total_rate"]}, {ref}breadth={bd_txt}) '
@@ -389,7 +471,8 @@ if __name__ == '__main__':
         hit = [c for c in cands if c['stk_cd'] in reserved]
         print(f'fire 조건 통과 {len(cands)}건(최대 {CHECK_DISPLAY_LIMIT} 표시) / '
               f'reserved {len(reserved)}종목 → 매수 대상 {len(hit)}건 '
-              f'(가용현금의 {CASH_DEPLOY_RATIO:.0%}를 {BUY_SLOTS}등분, 최대 {BUY_SLOTS}종목)')
+              f'(매수한도=가용현금의 {CASH_DEPLOY_RATIO:.0%}, '
+              f'종목당 상한=한도/{POS_CAP_DIVISOR}, 최대 {BUY_SLOTS}종목)')
         for i, c in enumerate(cands, 1):
             ref = (f' 신고가대비 {c["dist_20d_high"]:+.1f}% 당일 {c["ret_1d"]:+.1f}%'
                    if c['dist_20d_high'] is not None else ' (pkl 오늘자 없음)')
