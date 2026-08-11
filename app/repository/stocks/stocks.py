@@ -282,7 +282,7 @@ def update_interest_stock_close_correctly_list(stocks, conn=None):
             today_price_change_pct = COALESCE(%s, s.today_price_change_pct),
             target                 = COALESCE(%s, s.target)
         WHERE s.stock_code       = %s
-          AND s.target           = 'interest'
+          AND s.target           IN ('interest', 'interest_v2')
           AND s.created_at::date = %s
           AND NOT EXISTS (
               SELECT 1
@@ -838,6 +838,8 @@ def update_stocks_break_away(stock, conn=None):
         breakaway_target = "breakaway_low"
     elif origin_target == "interest":
         breakaway_target = "breakaway"
+    elif origin_target == "interest_v2":
+        breakaway_target = "breakaway_v2"
     else:
         raise ValueError(f"지원하지 않는 target 값입니다: {origin_target}")
 
