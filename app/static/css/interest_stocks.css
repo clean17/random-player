@@ -85,6 +85,17 @@ body {
 }
 .tab-select:hover { border-color: #2563eb; }
 .tab-select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+
+/* tab-select 뒤에 두는 보이지 않는 줄바꿈 강제용 스페이서.
+   PC(기본)에서는 크기 0이라 레이아웃에 아무 영향이 없다. */
+.tab-bar-break {
+    flex-basis: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
 .tab-select option { background: #fff; color: #111827; font-weight: 500; }
 
 /* 기존 전역 button을 쓰더라도 탭과 구분 */
@@ -414,11 +425,21 @@ body.page-stocks .tab-bar input[type="date"].date {
         flex: 0 0 auto;
     }
 
+    /* 모바일에서만 한 줄을 통째로 차지 → wrap 컨테이너라 이 스페이서 뒤 형제들이
+       전부 다음 줄로 밀려난다. tab-select 자신의 크기(min-width:148px)는 그대로 유지된다. */
+    body.page-stocks .tab-bar .tab-bar-break {
+        flex-basis: 100% !important;
+        width: 100% !important;
+        height: 0 !important;
+    }
+
     body.page-stocks .tab-bar input.date,
     body.page-stocks .tab-bar input[type="date"].date {
-        flex: 1 1 calc(50% - 4px) !important;
-        width: calc(50% - 4px) !important;
-        max-width: calc(50% - 4px) !important;
+        /* 기존 폭(50% - 4px)의 70%. flex-grow를 0으로 둬야 한다 — grow:1이면 남는 공간을
+           다시 채우려고 늘어나서 아래 width/max-width 축소가 무효화된다. */
+        flex: 0 0 calc((50% - 4px) * 0.7) !important;
+        width: calc((50% - 4px) * 0.7) !important;
+        max-width: calc((50% - 4px) * 0.7) !important;
         min-width: 0 !important;
         height: 40px;
         margin: 0 !important;

@@ -190,6 +190,8 @@
             font-size: 18px;
             font-weight: 700;
         }
+        /* 모바일 기본값: 1열. 원래 폭 그대로라 종목명(예: LG에너지솔루션(373220))이
+           잘리지 않는다. (항목 수 상한은 JS의 MS_PIE_LEGEND_MAX가 담당 — 여기선 폭/열만 다룸) */
         .mystocks-pie-legend {
             list-style: none;
             margin: 0;
@@ -206,6 +208,21 @@
             gap: 6px;
             font-size: 13px;
             flex-wrap: nowrap;
+        }
+        /* PC(768px 이상)만 2열 — 공간이 넉넉하므로 폭도 그만큼 넓혀서(280px×2 수준) 열이
+           좁아져 이름이 잘리는 일이 없게 한다. columns는 flex 컨테이너엔 적용되지 않으므로
+           display를 block으로 바꾼다. */
+        @media (min-width: 768px) {
+            .mystocks-pie-legend {
+                flex-basis: 580px;
+                display: block;
+                columns: 2;
+                column-gap: 20px;
+            }
+            .mystocks-pie-legend li {
+                margin-bottom: 6px;
+                break-inside: avoid; /* 한 항목이 열 경계에서 쪼개지지 않게 */
+            }
         }
         .mystocks-pie-legend .name {
             flex: 1 1 auto;
@@ -268,6 +285,7 @@
             <option value="#tab-reserved">✓ 자동매수 대상</option>
             <option value="#tab-mystocks">내 계좌</option>
         </select>
+        <span class="tab-bar-break" aria-hidden="true"></span>
         <input id="dateInputStart" class="date" type="date" />
         <input id="dateInputEnd" class="date" type="date" style="display: none"/>
         <select id="ruleFilter" class="rule-filter" style="display:none">
@@ -982,6 +1000,8 @@
 
     const MS_PIE_COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
                            '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
+    const MS_PIE_OTHER_COLOR = '#d1d5db'; // '기타' 묶음 전용 색 (특정 종목 색과 안 겹치게 회색으로 고정)
+    const MS_PIE_LEGEND_MAX = 12; // 범례 2열 기준 한 열에 6개씩 — 보유 종목이 많아도 범례가 과도하게 길어지지 않도록
 
     function renderMyStocksPieChart(holdings) {
         const wrap = document.getElementById('ms-pie-wrap');
@@ -990,17 +1010,30 @@
 
         document.getElementById('ms-pie-count-num').textContent = (holdings || []).length;
 
-        const values = (holdings || []).map(h => ({
+        const rawValues = (holdings || []).map(h => ({
             name: h.stk_nm ? `${h.stk_nm}(${h.stk_cd})` : h.stk_cd,
             value: Math.max(0, Number(h.cur_price || 0) * Number(h.qty || 0)),
         })).filter(v => v.value > 0).sort((a, b) => b.value - a.value);
 
-        const total = values.reduce((sum, v) => sum + v.value, 0);
-        if (!values.length || total <= 0) {
+        const total = rawValues.reduce((sum, v) => sum + v.value, 0);
+        if (!rawValues.length || total <= 0) {
             wrap.style.display = 'none';
             return;
         }
         wrap.style.display = 'flex';
+
+        // 상위 (MS_PIE_LEGEND_MAX - 1)개만 개별 표시하고 나머지는 '기타 N종목'으로 합친다.
+        // 파이 조각 수와 범례 항목 수를 항상 똑같이 유지해야 색이 서로 어긋나지 않는다.
+        let values = rawValues;
+        let otherIndex = -1;
+        if (rawValues.length > MS_PIE_LEGEND_MAX) {
+            const keep = MS_PIE_LEGEND_MAX - 1;
+            const top = rawValues.slice(0, keep);
+            const rest = rawValues.slice(keep);
+            const restSum = rest.reduce((sum, v) => sum + v.value, 0);
+            values = [...top, { name: `기타 ${rest.length}종목`, value: restSum }];
+            otherIndex = values.length - 1;
+        }
 
         // 조각 사이 공백: wrap 배경(#f8f8f8)과 같은 색 구간을 끼워 넣어 틈처럼 보이게 함
         const GAP_COLOR = '#f8f8f8';
@@ -1012,7 +1045,7 @@
         let acc = 0;
         const stops = [];
         values.forEach((v, i) => {
-            const color = MS_PIE_COLORS[i % MS_PIE_COLORS.length];
+            const color = i === otherIndex ? MS_PIE_OTHER_COLOR : MS_PIE_COLORS[i % MS_PIE_COLORS.length];
             const segDeg = (v.value / total) * (360 - totalGapDeg);
             const start = acc;
             acc += segDeg;
@@ -1026,7 +1059,7 @@
         pie.style.background = `conic-gradient(${stops.join(', ')})`;
 
         legend.innerHTML = values.map((v, i) => {
-            const color = MS_PIE_COLORS[i % MS_PIE_COLORS.length];
+            const color = i === otherIndex ? MS_PIE_OTHER_COLOR : MS_PIE_COLORS[i % MS_PIE_COLORS.length];
             const pct = (v.value / total * 100).toFixed(1);
             return `<li><span class="swatch" style="background:${color}"></span><span class="name">${v.name}</span><span class="pct">${msFmtWon(v.value)} (${pct}%)</span></li>`;
         }).join('');
@@ -1040,7 +1073,12 @@
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">보유 종목이 없어요</td></tr>`;
             return;
         }
-        tbody.innerHTML = holdings.map(h => {
+        // 평가금액(현재가 × 수량) 내림차순 정렬. 원본 holdings는 파이차트 렌더에도 그대로
+        // 쓰이므로 복사본만 정렬한다 — 백엔드(kt00018 응답)는 정렬을 안 해준다.
+        const sorted = holdings.slice().sort((a, b) =>
+            (Number(b.cur_price || 0) * Number(b.qty || 0)) - (Number(a.cur_price || 0) * Number(a.qty || 0))
+        );
+        tbody.innerHTML = sorted.map(h => {
             const pnl = h.pnl != null ? Number(h.pnl) : (Number(h.cur_price) - Number(h.avg_price)) * Number(h.qty || 0);
             const evltAmt = Number(h.cur_price || 0) * Number(h.qty || 0);
             const pnlSubText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)} (${msFmtPct(h.profit_rate)})`;
