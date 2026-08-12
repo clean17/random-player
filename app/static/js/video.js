@@ -170,6 +170,8 @@ function resetLoop() {
     bBtn?.classList.remove('active');
     toggleGainBtn?.classList.remove('active');
     isSectionLooping = false;
+    startTime = 0;
+    endTime = 0;
     // loopButton.classList.remove('active');
 }
 
@@ -229,6 +231,7 @@ function playVideo(videoUrl) {
         player.volume(previousVolume);
         player.loop(isLooping);
         player.play().catch(() => {});
+        showControls(); // 새 영상 시작 시 컨트롤을 즉시 노출 (삭제 후 등 재사용 경로 대비)
         return;
     }
 
@@ -259,7 +262,7 @@ function getVideoEvent() {
     filenameDisplay.textContent = videoFilename;
 
     videoPlayer.addEventListener('timeupdate', function() {
-        if (isLooping && endTime > startTime) {
+        if (isSectionLooping && endTime > startTime) {
             if (videoPlayer.currentTime >= endTime) {
                 videoPlayer.currentTime = startTime;
                 videoPlayer.play();
@@ -393,6 +396,7 @@ function changeVideo() {
     player.volume(previousVolume);
     player.loop(isLooping);
     player.play().catch(() => {});
+    showControls(); // 새 영상 시작 시 컨트롤을 즉시 노출 (모바일에서 play 이벤트 누락 대비)
     const readyPlayer = player;
     readyPlayer.ready(function() {
         if (readyPlayer.isDisposed()) return;
@@ -421,6 +425,16 @@ function changeVideo() {
             }
         }
     });
+    // 컨트롤 표시 트리거는 video.js 자체 이벤트 버스로 건다(player.on). timeupdate/ended와
+    // 마찬가지로 내부적으로 재발급되는 tech에도 안전하게 유지된다 — 반면 addVideoEvent()의
+    // videoPlayer.addEventListener(...)는 최초 영상 로드 시 한 번만 바인딩되므로, 이후
+    // delVideo() → initVideoSrc() → player.reset()을 거치면(삭제 버튼 경로에서만 발생) 다시
+    // 걸리지 않는다. PC는 document 전역 mousemove로 가려져 있어 못 느꼈지만, 모바일은 터치가
+    // click/touchstart에만 의존해 삭제 후 컨트롤이 안 돌아오는 원인이었다.
+    player.off('click'); player.on('click', showControls);
+    player.off('touchstart'); player.on('touchstart', showControls);
+    player.off('play'); player.on('play', showControls);
+    player.off('pause'); player.on('pause', showControls);
     player.off('ended');
     player.on('ended', function() {
         if (isLooping && endTime === 0) {

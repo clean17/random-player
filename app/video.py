@@ -71,11 +71,13 @@ def get_video(filepath):
         abort(404)
 
     video_directory = settings[key]  # 딕셔너리 접근 방식으로 수정
+    full_path = os.path.join(video_directory, file_dir, filename)
 
-    return send_file(
-        os.path.join(video_directory, file_dir, filename),
-        conditional=True
-    )
+    if not os.path.exists(full_path):
+        print(f"[video] not found: {full_path}")
+        abort(404)
+
+    return send_file(full_path, conditional=True)
 
 
 # 이미지 리스트, 채팅 페이지에서 임시로 사용할 엔드포인트
