@@ -37,11 +37,18 @@
 
         <div id="controls">
             {% if directory != "10" %}
-            <div id="controls-top">
-                <button id="minusTenSec">-30</button>
-                <button id="plusTenSec">+30</button>
-                <button id="toggleGain">Gain</button>
-                <button id="fullScreen">Full</button>
+            <div id="controls-stack">
+                <div id="controls-sync">
+                    <button id="syncPlusBtn">Sync+</button>
+                    <button id="syncMinusBtn">Sync-</button>
+                    <button id="syncResetBtn">Sync Reset</button>
+                </div>
+                <div id="controls-top">
+                    <button id="minusTenSec">-30</button>
+                    <button id="plusTenSec">+30</button>
+                    <button id="toggleGain">Gain</button>
+                    <button id="fullScreen">Full</button>
+                </div>
             </div>
             <button id="aButton">A</button>
             <button id="bButton">B</button>
