@@ -277,8 +277,9 @@ def place_order(stk_cd: str, qty: int, price: int,
     }
     api_id = 'kt10000' if side == '1' else 'kt10001'
     result = _call(api_id, '/api/dostk/ordr', body)
-    action = '매수' if side == '1' else '매도'
-    print(f'[주문] {action} {stk_cd} {qty}주 → ord_no={result.get("ord_no")}')
+    # 로깅은 호출부 책임 — 여기서 print하면 호출부의 상세 로그(_log.info)와 항상 겹친다.
+    # 단, kiwoom_trailing_stop.py의 손절/트레일링/정체보호 성공 로그는 result를 찍지 않으므로
+    # ord_no를 그쪽 로그 문자열에 직접 넣어뒀다(2026-08-12) — 여기서 지우기 전에 확인할 것.
     return result
 
 

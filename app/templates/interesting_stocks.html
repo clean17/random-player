@@ -244,7 +244,7 @@
             flex: 0 0 auto;
         }
         .ms-history-scroller {
-            max-height: 400px;
+            max-height: 700px;
             overflow-y: auto;
         }
         .ms-history-scroller table thead th {
@@ -619,6 +619,7 @@
 
     // 탭 전환 (드롭다운)
     const tabSelectEl = document.getElementById('tabSelect');
+    const TAB_STORAGE_KEY = 'interesting_stocks:lastTab'; // 새로고침해도 마지막 탭 유지
 
     function activateTab(targetSel) {
         document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
@@ -651,7 +652,10 @@
         }
     }
 
-    tabSelectEl?.addEventListener('change', () => activateTab(tabSelectEl.value));
+    tabSelectEl?.addEventListener('change', () => {
+        try { localStorage.setItem(TAB_STORAGE_KEY, tabSelectEl.value); } catch (e) { /* 시크릿 모드 등 저장 불가 시 무시 */ }
+        activateTab(tabSelectEl.value);
+    });
 
     // '내 계좌' 탭이 활성화되어 있는 동안만 3초마다 자동 새로고침 (탭 전환 시 정지)
     // 주기적 새로고침은 로딩 오버레이 없이 조용히 갱신 (화면 깜빡임 방지)
@@ -1707,13 +1711,20 @@
     // 즐겨찾기/자동매수 목록을 먼저 받아둔 뒤 카드를 그린다 — 렌더 시점에 목록이 비어 있으면
     // 별/체크 아이콘이 해제 상태로 그려진다(기존엔 loadData가 먼저 호출돼 이 문제가 있었음).
     window.addEventListener('DOMContentLoaded', async _ => {
-        // 첫 진입은 activateTab을 거치지 않으므로, 초기 탭의 부가 UI(검색창 등)를 직접 맞춰준다.
-        const initialTabId = document.querySelector(getActiveTabTarget())?.id;
-        if (initialTabId) updateTabExtras(initialTabId);
+        // 새로고침 전에 보던 탭이 있으면 복원 — 저장된 값이 현재 옵션 목록에 없으면(마크업 변경 등)
+        // 무시하고 HTML의 기본 selected(실시간)를 그대로 쓴다.
+        let savedTab = null;
+        try { savedTab = localStorage.getItem(TAB_STORAGE_KEY); } catch (e) { /* 접근 불가 시 무시 */ }
+        if (tabSelectEl && savedTab && [...tabSelectEl.options].some(o => o.value === savedTab)) {
+            tabSelectEl.value = savedTab;
+        }
+
         setDefaultDateToday(0, startDateInputEl);
         setDefaultDateToday(0, endDateInputEl);
         await Promise.all([getFavoriteStocks(), getReservedStocks()]);
-        loadData();
+        // activateTab이 탭별 패널 표시/부가 UI/데이터 로드를 전부 처리한다 —
+        // 수동으로 탭을 바꿀 때와 완전히 같은 경로를 타야 tab-mystocks 등에서 어긋나지 않는다.
+        activateTab(tabSelectEl ? tabSelectEl.value : getActiveTabTarget());
     });
 </script>
 

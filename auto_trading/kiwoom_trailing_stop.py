@@ -719,7 +719,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             return pos_state
         _log.info(f'[{label}] {stk_nm}({stk_cd}) rate={rate:.2%}{peak_txt} (손절선 {stop_level:.1%}) '
                   f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
-                  f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
+                  f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
+                  f'ord_no={res.get("ord_no")}')
         _record_trade(stk_cd, stk_nm, 'sell', 'giveback_stop' if was_armed else 'stop_loss',
                       sell_qty, cur_price, avg_price, pnl,
                       asset_ratio=asset_ratio, holding_ratio=holding_ratio,
@@ -795,7 +796,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             _log.info(f'[{reason} {tranche_txt}차] {stk_nm}({stk_cd}) rate={rate:.2%} '
                       f'peak={peak_txt2} 트리거선={trigger_txt} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
                       f'{sell_qty}주 매도, 손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원'
-                      f'(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}), 잔여 {pos_state["remaining_qty"] - sell_qty}주')
+                      f'(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}), 잔여 {pos_state["remaining_qty"] - sell_qty}주 '
+                      f'ord_no={res.get("ord_no")}')
             _record_trade(stk_cd, stk_nm, 'sell', reason_key,
                            sell_qty, cur_price, avg_price, pnl,
                            asset_ratio=asset_ratio, holding_ratio=holding_ratio,
@@ -833,7 +835,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                     return pos_state
                 _log.info(f'[정체보호전량청산] {stk_nm}({stk_cd}) rate={rate:.2%} 직전고점={pos_state["last_sold_peak"]:.2%} '
                           f'트리거선={trig_used - STALL_GAP:.2%} 매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 {sell_qty}주 전량 청산, '
-                          f'손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
+                          f'손익={pnl:+,.0f}원, 거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
+                          f'ord_no={res.get("ord_no")}')
                 _record_trade(stk_cd, stk_nm, 'sell', 'stall', sell_qty, cur_price, avg_price, pnl,
                               asset_ratio=asset_ratio, holding_ratio=1.0,
                               rate=rate, peak_rate=pos_state['last_sold_peak'],
