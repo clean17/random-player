@@ -947,7 +947,16 @@ function initFavoriteButtons() {
 
             try {
                 await requestToggleFavorite({ stockCode, next });
-                // 성공: 그대로 유지
+                // 다른 카드/탭에서도 같은 상태를 보도록 로컬 캐시 동기화 (reservedStocks와 동일 패턴).
+                // 이게 없으면 favoriteStocks가 페이지 로드 시점 스냅샷에 고정돼, 토글 이후 탭을
+                // 전환해 카드가 다시 그려질 때(initFavoriteButtons 재실행) 방금 누른 상태가 반영
+                // 안 되고 예전 값으로 되돌아가 보인다 — 그 상태에서 다시 누르면 실제로는 서버가
+                // unconditional TOGGLE(flag = NOT flag)이라 의도와 반대로 뒤집혀 버린다.
+                if (typeof favoriteStocks !== "undefined") {
+                    const i = favoriteStocks.indexOf(stockCode);
+                    if (next && i === -1) favoriteStocks.push(stockCode);
+                    if (!next && i !== -1) favoriteStocks.splice(i, 1);
+                }
             } catch (e) {
                 // 실패: rollback
                 btn.dataset.favorited = String(current);
