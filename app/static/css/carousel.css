@@ -273,3 +273,15 @@
     color: #64748b !important;
     text-align: center !important;
 }
+
+/* ===== 모바일/터치 기기에서는 캐러셀 화살표 버튼 숨김 =====
+   터치 드래그로 카드를 넘길 수 있어 버튼이 불필요하고, 화면을 가리기만 한다.
+   (hover: none) 또는 (pointer: coarse)면 정밀 포인터(마우스)가 없는 기기로 간주한다 —
+   화면 폭 기준(max-width)보다 안정적이다(좁은 PC창을 모바일로, 큰 태블릿을 PC로 오판하지 않음).
+   carousel.css가 세 CSS 파일 중 가장 나중에 로드되고 선택자도 interest_stocks.css의 기존
+   .carousel-btn 규칙들과 동일해서, 명시도가 같을 때 소스 순서로 이 규칙이 이긴다. */
+@media (hover: none), (pointer: coarse) {
+    body.page-stocks .table-scroller .carousel-btn {
+        display: none !important;
+    }
+}
