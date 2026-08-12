@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_stocks_advanced, find_low_stocks, \
     update_interest_stocks, \
-    renew_kiwoom_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
+    renew_kiwoom_token_job, renew_kiwoom_mock_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
     reconcile_kiwoom_fills
@@ -240,12 +240,23 @@ def create_scheduler():
 
     ####################################################################
 
-    # 2) 매일 07:00 키움 토큰 갱신
+    # 2) 매일 07:00 키움 토큰 갱신 (실전)
     scheduler.add_job(
         renew_kiwoom_token_job,
         trigger=CronTrigger(hour=7, minute=0),
         # trigger=CronTrigger(second="*/15"),   # 15초 마다
         id="renew_token_daily",
+        executor="io",
+        replace_existing=True
+    )
+
+    # 2-0-0-1) 매일 06:55 키움 토큰 갱신 (모의투자) — 실전 잡과 겹치지 않도록 5분 앞에 배치.
+    #          모의투자 토큰은 예정된 갱신이 없어 kiwoom_api._call()의 401 재시도로만 반응형
+    #          갱신되고 있었다(2026-08-12 확인). 그 반응형 경로는 그대로 두고 선제 갱신을 더한다.
+    scheduler.add_job(
+        renew_kiwoom_mock_token_job,
+        trigger=CronTrigger(hour=6, minute=55),
+        id="renew_mock_token_daily",
         executor="io",
         replace_existing=True
     )

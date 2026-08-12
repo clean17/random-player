@@ -130,6 +130,18 @@ def renew_kiwoom_token_job():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\random-player")
 
 
+def renew_kiwoom_mock_token_job():
+    # 실전 토큰(위 renew_kiwoom_token_job)은 매일 07:00에 선제 갱신되는데, 모의투자 토큰은
+    # 예정된 갱신이 없어서 kiwoom_api._call()의 401 재시도 로직에만 기대고 있었다(2026-08-12,
+    # 실계좌 토큰 07:00:06 발급 후 모의투자 토큰이 08:00:47에 예정 없이 재발급된 것으로 확인 —
+    # 이전 모의 토큰이 만료된 시점에 트레일링 30초 잡이 401을 맞고 그제서야 반응형으로 갱신됨).
+    # 그 반응형 경로는 그대로 두고(장애 시 자동 복구 안전장치), 매일 아침 선제 갱신도 추가한다.
+    print('    ############################### renew_kiwoom_mock_token ###############################')
+    venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\random-player\auto_trading\renew_kiwoom_token.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--mock"], cwd=r"C:\my-project\random-player")
+
+
 def run_crawl_ai_image():
     print('    ############################### run_crawl_ai_image ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
