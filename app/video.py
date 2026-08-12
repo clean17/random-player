@@ -1,6 +1,8 @@
 import os
+import json
 import random
 import subprocess
+import threading
 import time, gc
 import cv2
 import re
@@ -14,6 +16,27 @@ from urllib.parse import quote
 from config.config import settings
 
 video = Blueprint('video', __name__)
+
+# 영상별 오디오 싱크 오프셋 저장 — { "<dir>": { "<filename>": offset, ... }, ... }
+SYNC_OFFSET_FILE = os.path.join(os.path.dirname(__file__), 'video_sync_offsets.json')
+_sync_offset_lock = threading.Lock()
+
+
+def _load_sync_offsets():
+    if not os.path.exists(SYNC_OFFSET_FILE):
+        return {}
+    try:
+        with open(SYNC_OFFSET_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (IOError, ValueError):
+        return {}
+
+
+def _save_sync_offsets(data):
+    tmp_path = SYNC_OFFSET_FILE + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp_path, SYNC_OFFSET_FILE)  # 쓰다가 죽어도 원본 파일이 깨지지 않도록 원자적 교체
 
 # 설정
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
@@ -57,6 +80,36 @@ def get_videos():
     random.seed(time.time())
     random.shuffle(videos)
     return jsonify(videos)
+
+@video.route('/sync-offsets', methods=['GET'])
+@login_required
+def get_sync_offsets():
+    directory = request.args.get('dir')
+    with _sync_offset_lock:
+        all_offsets = _load_sync_offsets()
+    return jsonify(all_offsets.get(directory, {}))
+
+@video.route('/sync-offset', methods=['POST'])
+@login_required
+def set_sync_offset():
+    data = request.get_json(silent=True) or {}
+    directory = data.get('dir')
+    filename = data.get('filename')
+    offset = data.get('offset')
+    if not directory or not filename:
+        return '', 400
+
+    with _sync_offset_lock:
+        all_offsets = _load_sync_offsets()
+        dir_offsets = all_offsets.setdefault(directory, {})
+        if not offset:  # 0(기본값) 또는 누락이면 저장해둘 필요 없음
+            dir_offsets.pop(filename, None)
+        else:
+            dir_offsets[filename] = offset
+        if not dir_offsets:
+            all_offsets.pop(directory, None)
+        _save_sync_offsets(all_offsets)
+    return '', 204
 
 @video.route('/videos/<path:filepath>', methods=['GET'])
 @login_required

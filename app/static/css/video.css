@@ -17,6 +17,16 @@ video::-webkit-media-controls {
     z-index: 5; /* video.js 컨트롤러의 z-index 설정 */
 }
 
+/* 전체화면 + 유휴(마우스 정지) 상태에서 브라우저가 <video>를 절전을 위해 하드웨어 오버레이로
+   승격시키는 경우가 있는데, 이 경로는 일반 컴포지팅 스택을 우회해서 같은 자리의 <canvas>
+   형제 엘리먼트를 완전히 가려버릴 수 있다(DOM/CSS는 멀쩡한데 화면에서만 안 보임 — 3분할
+   좌우 캔버스가 전체화면 유휴 시에만 사라지던 원인). 캔버스를 GPU 컴포지팅 레이어로 강제
+   승격시켜 같은 렌더링 경로를 타게 하면 가려지지 않는다. */
+#leftCanvas, #rightCanvas {
+    transform: translateZ(0);
+    will-change: transform;
+}
+
 #videoPlayer_html5_api {
     width: 100vw !important;
     /* 모바일에서 100vh는 주소창이 접혔을 때 기준 높이라, 주소창이 다시 나타나면 실제 보이는

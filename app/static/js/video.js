@@ -108,6 +108,12 @@ function initVideoElem() {
 }
 
 function initVideoSrc() {
+    // syncAudioElement는 영상과 완전히 분리된 별도의 <audio>라서, 영상만 멈추고 지워도 얘는
+    // 계속 재생된다 — 삭제 버튼을 누르면 화면은 까매졌는데 오디오만 계속 들리던 원인.
+    if (syncAudioElement) {
+        try { syncAudioElement.pause(); } catch (_) {}
+    }
+
     const currentVideoPlayer = document.querySelector('#videoPlayer')
     if (currentVideoPlayer) {
         if (isVideoJs()) {
@@ -182,6 +188,7 @@ function resetLoop() {
 /************************************************************************/
 
 function selectVideoFromArr(videos, randomIndex) {
+    flushSyncOffsetPost(); // 다음 영상으로 넘어가기 전, 디바운스 중이던 이전 영상의 싱크 값을 즉시 저장
     currentVideo = videos[randomIndex]
     fetchVideoArr.splice(randomIndex, 1); // randomIndex에서 1개 제거
     // console.log('currentVideo', currentVideo)
@@ -191,6 +198,7 @@ function selectVideoFromArr(videos, randomIndex) {
         currentVideo = videos[randomIndex === 0 ? 1 : 0]
     }
 
+    applySavedSyncOffset(); // 이 영상에 저장된 싱크 값이 있으면 불러오고, 없으면 기본값 0
     const videoUrl = makeGetUrl(currentVideo);
     // console.log('videoUrl', videoUrl)
     playVideo(videoUrl)
@@ -235,6 +243,11 @@ function playVideo(videoUrl) {
         player.play().catch(() => {});
         showControls(); // 새 영상 시작 시 컨트롤을 즉시 노출 (삭제 후 등 재사용 경로 대비)
 
+        // fast path는 delayAudio()를 다시 안 타므로, 이 영상에 저장된 싱크 오프셋이 있는데
+        // 그래프가 아직 한 번도 켜진 적 없다면 여기서 직접 켜준다(안 그러면 값은 불러와졌어도
+        // 실제로 들리지는 않는다). 이미 켜져 있다면 loadstart/timeupdate가 알아서 따라간다.
+        bindSyncVideoElement(player.el().getElementsByTagName('video')[0], true);
+
         // 한 번 video.js 모드로 넘어가면 이후 영상은 전부 이 fast path만 타서, 세로영상이 다시
         // 나와도 3분할로 전환될 기회가 없었다(PC에서 3분할이 계속 안 되던 원인). 메타데이터가
         // 도착하면 이번 영상의 실제 비율을 확인해서, 3분할 대상이면 video.js를 버리고 네이티브
@@ -247,7 +260,14 @@ function playVideo(videoUrl) {
             const vp = player.el().getElementsByTagName('video')[0];
             const ratio = vp && vp.videoWidth ? vp.videoHeight / vp.videoWidth : 0;
             if (ratio > 1 && window.innerWidth > window.innerHeight) {
-                playNative(videoUrl, false); // 이미 위에서 pushVideoArr 했으니 다시 push하지 않음
+                // loadedmetadata 콜백 안에서 바로 player.dispose()를 부르면, 같은 이벤트에
+                // 걸린 video.js 자체 내부 리스너(반응형 스타일 갱신 등)가 뒤이어 실행되다가
+                // 이미 지워진 tech를 참조해서 "Cannot read properties of null (reading
+                // 'videoWidth')" 에러를 던진다. 디스패치가 끝난 다음 틱으로 미뤄서 피한다.
+                setTimeout(function() {
+                    if (currentVideo !== expectedVideo) return;
+                    playNative(videoUrl, false); // 이미 위에서 pushVideoArr 했으니 다시 push하지 않음
+                }, 0);
             }
         });
         return;
@@ -355,6 +375,14 @@ function setupThreeSplitCanvas() {
             // 현재 비디오의 보이는 크기 계산
             const containerW = videoContainer.clientWidth;
             const containerH = videoContainer.clientHeight;
+            // 전체화면에서 네이티브 <video controls> 바가 유휴 상태로 사라졌다 나타났다 할 때
+            // 그 공간이 여닫히며 resize 이벤트가 튀는데, 그 순간 컨테이너 크기가 0으로
+            // 읽히는 경우가 있다 — 이걸 그대로 반영하면 캔버스가 0 크기로 찌그러져 배경색만
+            // 보이고, 그 상태가 다음 resize 전까지 그대로 남는다. 값이 이상하면 아예 반영하지
+            // 않고 이전 레이아웃을 유지한다.
+            if (!containerW || !containerH) {
+                return;
+            }
             let scale = Math.min(containerW / videoW, containerH / videoH);
             let shownW = videoW * scale;
             let shownH = videoH * scale;
@@ -365,6 +393,11 @@ function setupThreeSplitCanvas() {
             myVideoPlayer.style.height = shownH + 'px';
             myVideoPlayer.style.left = (containerW - shownW) / 2 + 'px';
             myVideoPlayer.style.top = (containerH - shownH) / 2 + 'px';
+            // 전체화면+유휴 상태에서 브라우저가 이 <video>를 하드웨어 오버레이로 승격시켜 같은
+            // 자리의 형제 캔버스를 완전히 덮어버리는 것으로 확인됐다(CSS/DOM은 안 변하고 그림만
+            // 안 보임 — 콘솔 진단으로 확정). transform을 걸어 비디오를 일반 컴포지팅 레이어로
+            // 강제해서 이 하드웨어 오버레이 경로를 타지 않게 한다.
+            myVideoPlayer.style.transform = 'translateZ(0)';
 
             // leftCanvas: 비디오 왼쪽으로 가로길이만큼 떨어져 배치
             leftCanvas.width = shownW;
@@ -496,19 +529,23 @@ function onPlayerEnded() {
 
 function delVideo() {
     if (currentVideo) {
-        if (confirm(`Delete \r\n ${currentVideo} ?`)) {
+        const deletedVideo = currentVideo; // currentVideo는 아래에서 다음 영상으로 바뀌므로 미리 캡처
+        if (confirm(`Delete \r\n ${deletedVideo} ?`)) {
+            cancelSyncOffsetPost(); // 삭제될 영상이라 디바운스 중이던 값은 보낼 필요 없음 (아래서 0으로 정리함)
             initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다 (서버에서 스트림 중이므로 삭제가 안된다)
-            axios.post(`/video/delete/${encodeURIComponent(currentVideo)}?dir=${dir}`)
+            axios.post(`/video/delete/${encodeURIComponent(deletedVideo)}?dir=${dir}`)
                 .then(response => {
                     if (response.status === 204) {
                         // alert(`${currentVideo}`+` is deleted`)
+                        delete videoSyncOffsetsMap[deletedVideo]; // 삭제된 영상의 싱크 값도 같이 정리
+                        axios.post('/video/sync-offset', {dir: dir, filename: deletedVideo, offset: 0}).catch(() => {});
                         currentVideo = '';
                         getVideo();
                     } else {
                         alert('Failed to delete video');
                     }
                 }).catch(err => {
-                alert(currentVideo)
+                alert(deletedVideo)
             });
         }
     }
@@ -530,8 +567,8 @@ const hideControls = () => {
     hideControlsTimeout = setTimeout(() => {
         controls.style.display = 'none';
         topDiv.style.display = 'none';
-        // filenameDisplay.style.display = 'none';
-        // filenameDisplay.style.opacity = "0";
+        // filenameDisplay는 항상 보이도록 둔다 — 이걸 숨겼을 때 전체화면에서 3분할 좌우
+        // 영상이 같이 사라지는 문제가 생겨서 되돌림.
         videoContainer.style.cursor = 'none';
     }, 2000);
 };
@@ -539,8 +576,6 @@ const hideControls = () => {
 const showControls = () => {
     controls.style.display = 'block';
     topDiv.style.display = 'block';
-    // filenameDisplay.style.display = 'block';
-    // filenameDisplay.style.opacity = "1";
     videoContainer.style.cursor = 'default';
     hideControls();
 };
@@ -590,10 +625,12 @@ prevButton?.addEventListener('click', function () {
     let prevVideo = previousVideos.shift();
 
     if (prevVideo) {
+        flushSyncOffsetPost(); // 다음 영상으로 넘어가기 전, 디바운스 중이던 이전 영상의 싱크 값을 즉시 저장
         const videoFilename = extractFilename(decodeURIComponent(prevVideo));
         console.log('prevButton', videoFilename);
         pushVideoArr(currentVideo)
         currentVideo = prevVideo;
+        applySavedSyncOffset(); // selectVideoFromArr()와 동일하게 이 영상의 저장된 싱크 값을 불러온다
 
         const videoUrl = makeGetUrl(prevVideo)
         playVideo(videoUrl)
@@ -673,9 +710,12 @@ function resyncAudioElement(force) {
 
 function adjustAudioSync(offset) {
     ensureSyncAudioGraph();
-    audioOffset += offset;
+    // 0.01을 계속 더하면 JS 부동소수점 오차가 쌓여 -0.3000000000000001 같은 값이 된다 —
+    // 소수점 2자리로 반올림해서 정리한다.
+    audioOffset = Math.round((audioOffset + offset) * 100) / 100;
     resyncAudioElement(true);
     showSyncMessage();
+    saveSyncOffsetForCurrentVideo();
 }
 
 function resetAudioSync() {
@@ -683,6 +723,90 @@ function resetAudioSync() {
     audioOffset = 0;
     resyncAudioElement(true);
     showSyncMessage();
+    saveSyncOffsetForCurrentVideo();
+}
+
+// 영상별 오디오 싱크 오프셋을 서버(JSON 파일)에 저장해뒀다가, 같은 영상이 다시 나오면 그 값을,
+// 처음 보는(또는 저장된 값이 없는) 영상이면 기본값 0을 불러온다 — localStorage는 기기/브라우저
+// 마다 따로 쌓여서 다른 PC에서는 못 불러오므로 서버에 둔다. dir별로 통째로 한 번만 받아와
+// 캐시해두고, 영상이 바뀔 때마다 그 캐시에서 즉시 조회한다(매번 네트워크 요청을 안 하기 위해).
+let videoSyncOffsetsMap = {};
+let videoSyncOffsetsLoaded = false;
+
+function loadVideoSyncOffsetsFromServer() {
+    return axios.get('/video/sync-offsets', {params: {dir}})
+        .then(function(response) {
+            videoSyncOffsetsMap = response.data || {};
+        })
+        .catch(function() {
+            videoSyncOffsetsMap = {};
+        })
+        .finally(function() {
+            videoSyncOffsetsLoaded = true;
+        });
+}
+
+function saveSyncOffsetForCurrentVideo() {
+    if (!currentVideo) return;
+    if (audioOffset === 0) {
+        delete videoSyncOffsetsMap[currentVideo]; // 기본값이면 굳이 저장해두지 않는다
+    } else {
+        videoSyncOffsetsMap[currentVideo] = audioOffset;
+    }
+    scheduleSyncOffsetPost({dir: dir, filename: currentVideo, offset: audioOffset});
+}
+
+// a/d 키를 연타할 때 saveSyncOffsetForCurrentVideo()가 그때마다 불리는데, 중간값(-0.01,
+// -0.02, ...)은 의미가 없고 마지막으로 정착한 값만 중요하다 — 그래서 디바운스로 처리한다:
+// 조정할 때마다 타이머를 리셋하고, 3초간 추가 조정이 없어야 그제서야 실제로 보낸다.
+// 3초가 되기 전에 다음 영상으로 넘어가거나 페이지를 벗어나면 flushSyncOffsetPost()로 그
+// 시점에 즉시 보낸다(안 그러면 그 마지막 조정값이 서버에 영영 저장되지 않는다).
+let syncOffsetDebounceTimer = null;
+let syncOffsetPendingPayload = null;
+
+function sendSyncOffsetPost(payload, useBeacon) {
+    if (useBeacon && navigator.sendBeacon) {
+        // 페이지를 벗어나는 시점(beforeunload)엔 일반 axios 요청이 완료 전에 취소될 수 있어
+        // sendBeacon으로 보낸다 — 브라우저가 페이지 종료와 무관하게 전송을 보장해준다.
+        const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+        navigator.sendBeacon('/video/sync-offset', blob);
+    } else {
+        axios.post('/video/sync-offset', payload).catch(function() {});
+    }
+}
+
+function scheduleSyncOffsetPost(payload) {
+    syncOffsetPendingPayload = payload;
+    clearTimeout(syncOffsetDebounceTimer);
+    syncOffsetDebounceTimer = setTimeout(function() {
+        syncOffsetDebounceTimer = null;
+        const pending = syncOffsetPendingPayload;
+        syncOffsetPendingPayload = null;
+        if (pending) sendSyncOffsetPost(pending);
+    }, 3000);
+}
+
+function flushSyncOffsetPost(useBeacon) {
+    if (!syncOffsetDebounceTimer) return;
+    clearTimeout(syncOffsetDebounceTimer);
+    syncOffsetDebounceTimer = null;
+    const pending = syncOffsetPendingPayload;
+    syncOffsetPendingPayload = null;
+    if (pending) sendSyncOffsetPost(pending, useBeacon);
+}
+
+function cancelSyncOffsetPost() {
+    clearTimeout(syncOffsetDebounceTimer);
+    syncOffsetDebounceTimer = null;
+    syncOffsetPendingPayload = null;
+}
+
+window.addEventListener('beforeunload', function() { flushSyncOffsetPost(true); });
+window.addEventListener('pagehide', function() { flushSyncOffsetPost(true); });
+
+function applySavedSyncOffset() {
+    const saved = videoSyncOffsetsMap[currentVideo];
+    audioOffset = typeof saved === 'number' ? saved : 0;
 }
 
 function showVolumeMessage(isVideoJS) {
@@ -934,26 +1058,34 @@ function delayAudio() {
     let video = document.querySelector('#videoPlayer')
     if (!video) return;
 
-    function bindVideoElement(videoElement, isVjs) {
-        syncVideoElement = videoElement;
-        pendingIsVjs = isVjs;
-        if (syncAudioActive) {
-            // 이전 영상에서 이미 켠 상태라면 새 영상에도 그대로 이어서 켠다
-            activateSyncAudio(videoElement, isVjs);
-        }
-    }
-
     if (isVideoJs()) {
         const audioPlayer = player;
         audioPlayer.ready(function() {
             if (audioPlayer.isDisposed()) return;
             const videoElement = audioPlayer.el().getElementsByTagName('video')[0];
-            bindVideoElement(videoElement, true);
+            bindSyncVideoElement(videoElement, true);
         });
     } else if (video instanceof HTMLMediaElement) {
-        bindVideoElement(video, false);
+        bindSyncVideoElement(video, false);
     } else {
         console.error('Selected element is not an HTMLMediaElement');
+    }
+}
+
+// 새 영상으로 넘어갈 때마다 호출된다. 네이티브 경로는 매번 새 <video> 엘리먼트가 생기므로
+// 그래프를 다시 만들어야 하지만, video.js의 fast path(player.src()로 같은 tech를 재사용)는
+// 엘리먼트가 그대로라 다시 만들 필요가 없다 — 이미 켜져 있으면 loadstart/timeupdate가 새
+// src와 새 audioOffset을 알아서 따라간다. 저장된 오프셋이 있는 영상은(그래프가 아직 없어도)
+// 바로 들리게 해야 하므로 이번엔 즉시 활성화한다.
+function bindSyncVideoElement(videoElement, isVjs) {
+    const sameElement = videoElement === syncVideoElement;
+    syncVideoElement = videoElement;
+    pendingIsVjs = isVjs;
+    if (sameElement && syncAudioActive) {
+        return;
+    }
+    if (syncAudioActive || audioOffset !== 0) {
+        activateSyncAudio(videoElement, isVjs);
     }
 }
 
@@ -1049,7 +1181,10 @@ function activateSyncAudio(videoElement, isVjs) {
 function initPage() {
     previousVideos.push(undefined)
     // player = videojs('videoPlayer');
-    getVideo();
+    loadVideoSyncOffsetsFromServer().then(function() {
+        getVideo();
+    });
 }
+
 
 document.addEventListener("DOMContentLoaded", initPage)
