@@ -20,6 +20,10 @@ app/tasks.pkl
 data/data.json
 auto_trading/kiwoom_trailing_state.json
 auto_trading/kiwoom_fire_state.json
+# 모의/실전 분리 후 파일명이 _mock/_real로 나뉜다 (kiwoom_api.env_path)
+auto_trading/kiwoom_trailing_state_*.json
+auto_trading/kiwoom_fire_state_*.json
+auto_trading/*.bak_*
 logs/
 HELP.md
 .gradle

@@ -41,6 +41,21 @@ def get_account_credentials() -> tuple:
     호출부에서 acnt_no를 직접 .env 키로 읽지 말고 반드시 이 함수를 통해서만 가져올 것."""
     return os.environ.get(_cfg['acnt_no_env']), os.environ.get(_cfg['acnt_pwd_env'])
 
+
+def env_path(path: str) -> str:
+    """상태·이력 파일 경로에 KIWOOM_ENV를 붙여 모의/실전을 분리한다.
+
+        logs/kiwoom_trading/trades.jsonl → trades_real.jsonl   (KIWOOM_ENV=real)
+                                         → trades_mock.jsonl   (KIWOOM_ENV=mock)
+
+    ⚠️ 분리하지 않으면 모의계좌 상태가 실전 매매를 조종한다. 2026-08-14 실전 전환 당일
+       kiwoom_trailing_state.json에 남아 있던 모의 포지션 상태(후성 093370: peak_rate 11.86%,
+       tranche_qty 10)가 그대로 쓰여서, 실계좌 후성이 그 모의 기준선으로 10주 매도됐다.
+       실현손익 기준점(asset_baseline)도 모의 자산(749만원)이 실계좌(172만원)에 적용되고 있었다.
+    """
+    root, ext = os.path.splitext(path)
+    return f'{root}_{KIWOOM_ENV}{ext}'
+
 _RATE_LIMIT_SLEEP = 0.35  # 키움 초당 호출 제한 대응
 
 

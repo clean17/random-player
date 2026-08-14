@@ -126,7 +126,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials
+from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials, env_path
 from auto_trading.kiwoom_trailing_stop import _log, _record_trade, is_market_open, order_accepted
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
@@ -161,8 +161,10 @@ COOLDOWN_DAYS = 2          # 같은 종목 재매수 금지 기간. 1일에 샀�
 
 PKL_DIR = r'C:\my-project\AutoSales.py\data\pickle'
 _LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'kiwoom_trading')
-BREADTH_CACHE = os.path.join(_LOG_DIR, 'market_breadth_cache.json')
-FIRE_STATE_FILE = os.path.join(os.path.dirname(__file__), 'kiwoom_fire_state.json')
+BREADTH_CACHE = os.path.join(_LOG_DIR, 'market_breadth_cache.json')  # 시장 지표 캐시라 계좌와 무관 — 분리 불필요
+# 쿨다운·당일 매수건수는 계좌별 상태다. 모의/실전이 섞이면 모의에서 산 종목의 쿨다운이 실전 매수를
+# 막고, _daily 카운트도 뒤섞인다. 상세는 kiwoom_api.env_path() docstring 참고.
+FIRE_STATE_FILE = env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_fire_state.json'))
 
 ACNT_NO, ACNT_PWD = get_account_credentials()
 
