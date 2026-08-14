@@ -1,6 +1,22 @@
 """
-키움 계좌 보유 종목 트레일링 스탑 자동 매매.
+키움 계좌 보유 종목 자동 청산.
 
+━━━ 현재 운영 규칙 (2026-08-14~) ━━━
+  손절 -6% 전량 청산  +  보유 5영업일 상한 전량 청산.  트레일링은 꺼져 있다(TRAILING_ENABLED=False).
+
+  3년치(2023-04~2026-08, 신호 30,205건) 연도별 검증에서 트레일링이 4개 연도 '전부' 손실을
+  냈다(현행 상회 0/4). 같은 신호에 청산만 바꾼 연도별 평균 %(왕복비용 0.2% 반영 전):
+                              2023    2024    2025    2026    전체   비용후
+    트레일링(최대15일)         -1.009  -1.290  -0.455  -0.384  -0.794  -0.994
+    트레일링 튜닝(활성3/gap3)  -0.627  -0.724  -0.378  -0.362  -0.526  -0.726
+    손절-6% + 5일 보유         -0.120  -0.075  +0.578  +0.705  +0.267  +0.067  ← 채택
+  이 신호의 수익은 1~3일에 몰려 있는데(1일 +0.106% / 3일 +0.085% / 10일 -0.918% / 20일 -1.366%)
+  트레일링은 +7%까지 올라야 켜지고 5%p 되돌릴 때까지 안 팔아, 수익 구간이 끝난 뒤에 나온다.
+  ⚠️ 비용 후 +0.067%는 '간신히 본전 위'다. 2023·2024년은 개선 후에도 마이너스이고, pkl에
+     상장폐지 종목이 빠져 있어(생존편향) 실제는 이보다 낮다.
+  검증 스크립트: auto_trading/backtest/exit_validation_3y.py
+
+━━━ 아래는 TRAILING_ENABLED=True로 되돌렸을 때의 규칙 (현재 비활성) ━━━
 기본 전략 (수정하려면 아래 상수만 변경):
   - 손절            : -6%  → 전량 즉시 청산
   - 되돌림 손절     : 한 번이라도 +5%를 찍었던(트레일링 활성화된) 종목도 손절선은 동일하게 -6%
@@ -57,7 +73,7 @@ from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
 from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
-    dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders
+    dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -133,6 +149,25 @@ MIN_PROFIT_FLOOR = 0.03
 ARMED_GIVEBACK_STOP = -0.06
 STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고점 없이 그 트리거선보다 추가로 이만큼 더 밀리면 잔여 전량 청산
 
+# ── 트레일링 비활성화 + 보유기간 상한 (2026-08-14) ──────────────────────────
+# 3년치(2023-04~2026-08, 신호 30,205건) 연도별 검증 결과 트레일링 방식이 구조적으로 손실을
+# 내고 있었다. 같은 신호에 청산만 바꿔 비교(왕복비용 0.2% 반영 전 / 연도별 평균 %):
+#                              2023    2024    2025    2026    전체   비용후
+#   트레일링(현행,최대15일)     -1.009  -1.290  -0.455  -0.384  -0.794  -0.994
+#   트레일링 파라미터 튜닝      -0.627  -0.724  -0.378  -0.362  -0.526  -0.726
+#     (활성3%/gap3%/최대3일)
+#   손절-6% + 5일 보유          -0.120  -0.075  +0.578  +0.705  +0.267  +0.067  ← 채택
+# 트레일링은 4개 연도 '전부'에서 다른 어떤 방식보다 나빴다(현행 상회 0/4). 파라미터를 당겨도
+# 마이너스를 못 벗어난다 — 이 신호의 수익이 1~3일에 몰려 있는데 트레일링은 +7%까지 올라야
+# 켜지고 거기서 5%p 되돌릴 때까지 안 팔아서, 수익 구간이 끝난 뒤에 나오기 때문이다.
+# 반면 '손절 -6% + 5거래일 보유'는 4개 연도 전부에서 현행을 상회하고 비용 후에도 플러스였다.
+#
+# ⚠️ 3년 평균 +0.267%(비용 후 +0.067%)는 '간신히 본전 위'다. 2023·2024년은 개선 후에도
+#    마이너스이고, pkl에 상장폐지 종목이 빠져 있어(생존편향) 실제는 이보다 낮다.
+# 되돌리려면 TRAILING_ENABLED=True로 바꾸면 원래 로직이 그대로 살아난다.
+TRAILING_ENABLED = False
+MAX_HOLD_DAYS = 5   # 이 영업일수를 넘겨 보유 중이면 잔여 전량 시장가 청산 (0 이하면 상한 없음)
+
 # ── 기업행위(액면분할·권리락)/데이터 이상 방어 ──────────────────────────────
 # 액면분할 당일 아침엔 증권사가 '현재가는 분할 후 가격, 평단가·수량은 아직 조정 전'으로 주는
 # 구간이 있다. 2026-07-16 티엘비(1:2 분할)에서 평단가 88,500 / 현재가 41,550으로 들어와
@@ -145,9 +180,11 @@ STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고�
 ANOMALY_DROP = 0.35
 ANOMALY_RATE = -0.25
 
-STATE_FILE = os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_state.json')
-TRADES_FILE = os.path.join(_LOG_DIR, 'trades.jsonl')  # 실현손익 이력(승률/손익비 계산용) — 기록 누락 가능성 있음
-BASELINE_FILE = os.path.join(_LOG_DIR, 'asset_baseline.json')  # 일/주/월 시작 시점 총자산 스냅샷
+# 모의/실전 상태·이력은 반드시 분리한다(env_path가 파일명에 _mock/_real을 붙임) — 섞이면
+# 모의 계좌의 트레일링 상태·자산 기준점이 실전 매매를 조종한다. 상세는 env_path() docstring 참고.
+STATE_FILE = env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_state.json'))
+TRADES_FILE = env_path(os.path.join(_LOG_DIR, 'trades.jsonl'))  # 실현손익 이력(승률/손익비 계산용) — 기록 누락 가능성 있음
+BASELINE_FILE = env_path(os.path.join(_LOG_DIR, 'asset_baseline.json'))  # 일/주/월 시작 시점 총자산 스냅샷
 
 # KIWOOM_ENV(mock/real)에 맞는 계좌번호 쌍을 가져옴 — 모의/실전 계좌번호가 다르므로 직접 os.environ으로 읽지 않음
 ACNT_NO, ACNT_PWD = get_account_credentials()
@@ -577,6 +614,45 @@ def _ensure_baseline(current_total_asset: float) -> Dict:
     return data
 
 
+def record_cash_transfer(amount: float, note: str = '') -> Dict:
+    """계좌 입출금(직접 이체)을 손익 기준선에 반영한다. 입금은 양수, 출금은 음수.
+
+    자산기준 손익은 '현재 총자산 - 기준 자산'이라 입출금을 매매 손익과 구분하지 못한다.
+    실제로 2026-08-14 실계좌에 259,052원을 입금했더니 오늘 손익이 +260,898원(+15.09%)으로
+    잡혔다(같은 시각 체결기준 손익은 +1,846원). 키움 API에 입출금 조회가 없어 자동 감지가
+    안 되므로, 이체할 때마다 이 함수로 기준선을 같이 올려/내려 주어야 한다.
+
+        venv/Scripts/python.exe -m auto_trading.kiwoom_trailing_stop --transfer 259052
+        venv/Scripts/python.exe -m auto_trading.kiwoom_trailing_stop --transfer -100000 --note "출금"
+
+    기준선에 amount를 더하면 (현재자산 - (기준선+입금액)) 이 되어 입금분이 손익에서 빠진다.
+    """
+    data = _load_baseline()
+    before = {k: data.get(k) for k in ('daily_start', 'weekly_start', 'monthly_start')}
+
+    for key in ('daily_start', 'weekly_start', 'monthly_start'):
+        if data.get(key):
+            data[key] = float(data[key]) + amount
+
+    # last_asset도 같이 올려야 다음 날 기준선 롤오버(rollover_base)가 어긋나지 않는다.
+    if data.get('last_asset'):
+        data['last_asset'] = float(data['last_asset']) + amount
+
+    # 감사용 이력 — 나중에 "이 기준선이 왜 이 값인가"를 되짚을 수 있게 남긴다.
+    data.setdefault('transfers', []).append({
+        'ts': datetime.datetime.now().isoformat(timespec='seconds'),
+        'amount': amount,
+        'note': note,
+    })
+    _save_baseline(data)
+
+    _log.info(f'[입출금반영] {amount:+,.0f}원 {note} — 기준선 '
+              f'일 {before["daily_start"]:,.0f}→{data["daily_start"]:,.0f} / '
+              f'주 {before["weekly_start"]:,.0f}→{data["weekly_start"]:,.0f} / '
+              f'월 {before["monthly_start"]:,.0f}→{data["monthly_start"]:,.0f}')
+    return data
+
+
 def get_asset_based_pnl(current_total_asset: float) -> Dict:
     """실제 총자산 변동 기준 일/주/월 손익. 거래 누락·수수료·세금과 무관하게 항상 정확함
     (trades.jsonl 기반 get_pnl_summary()의 실현손익 집계는 기록되지 않은 거래가 있으면 틀릴 수 있음)."""
@@ -612,7 +688,32 @@ def _fresh_position_state(qty: int) -> Dict:
         'exited': False,
         'last_price': None,  # 직전 사이클 관측 현재가 (기업행위 급락 감지용)
         'halted': False,     # 데이터 이상으로 자동매매 정지된 상태인지
+        # MAX_HOLD_DAYS 계산 기준일. 실제 매수일이 아니라 '이 상태를 처음 만든 날'이다 —
+        # 추가매수로 상태가 리셋되면 보유기간도 그 시점부터 다시 센다(평단가가 바뀌었으므로
+        # 손절선과 마찬가지로 새 기준으로 보는 게 맞다).
+        'entry_date': datetime.date.today().isoformat(),
     }
+
+
+def _held_business_days(entry_date: Optional[str]) -> Optional[int]:
+    """entry_date 이후 지난 영업일(월~금) 수. 공휴일은 반영하지 않으므로 실제 거래일보다 크거나
+    같다 — 상한에 약간 일찍 걸릴 수 있는데, 늦게 파는 것보다 안전한 방향이라 그대로 둔다."""
+    if not entry_date:
+        return None
+    try:
+        start = datetime.date.fromisoformat(entry_date)
+    except (TypeError, ValueError):
+        return None
+    today = datetime.date.today()
+    if today <= start:
+        return 0
+    days = 0
+    cur = start
+    while cur < today:
+        cur += datetime.timedelta(days=1)
+        if cur.weekday() < 5:   # 0=월 ~ 4=금
+            days += 1
+    return days
 
 
 def _detect_data_anomaly(pos_state: Dict, rate: float, cur_price: float) -> Optional[str]:
@@ -671,6 +772,12 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     if 'target_idx' not in pos_state:
         pos_state['target_idx'] = 1 if pos_state.get('target_hit') else 0
 
+    # MAX_HOLD_DAYS 도입(2026-08-14) 이전에 만들어진 상태에는 entry_date가 없다. 실제 매수일을
+    # 알 수 없으므로 '오늘 처음 본 것'으로 잡는다 — 보유상한이 즉시 발동해 예상치 못한 전량
+    # 청산이 일어나는 것보다, 오늘부터 다시 세는 쪽이 안전하다.
+    if not pos_state.get('entry_date'):
+        pos_state['entry_date'] = datetime.date.today().isoformat()
+
     # 0) 기업행위/데이터 이상 방어 — 손절·트레일링 등 어떤 매도보다 먼저 평가한다.
     #    값이 신뢰할 수 없으면 매도하지 않고 경고만 남긴 뒤 그대로 보유 (실손실 확정 방지).
     anomaly = _detect_data_anomaly(pos_state, rate, cur_price)
@@ -728,6 +835,37 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                       ord_no=res.get('ord_no'))
         pos_state['remaining_qty'] = 0
         pos_state['exited'] = True
+        return pos_state
+
+    # 1-2) 보유기간 상한 — 손절 다음, 트레일링보다 먼저 본다.
+    #      이 신호의 수익은 1~3일에 몰려 있고 그 뒤로 소멸한다(3년 검증: 1일 +0.106% /
+    #      3일 +0.085% / 10일 -0.918% / 20일 -1.366%). 오래 들고 있는 것 자체가 손실이다.
+    held = _held_business_days(pos_state.get('entry_date')) if MAX_HOLD_DAYS > 0 else None
+    if held is not None and held >= MAX_HOLD_DAYS:
+        sell_qty = pos_state['remaining_qty']
+        pnl = (cur_price - avg_price) * sell_qty
+        trade_value = cur_price * sell_qty
+        asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
+        res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+        if not order_accepted(res):
+            _log.error(f'[보유상한-주문거부] {stk_nm}({stk_cd}) rate={rate:.2%} {sell_qty}주 → {res} '
+                       f'(이력 미기록, 상태 유지, 다음 사이클에 재시도)')
+            return pos_state
+        _log.info(f'[보유상한청산] {stk_nm}({stk_cd}) rate={rate:.2%} 보유 {held}영업일'
+                  f'(상한 {MAX_HOLD_DAYS}일, 진입 {pos_state.get("entry_date")}) '
+                  f'매입가={avg_price:,.0f}원 현재가={cur_price:,.0f}원 '
+                  f'{sell_qty}주 전량 청산, 손익={pnl:+,.0f}원, '
+                  f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) ord_no={res.get("ord_no")}')
+        _record_trade(stk_cd, stk_nm, 'sell', 'max_hold', sell_qty, cur_price, avg_price, pnl,
+                      asset_ratio=asset_ratio, holding_ratio=1.0, rate=rate,
+                      peak_rate=pos_state.get('peak_rate'), ord_no=res.get('ord_no'))
+        pos_state['remaining_qty'] = 0
+        pos_state['exited'] = True
+        return pos_state
+
+    # TRAILING_ENABLED=False면 아래 트레일링/목표가/정체보호를 통째로 건너뛴다.
+    # (3년 검증에서 트레일링이 4개 연도 전부 손실이었다 — 위 상수 주석 참고)
+    if not TRAILING_ENABLED:
         return pos_state
 
     # 2) 트레일링 고점 갱신 (+5% 이상에서만 추적 시작)
@@ -890,9 +1028,9 @@ def log_account_summary():
     _log.info(
         f'[계좌현황] 총자산={s["total_asset"]:,.0f}원 매입={s["tot_pur_amt"]:,.0f}원 '
         f'평가={s["tot_evlt_amt"]:,.0f}원 손익={s["tot_evlt_pl"]:+,.0f}원 수익률={s["tot_prft_rt"]:+.2%} '
-        f'\n오늘손익(자산기준)={asset_pnl["daily"]["pnl"]:+,.0f}원({asset_pnl["daily"]["rate"]:+.2%}) '
-        f'주간손익(자산기준)={asset_pnl["weekly"]["pnl"]:+,.0f}원({asset_pnl["weekly"]["rate"]:+.2%}) '
-        f'월간손익(자산기준)={asset_pnl["monthly"]["pnl"]:+,.0f}원({asset_pnl["monthly"]["rate"]:+.2%}) '
+        # f'\n오늘손익(자산기준)={asset_pnl["daily"]["pnl"]:+,.0f}원({asset_pnl["daily"]["rate"]:+.2%}) '
+        # f'주간손익(자산기준)={asset_pnl["weekly"]["pnl"]:+,.0f}원({asset_pnl["weekly"]["rate"]:+.2%}) '
+        # f'월간손익(자산기준)={asset_pnl["monthly"]["pnl"]:+,.0f}원({asset_pnl["monthly"]["rate"]:+.2%}) '
         f'\n오늘손익(체결기준)={trade_pnl["daily"]["pnl"]:+,.0f}원({trade_pnl["daily"]["rate"]:+.2%}) '
         f'주간손익(체결기준)={trade_pnl["weekly"]["pnl"]:+,.0f}원({trade_pnl["weekly"]["rate"]:+.2%}) '
         f'월간손익(체결기준)={trade_pnl["monthly"]["pnl"]:+,.0f}원({trade_pnl["monthly"]["rate"]:+.2%}) '
@@ -995,6 +1133,21 @@ if __name__ == '__main__':
         if '--date' in sys.argv:
             _d = sys.argv[sys.argv.index('--date') + 1]
         print(reconcile_fills(dry_run='--dry-run' in sys.argv, session_date=_d))
+    elif '--transfer' in sys.argv:
+        # 계좌 입출금을 손익 기준선에 반영 (입금 양수 / 출금 음수)
+        # 사용법: python -m auto_trading.kiwoom_trailing_stop --transfer 259052 [--note "입금"]
+        idx = sys.argv.index('--transfer')
+        _args = sys.argv[idx + 1:]
+        if not _args:
+            print('사용법: python -m auto_trading.kiwoom_trailing_stop --transfer <금액> [--note "설명"]')
+        else:
+            _amt = float(_args[0].replace(',', ''))
+            _note = ''
+            if '--note' in sys.argv:
+                _note = sys.argv[sys.argv.index('--note') + 1]
+            _res = record_cash_transfer(_amt, _note)
+            print(f'기준선 반영 완료: 일 {_res["daily_start"]:,.0f} / '
+                  f'주 {_res["weekly_start"]:,.0f} / 월 {_res["monthly_start"]:,.0f}')
     elif '--buy' in sys.argv:
         # 사용법: python -m auto_trading.kiwoom_trailing_stop --buy <종목코드> [수량]
         # 수량 생략 시 가용 현금 전액으로 시장가 매수

@@ -16,10 +16,11 @@ HEADLESS = False
 USERNAME = settings['SCRAP_USERNAME']
 PASSWORD = settings['SCRAP_PASSWORD']
 
-ACCOUNT = "test"   # 저장 폴더명: IMAGE_DIR2/{ACCOUNT}/images|reels/
+ACCOUNT = "lalababy.amy"
 
 POST_URLS = [
-    "https://www.instagram.com/fkaus014/p/DOuWTchj75b/",   # 테스트할 포스트 URI
+    "https://www.instagram.com/p/DbSpNayxlSW/",   # 테스트할 포스트 URI
+    # "",
 ]
 
 
