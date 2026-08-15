@@ -3,7 +3,7 @@ import time
 import json
 import threading
 import requests
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv, find_dotenv
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -149,6 +149,27 @@ def get_current_price_and_name(stk_cd: str) -> Tuple[int, str]:
 def get_current_price(stk_cd: str) -> int:
     """현재가(원) 반환. 실패 시 0."""
     return get_current_price_and_name(stk_cd)[0]
+
+
+def get_intraday_range(stk_cd: str) -> Optional[Tuple[int, int, int]]:
+    """(현재가, 당일 고가, 당일 저가) 반환. 실패하거나 값이 이상하면 None.
+
+    kiwoom_fire_strategy의 '종가위치' 필터용. 값에 +/- 부호와 콤마가 섞여 오므로 정규화한다.
+    """
+    try:
+        data = _call('ka10001', '/api/dostk/stkinfo', {'stk_cd': stk_cd})
+
+        def num(key):
+            raw = str(data.get(key, '0')).replace(',', '').replace('+', '').replace('-', '')
+            return abs(int(raw or 0))
+
+        cur, high, low = num('cur_prc'), num('high_pric'), num('low_pric')
+        if cur <= 0 or high <= 0 or low <= 0 or high < low:
+            return None
+        return cur, high, low
+    except Exception as e:
+        print(f'[ERROR] get_intraday_range {stk_cd}: {e}')
+        return None
 
 
 # ── 계좌 잔고 조회 ───────────────────────────────────────────────────────────

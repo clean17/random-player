@@ -139,9 +139,23 @@ BREADTH_MIN = 0.0          # 시장폭 레짐 게이트. 0 이하면 게이트�
                            # breadth 방향(전일대비 상승/이평 상회)을 쓰는 안도 테스트했으나
                            # 검증기간 전부 마이너스(-1.6~-2.1%)라 폐기 — 수준(level)만 유효했다.
 FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트 '관심' 탭과 동일)
+# 종가위치 = (현재가-당일저가)/(당일고가-당일저가). 1에 가까울수록 고가 근처 마감.
+# 낮으면 장중 급등이 밀린 것(윗꼬리)이고, 그런 종목은 이후 성과가 나쁘다 — 데드캣 판별용.
+# 근거: auto_trading/backtest/first_signal_filter.py (첫 신호일 11,759건, 기간분할 검증)
+CLOSE_POS_MIN = 0.6
 CASH_DEPLOY_RATIO = 0.70   # 가용 현금 중 자동매수에 쓸 최대 비율 (나머지 30%는 현금 버퍼로 남김)
-BUY_SLOTS = 20             # 하루 최대 신규 매수 종목 수. 7→20 (2026-08-10, 포트폴리오
-                           # 재시뮬레이션 근거는 위 docstring "쿨다운/슬롯 재검증" 참고).
+BUY_SLOTS = 5              # 하루 최대 신규 매수 종목 수. 20→5 (2026-08-14).
+                           # 새 전략(첫 신호일 + 종가위치>=0.6 + 손절-6%/5일보유)으로
+                           # 부트스트랩 25회(후보 80% 표집, 초기자본 229만원) 결과:
+                           #   슬롯 3 : 평균 +11.1%  표준편차 17.2  최저 -25.6%
+                           #   슬롯 5 : 평균 +18.0%  표준편차  9.6  최저 -12.3%  ← 채택
+                           #   슬롯10 : 평균 +14.0%  표준편차  8.5  최저  -4.7%
+                           #   슬롯20 : 평균  +1.2%  표준편차  4.9  (1픽 8만원, nocash 33.6%)
+                           # 슬롯20은 1픽 예산이 너무 잘게 쪼개져 3분의 1이 1주도 못 산다.
+                           # ⚠️ 계좌가 500만원을 넘으면 10이 더 안정적이다(표준편차·최저값 우위).
+                           # 동적 슬롯(현금/50만원 등)은 기각 — 손실→현금감소→슬롯감소→집중도
+                           # 상승의 되먹임으로 표준편차가 26~37까지 뛴다(최저 -70%).
+                           # 근거: auto_trading/backtest/slot_sizing_test.py
                            # 2026-08-11부터 '1픽 예산의 분모'가 아니라 종목 수 상한으로만 쓴다
                            # (예산은 POS_CAP_DIVISOR가 결정).
 POS_CAP_DIVISOR = BUY_SLOTS  # 종목당 상한 = 매수한도 / 20 = 가용현금의 3.5%.
@@ -403,25 +417,48 @@ def run_fire_buy_cycle():
                 pass
         live.append(cand)
 
-    _log.info(f'[fire] 후보 {len(candidates)}종목(쿨다운 제외 후 {len(live)}종목) / '
+    # ── 종가위치 필터 + 정렬 ────────────────────────────────────────────────
+    # 매수 전에 후보 전체의 장중 시세를 먼저 받아 (현재가-저가)/(고가-저가)를 구한다.
+    # 장중 급등이 밀린 종목(윗꼬리)을 그 자리에서 걸러내기 위한 것 — 며칠 지켜보는 '확인'은
+    # 데이터가 두 번 부정했고(신호 차수·반등 지속일수 모두 단조 감소), 종가위치는 당일에
+    # 판별 가능하면서 예측력이 가장 강했다.
+    # 첫 신호일 11,759건 기준 종가위치별 3일 수익률(전/후반기 모두 같은 방향):
+    #   0.0~0.3(윗꼬리) -0.684 | 0.3~0.6 -0.132 | 0.6~0.85 +0.520 | 0.85~1.0 +1.175 (단위 %)
+    # 정렬도 종가위치 높은순으로 한다 — 상위로 좁힐수록 단조 증가한다(상위20 +0.664 →
+    # 상위10 +0.898 → 상위5 +1.166 → 상위3 +1.879). 등락률/거래대금비를 섞은 합성 순위는
+    # 오히려 나빴다(+0.529). 근거: auto_trading/backtest/ranking_test.py
+    # ⚠️ 15:18 시점의 잠정값이라 마감(15:30) 확정값과 다를 수 있다 — 15:20부터 동시호가라
+    #    그 전에 사야 하므로 감수한다. 백테스트는 확정 종가 기준이라 실제는 이보다 낮을 수 있다.
+    from auto_trading.kiwoom_api import get_intraday_range
+    ranked = []
+    skipped_tail = 0
+    for cand in live:
+        rng = get_intraday_range(cand['stk_cd'])
+        if rng is None:
+            continue
+        price, day_high, day_low = rng
+        close_pos = (price - day_low) / (day_high - day_low) if day_high > day_low else 1.0
+        if close_pos < CLOSE_POS_MIN:
+            skipped_tail += 1
+            continue
+        ranked.append({**cand, '_price': price, '_close_pos': close_pos})
+    ranked.sort(key=lambda c: c['_close_pos'], reverse=True)
+
+    _log.info(f'[fire] 후보 {len(candidates)}종목(쿨다운 제외 {len(live)} → '
+              f'종가위치 {CLOSE_POS_MIN} 미달 {skipped_tail}종목 제외 후 {len(ranked)}종목) / '
               f'가용현금 {cash:,.0f}원 → 매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}), '
               f'종목당 상한 {pos_cap:,.0f}원(한도/{POS_CAP_DIVISOR}), 최대 {BUY_SLOTS}종목')
 
-    for k, cand in enumerate(live):
+    for k, cand in enumerate(ranked):
         if buys_today >= BUY_SLOTS:
             break
         stk_cd = cand['stk_cd']
-
-        from auto_trading.kiwoom_api import get_current_price
-        price = get_current_price(stk_cd)
-        if price <= 0:
-            continue
+        price = cand['_price']
+        close_pos = cand['_close_pos']
 
         # 남은 한도를 '남은 후보 수'로 재분할 → 비싸서 못 산 종목의 예산이 뒤 후보로 흘러간다.
         # 종목당 상한(pos_cap)과 한도 잔액으로 이중 제한.
-        # 주의: get_current_price 실패로 skip된 종목은 분모에 남아 있어 예산이 약간 보수적으로
-        #      계산된다(실패는 드물고, 과대 배정보다 안전한 방향이라 그대로 둔다).
-        budget = (deploy_limit - deployed) / max(1, len(live) - k)
+        budget = (deploy_limit - deployed) / max(1, len(ranked) - k)
         spendable = min(budget, pos_cap, deploy_limit - deployed)
         qty = int(spendable // price)
         if qty <= 0:
@@ -444,7 +481,7 @@ def run_fire_buy_cycle():
             continue
         deployed += trade_value
         _log.info(f'[fire매수 {buys_today + 1}/{BUY_SLOTS}] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
-                  f'(총상승률 {cand["total_rate"]}, {ref}breadth={bd_txt}) '
+                  f'(종가위치 {close_pos:.2f}, 총상승률 {cand["total_rate"]}, {ref}breadth={bd_txt}) '
                   f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
                   f'누적 {deployed:,.0f}/{deploy_limit:,.0f}원 → {result}')
         _record_trade(stk_cd, cand['stk_nm'], 'buy', 'fire', qty, price, price, 0.0, asset_ratio=asset_ratio,

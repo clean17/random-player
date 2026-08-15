@@ -632,7 +632,17 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
 			-- AND b.increase_per_day BETWEEN 3 AND 6
             -- AND min_close::numeric < current_close::numeric
             AND b.market_value > 70_000_000_000
-            AND b.signal_days BETWEEN 2 AND 3
+            -- 신호 차수가 올라갈수록 성과가 단조 감소한다(1년 35,054건, 3거래일 보유,
+            -- 단위는 퍼센트): 1번째 +0.431 / 2번째 +0.373 / 3번째 -0.043 / 4번째 -0.305
+            -- / 6번째 -0.697. 기간을 반으로 갈라도 1번째만 양쪽 다 플러스(전반기 +0.865,
+            -- 후반기 +0.096)였고, 종전 조건(2~3)은 후반기가 -0.179로 마이너스였다.
+            -- MDD도 -7.19 -> -6.47로 낫다.
+            -- '며칠 더 지켜보고 확인'하는 접근은 이 데이터와 pkl 3년 반등 분석 두 곳에서
+            -- 모두 부정됐다 — 확인을 기다리는 사이 수익 구간이 끝난다.
+            -- 근거: auto_trading/backtest/entry_timing.py
+            -- 주의: 이 SQL 문자열은 psycopg 파라미터 바인딩을 쓰므로 주석에도 퍼센트 기호를
+            --      넣지 말 것 (플레이스홀더로 해석돼 ProgrammingError가 난다)
+            AND b.signal_days = 1
             and b.last_trading_value/b.avg_trading_value > 0.5
               /*
                * 한국시간 기준:
@@ -735,7 +745,10 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
         and i.created_at::date <= %s::date
         {target_condition}
         group by i.stock_code, i.stock_name, s.logo_image_url, s.category, s.graph_file, s.close
-        having COUNT(DISTINCT i.created_at::date) >= 2
+        -- 종전엔 having COUNT(DISTINCT created_at::date) >= 2 로 신호 1일짜리를 여기서 잘랐다.
+        -- 아래 fire_condition이 signal_days = 1 을 요구하도록 바뀌었으므로(첫 신호일 진입이
+        -- 가장 성과가 좋다는 검증 결과) 이 HAVING을 두면 후보가 항상 0이 된다.
+        having COUNT(DISTINCT i.created_at::date) >= 1
         """
 
     sql = f"""
