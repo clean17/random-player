@@ -68,6 +68,21 @@
 <script src="/static/js/ui_chrome.js?v={{ version }}"></script>
 </body>
 <script>
+    // 붙여넣기하면 화면이 깜빡이며 스크롤이 맨 위로 튀는 진짜 원인:
+    // Quill의 clipboard 모듈은 붙여넣기를 가로챌 때 화면 밖 아주 이상한 좌표(x: -99858 근처)에
+    // 있는 숨김 div(quill.clipboard.container)로 focus()를 옮겨 붙여넣기 내용을 받아낸 다음,
+    // 다시 실제 에디터로 focus()를 돌려놓는다. 이 focus() 호출들이 옵션 없이 이뤄지면 브라우저가
+    // "포커스된 엘리먼트를 화면에 보이게" 기본적으로 스크롤을 시도하는데, 대상이 화면 밖 좌표라
+    // 스크롤이 0으로 튀어버린다(개발자도구로 quill.clipboard.container 위치를 직접 확인해서 특정).
+    // focus()에 항상 preventScroll:true를 강제해서 이 자동 스크롤 자체를 막는다 — 이후에 나오는
+    // keepCaretVisible() 기반 보정들은 만약을 위한 안전망으로만 남겨둔다.
+    (function preventAutoScrollOnFocus() {
+        const nativeFocus = HTMLElement.prototype.focus;
+        HTMLElement.prototype.focus = function (options) {
+            return nativeFocus.call(this, Object.assign({}, options, { preventScroll: true }));
+        };
+    })();
+
     const form = document.getElementById('post-form');
     const contentInput = document.getElementById('content-input');
     const toolbarOptions = [
@@ -108,6 +123,71 @@
         // 2) Delta(JSON)으로 저장하고 싶으면:
         // contentInput.value = JSON.stringify(quill.getContents());
     });
+
+    // 포커스만으로는 스크롤을 움직이지 않는다.
+    // 단, 실제 입력으로 커서가 화면/하단 버튼/키보드 뒤로 내려갈 때만 최소한으로 따라간다.
+    // (이미지 붙여넣기/삽입에서도 재사용하므로 아래 IIFE 밖, 스크립트 최상위에 둔다.)
+    const postCaretFollowEditorEl = document.querySelector('.ql-editor');
+    const postCaretFollowActions = document.querySelector('.form-actions');
+
+    function getVisibleBottom() {
+        const vv = window.visualViewport;
+        const viewportBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
+        const actionsHeight = postCaretFollowActions ? Math.ceil(postCaretFollowActions.getBoundingClientRect().height) + 18 : 78;
+        return viewportBottom - actionsHeight;
+    }
+
+    function getVisibleTop() {
+        return 72; // fixed top-bar area + small breathing room
+    }
+
+    function keepCaretVisible() {
+        if (!postCaretFollowEditorEl) return;
+        const range = quill.getSelection();
+        if (!range) return;
+        const bounds = quill.getBounds(range.index, range.length);
+        const editorRect = postCaretFollowEditorEl.getBoundingClientRect();
+        const caretTop = editorRect.top + bounds.top;
+        const caretBottom = caretTop + Math.max(bounds.height, 22);
+        const visibleBottom = getVisibleBottom();
+        const visibleTop = getVisibleTop();
+
+        if (caretBottom > visibleBottom) {
+            const delta = Math.ceil(caretBottom - visibleBottom + 12);
+            window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+        } else if (caretTop < visibleTop) {
+            const delta = Math.floor(caretTop - visibleTop - 12);
+            window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+        }
+    }
+
+    // 이미지 embed 삽입 + 스크롤 튐 방지.
+    // quill.setSelection()이 내부적으로(혹은 브라우저의 Selection 이동이) 캐럿을 화면에 보이게
+    // 하려고 스크롤을 억지로 맨 위 등 엉뚱한 위치로 튀기는 경우가 있었다 — PC에서 이미지를
+    // 붙여넣을 때 화면이 깜빡하며 맨 위로 튀던 원인. setSelection() 직후 같은 동기 실행 구간에서
+    // 바로 이전 스크롤 위치로 되돌려 페인트 전에 눈에 보이는 튐 자체를 없애고(rAF까지 기다리면
+    // 이미 한 프레임 튄 게 그려진 뒤라 깜빡임으로 보인다), 이미지가 아직 로드 전이라 레이아웃이
+    // 나중에 또 바뀌는 경우를 대비해 rAF와 이미지 load 시점에도 한 번 더 보정한다.
+    function insertQuillImage(url, range) {
+        const beforeScroll = { x: window.scrollX, y: window.scrollY };
+        quill.insertEmbed(range.index, 'image', url);
+        const insertedIndex = range.index;
+        range.index += 1;
+        quill.setSelection(range.index);
+
+        function restoreScroll() {
+            window.scrollTo(beforeScroll.x, beforeScroll.y);
+            keepCaretVisible();
+        }
+        restoreScroll();
+        requestAnimationFrame(restoreScroll);
+
+        const leaf = quill.getLeaf(insertedIndex);
+        const node = leaf && leaf[0] && leaf[0].domNode;
+        if (node && node.tagName === 'IMG' && !node.complete) {
+            node.addEventListener('load', restoreScroll, { once: true });
+        }
+    }
 
     // Quill 초기화 뒤쪽에 붙이면 됨
     // capture: true로 등록 — Quill 자체 clipboard 모듈도 같은 root에 paste 리스너를 붙여두기 때문에,
@@ -158,9 +238,7 @@
             const imageUrl = await uploadImage(file);
             if (!imageUrl) continue;
 
-            quill.insertEmbed(range.index, 'image', imageUrl);
-            range.index += 1;
-            quill.setSelection(range.index);
+            insertQuillImage(imageUrl, range);
         }
     }, { capture: true });
 
@@ -207,9 +285,7 @@
                 const imageUrl = await uploadImage(file);
                 if (!imageUrl) continue;
 
-                quill.insertEmbed(range.index, 'image', imageUrl);
-                range.index += 1;
-                quill.setSelection(range.index);
+                insertQuillImage(imageUrl, range);
             }
         };
     }
@@ -233,45 +309,12 @@
         this.quill.setSelection(range.index + 1);
     }*/
 
-    // 포커스만으로는 스크롤을 움직이지 않는다.
-    // 단, 실제 입력으로 커서가 화면/하단 버튼/키보드 뒤로 내려갈 때만 최소한으로 따라간다.
     (function initPostCaretFollow() {
         const form = document.getElementById('post-form');
-        const editorEl = document.querySelector('.ql-editor');
-        const actions = document.querySelector('.form-actions');
+        const editorEl = postCaretFollowEditorEl;
         if (!form || !editorEl || !quill) return;
 
         let lastFocusScroll = null;
-
-        function getVisibleBottom() {
-            const vv = window.visualViewport;
-            const viewportBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
-            const actionsHeight = actions ? Math.ceil(actions.getBoundingClientRect().height) + 18 : 78;
-            return viewportBottom - actionsHeight;
-        }
-
-        function getVisibleTop() {
-            return 72; // fixed top-bar area + small breathing room
-        }
-
-        function keepCaretVisible() {
-            const range = quill.getSelection();
-            if (!range) return;
-            const bounds = quill.getBounds(range.index, range.length);
-            const editorRect = editorEl.getBoundingClientRect();
-            const caretTop = editorRect.top + bounds.top;
-            const caretBottom = caretTop + Math.max(bounds.height, 22);
-            const visibleBottom = getVisibleBottom();
-            const visibleTop = getVisibleTop();
-
-            if (caretBottom > visibleBottom) {
-                const delta = Math.ceil(caretBottom - visibleBottom + 12);
-                window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
-            } else if (caretTop < visibleTop) {
-                const delta = Math.floor(caretTop - visibleTop - 12);
-                window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
-            }
-        }
 
         form.addEventListener('focusin', function (event) {
             if (event.target !== editorEl && !editorEl.contains(event.target)) return;
@@ -279,11 +322,23 @@
             // 모바일 브라우저가 focus 시 임의로 스크롤하는 것을 즉시 되돌림.
             requestAnimationFrame(function () {
                 if (lastFocusScroll) window.scrollTo(lastFocusScroll.x, lastFocusScroll.y);
+                // PC에서 붙여넣기하면 Quill이 클립보드 처리 중 내부적으로 포커스를 다시 주는
+                // focusin이 한 번 더 발생하는데, 그 순간 캡처되는 lastFocusScroll이 "이미
+                // 맨 위로 튄" 값이라 그대로 복원하면 이 값이 우리 keepCaretVisible() 보정을
+                // 덮어써 스크롤이 0에 고정돼버렸다(실측으로 확인). 캐럿 기준 보정이 항상
+                // 마지막 발언권을 갖도록 여기서도 한 번 더 호출한다.
+                keepCaretVisible();
             });
         });
 
+        // insertEmbed()로 삽입되는 이미지(붙여넣기/툴바 버튼)는 source가 'api'라 여기서 걸러지고,
+        // 그 경로들에서는 각자 삽입 직후 insertQuillImage()가 보정한다.
+        // rAF만 쓰면 브라우저가 이미 한 프레임 엉뚱한 위치로 스크롤한 걸 그려버린 뒤에야
+        // 보정하게 되어 눈에는 깜빡임으로 보인다 — 같은 동기 실행 구간에서 즉시 한 번 보정하고,
+        // rAF는 그래도 남는 지연분에 대한 안전망으로만 둔다.
         quill.on('text-change', function (_delta, _oldDelta, source) {
             if (source !== 'user') return;
+            keepCaretVisible();
             requestAnimationFrame(keepCaretVisible);
         });
     })();
