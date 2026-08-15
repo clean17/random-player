@@ -14,6 +14,7 @@
     <div class="top-bar">
         <div class="back">
             <a href="{{ url_for('main.home') }}">Back</a>
+            <span id="videoCount" class="video-count"></span>
         </div>
         {% if directory != "10" %}
         <div class="prev"><a href="#" id="prevButton">Prev</a></div>
@@ -39,8 +40,10 @@
             {% if directory != "10" %}
             <div id="controls-stack">
                 <div id="controls-sync">
+                    <button id="syncPlusBigBtn">+0.1</button>
                     <button id="syncPlusBtn">+</button>
                     <button id="syncMinusBtn">-</button>
+                    <button id="syncMinusBigBtn">-0.1</button>
                     <button id="syncResetBtn">Reset</button>
                 </div>
                 <div id="controls-top">

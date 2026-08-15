@@ -130,7 +130,14 @@ def get_video(filepath):
         print(f"[video] not found: {full_path}")
         abort(404)
 
-    return send_file(full_path, conditional=True)
+    try:
+        return send_file(full_path, conditional=True)
+    except FileNotFoundError:
+        # os.path.exists() 확인과 send_file() 내부 open() 사이의 TOCTOU 레이스 — 경로가
+        # \\wsl.localhost\...(Docker Desktop 볼륨)라 네트워크 순단이나 삭제 버튼과의 경합으로
+        # 그 짧은 틈에 파일이 사라질 수 있다. 그대로 두면 500으로 죽으므로 404로 처리한다.
+        print(f"[video] disappeared before send_file: {full_path}")
+        abort(404)
 
 
 # 이미지 리스트, 채팅 페이지에서 임시로 사용할 엔드포인트

@@ -11,6 +11,8 @@ const topDiv = document.querySelector('.top-bar');
 const syncMessage = document.getElementById('sync-message');
 const volumeMessage = document.getElementById('volume-message');
 const filenameDisplay = document.getElementById('video-filename');
+const videoCountEl = document.getElementById('videoCount');
+let totalVideoCount = null; // 디렉터리 내 전체 영상 개수 (목록을 새로 받아올 때마다 갱신, 삭제 시 즉시 -1)
 const prevButton = document.getElementById('prevButton');
 const loopButton = document.getElementById('loopbutton');
 const aBtn  = document.getElementById('aButton');
@@ -204,6 +206,10 @@ function selectVideoFromArr(videos, randomIndex) {
     playVideo(videoUrl)
 }
 
+function updateVideoCountDisplay() {
+    if (videoCountEl) videoCountEl.textContent = totalVideoCount === null ? '' : `총 ${totalVideoCount}개`;
+}
+
 function getVideo() {
     document.querySelectorAll('canvas').forEach(elem => elem.remove());
     resetLoop();
@@ -213,9 +219,13 @@ function getVideo() {
                 let videos = response.data;
                 if (videos.length > 0) {
                     fetchVideoArr = [...videos];
+                    totalVideoCount = videos.length;
+                    updateVideoCountDisplay();
                     const randomIndex = Math.floor(Math.random() * fetchVideoArr.length);
                     selectVideoFromArr(fetchVideoArr, randomIndex);
                 } else {
+                    totalVideoCount = 0;
+                    updateVideoCountDisplay();
                     alert('No videos found');
                 }
             });
@@ -225,49 +235,104 @@ function getVideo() {
     }
 }
 
+// 세로 영상(3분할 대상)인지 실제 재생 없이 가볍게 먼저 확인한다. preload="metadata"만 받으므로
+// (전체 영상을 새로 받는 video.js/네이티브 로드보다 훨씬 가볍다) PC에서 fast path(video.js)로
+// 재생을 시작했다가 metadata 도착 후에야 세로인 걸 알고 처음부터 다시 네이티브로 받는 이중
+// 다운로드를 피하려는 용도다 — 그 중복 다운로드가 초반 네트워크 버스트 구간을 낭비해서, 3초쯤
+// 뒤 버퍼가 바닥나며 2초가량 끊기는 원인이었다. 실패해도(네트워크 에러 등) false로 처리해
+// 기존 fast path의 loadedmetadata 안전장치가 그대로 잡아내도록 한다.
+function probeVideoIsVerticalSplit(videoUrl, callback) {
+    const probe = document.createElement('video');
+    let done = false;
+    function finish(isVertical) {
+        if (done) return;
+        done = true;
+        probe.removeEventListener('loadedmetadata', onMeta);
+        probe.removeEventListener('error', onError);
+        probe.src = '';
+        probe.load();
+        probe.remove();
+        callback(isVertical);
+    }
+    function onMeta() {
+        const ratio = probe.videoWidth ? probe.videoHeight / probe.videoWidth : 0;
+        finish(ratio > 1 && window.innerWidth > window.innerHeight);
+    }
+    function onError() {
+        finish(false);
+    }
+    probe.preload = 'metadata';
+    probe.muted = true;
+    probe.style.display = 'none';
+    probe.addEventListener('loadedmetadata', onMeta);
+    probe.addEventListener('error', onError);
+    document.body.appendChild(probe);
+    probe.src = videoUrl;
+    probe.load();
+}
+
+// 기존 fast path 본문 — video.js가 이미 실행 중일 때 그 위에서 바로 재생한다. Android는 비동기
+// 콜백(loadedmetadata → changeVideo)에서 play()를 차단하므로, 사용자 제스처 컨텍스트 안에서
+// 기존 플레이어를 재활용해 동기적으로 play()를 호출해야 한다 — 그래서 모바일에서는 이 함수를
+// probe 없이 즉시(동기) 호출한다.
+function startVjsFastPath(videoUrl) {
+    mimeType = currentVideo.split('.').pop() === 'ts' ? 'video/mp2t' : 'video/mp4';
+    pushVideoArr(currentVideo);
+    player.off('loadeddata');
+    player.one('loadeddata', function() {
+        filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl));
+    });
+    player.src({type: mimeType, src: videoUrl});
+    player.load();
+    player.volume(previousVolume);
+    player.loop(isLooping);
+    player.play().catch(() => {});
+    showControls(); // 새 영상 시작 시 컨트롤을 즉시 노출 (삭제 후 등 재사용 경로 대비)
+
+    // fast path는 delayAudio()를 다시 안 타므로, 이 영상에 저장된 싱크 오프셋이 있는데
+    // 그래프가 아직 한 번도 켜진 적 없다면 여기서 직접 켜준다(안 그러면 값은 불러와졌어도
+    // 실제로 들리지는 않는다). 이미 켜져 있다면 loadstart/timeupdate가 알아서 따라간다.
+    bindSyncVideoElement(player.el().getElementsByTagName('video')[0], true);
+
+    // PC는 probeVideoIsVerticalSplit()이 미리 걸러주지만, 모바일은 안 거치고(또는 probe가
+    // 틀렸을 때) 여전히 여기서 실제 metadata로 다시 한번 확인해 3분할 대상이면 네이티브로
+    // 전환한다 — 기존 안전장치를 그대로 둔다.
+    const expectedVideo = currentVideo; // player.currentSrc()는 절대 URL로 바뀌어 원본 문자열과
+                                         // 안 맞으므로, 식별자로는 currentVideo를 그대로 스냅샷
+    player.one('loadedmetadata', function() {
+        if (currentVideo !== expectedVideo) return; // 그새 다른 영상으로 넘어갔으면 무시
+        const vp = player.el().getElementsByTagName('video')[0];
+        const ratio = vp && vp.videoWidth ? vp.videoHeight / vp.videoWidth : 0;
+        if (ratio > 1 && window.innerWidth > window.innerHeight) {
+            // loadedmetadata 콜백 안에서 바로 player.dispose()를 부르면, 같은 이벤트에
+            // 걸린 video.js 자체 내부 리스너(반응형 스타일 갱신 등)가 뒤이어 실행되다가
+            // 이미 지워진 tech를 참조해서 "Cannot read properties of null (reading
+            // 'videoWidth')" 에러를 던진다. 디스패치가 끝난 다음 틱으로 미뤄서 피한다.
+            setTimeout(function() {
+                if (currentVideo !== expectedVideo) return;
+                playNative(videoUrl, false); // 이미 위에서 pushVideoArr 했으니 다시 push하지 않음
+            }, 0);
+        }
+    });
+}
+
 function playVideo(videoUrl) {
-    // Fast path: Video.js가 이미 실행 중이면 사용자 제스처 컨텍스트 내에서 즉시 play()
-    // Android는 비동기 콜백(loadedmetadata → changeVideo)에서 play()를 차단하므로
-    // 기존 플레이어를 재활용해 동기적으로 호출한다
     if (player && !player.isDisposed() && isVideoJs()) {
-        mimeType = currentVideo.split('.').pop() === 'ts' ? 'video/mp2t' : 'video/mp4';
-        pushVideoArr(currentVideo);
-        player.off('loadeddata');
-        player.one('loadeddata', function() {
-            filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl));
-        });
-        player.src({type: mimeType, src: videoUrl});
-        player.load();
-        player.volume(previousVolume);
-        player.loop(isLooping);
-        player.play().catch(() => {});
-        showControls(); // 새 영상 시작 시 컨트롤을 즉시 노출 (삭제 후 등 재사용 경로 대비)
+        if (isMobile) {
+            // 모바일: 위에서 설명한 Android 제스처 제약 때문에 probe 없이 기존처럼 동기 호출한다.
+            startVjsFastPath(videoUrl);
+            return;
+        }
 
-        // fast path는 delayAudio()를 다시 안 타므로, 이 영상에 저장된 싱크 오프셋이 있는데
-        // 그래프가 아직 한 번도 켜진 적 없다면 여기서 직접 켜준다(안 그러면 값은 불러와졌어도
-        // 실제로 들리지는 않는다). 이미 켜져 있다면 loadstart/timeupdate가 알아서 따라간다.
-        bindSyncVideoElement(player.el().getElementsByTagName('video')[0], true);
-
-        // 한 번 video.js 모드로 넘어가면 이후 영상은 전부 이 fast path만 타서, 세로영상이 다시
-        // 나와도 3분할로 전환될 기회가 없었다(PC에서 3분할이 계속 안 되던 원인). 메타데이터가
-        // 도착하면 이번 영상의 실제 비율을 확인해서, 3분할 대상이면 video.js를 버리고 네이티브
-        // 경로로 다시 전환한다. play()는 이미 위에서 동기 호출했으니 안드로이드 제스처 제약과는
-        // 무관하고, 판단만 메타데이터 도착 시점으로 늦춰질 뿐이다.
-        const expectedVideo = currentVideo; // player.currentSrc()는 절대 URL로 바뀌어 원본 문자열과
-                                             // 안 맞으므로, 식별자로는 currentVideo를 그대로 스냅샷
-        player.one('loadedmetadata', function() {
-            if (currentVideo !== expectedVideo) return; // 그새 다른 영상으로 넘어갔으면 무시
-            const vp = player.el().getElementsByTagName('video')[0];
-            const ratio = vp && vp.videoWidth ? vp.videoHeight / vp.videoWidth : 0;
-            if (ratio > 1 && window.innerWidth > window.innerHeight) {
-                // loadedmetadata 콜백 안에서 바로 player.dispose()를 부르면, 같은 이벤트에
-                // 걸린 video.js 자체 내부 리스너(반응형 스타일 갱신 등)가 뒤이어 실행되다가
-                // 이미 지워진 tech를 참조해서 "Cannot read properties of null (reading
-                // 'videoWidth')" 에러를 던진다. 디스패치가 끝난 다음 틱으로 미뤄서 피한다.
-                setTimeout(function() {
-                    if (currentVideo !== expectedVideo) return;
-                    playNative(videoUrl, false); // 이미 위에서 pushVideoArr 했으니 다시 push하지 않음
-                }, 0);
+        // PC: 어느 경로로 재생할지 먼저 가볍게 확인한 뒤 한 번만 로드한다(중복 다운로드 방지).
+        // 그 대가로 재생 시작이 probe만큼(대개 매우 짧게) 늦어질 수 있다.
+        const expectedVideo = currentVideo;
+        probeVideoIsVerticalSplit(videoUrl, function(isVerticalSplit) {
+            if (currentVideo !== expectedVideo) return; // probe 도중 다른 영상으로 넘어갔으면 무시
+            if (isVerticalSplit) {
+                playNative(videoUrl, true); // video.js는 건드리지 않고 바로 네이티브+3분할로
+            } else {
+                startVjsFastPath(videoUrl);
             }
         });
         return;
@@ -531,21 +596,38 @@ function delVideo() {
     if (currentVideo) {
         const deletedVideo = currentVideo; // currentVideo는 아래에서 다음 영상으로 바뀌므로 미리 캡처
         if (confirm(`Delete \r\n ${deletedVideo} ?`)) {
+            keepFullscreenOnDelete = isFullscreen();
+            clearTimeout(keepFullscreenTimer);
+            keepFullscreenTimer = setTimeout(function() { keepFullscreenOnDelete = false; }, 4000);
             cancelSyncOffsetPost(); // 삭제될 영상이라 디바운스 중이던 값은 보낼 필요 없음 (아래서 0으로 정리함)
             initVideoSrc() // 삭제하려는 파일이 사용중이면 접근이 안된다 (서버에서 스트림 중이므로 삭제가 안된다)
+
+            // 삭제 응답을 기다리지 않고 바로 다음 영상을 불러온다 — 삭제 자체는 백그라운드에서 처리
+            if (totalVideoCount !== null) {
+                totalVideoCount = Math.max(0, totalVideoCount - 1);
+                updateVideoCountDisplay();
+            }
+            currentVideo = '';
+            getVideo();
+
             axios.post(`/video/delete/${encodeURIComponent(deletedVideo)}?dir=${dir}`)
                 .then(response => {
                     if (response.status === 204) {
-                        // alert(`${currentVideo}`+` is deleted`)
                         delete videoSyncOffsetsMap[deletedVideo]; // 삭제된 영상의 싱크 값도 같이 정리
                         axios.post('/video/sync-offset', {dir: dir, filename: deletedVideo, offset: 0}).catch(() => {});
-                        currentVideo = '';
-                        getVideo();
                     } else {
                         alert('Failed to delete video');
+                        if (totalVideoCount !== null) { // 실제로는 안 지워졌으니 낙관적으로 줄인 카운트를 되돌림
+                            totalVideoCount += 1;
+                            updateVideoCountDisplay();
+                        }
                     }
                 }).catch(err => {
                 alert(deletedVideo)
+                if (totalVideoCount !== null) {
+                    totalVideoCount += 1;
+                    updateVideoCountDisplay();
+                }
             });
         }
     }
@@ -570,6 +652,9 @@ const hideControls = () => {
         // filenameDisplay는 항상 보이도록 둔다 — 이걸 숨겼을 때 전체화면에서 3분할 좌우
         // 영상이 같이 사라지는 문제가 생겨서 되돌림.
         videoContainer.style.cursor = 'none';
+        // 네이티브 <video controls> 바의 자동숨김을 브라우저에 맡기지 않고 직접 제어한다
+        // (영상 교체 후 브라우저 자체 유휴 타이머가 멈춰 계속 떠있던 문제 — video.css 참고).
+        if (videoPlayer) videoPlayer.classList.add('controls-idle');
     }, 2000);
 };
 
@@ -577,6 +662,7 @@ const showControls = () => {
     controls.style.display = 'block';
     topDiv.style.display = 'block';
     videoContainer.style.cursor = 'default';
+    if (videoPlayer) videoPlayer.classList.remove('controls-idle');
     hideControls();
 };
 
@@ -643,6 +729,7 @@ function toggleLoop() {
     isLooping = !isLooping;
     if (videoPlayer) videoPlayer.loop = isLooping;
     else if (player) player.loop(isLooping);
+    if (syncAudioElement) syncAudioElement.loop = isLooping;
     loopButton.classList.toggle('active', isLooping);
 }
 
@@ -825,6 +912,44 @@ function showVolumeMessage(isVideoJS) {
     }, 2000); // 2초 후 메시지 숨기기
 }
 
+function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+}
+
+function requestDocFullscreen() {
+    let docEl = document.documentElement;
+    if (docEl.requestFullscreen) {
+        docEl.requestFullscreen();
+    } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+    } else if (docEl.mozRequestFullScreen) {
+        docEl.mozRequestFullScreen();
+    } else if (docEl.msRequestFullscreen) {
+        docEl.msRequestFullscreen();
+    }
+}
+
+// 삭제 버튼을 누르면 initVideoElem()이 기존 video.js 플레이어를 dispose()하는데, video.js는
+// dispose 시점에 자신이 전체화면 중이라고 판단되면 내부적으로 exitFullscreen()을 호출해버린다
+// (우리가 document.documentElement로 직접 진입한 전체화면이라도 video.js는 fullscreenchange를
+// 전역으로 구독해 자기 상태로 착각한다) — 그래서 삭제 후 다음 영상이 전체화면 밖으로 튕겨나오던
+// 원인이었다. 삭제 시작 시점에 전체화면이었는지 기록해두고, 그 직후 벌어지는 fullscreenchange로
+// 전체화면이 풀리면 즉시 재진입시킨다.
+let keepFullscreenOnDelete = false;
+let keepFullscreenTimer = null;
+
+function handleFullscreenChangeDuringDelete() {
+    if (keepFullscreenOnDelete && !isFullscreen()) {
+        keepFullscreenOnDelete = false;
+        clearTimeout(keepFullscreenTimer);
+        requestDocFullscreen();
+    }
+}
+document.addEventListener('fullscreenchange', handleFullscreenChangeDuringDelete);
+document.addEventListener('webkitfullscreenchange', handleFullscreenChangeDuringDelete);
+document.addEventListener('mozfullscreenchange', handleFullscreenChangeDuringDelete);
+document.addEventListener('MSFullscreenChange', handleFullscreenChangeDuringDelete);
+
 function exitFullscreen() {
     if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
         if (document.exitFullscreen) {
@@ -840,17 +965,8 @@ function exitFullscreen() {
 }
 
 function toggleFullscreen() {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {  // 현재 전체화면이 아닌 경우
-        let docEl = document.documentElement;
-        if (docEl.requestFullscreen) {
-            docEl.requestFullscreen();
-        } else if (docEl.webkitRequestFullscreen) {
-            docEl.webkitRequestFullscreen();
-        } else if (docEl.mozRequestFullScreen) {
-            docEl.mozRequestFullScreen();
-        } else if (docEl.msRequestFullscreen) {
-            docEl.msRequestFullscreen();
-        }
+    if (!isFullscreen()) {  // 현재 전체화면이 아닌 경우
+        requestDocFullscreen();
     } else {  // 현재 전체화면인 경우
         if (document.exitFullscreen) {
             document.exitFullscreen();
@@ -912,6 +1028,10 @@ function addKeyboardControls() {
     document.getElementById('syncMinusBtn')?.addEventListener('click', syncMinusClick);
     document.getElementById('syncPlusBtn')?.removeEventListener('click', syncPlusClick);
     document.getElementById('syncPlusBtn')?.addEventListener('click', syncPlusClick);
+    document.getElementById('syncMinusBigBtn')?.removeEventListener('click', syncMinusBigClick);
+    document.getElementById('syncMinusBigBtn')?.addEventListener('click', syncMinusBigClick);
+    document.getElementById('syncPlusBigBtn')?.removeEventListener('click', syncPlusBigClick);
+    document.getElementById('syncPlusBigBtn')?.addEventListener('click', syncPlusBigClick);
     document.getElementById('syncResetBtn')?.removeEventListener('click', resetAudioSync);
     document.getElementById('syncResetBtn')?.addEventListener('click', resetAudioSync);
 }
@@ -924,6 +1044,14 @@ function syncMinusClick() {
 function syncPlusClick() {
     // Sync+: 오디오를 늦춰 영상이 상대적으로 빠르게 느껴지도록 한다. 키보드 'a'와 동일.
     adjustAudioSync(0.01);
+}
+
+function syncMinusBigClick() {
+    adjustAudioSync(-0.1);
+}
+
+function syncPlusBigClick() {
+    adjustAudioSync(0.1);
 }
 
 function wheelEvent(evnet) {
@@ -988,10 +1116,12 @@ function videoKeyEvent(event) {
             showVolumeMessage(isVideoJS);
             break;
         case 'a':
-            adjustAudioSync(0.01); // Sync+와 동일 (오디오를 늦춰 영상이 빠르게 느껴짐)
+        case 'A': // Shift+a는 event.key가 대문자 'A'로 들어온다
+            adjustAudioSync(event.shiftKey ? 0.1 : 0.01); // Sync+와 동일 (오디오를 늦춰 영상이 빠르게 느껴짐), Shift면 0.1 단위
             break;
         case 'd':
-            adjustAudioSync(-0.01); // Sync-와 동일 (오디오를 앞당겨 영상이 느리게 느껴짐)
+        case 'D': // Shift+d
+            adjustAudioSync(event.shiftKey ? -0.1 : -0.01); // Sync-와 동일 (오디오를 앞당겨 영상이 느리게 느껴짐), Shift면 0.1 단위
             break;
         case 's':
             resetAudioSync();
@@ -1081,12 +1211,22 @@ function bindSyncVideoElement(videoElement, isVjs) {
     const sameElement = videoElement === syncVideoElement;
     syncVideoElement = videoElement;
     pendingIsVjs = isVjs;
+
+    // 저장된 오프셋이 0인 영상(싱크가 필요 없는 영상)인데 이전 영상에서 그래프가 켜진 채로
+    // 넘어오면, 원본 비디오는 계속 muted 상태로 남고 별도 오디오 파이프라인에만 의존하게 된다 —
+    // 그 파이프라인이 한 번이라도 어긋나면(오토플레이 정책, 로드 타이밍 등) 다음 영상 소리가
+    // 아예 안 들리는 원인이었다. 오프셋이 0이면 그래프를 끄고 원본 소리로 그냥 재생한다.
+    if (audioOffset === 0) {
+        if (syncAudioActive) {
+            deactivateSyncAudio(videoElement);
+        }
+        return;
+    }
+
     if (sameElement && syncAudioActive) {
         return;
     }
-    if (syncAudioActive || audioOffset !== 0) {
-        activateSyncAudio(videoElement, isVjs);
-    }
+    activateSyncAudio(videoElement, isVjs);
 }
 
 function ensureSyncAudioGraph() {
@@ -1094,11 +1234,46 @@ function ensureSyncAudioGraph() {
     activateSyncAudio(syncVideoElement, pendingIsVjs);
 }
 
+// activateSyncAudio()가 videoElement에 걸어둔 play/pause/ended/seeked/ratechange/timeupdate
+// 리스너를 떼어낸다. 안 떼면 video.js의 fast path(같은 tech 엘리먼트 재사용)에서 그래프를 껐다
+// 켰다 할 때마다 예전 리스너가 계속 쌓여, 이미 지워진 오디오 엘리먼트를 참조하는 낡은 클로저가
+// 뒤섞여 재생/음소거 상태가 들쭉날쭉해지는 원인이 됐다.
+let syncListenersTarget = null;
+let syncListeners = null;
+
+function detachSyncListeners() {
+    if (syncListenersTarget && syncListeners) {
+        syncListenersTarget.removeEventListener('play', syncListeners.play);
+        syncListenersTarget.removeEventListener('pause', syncListeners.pause);
+        syncListenersTarget.removeEventListener('ended', syncListeners.ended);
+        syncListenersTarget.removeEventListener('seeked', syncListeners.seeked);
+        syncListenersTarget.removeEventListener('ratechange', syncListeners.ratechange);
+        syncListenersTarget.removeEventListener('timeupdate', syncListeners.timeupdate);
+    }
+    syncListenersTarget = null;
+    syncListeners = null;
+}
+
+// 그래프를 끄고 원본 비디오 소리로 되돌린다 (오프셋이 0인 영상으로 넘어갈 때 사용)
+function deactivateSyncAudio(videoElement) {
+    syncAudioActive = false;
+    detachSyncListeners();
+    videoElement.muted = false;
+    videoElement.removeAttribute('muted');
+    if (syncAudioElement) {
+        try { syncAudioElement.pause(); } catch (_) {}
+    }
+    if (audioContext) {
+        try { audioContext.suspend(); } catch (_) {}
+    }
+}
+
 // 비디오 자체의 소리는 끄고(muted), 같은 파일을 재생하는 별도의 <audio> 엘리먼트를 하나 더
 // 만들어 그 currentTime을 "비디오의 currentTime + audioOffset"으로 계속 맞춰준다. 두 트랙의
 // 재생 위치가 독립적이라 DelayNode 방식과 달리 음수(오디오를 앞당기는) 방향에 상한이 없다.
 function activateSyncAudio(videoElement, isVjs) {
     syncAudioActive = true;
+    detachSyncListeners(); // 이 엘리먼트에 이전 호출로 걸려있던 리스너가 있으면 먼저 제거
 
     // 재호출(다음 영상, 네이티브↔video.js 전환 등) 대비 이전 그래프/엘리먼트 정리
     if (audioContext) {
@@ -1111,10 +1286,15 @@ function activateSyncAudio(videoElement, isVjs) {
     }
 
     videoElement.muted = true; // 실제 소리는 아래 syncAudioElement 하나로만 낸다 (이중재생 방지)
+    videoElement.setAttribute('muted', ''); // iOS Safari는 JS 프로퍼티만으론 재생/일시정지 때 muted가
+    // 풀리는 경우가 있어(모바일에서 오디오가 겹쳐 들리던 원인) attribute로도 같이 걸어둔다
 
     const audioEl = document.createElement('audio');
     audioEl.preload = 'auto';
     audioEl.style.display = 'none';
+    audioEl.loop = isLooping; // 네이티브 loop 재생 시 audioEl이 자기 길이만큼만 돌고 멈추는 것에
+    // 대한 안전망 (아래 onSeeked에서도 직접 재생을 재보장하지만, 이벤트 타이밍이 어긋나는
+    // 경우를 대비해 이중으로 막아둔다)
     document.body.appendChild(audioEl);
     syncAudioElement = audioEl;
 
@@ -1140,23 +1320,46 @@ function activateSyncAudio(videoElement, isVjs) {
     }
 
     function syncPlayState() {
+        videoElement.muted = true; // 모바일에서 재생을 누를 때마다 muted가 풀려 원본 오디오가 같이
+        // 들리는 경우가 있어(합성 오디오와 겹쳐 트랙이 여러 개로 들림) 매 play 시점에 재확인한다
         resyncAudioElement(true);
         audioEl.play().catch(() => {});
         audioContext && audioContext.resume();
     }
 
-    videoElement.addEventListener('play', syncPlayState);
-    videoElement.addEventListener('pause', () => {
-        audioEl.pause();
-        audioContext && audioContext.suspend();
-    });
-    videoElement.addEventListener('ended', () => {
-        audioEl.pause();
-        audioContext && audioContext.suspend();
-    });
-    videoElement.addEventListener('seeked', () => resyncAudioElement(true));
-    videoElement.addEventListener('ratechange', () => { audioEl.playbackRate = videoElement.playbackRate; });
-    videoElement.addEventListener('timeupdate', () => resyncAudioElement(false));
+    function onSeeked() {
+        resyncAudioElement(true);
+        // 네이티브 loop 재생은 'ended'/'play' 없이 끝에서 처음으로 조용히 seek만 하고 이어지므로,
+        // audioEl은 루프를 안 따라가고(자기 길이만큼 재생하다 자연스럽게 멈춘 뒤) 무음으로 남아
+        // 있었다 — 영상은 계속 재생되는데 소리만 사라지는(멈춘 것처럼 보이는) 원인이었다. 비디오가
+        // 재생 중이면 매 seek마다 audioEl 재생을 다시 보장한다.
+        if (!videoElement.paused && !videoElement.ended) {
+            audioEl.play().catch(() => {});
+        }
+    }
+
+    const listeners = {
+        play: syncPlayState,
+        pause: function() {
+            audioEl.pause();
+            audioContext && audioContext.suspend();
+        },
+        ended: function() {
+            audioEl.pause();
+            audioContext && audioContext.suspend();
+        },
+        seeked: onSeeked,
+        ratechange: function() { audioEl.playbackRate = videoElement.playbackRate; },
+        timeupdate: function() { resyncAudioElement(false); }
+    };
+    videoElement.addEventListener('play', listeners.play);
+    videoElement.addEventListener('pause', listeners.pause);
+    videoElement.addEventListener('ended', listeners.ended);
+    videoElement.addEventListener('seeked', listeners.seeked);
+    videoElement.addEventListener('ratechange', listeners.ratechange);
+    videoElement.addEventListener('timeupdate', listeners.timeupdate);
+    syncListenersTarget = videoElement;
+    syncListeners = listeners;
 
     if (isVjs) {
         // video.js는 다음 영상을 player.src()로 같은 tech 엘리먼트에 갈아끼우는 방식(빠른

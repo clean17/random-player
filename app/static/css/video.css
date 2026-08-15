@@ -12,6 +12,16 @@ video::-webkit-media-controls {
     width: 100% !important;
     z-index: 3 !important;
     position: relative;
+    transition: opacity 0.3s ease;
+}
+/* 네이티브 <video controls> 바는 position:relative로 강제 override해둔 탓인지, 영상을
+   교체(Next/Prev/Delete 등)한 뒤에는 브라우저 자체 유휴(마우스 정지) 자동숨김이 더 이상
+   동작하지 않고 계속 떠있는 채로 남는 경우가 있었다. 브라우저 자동숨김에 기대는 대신,
+   #controls/.top-bar와 동일한 2초 유휴 타이머(showControls/hideControls, video.js 아래 참고)로
+   이 클래스를 직접 토글해 항상 같은 타이밍에 부드럽게 사라지도록 만든다. */
+video.controls-idle::-webkit-media-controls {
+    opacity: 0;
+    pointer-events: none;
 }
 .vjs-control-bar {
     z-index: 5; /* video.js 컨트롤러의 z-index 설정 */
@@ -331,6 +341,22 @@ body.page-video .top-bar .back a::before,
 body.legacy-video-page .top-bar .back a::before {
     content: none !important;
     display: none !important;
+}
+
+body.page-video .top-bar .back .video-count,
+body.legacy-video-page .top-bar .back .video-count {
+    display: inline-block !important;
+    padding: 10px !important;
+    margin: 5px !important;
+    background: rgba(0, 0, 0, 0.82) !important;
+    color: #fff !important;
+    opacity: 0.82 !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    border-radius: 5px !important;
+    vertical-align: middle !important;
+    white-space: nowrap !important;
 }
 
 body.page-video #videoContainer,
