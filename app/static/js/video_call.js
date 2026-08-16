@@ -42,6 +42,8 @@ const recordBtn = document.getElementById('record');
 const recordIcon = recordBtn.querySelector('i');
 const roomName = 'nh';
 const opacitySlider = document.getElementById('opacitySlider');
+const callStatusOverlay = document.getElementById('callStatusOverlay');
+const callStatusText = document.getElementById('callStatusText');
 
 let myStream;
 let muted = false;
@@ -75,6 +77,23 @@ function rtcLog(label, ...args) {
     console.log(`[RTC] ${label} ${state}`, ...args);
 }
 
+// 연결이 오래 걸릴 때 "안 되는 줄" 알고 나가버리는 걸 막기 위한 상태 표시.
+// subtle=true: 상대가 아직 없거나 재시도를 포기한 뒤의 "대기 중" — 화면을 가리지 않는 작은 배지.
+// subtle=false(기본): welcome/offer를 실제로 받아 지금 협상 중일 때만 — 진한 오버레이+스피너.
+// 이 둘을 구분하는 이유는, 이 화면이 계속 켜둔 채로 업무 중 가끔 들여다보는 용도로도 쓰이기 때문에
+// 상대가 아예 없을 때도 "연결 중"처럼 보이는 문구를 계속 띄우면 실제 상황과 안 맞아서다.
+function showCallStatus(text, { subtle = false } = {}) {
+    if (!callStatusOverlay) return;
+    if (callStatusText) callStatusText.textContent = text;
+    callStatusOverlay.classList.toggle('subtle', subtle);
+    callStatusOverlay.classList.remove('hidden');
+}
+
+function hideCallStatus() {
+    if (!callStatusOverlay) return;
+    callStatusOverlay.classList.add('hidden');
+}
+
 
 ///////////////////////// Socket Code /////////////////////////////////////
 
@@ -86,32 +105,139 @@ const socket = io("https://chickchick.kr:3000", {
     reconnectionDelay: 1000,         // 1초 간격
 });
 
+///////////////////////// 연결 재협상/재시도 //////////////////////////////
+
+const CONNECT_WATCHDOG_MS = 4000;      // offer/answer 보낸 뒤 연결 확인까지 기다리는 시간 (기존 8000)
+const ICE_DISCONNECT_GRACE_MS = 2500;  // iceConnectionState=disconnected 후 자연 복구를 기다리는 시간
+const NEGOTIATION_WAIT_MS = 3000;      // welcome/answer가 잘못된 state에서 온 경우 재시도 대기 시간 (기존 5000)
+const MAX_NEGOTIATION_RETRY = 6;
+
+let connectWatchdogTimer = null;
+let iceDisconnectTimer = null;
+let negotiationRetryCount = 0;
+let restartInFlight = false;
+
+function clearConnectWatchdog() {
+    clearTimeout(connectWatchdogTimer);
+    connectWatchdogTimer = null;
+}
+
+function clearIceDisconnectTimer() {
+    clearTimeout(iceDisconnectTimer);
+    iceDisconnectTimer = null;
+}
+
+// 재시도 진입점 — 여러 감지 경로(watchdog/iceConnectionState/connectionState)가 겹쳐 들어와도
+// 카운터 하나로 상한을 공유하고, 같은 순간 중복 재협상이 나가지 않도록 막는다
+function tryRestartNegotiation(reason) {
+    if (restartInFlight) return;
+    if (negotiationRetryCount >= MAX_NEGOTIATION_RETRY) {
+        rtcLog(`연결 재시도 포기 (${MAX_NEGOTIATION_RETRY}회 초과) — ${reason}`);
+        // 상대가 나갔거나 연결이 아예 끊긴 상태일 수 있으니, "재연결 중"처럼 계속 진행 중인 척
+        // 띄우지 않고 다시 조용한 대기 상태로 돌아간다 (새 welcome이 오면 그때 다시 활성 표시로 전환됨)
+        showCallStatus('상대방을 기다리는 중', { subtle: true });
+        return;
+    }
+    negotiationRetryCount++;
+    restartInFlight = true;
+    rtcLog(`재협상 시도 #${negotiationRetryCount} — ${reason}`);
+    showCallStatus('연결이 불안정해요. 재연결 시도 중...');
+    restartNegotiation().finally(() => {
+        restartInFlight = false;
+    });
+}
+
+// offer/answer를 보낸 뒤 CONNECT_WATCHDOG_MS 안에 연결이 안 되면 ICE 재시작으로 재시도한다
+function armConnectWatchdog() {
+    clearConnectWatchdog();
+    connectWatchdogTimer = setTimeout(() => {
+        if (!myPeerConnection || myPeerConnection.connectionState === 'connected') return;
+        tryRestartNegotiation(`연결 지연(connectionState=${myPeerConnection.connectionState})`);
+    }, CONNECT_WATCHDOG_MS);
+}
+
+async function restartNegotiation() {
+    if (!myPeerConnection || myPeerConnection.signalingState === 'closed') return;
+    try {
+        const offer = await myPeerConnection.createOffer({ iceRestart: true });
+        await myPeerConnection.setLocalDescription(offer);
+        rtcLog('재협상 offer 전송 (iceRestart)');
+        socket.emit('offer', offer, roomName);
+        armConnectWatchdog();
+    } catch (err) {
+        rtcLog('재협상 실패', err);
+    }
+}
+
+async function sendOffer() {
+    myDataChannel = myPeerConnection.createDataChannel('video/audio');
+    myDataChannel.addEventListener('message', console.log); // message 이벤트 - send에 반응
+    rtcLog('dataChannel 생성됨');
+    const offer = await myPeerConnection.createOffer();
+    await myPeerConnection.setLocalDescription(offer); // 각자의 offer로 SDP(Session Description Protocol) 설정
+    rtcLog('offer 전송');
+    socket.emit('offer', offer, roomName); // 만들어진 offer를 전송
+    armConnectWatchdog();
+}
+
+// signalingState가 stable이 아니어서 offer를 바로 못 보낼 때, stable 전환을 기다렸다가 한 번 재시도한다
+// (동시 입장 등으로 타이밍이 꼬여 welcome 처리 시점에 state가 잠깐 안정되지 않은 경우 대비)
+// stable로 안 돌아오면 옛 offer가 죽은 협상일 가능성이 높으므로, 기다리다 포기하지 않고 바로 ICE 재시작으로 넘어간다
+function retryOfferWhenStable() {
+    let settled = false;
+    const onStateChange = () => {
+        if (settled || myPeerConnection.signalingState !== 'stable') return;
+        settled = true;
+        myPeerConnection.removeEventListener('signalingstatechange', onStateChange);
+        sendOffer();
+    };
+    myPeerConnection.addEventListener('signalingstatechange', onStateChange);
+    setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        myPeerConnection.removeEventListener('signalingstatechange', onStateChange);
+        tryRestartNegotiation('welcome stable 대기 타임아웃');
+    }, NEGOTIATION_WAIT_MS);
+}
+
 // 내가 들어가면 다른 참가자들이 'welcome' 이벤트를 받는다
 socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer를 생성 및 제안
     welcomeCount++;
     rtcLog(`welcome #${welcomeCount}`);
+    showCallStatus('연결 시도 중...'); // 상대가 실제로 들어와서 협상을 시작하는 시점이므로 활성 표시로 전환
 
     if (peerLeftTimeout) {
         clearTimeout(peerLeftTimeout); // 타이머 취소
         peerLeftTimeout = null;
     }
+
+    // 새 peer가 들어와서 온 신호이므로, 이전 시도에서 소진된 재시도 예산과 무관하게 새로 기회를 준다
+    // (그래서 이전엔 재시도 상한에 걸리면 새로운 상대가 들어와도 영원히 무시됐다)
+    negotiationRetryCount = 0;
+
+    // 기존 연결이 오랫동안 failed/disconnected로 죽어있다면 되살리려 하지 말고 완전히 새로 만든다
+    // (죽은 offer를 붙잡은 채 have-local-offer에 갇혀 새 피어의 welcome조차 처리 못 하는 좀비 상태 방지)
+    const deadStates = ['failed', 'disconnected'];
+    if (myPeerConnection && (deadStates.includes(myPeerConnection.connectionState) || deadStates.includes(myPeerConnection.iceConnectionState))) {
+        rtcLog('기존 연결이 죽어있어 새로 생성');
+        clearConnectWatchdog();
+        clearIceDisconnectTimer();
+        myPeerConnection.close();
+        myPeerConnection = null;
+    }
+
     if (!myPeerConnection) {
         await makeConnection();
     }
 
-    // 이미 offer 진행 중이면 중복 welcome 무시
+    // 이미 offer 진행 중이면 중복 welcome 무시하되, 타이밍이 꼬여 잠깐 stable이 아닐 수 있으니 재시도를 걸어둔다
     if (myPeerConnection.signalingState !== 'stable') {
-        rtcLog(`welcome 무시 — 이미 signalingState=${myPeerConnection.signalingState}`);
+        rtcLog(`welcome 무시 — 이미 signalingState=${myPeerConnection.signalingState}, stable 전환 시 재시도`);
+        retryOfferWhenStable();
         return;
     }
 
-    myDataChannel = myPeerConnection.createDataChannel('video/audio');
-    myDataChannel.addEventListener('message', console.log); // message 이벤트 - send에 반응
-    rtcLog('dataChannel 생성됨');
-    const offer = await myPeerConnection.createOffer();
-    myPeerConnection.setLocalDescription(offer); // 각자의 offer로 SDP(Session Description Protocol) 설정
-    rtcLog('offer 전송');
-    socket.emit('offer', offer, roomName); // 만들어진 offer를 전송
+    await sendOffer();
 });
 
 /**
@@ -124,27 +250,57 @@ socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer�
  */
 socket.on('offer', async (offer) => {
     rtcLog('offer 수신');
+    showCallStatus('연결 시도 중...'); // 상대가 실제로 offer를 보내온 시점이므로 활성 표시로 전환
+    // offer가 getMedia()/makeConnection() 완료보다 먼저 도착하는 레이스 대비
+    if (!myPeerConnection) {
+        await makeConnection();
+    }
     myPeerConnection.addEventListener('datachannel', event => { // datachannel 감지
         myDataChannel = event.channel;
         myDataChannel.addEventListener('message', console.log);
     });
     await myPeerConnection.setRemoteDescription(offer);
+    // remoteDescription 설정 전에 도착해 대기 중이던 ICE 후보를 흘려보낸다 (answer 쪽에서만 비우던 누락 보완)
+    candidateQueue.forEach(c => myPeerConnection.addIceCandidate(c));
+    candidateQueue = [];
     const answer = await myPeerConnection.createAnswer(); // offer를 받고 answer를 생성해 SDP 설정
-    myPeerConnection.setLocalDescription(answer); // 각자의 peer는 local, remote를 설정
+    await myPeerConnection.setLocalDescription(answer); // 각자의 peer는 local, remote를 설정
     rtcLog('answer 전송');
     socket.emit('answer', answer, roomName);
+    armConnectWatchdog();
 });
 
 socket.on('answer', async (answer) => {
     rtcLog('answer 수신');
-    if (myPeerConnection.signalingState !== 'have-local-offer') {
-        rtcLog(`answer 무시 — 잘못된 state: ${myPeerConnection.signalingState}`);
+
+    const applyAnswer = async () => {
+        await myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
+        rtcLog('answer setRemoteDescription 완료');
+        candidateQueue.forEach(c => myPeerConnection.addIceCandidate(c));
+        candidateQueue = [];
+    };
+
+    if (myPeerConnection.signalingState === 'have-local-offer') {
+        await applyAnswer();
         return;
     }
-    await myPeerConnection.setRemoteDescription(answer); // 각 peer는 자신의 SDP 연결된 room의 SDP를 설정한다.
-    rtcLog('answer setRemoteDescription 완료');
-    candidateQueue.forEach(c => myPeerConnection.addIceCandidate(c));
-    candidateQueue = [];
+
+    // 우리 offer의 setLocalDescription이 아직 안 끝났거나 타이밍이 꼬인 경우, have-local-offer 전환을 잠깐 기다렸다가 재시도
+    rtcLog(`answer 대기 — 잘못된 state: ${myPeerConnection.signalingState}, have-local-offer 전환 시 재시도`);
+    let settled = false;
+    const onStateChange = async () => {
+        if (settled || myPeerConnection.signalingState !== 'have-local-offer') return;
+        settled = true;
+        myPeerConnection.removeEventListener('signalingstatechange', onStateChange);
+        await applyAnswer();
+    };
+    myPeerConnection.addEventListener('signalingstatechange', onStateChange);
+    setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        myPeerConnection.removeEventListener('signalingstatechange', onStateChange);
+        tryRestartNegotiation('answer have-local-offer 대기 타임아웃');
+    }, NEGOTIATION_WAIT_MS);
 });
 
 socket.on('ice', (ice) => {
@@ -192,6 +348,12 @@ async function onIceCandidateReceived(candidate) {
 
     if (!candidate) {
         console.log("remote ICE gathering complete");
+        return;
+    }
+
+    if (!myPeerConnection) {
+        console.log("ICE 후보 대기열에 보관(연결 생성 전):", candidate);
+        candidateQueue.push(candidate);
         return;
     }
 
@@ -273,7 +435,7 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         let audioTrack = myStream.getAudioTracks()[0];
         const audioSettings = audioTrack.getSettings();
         currentMicrophoneDeviceId = audioSettings.deviceId || null; // 필요없는지 테스트 필요
-        console.log("🎤 현재 사용증인 마이크 deviceId:", currentMicrophoneDeviceId);
+        console.log("🎤 현재 사용 중인 마이크 deviceId:", currentMicrophoneDeviceId);
 
         // deviceId 없이 잡은 최초 트랙은 OS 기본 통신 장치로 라우팅되어 먹먹하게 들리는 경우가 있어,
         // 실제 deviceId를 알아낸 뒤 그 deviceId로 다시 명시적으로 잡아 교체한다 (마이크 전환 후 되돌렸을 때와 동일한 경로)
@@ -320,7 +482,16 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
 
     } catch (err) {
         console.error("🎥 getMedia 에러:", err);
-        alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
+
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError" || err.name === "SecurityError") {
+            alert("카메라/마이크 권한이 꺼져 있어 영상통화를 시작할 수 없습니다.\n브라우저 주소창 옆 사이트 설정에서 카메라와 마이크 권한을 '허용'으로 바꾼 뒤 새로고침 해주세요.");
+        } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+            alert("카메라 또는 마이크 장치를 찾을 수 없습니다.\n장치가 연결되어 있는지 확인해주세요.");
+        } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+            alert("카메라 또는 마이크를 다른 앱이 사용 중입니다.\n해당 앱을 종료한 뒤 다시 시도해주세요.");
+        } else {
+            alert("카메라 또는 마이크를 사용할 수 없습니다.\n권한 또는 다른 앱 확인이 필요합니다.");
+        }
     }
 }
 
@@ -400,22 +571,49 @@ async function makeConnection() { // 연결을 만든다.
     myPeerConnection.addEventListener('track', handleTrack);
 
     myPeerConnection.addEventListener('iceconnectionstatechange', () => {
-        rtcLog(`iceConnectionState → ${myPeerConnection.iceConnectionState}`);
+        const iceState = myPeerConnection.iceConnectionState;
+        rtcLog(`iceConnectionState → ${iceState}`);
+
+        // connectionState=failed는 스펙상 감지까지 수십 초가 걸릴 수 있어, 훨씬 먼저 바뀌는
+        // iceConnectionState를 보고 더 빨리 반응한다. disconnected는 순간적인 네트워크 끊김으로
+        // 자연 복구되는 경우가 많아 짧게(ICE_DISCONNECT_GRACE_MS) 기다렸다가만 재시도한다.
+        if (iceState === 'connected' || iceState === 'completed') {
+            clearIceDisconnectTimer();
+        } else if (iceState === 'disconnected') {
+            clearIceDisconnectTimer();
+            iceDisconnectTimer = setTimeout(() => {
+                if (myPeerConnection && myPeerConnection.iceConnectionState === 'disconnected') {
+                    tryRestartNegotiation('iceConnectionState=disconnected 지속');
+                }
+            }, ICE_DISCONNECT_GRACE_MS);
+        } else if (iceState === 'failed') {
+            clearIceDisconnectTimer();
+            tryRestartNegotiation('iceConnectionState=failed');
+        }
     });
     myPeerConnection.addEventListener('connectionstatechange', () => {
         rtcLog(`connectionState → ${myPeerConnection.connectionState}`);
+        if (myPeerConnection.connectionState === 'connected') {
+            clearConnectWatchdog();
+            clearIceDisconnectTimer();
+            negotiationRetryCount = 0;
+            hideCallStatus();
+        } else if (myPeerConnection.connectionState === 'failed') {
+            tryRestartNegotiation('connectionState=failed');
+        }
     });
     myPeerConnection.addEventListener('signalingstatechange', () => {
         rtcLog(`signalingState → ${myPeerConnection.signalingState}`);
     });
 
     // addTrack을 requestAnimationFrame으로 지연 — 영상 엘리먼트가 최소 1프레임 렌더한 뒤에
-    // WebRTC 파이프라인이 트랙을 가져가도록 해 Android freeze 방지
+    // WebRTC 파이프라인이 트랙을 가져가도록 해 Android freeze 방지.
+    // 단, makeConnection()을 await하는 호출자가 트랙이 실제로 붙기 전에 offer를 만들어버리는
+    // 레이스를 막기 위해 프레임 하나를 Promise로 감싸서 여기서 기다린다.
     if (myStream) {
-        requestAnimationFrame(() => {
-            myStream.getTracks().forEach(track => {
-                myPeerConnection.addTrack(track, myStream);
-            });
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        myStream.getTracks().forEach(track => {
+            myPeerConnection.addTrack(track, myStream);
         });
     }
 };
@@ -450,6 +648,7 @@ function handleIce(event) {
 function handleTrack(event) {
     const [stream] = event.streams;
     peerFace.srcObject = stream;
+    hideCallStatus();
 
     peerFace.onloadedmetadata = () => {
         recordCanvas.width = peerFace.videoWidth || 1280;
@@ -817,6 +1016,7 @@ opacitySlider.addEventListener('input', (e) => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
+    showCallStatus('상대방을 기다리는 중', { subtle: true });
     await getMedia();
     await makeConnection();
     socket.emit('join_video_socket', roomName, username);

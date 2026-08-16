@@ -24,6 +24,64 @@ video.mirror {
     object-fit: contain; /* ✅ 화면에 꽉 차게 */
     z-index: 1;
 }
+#callStatusOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: rgba(0, 0, 0, 0.55);
+    color: whitesmoke;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+#callStatusOverlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+/* 상대가 아직 없거나(대기) 재시도를 다 써서 포기한 뒤 — 화면을 가리지 않는 작은 배지로만 표시 */
+#callStatusOverlay.subtle {
+    top: 12px;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translateX(-50%);
+    flex-direction: row;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 6px 14px;
+    border-radius: 20px;
+}
+#callStatusOverlay.subtle .call-status-spinner {
+    display: none;
+}
+#callStatusOverlay.subtle #callStatusText {
+    font-size: 12px;
+    opacity: 0.9;
+}
+.call-status-spinner {
+    width: 42px;
+    height: 42px;
+    border: 4px solid rgba(255, 255, 255, 0.25);
+    border-top-color: whitesmoke;
+    border-radius: 50%;
+    animation: call-status-spin 0.9s linear infinite;
+}
+#callStatusText {
+    margin: 0;
+    font-size: 15px;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+@keyframes call-status-spin {
+    to { transform: rotate(360deg); }
+}
 #myFaceWrapper {
     position: absolute;
     bottom: 15px;

@@ -35,6 +35,10 @@
     <div id="myStream">
         <canvas id="recordCanvas" style="display:none;"></canvas>
         <video id="peerFace" autoplay playsinline muted></video>
+        <div id="callStatusOverlay" class="call-status-overlay subtle">
+            <div class="call-status-spinner"></div>
+            <p id="callStatusText">상대방을 기다리는 중</p>
+        </div>
         <div id="myFaceWrapper">
             <video id="myFace" autoplay playsinline muted></video>
             <button id="switchCamera" title="Switch Camera" class="circle-button">
