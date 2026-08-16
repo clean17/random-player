@@ -121,6 +121,12 @@ function openVideoCallWindow() {
 
     window.addEventListener("message", (event) => {
         if (event.data === "force-close") closeBtn.click();
+        if (event.data === "video-call-reconnected") {
+            // 홈 화면 이동 등으로 통화가 끊겼다가 다시 이어진 경우 — "통화요청"이 아니라
+            // 다시 이어졌다는 걸 명확히 구분해서 알린다 (새 통화 요청으로 오해하지 않게)
+            const reconnectMsg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화 재연결';
+            socket.emit("new_msg", { username, msg: reconnectMsg, room: roomName });
+        }
     });
 
     // 키보드 감지: focusin(선제) + viewport resize(보장)

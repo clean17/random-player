@@ -23,6 +23,11 @@ video.mirror {
     height: 100%;
     object-fit: contain; /* ✅ 화면에 꽉 차게 */
     z-index: 1;
+    transition: filter 0.4s ease;
+}
+/* 연결 중/대기 중/재연결 중일 때 — 마지막 프레임은 유지하되 지금 라이브가 아님을 표시 */
+#peerFace.dimmed {
+    filter: grayscale(0.5) brightness(0.45);
 }
 #callStatusOverlay {
     position: absolute;

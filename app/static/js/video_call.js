@@ -87,11 +87,16 @@ function showCallStatus(text, { subtle = false } = {}) {
     if (callStatusText) callStatusText.textContent = text;
     callStatusOverlay.classList.toggle('subtle', subtle);
     callStatusOverlay.classList.remove('hidden');
+    // 상대가 나가도 화면을 검은색으로 리셋하지 않고 마지막 프레임을 유지하되, 지금 라이브가
+    // 아니라는 걸 알 수 있게 어둡게/탈색해서 보여준다 (완전 검은 화면은 고장처럼 보이고,
+    // 그대로 생생하게 두면 멈춘 건지 헷갈리기 때문)
+    peerFace.classList.add('dimmed');
 }
 
 function hideCallStatus() {
     if (!callStatusOverlay) return;
     callStatusOverlay.classList.add('hidden');
+    peerFace.classList.remove('dimmed');
 }
 
 
@@ -116,6 +121,9 @@ let connectWatchdogTimer = null;
 let iceDisconnectTimer = null;
 let negotiationRetryCount = 0;
 let restartInFlight = false;
+// 실제로 재협상/재생성이 필요했던 "진짜" 끊김에서 복구했을 때만 채팅에 재연결을 알린다
+// (아주 짧은 네트워크 흔들림까지 매번 알리면 그 자체가 스팸이 된다)
+let announceReconnectOnNextConnect = false;
 
 function clearConnectWatchdog() {
     clearTimeout(connectWatchdogTimer);
@@ -140,19 +148,40 @@ function tryRestartNegotiation(reason) {
     }
     negotiationRetryCount++;
     restartInFlight = true;
+    announceReconnectOnNextConnect = true;
     rtcLog(`재협상 시도 #${negotiationRetryCount} — ${reason}`);
-    showCallStatus('연결이 불안정해요. 재연결 시도 중...');
+    if (negotiationRetryCount === 1) {
+        // 첫 재시도는 진짜 잠깐의 네트워크 문제일 수 있으니 "재연결 중"으로 활성 표시
+        showCallStatus('연결이 불안정해요. 재연결 시도 중...');
+    } else {
+        // 한 번 재시도해도 안 됐다면 상대가 나갔을 가능성이 더 높다. 재시도는 백그라운드에서
+        // 계속하되(최대 MAX_NEGOTIATION_RETRY회), 화면엔 "재연결 중"을 과장해서 계속 띄우지 않고
+        // 조용한 대기 상태로 보여준다.
+        showCallStatus('상대방을 기다리는 중', { subtle: true });
+    }
     restartNegotiation().finally(() => {
         restartInFlight = false;
     });
 }
 
-// offer/answer를 보낸 뒤 CONNECT_WATCHDOG_MS 안에 연결이 안 되면 ICE 재시작으로 재시도한다
+// offer/answer를 보낸 뒤 CONNECT_WATCHDOG_MS 안에 연결이 안 되면 ICE 재시작으로 재시도한다.
+// 단, iceConnectionState가 이미 connected/completed인데 connectionState만 아직 connecting인 건
+// DTLS 핸드셰이크가 마무리되는 정상적인 지연이다 — 이때 재시작을 걸면 진행 중인 DTLS를 처음부터
+// 다시 시작시켜서 영원히 connecting에 머무는 자기 폭주(양쪽이 서로 계속 재시작을 걸어 매초 offer가
+// 오가는 상태)를 만든다. 그래서 ICE가 이미 붙었으면 재시작하지 않고 기다린다 — 진짜 실패하면
+// connectionState=failed로 넘어가고 그건 connectionstatechange 핸들러가 따로 처리한다.
 function armConnectWatchdog() {
     clearConnectWatchdog();
     connectWatchdogTimer = setTimeout(() => {
-        if (!myPeerConnection || myPeerConnection.connectionState === 'connected') return;
-        tryRestartNegotiation(`연결 지연(connectionState=${myPeerConnection.connectionState})`);
+        if (!myPeerConnection) return;
+        const connState = myPeerConnection.connectionState;
+        const iceState = myPeerConnection.iceConnectionState;
+        if (connState === 'connected') return;
+        if (iceState === 'connected' || iceState === 'completed') {
+            rtcLog(`connectionState=${connState}지만 iceConnectionState=${iceState} — DTLS 마무리 대기, 재협상 보류`);
+            return;
+        }
+        tryRestartNegotiation(`연결 지연(connectionState=${connState})`);
     }, CONNECT_WATCHDOG_MS);
 }
 
@@ -204,6 +233,17 @@ function retryOfferWhenStable() {
 socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer를 생성 및 제안
     welcomeCount++;
     rtcLog(`welcome #${welcomeCount}`);
+
+    // 이미 미디어가 정상적으로 흐르는 중이면(connectionState=connected) 이 welcome은 무시한다.
+    // 상대의 "신호" 소켓이 백그라운드 복귀 등으로 재연결되면서 온 것일 뿐, 실제 미디어 연결은
+    // 끊긴 적이 없는 경우가 많다. 이미 연결된 상태에서 다시 offer를 보내면, connectionState가
+    // 계속 'connected'로 유지돼 값이 안 바뀌니 이걸 지워줄 이벤트도 다시 안 떠서 "연결 시도 중"
+    // 표시가 영원히 고착되는 버그가 났었다.
+    if (myPeerConnection && myPeerConnection.connectionState === 'connected') {
+        rtcLog('welcome 수신 — 이미 연결되어 있어 무시');
+        return;
+    }
+
     showCallStatus('연결 시도 중...'); // 상대가 실제로 들어와서 협상을 시작하는 시점이므로 활성 표시로 전환
 
     if (peerLeftTimeout) {
@@ -220,6 +260,7 @@ socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer�
     const deadStates = ['failed', 'disconnected'];
     if (myPeerConnection && (deadStates.includes(myPeerConnection.connectionState) || deadStates.includes(myPeerConnection.iceConnectionState))) {
         rtcLog('기존 연결이 죽어있어 새로 생성');
+        announceReconnectOnNextConnect = true;
         clearConnectWatchdog();
         clearIceDisconnectTimer();
         myPeerConnection.close();
@@ -250,7 +291,12 @@ socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer�
  */
 socket.on('offer', async (offer) => {
     rtcLog('offer 수신');
-    showCallStatus('연결 시도 중...'); // 상대가 실제로 offer를 보내온 시점이므로 활성 표시로 전환
+    // offer 자체는 시그널링 정합성을 위해 항상 처리해야 하지만(무시하면 상대와 상태가 어긋남),
+    // 이미 connected 상태면 화면에 "연결 시도 중"을 새로 띄우지 않는다 — 재협상 후에도 계속
+    // connected로 유지되면 값이 안 바뀌어 지워줄 이벤트가 안 뜨고 표시가 고착되기 때문
+    if (!(myPeerConnection && myPeerConnection.connectionState === 'connected')) {
+        showCallStatus('연결 시도 중...'); // 상대가 실제로 offer를 보내온 시점이므로 활성 표시로 전환
+    }
     // offer가 getMedia()/makeConnection() 완료보다 먼저 도착하는 레이스 대비
     if (!myPeerConnection) {
         await makeConnection();
@@ -598,6 +644,12 @@ async function makeConnection() { // 연결을 만든다.
             clearIceDisconnectTimer();
             negotiationRetryCount = 0;
             hideCallStatus();
+            if (announceReconnectOnNextConnect) {
+                announceReconnectOnNextConnect = false;
+                // 채팅 소켓/방 이름은 부모창(chat.js)이 갖고 있으니, 여기서는 postMessage로
+                // "재연결됐다"고만 알리고 실제 메세지 전송은 부모창이 담당한다
+                window.parent.postMessage('video-call-reconnected', '*');
+            }
         } else if (myPeerConnection.connectionState === 'failed') {
             tryRestartNegotiation('connectionState=failed');
         }
@@ -654,6 +706,7 @@ function handleTrack(event) {
         recordCanvas.width = peerFace.videoWidth || 1280;
         recordCanvas.height = peerFace.videoHeight || 720;
         startDrawingLoop(peerFace, peerFace.videoWidth, peerFace.videoHeight);
+        startPeerFreezeDetection();
 
         const videoTrack = stream.getVideoTracks()[0];
         const settings = videoTrack.getSettings();
@@ -997,6 +1050,45 @@ function startFreezeDetection() {
     }
 }
 
+// 상대가 홈 화면으로 이동하면 모바일 브라우저가 카메라 캡처를 멈춰버려서(OS/브라우저의
+// 백그라운드 카메라 차단 정책 — 코드로 우회 불가) 상대 화면이 멈춘다. 막을 수는 없지만,
+// 조용히 멈춘 화면만 보여주는 대신 "지금 라이브가 아니다"를 알려줄 수는 있다.
+let peerFreezeIntervalId = null;
+let peerFaceFrozen = false;
+
+function startPeerFreezeDetection() {
+    clearInterval(peerFreezeIntervalId);
+    peerFaceFrozen = false;
+    if (!('requestVideoFrameCallback' in HTMLVideoElement.prototype)) return;
+
+    let lastFrameTime = performance.now();
+    const onFrame = () => {
+        lastFrameTime = performance.now();
+        if (peerFaceFrozen) {
+            peerFaceFrozen = false;
+            rtcLog('상대 영상 프레임 재개');
+            hideCallStatus();
+        }
+        peerFace.requestVideoFrameCallback(onFrame);
+    };
+    peerFace.requestVideoFrameCallback(onFrame);
+
+    peerFreezeIntervalId = setInterval(() => {
+        if (!myPeerConnection || myPeerConnection.connectionState !== 'connected') return;
+        if (performance.now() - lastFrameTime > 3000) {
+            if (!peerFaceFrozen) {
+                peerFaceFrozen = true;
+                rtcLog('상대 영상 프레임 정지 감지 (백그라운드 이동 추정)');
+                showCallStatus('상대방 화면이 멈췄어요', { subtle: true });
+            }
+            // 트랙 자체는 살아있는데 <video> 재생만 멈춰있는 경우가 있어(백그라운드 복귀 후 등) 재생을 다시 시도
+            if (peerFace.paused) {
+                peerFace.play().catch(() => {});
+            }
+        }
+    }, 1000);
+}
+
 /////////////////////// Control Buttons Opacity ///////////////////////
 
 function setVideoCallButtonsOpacity(opacity) {
@@ -1024,10 +1116,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     startFreezeDetection();
 })
 
-// 탭 전환/화면 잠금 후 foreground 복귀 시 내 화면 resume
+// 탭 전환/화면 잠금 후 foreground 복귀 시 내 화면 + 상대 화면 resume.
+// 모바일 브라우저는 백그라운드에서 돌아오면 <video>가 재생을 자동으로 이어가지 않는 경우가 있어
+// (미디어 연결 자체는 안 끊겼어도) srcObject는 그대로인데 화면만 마지막 프레임에 멈춰있게 된다.
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && myFace.paused && myStream && myStream.active) {
+    if (document.hidden) return;
+    if (myFace.paused && myStream && myStream.active) {
         myFace.play().catch(() => {});
+    }
+    if (peerFace.paused && peerFace.srcObject) {
+        peerFace.play().catch(() => {});
     }
 });
 
