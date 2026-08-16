@@ -110,10 +110,41 @@ const socket = io("https://chickchick.kr:3000", {
     reconnectionDelay: 1000,         // 1초 간격
 });
 
+// reconnectionAttempts(20회)를 다 쓰면 socket.io가 재연결을 완전히 포기한다 — 인터넷이 몇 분 이상
+// 끊기면 그 안에 20번을 다 써버려서, 나중에 인터넷이 다시 돌아와도 소켓이 스스로 안 붙는다.
+// 브라우저가 온라인 상태 복귀를 감지하면 포기한 상태여도 다시 연결을 시도하도록 강제한다.
+window.addEventListener('online', () => {
+    if (!socket.connected) {
+        rtcLog('온라인 복귀 감지 — 소켓 재연결 시도');
+        socket.connect();
+    }
+    // 내 쪽 네트워크가 끊겼다가 돌아온 경우, iceConnectionState=disconnected 상태에서
+    // ICE_DISCONNECT_GRACE_MS(디바운스용 유예 시간)을 그냥 흘려보내지 않고 즉시 재시도한다 —
+    // 브라우저가 직접 "온라인 복귀"를 알려준 확실한 신호라서 더 기다릴 이유가 없다.
+    if (myPeerConnection && ['disconnected', 'failed'].includes(myPeerConnection.iceConnectionState)) {
+        rtcLog('온라인 복귀 감지 — ICE 재시작 즉시 시도');
+        clearIceDisconnectTimer();
+        tryRestartNegotiation('online 이벤트 - 네트워크 복구 감지');
+    }
+});
+
+// 소켓이 재연결돼도(온라인 복귀 등) 서버가 이 클라이언트를 다시 방에 넣어주지 않으면 상대에게
+// welcome이 안 가서 재협상 자체가 시작되지 않는다. connect는 최초 연결 + 매 재연결마다 발생하는데,
+// 최초 연결 시점엔 아직 getMedia()/makeConnection()이 안 끝났을 수 있어(카메라 권한 대기 등) 그때는
+// DOMContentLoaded 쪽에서 미디어 준비가 끝난 뒤 한 번만 보내고, 여기서는 "그 뒤의 재연결"에만 반응해
+// join_video_socket을 다시 보낸다. 이미 연결이 살아있는 채로 재입장 신호가 중복 도착해도,
+// welcome/offer 핸들러가 이미 connectionState=connected인 경우를 걸러내므로 안전하다.
+let hasAnnouncedToRoom = false;
+socket.on('connect', () => {
+    if (!hasAnnouncedToRoom) return; // 최초 연결은 DOMContentLoaded가 미디어 준비 후 처리
+    rtcLog('소켓 재연결됨 — join_video_socket 재전송');
+    socket.emit('join_video_socket', roomName, username);
+});
+
 ///////////////////////// 연결 재협상/재시도 //////////////////////////////
 
 const CONNECT_WATCHDOG_MS = 4000;      // offer/answer 보낸 뒤 연결 확인까지 기다리는 시간 (기존 8000)
-const ICE_DISCONNECT_GRACE_MS = 2500;  // iceConnectionState=disconnected 후 자연 복구를 기다리는 시간
+const ICE_DISCONNECT_GRACE_MS = 1500;  // iceConnectionState=disconnected 후 자연 복구를 기다리는 시간 (기존 2500)
 const NEGOTIATION_WAIT_MS = 3000;      // welcome/answer가 잘못된 state에서 온 경우 재시도 대기 시간 (기존 5000)
 const MAX_NEGOTIATION_RETRY = 6;
 
@@ -124,6 +155,9 @@ let restartInFlight = false;
 // 실제로 재협상/재생성이 필요했던 "진짜" 끊김에서 복구했을 때만 채팅에 재연결을 알린다
 // (아주 짧은 네트워크 흔들림까지 매번 알리면 그 자체가 스팸이 된다)
 let announceReconnectOnNextConnect = false;
+// 이 세션에서 한 번이라도 정상 연결됐었는지 — "아직 아무도 안 들어옴"과 "붙어있다가 끊김"을 구분해서
+// 후자는 더 명확하게 알리기 위함
+let hasConnectedOnce = false;
 
 function clearConnectWatchdog() {
     clearTimeout(connectWatchdogTimer);
@@ -141,9 +175,16 @@ function tryRestartNegotiation(reason) {
     if (restartInFlight) return;
     if (negotiationRetryCount >= MAX_NEGOTIATION_RETRY) {
         rtcLog(`연결 재시도 포기 (${MAX_NEGOTIATION_RETRY}회 초과) — ${reason}`);
-        // 상대가 나갔거나 연결이 아예 끊긴 상태일 수 있으니, "재연결 중"처럼 계속 진행 중인 척
-        // 띄우지 않고 다시 조용한 대기 상태로 돌아간다 (새 welcome이 오면 그때 다시 활성 표시로 전환됨)
-        showCallStatus('상대방을 기다리는 중', { subtle: true });
+        if (hasConnectedOnce) {
+            // 정상 연결됐던 적이 있는데 재시도가 다 실패한 거라면, "아직 아무도 안 들어옴"과는
+            // 다른 진짜 문제(인터넷 끊김 등)일 가능성이 높다 — 조용한 대기 문구 대신 명확하게 알린다.
+            // (새 welcome/offer가 오면 "연결 시도 중"으로, 실제로 연결되면 사라짐)
+            showCallStatus('상대방과 연결이 끊겼어요');
+        } else {
+            // 이번 세션에서 한 번도 연결된 적이 없다면 그냥 상대가 아직 안 들어온 것일 수 있으니
+            // "재연결 중"처럼 계속 진행 중인 척 띄우지 않고 조용한 대기 상태로 돌아간다
+            showCallStatus('상대방을 기다리는 중', { subtle: true });
+        }
         return;
     }
     negotiationRetryCount++;
@@ -202,7 +243,10 @@ async function sendOffer() {
     myDataChannel = myPeerConnection.createDataChannel('video/audio');
     myDataChannel.addEventListener('message', console.log); // message 이벤트 - send에 반응
     rtcLog('dataChannel 생성됨');
-    const offer = await myPeerConnection.createOffer();
+    // iceRestart: true — 최초 연결에서는 어차피 새 ICE 세션이라 영향이 없고, welcome을 받았을 때
+    // connectionState가 아직 'connected'로 낡게 남아있는 채로 재협상하는 경우(위 peerFaceFrozen 분기)엔
+    // 이게 없으면 예전(죽은) ICE 자격증명을 그대로 재사용해서 실제로는 아무것도 안 고쳐질 수 있다.
+    const offer = await myPeerConnection.createOffer({ iceRestart: true });
     await myPeerConnection.setLocalDescription(offer); // 각자의 offer로 SDP(Session Description Protocol) 설정
     rtcLog('offer 전송');
     socket.emit('offer', offer, roomName); // 만들어진 offer를 전송
@@ -239,8 +283,19 @@ socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer�
     // 끊긴 적이 없는 경우가 많다. 이미 연결된 상태에서 다시 offer를 보내면, connectionState가
     // 계속 'connected'로 유지돼 값이 안 바뀌니 이걸 지워줄 이벤트도 다시 안 떠서 "연결 시도 중"
     // 표시가 영원히 고착되는 버그가 났었다.
+    // 단, peerFaceFrozen(상대 영상 프레임 정지 감지)이 이미 서 있다면 완전히 무시하진 않는다 — welcome은
+    // 상대가 재연결됐다는 빠르고 확실한 신호인데, connectionState는 브라우저 ICE 스택이 죽은 걸
+    // 뒤늦게 알아채기 전까지 한참 'connected'로 남아있기 때문이다. 이 경우엔 아래(연결이 안 된 경우용)
+    // 로직으로 흘려서 sendOffer()를 직접 부르지 않고, tryRestartNegotiation()의 단일 진입점을 거치게
+    // 한다 — 안 그러면 iceconnectionstatechange 등에서 이미 진행 중인 재협상과 충돌해서(서로 다른
+    // ICE 재시작이 겹쳐 DTLS가 매번 처음부터 다시 시작) 오히려 재연결이 더 오래 걸리는 문제가 있었다.
     if (myPeerConnection && myPeerConnection.connectionState === 'connected') {
-        rtcLog('welcome 수신 — 이미 연결되어 있어 무시');
+        if (peerFaceFrozen) {
+            rtcLog('welcome 수신 — connected지만 영상 정지 감지됨, 재협상 트리거');
+            tryRestartNegotiation('welcome 수신 — 영상 정지 상태');
+        } else {
+            rtcLog('welcome 수신 — 이미 연결되어 있어 무시');
+        }
         return;
     }
 
@@ -643,6 +698,7 @@ async function makeConnection() { // 연결을 만든다.
             clearConnectWatchdog();
             clearIceDisconnectTimer();
             negotiationRetryCount = 0;
+            hasConnectedOnce = true;
             hideCallStatus();
             if (announceReconnectOnNextConnect) {
                 announceReconnectOnNextConnect = false;
@@ -1111,16 +1167,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     showCallStatus('상대방을 기다리는 중', { subtle: true });
     await getMedia();
     await makeConnection();
+    hasAnnouncedToRoom = true;
     socket.emit('join_video_socket', roomName, username);
     setSwitchCameraPos();
     startFreezeDetection();
 })
 
+// 백그라운드에서는 소켓이 짧게 붙었다 끊기는 자동 재연결을 반복하며(flapping) 서버 쪽에서
+// "연결 끊김"을 여러 번 감지하게 만들 수 있다(영상통화 종료 신호가 중복으로 여러 번 오는 원인).
+// hidden↔visible 전환이 중복 발생해도 한 번만 처리되도록 상태를 직접 추적한다.
+let isVideoCallPageVisible = true;
+
 // 탭 전환/화면 잠금 후 foreground 복귀 시 내 화면 + 상대 화면 resume.
 // 모바일 브라우저는 백그라운드에서 돌아오면 <video>가 재생을 자동으로 이어가지 않는 경우가 있어
 // (미디어 연결 자체는 안 끊겼어도) srcObject는 그대로인데 화면만 마지막 프레임에 멈춰있게 된다.
 document.addEventListener('visibilitychange', () => {
-    if (document.hidden) return;
+    if (document.hidden) {
+        if (isVideoCallPageVisible) {
+            isVideoCallPageVisible = false;
+            // 지금 살아있는 연결은 안 끊지만, 백그라운드 중 연결이 끊기면 자동 재연결(flapping)은 멈춰둔다
+            if (socket.io) socket.io.reconnection(false);
+        }
+        return;
+    }
+    if (!isVideoCallPageVisible) {
+        isVideoCallPageVisible = true;
+        if (socket.io) socket.io.reconnection(true);
+        if (!socket.connected) socket.connect();
+    }
     if (myFace.paused && myStream && myStream.active) {
         myFace.play().catch(() => {});
     }

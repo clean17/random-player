@@ -24,6 +24,33 @@ const HOME_LEFT = "15px";
 
 ////////////////////////// Video Call //////////////////////////////
 
+function closeVideoCallWindow() {
+    if (!videoCallWindow) return;
+    document.body.removeChild(videoCallWindow);
+    videoCallWindow = null;
+    vcallIframe = null;
+    keyboardShrunken = false;
+    document.removeEventListener("focusin",  onInputFocus);
+    document.removeEventListener("focusout", onInputBlur);
+    if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", onViewportResize);
+    }
+    window.removeEventListener("resize", onViewportResize);
+}
+
+// 모듈 스코프에서 딱 한 번만 등록한다. 예전엔 openVideoCallWindow() 안에서 매번 등록하고
+// 닫을 때 제거하지 않아서, 통화창을 열었다 닫았다 할 때마다 리스너가 계속 쌓였다 —
+// 그 상태에서 신호 하나가 오면 쌓인 리스너 수만큼 중복으로 반응해 채팅 메세지가 여러 번 나갔다.
+window.addEventListener("message", (event) => {
+    if (event.data === "force-close") closeVideoCallWindow();
+    if (event.data === "video-call-reconnected") {
+        // 홈 화면 이동 등으로 통화가 끊겼다가 다시 이어진 경우 — "통화요청"이 아니라
+        // 다시 이어졌다는 걸 명확히 구분해서 알린다 (새 통화 요청으로 오해하지 않게)
+        const reconnectMsg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화 재연결';
+        socket.emit("new_msg", { username, msg: reconnectMsg, room: roomName });
+    }
+});
+
 function openVideoCallWindow() {
     if (videoCallWindow) return;
 
@@ -68,20 +95,7 @@ function openVideoCallWindow() {
     const closeBtn = document.createElement("span");
     closeBtn.innerHTML = '<i class="fas fa-times"></i>';
     closeBtn.style.cursor = "pointer";
-    closeBtn.onclick = () => {
-        if (videoCallWindow) {
-            document.body.removeChild(videoCallWindow);
-            videoCallWindow = null;
-            vcallIframe = null;
-            keyboardShrunken = false;
-            document.removeEventListener("focusin",  onInputFocus);
-            document.removeEventListener("focusout", onInputBlur);
-            if (window.visualViewport) {
-                window.visualViewport.removeEventListener("resize", onViewportResize);
-            }
-            window.removeEventListener("resize", onViewportResize);
-        }
-    };
+    closeBtn.onclick = closeVideoCallWindow;
 
     hideBtn.addEventListener("touchstart", e => e.stopPropagation(), { passive: false });
     closeBtn.addEventListener("touchstart", e => e.stopPropagation(), { passive: false });
@@ -118,16 +132,6 @@ function openVideoCallWindow() {
     videoCallWindow.appendChild(vcallIframe);
     videoCallWindow.appendChild(resizeHandle);
     document.body.appendChild(videoCallWindow);
-
-    window.addEventListener("message", (event) => {
-        if (event.data === "force-close") closeBtn.click();
-        if (event.data === "video-call-reconnected") {
-            // 홈 화면 이동 등으로 통화가 끊겼다가 다시 이어진 경우 — "통화요청"이 아니라
-            // 다시 이어졌다는 걸 명확히 구분해서 알린다 (새 통화 요청으로 오해하지 않게)
-            const reconnectMsg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화 재연결';
-            socket.emit("new_msg", { username, msg: reconnectMsg, room: roomName });
-        }
-    });
 
     // 키보드 감지: focusin(선제) + viewport resize(보장)
     baseViewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;

@@ -17,7 +17,11 @@ const chatContainer = document.getElementById("chat-container"),
     videoCallBtn = document.getElementById("videoCallBtn"),
     toggleNotificationBtn = document.getElementById("toggleNotification"),
     roomUserCount = document.getElementById('userCount'),
+    userCountIndicator = document.getElementById('user-count-indicator'),
+    userListPanel = document.getElementById('userListPanel'),
     typingIndicator = document.getElementById('typingIndicator');
+
+let currentRoomUserList = [];
 
 
 function setVideoCallButtonActive(isActive) {
@@ -374,6 +378,8 @@ function connectSocket() {
     socket.on("room_user_list", (userList) => {
         // console.log('현재 접속 중인 유저 목록:', userList);
         updateUserCount(userList.length);
+        currentRoomUserList = userList;
+        renderUserListPanel();
         const tempUserList = [];
         userList.forEach(user => {
             if (user !== username) {
@@ -437,18 +443,31 @@ function connectSocket() {
     // 확인하는 방식이라, 소켓이 응답을 멈춘 뒤로도 서버가 "진짜 끊겼다"고 판단하기까지 통상
     // 수십 초(핑 간격+타임아웃)가 걸린다. 즉 우리가 이 이벤트를 받는 시점은 이미 상대가 안 보인 지
     // 꽤 지난 뒤라서, 여기서 몇 초만 더 기다려선 "잠깐 홈화면 갔다옴"과 "진짜 종료"를 못 가른다.
-    // 그래서 넉넉하게(GRACE) 기다렸다가, 그 사이 재연결 신호(find_video_call/video_call_ready)가
-    // 없을 때만 실제로 끈다 — 살짝 늦게 반영되는 대신, 잠깐 안 보인 것만으로 "종료"로 잘못 뜨는
-    // 일을 줄인다.
+    // 그래서 잠깐(GRACE) 기다렸다가, 그 사이 재연결 신호(find_video_call/video_call_ready)가
+    // 없을 때만 실제로 끈다 — 이 신호 자체가 이미 서버의 ping-timeout만큼 늦게 온 것이라, 여기서
+    // 또 너무 오래 기다리면(45초 등) 상대 인터넷이 실제로 끊긴 뒤에도 초록불이 1분 넘게 남는
+    // 역효과가 있었다. 15초 정도로 짧게 잡아 "떠 있는 시간"과 "정확성" 사이 균형을 맞춘다.
     socket.on("video_call_ended", (data) => {
+        console.log('video_call_ended 수신:', data); // data에 종료 원인 관련 필드가 있는지 확인용
         videoCallRoomName = null;
         clearTimeout(videoCallEndedGraceTimer);
         videoCallEndedGraceTimer = setTimeout(() => {
             videoCallEndedGraceTimer = null;
             setVideoCallButtonActive(false);
-        }, 45000);
+        }, 15000);
     });
 }
+
+// reconnectionAttempts(20회)를 다 쓰면 socket.io가 재연결을 완전히 포기한다 — 인터넷이 몇 분 이상
+// 끊기면 그 안에 다 써버려서, 나중에 인터넷이 다시 돌아와도 소켓이 스스로 안 붙는다.
+// 브라우저가 온라인 상태 복귀를 감지하면 포기한 상태여도 다시 연결을 시도하도록 강제한다.
+// connectSocket()이 여러 번 호출돼도 socket 변수는 항상 최신 인스턴스를 참조하므로 리스너는 한 번만 등록한다.
+window.addEventListener('online', () => {
+    if (socket && !socket.connected) {
+        console.log('🌐 온라인 복귀 감지 — 소켓 재연결 시도');
+        socket.connect();
+    }
+});
 
 
 ////////////////////////// Focus on Browser  ///////////////////////////
@@ -496,6 +515,13 @@ function stopPolling() {
 }
 
 
+// 백그라운드에서는 소켓이 짧게 붙었다 끊기는 자동 재연결을 반복하며(flapping) 서버 쪽에서
+// "연결 끊김"을 여러 번 감지하게 만들 수 있다 — 영상통화 종료 신호 같은 이벤트가 중복으로 여러 번
+// 오는 원인이 된다. 그래서 hidden↔visible 전환이 중복으로 발생해도(일부 모바일 브라우저에서
+// 전환 애니메이션 중 짧게 여러 번 뜨는 경우가 있음) exit_room/재연결 제어가 한 번만 실행되도록
+// 상태를 직접 추적한다.
+let isChatRoomVisible = true;
+
 // 3. 관찰 시작
 document.addEventListener('visibilitychange', async () => {
     removeTypingBox();
@@ -507,6 +533,11 @@ document.addEventListener('visibilitychange', async () => {
      * [document.visibilityState === "visible"] == [!document.hidden]
      */
     if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
+        if (!isChatRoomVisible) {
+            isChatRoomVisible = true;
+            if (socket && socket.io) socket.io.reconnection(true);
+            if (socket && !socket.connected) socket.connect();
+        }
         startPolling();
         if (shouldAutoFocusChatInput()) chatInput.focus();
 
@@ -575,11 +606,14 @@ document.addEventListener('visibilitychange', async () => {
                 sendReadDataLastChat(); // 스크롤이 최하단이면 상대에게 읽었다고 보낸다
             });
 
-    } else {
+    } else if (isChatRoomVisible) {
+        isChatRoomVisible = false;
         stopPolling();
         socket.emit("exit_room", { username: username, room: roomName });
         // 소켓을 끊어버리면 알림이 안온다..
         // if (typeof socket !== "undefined") socket.disconnect();
+        // 지금 살아있는 연결은 안 끊지만, 백그라운드 중 연결이 끊기면 자동 재연결(flapping)은 멈춰둔다
+        if (socket && socket.io) socket.io.reconnection(false);
     }
 });
 
@@ -1198,6 +1232,52 @@ function updateUserCount(number) {
         setVideoCallButtonActive(false);
     }*/
 }
+
+// 접속자 수 표시를 누르면 현재 접속 중인 유저 아이디 목록을 보여준다
+function renderUserListPanel() {
+    if (!userListPanel) return;
+    userListPanel.textContent = "";
+
+    if (!currentRoomUserList || currentRoomUserList.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "user-list-empty";
+        empty.textContent = "접속자 없음";
+        userListPanel.appendChild(empty);
+        return;
+    }
+
+    currentRoomUserList.forEach(user => {
+        const item = document.createElement("div");
+        item.className = "user-list-item";
+        item.textContent = user === username ? `${user} (나)` : user;
+        userListPanel.appendChild(item);
+    });
+}
+
+function toggleUserListPanel(forceState) {
+    if (!userCountIndicator) return;
+    const willOpen = typeof forceState === "boolean" ? forceState : !userCountIndicator.classList.contains("is-open");
+    userCountIndicator.classList.toggle("is-open", willOpen);
+    userCountIndicator.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
+userCountIndicator?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (event.target.closest(".user-list-panel")) return; // 패널 내부 클릭은 토글하지 않음
+    toggleUserListPanel();
+});
+
+userCountIndicator?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggleUserListPanel();
+});
+
+document.addEventListener("click", (event) => {
+    if (userCountIndicator && !userCountIndicator.contains(event.target)) {
+        toggleUserListPanel(false);
+    }
+});
 
 // 최하단으로 가는 버튼 생성
 function renderBottomScrollButton() {
