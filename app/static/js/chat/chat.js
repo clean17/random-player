@@ -52,6 +52,7 @@ let offset = 0, // 가장 최근 10개는 이미 로드됨
     lastReadChatId = 0,
     submitted = false,
     videoCallRoomName = null,
+    videoCallEndedGraceTimer = null,
     typingTimeout,
     peerLastReadChatId = 0,
     isTyping = false,
@@ -414,6 +415,8 @@ function connectSocket() {
     // 상대는 이미 영상통화를 연결함 + 채팅방이 늦게 들어와 영통소켓 정보를 받아옴
     socket.on("find_video_call", (data) => {
         if (data.userList.length !== 0 && !data.userList.includes(username)) {
+            clearTimeout(videoCallEndedGraceTimer);
+            videoCallEndedGraceTimer = null;
             setVideoCallButtonActive(true);
         }
     });
@@ -422,17 +425,28 @@ function connectSocket() {
     socket.on("video_call_ready", (data) => {
         videoCallRoomName = data.videoCallRoomName;
         if (username !== data.username) {
+            clearTimeout(videoCallEndedGraceTimer);
+            videoCallEndedGraceTimer = null;
             setVideoCallButtonActive(true);
         }
     });
 
-    // socket.on("disconnect" 에서 video_call_ended 메세지를 날린다
+    // socket.on("disconnect" 에서 서버가 video_call_ended를 보낸다.
+    // 홈 화면 이동 등으로 앱이 백그라운드로 가면 소켓이 끊기는데, 서버는 이것도 disconnect로 보고
+    // video_call_ended를 보낸다 — 그런데 이 신호 자체가 이미 늦다. 서버가 핑으로 연결 여부를
+    // 확인하는 방식이라, 소켓이 응답을 멈춘 뒤로도 서버가 "진짜 끊겼다"고 판단하기까지 통상
+    // 수십 초(핑 간격+타임아웃)가 걸린다. 즉 우리가 이 이벤트를 받는 시점은 이미 상대가 안 보인 지
+    // 꽤 지난 뒤라서, 여기서 몇 초만 더 기다려선 "잠깐 홈화면 갔다옴"과 "진짜 종료"를 못 가른다.
+    // 그래서 넉넉하게(GRACE) 기다렸다가, 그 사이 재연결 신호(find_video_call/video_call_ready)가
+    // 없을 때만 실제로 끈다 — 살짝 늦게 반영되는 대신, 잠깐 안 보인 것만으로 "종료"로 잘못 뜨는
+    // 일을 줄인다.
     socket.on("video_call_ended", (data) => {
         videoCallRoomName = null;
-        // 상대가 다른 탭에 있어도 영상통화를 나간게 아니므로 신호는 끄지 않는다
-        // if (username !== data.username) {
-        //     videoCallBtn.style.backgroundColor = "";
-        setVideoCallButtonActive(false);
+        clearTimeout(videoCallEndedGraceTimer);
+        videoCallEndedGraceTimer = setTimeout(() => {
+            videoCallEndedGraceTimer = null;
+            setVideoCallButtonActive(false);
+        }, 45000);
     });
 }
 
