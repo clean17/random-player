@@ -38,6 +38,27 @@ def _save_sync_offsets(data):
         json.dump(data, f, ensure_ascii=False)
     os.replace(tmp_path, SYNC_OFFSET_FILE)  # 쓰다가 죽어도 원본 파일이 깨지지 않도록 원자적 교체
 
+# 하트(좋아요) 표시한 영상 목록 — { "<dir>": ["<filename>", ...], ... }
+LIKED_VIDEOS_FILE = os.path.join(os.path.dirname(__file__), 'liked_videos.json')
+_liked_videos_lock = threading.Lock()
+
+
+def _load_liked_videos():
+    if not os.path.exists(LIKED_VIDEOS_FILE):
+        return {}
+    try:
+        with open(LIKED_VIDEOS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (IOError, ValueError):
+        return {}
+
+
+def _save_liked_videos(data):
+    tmp_path = LIKED_VIDEOS_FILE + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp_path, LIKED_VIDEOS_FILE)  # 쓰다가 죽어도 원본 파일이 깨지지 않도록 원자적 교체
+
 # 설정
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 IMAGE_DIR = settings['IMAGE_DIR']
@@ -65,6 +86,7 @@ def video_player(directory):
 @login_required
 def get_videos():
     directory = request.args.get('dir')
+    liked_param = request.args.get('liked')  # 'true' / 'false' / 없음(전체)
     video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
     videos = []
     for root, dirs, files in os.walk(video_directory):
@@ -76,10 +98,49 @@ def get_videos():
                 rel_file = rel_file.replace(os.path.sep, '/')
                 videos.append(rel_file)
 
+    if liked_param is not None:
+        with _liked_videos_lock:
+            all_liked = _load_liked_videos()
+        liked_set = set(all_liked.get(directory, []))
+        want_liked = liked_param.lower() == 'true'
+        videos = [v for v in videos if (v in liked_set) == want_liked]
+
     # print('############### video_list ###############')
     random.seed(time.time())
     random.shuffle(videos)
     return jsonify(videos)
+
+@video.route('/liked-videos', methods=['GET'])
+@login_required
+def get_liked_videos():
+    directory = request.args.get('dir')
+    with _liked_videos_lock:
+        all_liked = _load_liked_videos()
+    return jsonify(all_liked.get(directory, []))
+
+@video.route('/like', methods=['POST'])
+@login_required
+def set_liked_video():
+    data = request.get_json(silent=True) or {}
+    directory = data.get('dir')
+    filename = data.get('filename')
+    liked = data.get('liked')
+    if not directory or not filename:
+        return '', 400
+
+    with _liked_videos_lock:
+        all_liked = _load_liked_videos()
+        dir_liked = all_liked.setdefault(directory, [])
+        if liked:
+            if filename not in dir_liked:
+                dir_liked.append(filename)
+        else:
+            if filename in dir_liked:
+                dir_liked.remove(filename)
+        if not dir_liked:
+            all_liked.pop(directory, None)
+        _save_liked_videos(all_liked)
+    return '', 204
 
 @video.route('/sync-offsets', methods=['GET'])
 @login_required
@@ -205,6 +266,16 @@ def delete_video(filename):
             print(f"Error: {e}") # 0x80270027은 “그 파일/폴더 지금 누가 쓰는 중이라 휴지통 이동 못 함” 이라는 뜻
         except TrashPermissionError as e:
             print(f"Permission Error: {e}")
+
+        # 지워진 영상의 하트 상태도 같이 정리 (안 하면 파일명이 재사용될 때 엉뚱하게 하트 표시됨)
+        with _liked_videos_lock:
+            all_liked = _load_liked_videos()
+            dir_liked = all_liked.get(directory, [])
+            if filename in dir_liked:
+                dir_liked.remove(filename)
+                if not dir_liked:
+                    all_liked.pop(directory, None)
+                _save_liked_videos(all_liked)
 
         # print(f"[ {filename} ] is successfully deleted")
         # os.remove(file_path)

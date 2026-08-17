@@ -70,6 +70,75 @@ video.controls-idle::-webkit-media-controls {
     background-color: #0080ff;
     color: #fff;
 }
+.like-bar {
+    position: absolute;
+    top: 56px; /* heart-btn-wrap(top:10px, height 36px) 바로 아래 */
+    right: 10px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+.like-bar.with-prev-loop {
+    top: 156px; /* heart-btn-wrap.with-prev-loop(top:110px) 바로 아래 */
+}
+.like-bar select {
+    box-sizing: border-box;
+    height: 36px;
+    padding: 0 8px;
+    font-size: 14px;
+    border: none;
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0.82);
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.like-bar select:hover {
+    background-color: #0056b3;
+    opacity: 1;
+}
+
+/* top-bar 밖에 독립적으로 둔다 — hideControls()가 topDiv(.top-bar)를 display:none 시켜도
+   같이 사라지지 않고 항상 보이게 하기 위함 (#video-filename과 같은 이유). */
+.heart-btn-wrap {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 10001;
+}
+.heart-btn-wrap.with-prev-loop {
+    top: 110px; /* 컨트롤이 보일 때 Prev(top:10)/Loop(top:60)와 겹치지 않도록 */
+}
+.heart-btn {
+    box-sizing: border-box;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0.82);
+    color: #fff;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: background-color 0.15s;
+}
+.heart-btn:hover {
+    background-color: #0056b3;
+    opacity: 1;
+}
+.heart-btn .heart-shape {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2;
+}
+.heart-btn.liked .heart-shape {
+    fill: #ff4d6d;
+    stroke: #ff4d6d;
+}
 #toggleGain .active {
     background-color: #0080ff;
 }
@@ -108,9 +177,11 @@ video.controls-idle::-webkit-media-controls {
     border: none;
     border-radius: 5px;
     opacity: 0.8;
+    transition: background-color 0.15s;
 }
 #controls button:hover {
     opacity: 1;
+    background-color: #0056b3;
 }
 
 #controls-repit {
@@ -297,6 +368,55 @@ body.legacy-video-page .top-bar .loop {
     pointer-events: auto !important;
     z-index: 10002 !important;
 }
+
+body.page-video .top-bar .like-bar,
+body.legacy-video-page .top-bar .like-bar {
+    position: absolute !important;
+    top: 56px !important;
+    right: 10px !important;
+    left: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    gap: 6px !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    z-index: 10002 !important;
+}
+
+body.page-video .top-bar .like-bar.with-prev-loop,
+body.legacy-video-page .top-bar .like-bar.with-prev-loop {
+    top: 156px !important;
+}
+
+body.page-video .top-bar .like-bar select,
+body.legacy-video-page .top-bar .like-bar select {
+    box-sizing: border-box !important;
+    height: 36px !important;
+    padding: 0 8px !important;
+    font-size: 14px !important;
+    border: none !important;
+    border-radius: 5px !important;
+    background: rgba(0, 0, 0, 0.82) !important;
+    color: #fff !important;
+    cursor: pointer !important;
+}
+
+body.page-video .top-bar .like-bar select:hover,
+body.legacy-video-page .top-bar .like-bar select:hover {
+    background: #0056b3 !important;
+    opacity: 1 !important;
+}
+
+/* heart-btn-wrap은 .top-bar 밖의 독립 엘리먼트라 위 .top-bar 스코프 규칙과는 무관하다 —
+   .top-bar가 idle 타이머로 display:none 되어도(hideControls) 같이 사라지지 않아야 해서
+   일부러 밖에 뺐다. 이 페이지 전용 !important 스코프가 필요 없으니 video.css 상단의
+   일반 .heart-btn-wrap / .heart-btn 규칙을 그대로 쓴다. */
 
 body.page-video .top-bar a,
 body.legacy-video-page .top-bar a {

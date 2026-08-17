@@ -38,6 +38,10 @@ let startTime = 0;
 let endTime = 0;
 let fetchVideoArr = [];
 let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const heartButton = document.getElementById('heartButton');
+const likeFilterSelect = document.getElementById('likeFilterSelect');
+let likedVideosSet = new Set(); // 현재 dir에서 하트한 영상 파일명 집합 (서버에서 한 번에 불러와 캐시)
+let likeFilterMode = 'unliked'; // 'unliked' | 'liked' — Next가 어느 목록에서 뽑을지
 
 /************************************************************************/
 /******************************   Common   ******************************/
@@ -88,16 +92,21 @@ function initVideoElem() {
     const currentVideoPlayer = document.querySelector('#videoPlayer')
     if (currentVideoPlayer) {
         if (isVideoJs()) {
-            let player = videojs.getPlayer(currentVideoPlayer.id);
-            if (player) {
+            const existingPlayer = videojs.getPlayer(currentVideoPlayer.id);
+            if (existingPlayer) {
                 try {
-                    player.dispose(); // video.js 인스턴스 해제 > #videoPlayer도 자동으로 DOM에서 제거된다
+                    existingPlayer.dispose(); // video.js 인스턴스 해제 > #videoPlayer도 자동으로 DOM에서 제거된다
                 } catch (e) {
                     currentVideoPlayer.remove();
                 }
             } else {
                 currentVideoPlayer.remove();
             }
+            // 위 지역 변수가 전역 player를 가리는(shadowing) 이름과 같아서, dispose() 후에도
+            // 전역 player는 여전히 죽은 인스턴스를 참조한 채로 남아있었다 — 이후 aButton/bButton
+            // (및 '['/']' 키)에서 player.currentTime()을 호출하면 tech_가 null이라 그대로
+            // "Cannot read properties of null (reading 'currentTime')"로 죽던 원인이었다.
+            player = null;
         } else {
             currentVideoPlayer.remove();
         }
@@ -201,6 +210,7 @@ function selectVideoFromArr(videos, randomIndex) {
     }
 
     applySavedSyncOffset(); // 이 영상에 저장된 싱크 값이 있으면 불러오고, 없으면 기본값 0
+    updateHeartButton();
     const videoUrl = makeGetUrl(currentVideo);
     // console.log('videoUrl', videoUrl)
     playVideo(videoUrl)
@@ -214,7 +224,8 @@ function getVideo() {
     document.querySelectorAll('canvas').forEach(elem => elem.remove());
     resetLoop();
     if (fetchVideoArr.length === 0) {
-        axios.get(`/video/videos?dir=${dir}`)
+        const likedParam = likeFilterMode === 'liked' ? 'true' : 'false';
+        axios.get(`/video/videos?dir=${dir}&liked=${likedParam}`)
             .then(response => {
                 let videos = response.data;
                 if (videos.length > 0) {
@@ -226,13 +237,19 @@ function getVideo() {
                 } else {
                     totalVideoCount = 0;
                     updateVideoCountDisplay();
-                    alert('No videos found');
+                    alert(likeFilterMode === 'liked' ? '하트한 영상이 없습니다' : '안누른 영상이 없습니다');
                 }
             });
     } else {
         const randomIndex = Math.floor(Math.random() * fetchVideoArr.length);
         selectVideoFromArr(fetchVideoArr, randomIndex);
     }
+}
+
+function updateHeartButton() {
+    if (!heartButton) return;
+    const liked = likedVideosSet.has(currentVideo);
+    heartButton.classList.toggle('liked', liked);
 }
 
 // 세로 영상(3분할 대상)인지 실제 재생 없이 가볍게 먼저 확인한다. preload="metadata"만 받으므로
@@ -608,6 +625,7 @@ function delVideo() {
                 updateVideoCountDisplay();
             }
             currentVideo = '';
+            updateHeartButton();
             getVideo();
 
             axios.post(`/video/delete/${encodeURIComponent(deletedVideo)}?dir=${dir}`)
@@ -615,6 +633,7 @@ function delVideo() {
                     if (response.status === 204) {
                         delete videoSyncOffsetsMap[deletedVideo]; // 삭제된 영상의 싱크 값도 같이 정리
                         axios.post('/video/sync-offset', {dir: dir, filename: deletedVideo, offset: 0}).catch(() => {});
+                        likedVideosSet.delete(deletedVideo); // 서버에서도 delete 라우트가 같이 정리한다
                     } else {
                         alert('Failed to delete video');
                         if (totalVideoCount !== null) { // 실제로는 안 지워졌으니 낙관적으로 줄인 카운트를 되돌림
@@ -670,6 +689,23 @@ document.getElementById('nextButton')?.removeEventListener('click', getVideo);
 document.getElementById('nextButton')?.addEventListener('click', getVideo);
 document.getElementById('deleteButton')?.removeEventListener('click', delVideo);
 document.getElementById('deleteButton')?.addEventListener('click', delVideo);
+heartButton?.addEventListener('click', function() {
+    if (!currentVideo) return;
+    const newLiked = !likedVideosSet.has(currentVideo);
+    if (newLiked) {
+        likedVideosSet.add(currentVideo);
+    } else {
+        likedVideosSet.delete(currentVideo);
+    }
+    updateHeartButton();
+    axios.post('/video/like', {dir: dir, filename: currentVideo, liked: newLiked}).catch(() => {});
+});
+likeFilterSelect?.addEventListener('change', function() {
+    likeFilterMode = likeFilterSelect.value;
+    fetchVideoArr = []; // 필터가 바뀌었으니 이전 목록 캐시는 버리고 새로 받아온다
+    currentVideo = '';
+    getVideo();
+});
 document.getElementById('fullScreen')?.removeEventListener('click', toggleFullscreen);
 document.getElementById('fullScreen')?.addEventListener('click', toggleFullscreen);
 document.addEventListener('mousemove', showControls);
@@ -717,6 +753,7 @@ prevButton?.addEventListener('click', function () {
         pushVideoArr(currentVideo)
         currentVideo = prevVideo;
         applySavedSyncOffset(); // selectVideoFromArr()와 동일하게 이 영상의 저장된 싱크 값을 불러온다
+        updateHeartButton();
 
         const videoUrl = makeGetUrl(prevVideo)
         playVideo(videoUrl)
@@ -735,26 +772,26 @@ function toggleLoop() {
 
 aBtn?.addEventListener('click', function() {
     isClickAbtn = !isClickAbtn;
-    if (player) startTime = player.currentTime();
+    if (player && !player.isDisposed()) startTime = player.currentTime();
     if (videoPlayer) startTime = videoPlayer.currentTime;
     isSectionLooping = isClickAbtn && isClickBbtn
     aBtn.classList.toggle('active', isClickAbtn);
     if (isSectionLooping && videoPlayer) {
         videoPlayer.removeAttribute('controls');
-    } else {
+    } else if (videoPlayer) {
         videoPlayer.setAttribute('controls', 'controls');
     }
 });
 
 bBtn?.addEventListener('click', function() {
     isClickBbtn = !isClickBbtn;
-    if (player) endTime = player.currentTime();
+    if (player && !player.isDisposed()) endTime = player.currentTime();
     if (videoPlayer) endTime = videoPlayer.currentTime;
     isSectionLooping = isClickAbtn && isClickBbtn
     bBtn.classList.toggle('active', isClickBbtn);
     if (isSectionLooping && videoPlayer) {
         videoPlayer.removeAttribute('controls');
-    } else {
+    } else if (videoPlayer) {
         videoPlayer.setAttribute('controls', 'controls');
     }
 });
@@ -830,6 +867,18 @@ function loadVideoSyncOffsetsFromServer() {
         })
         .finally(function() {
             videoSyncOffsetsLoaded = true;
+        });
+}
+
+// 현재 dir에서 하트한 영상 목록을 한 번에 받아 캐시해둔다 (videoSyncOffsetsMap과 동일한 방식) —
+// 영상이 바뀔 때마다 이 캐시에서 즉시 조회해 하트 버튼 상태를 표시한다.
+function loadLikedVideosFromServer() {
+    return axios.get('/video/liked-videos', {params: {dir}})
+        .then(function(response) {
+            likedVideosSet = new Set(response.data || []);
+        })
+        .catch(function() {
+            likedVideosSet = new Set();
         });
 }
 
@@ -1126,6 +1175,10 @@ function videoKeyEvent(event) {
         case 's':
             resetAudioSync();
             break;
+        case 'l':
+        case 'L':
+            heartButton?.click();
+            break;
         case 'Delete':
             delVideo();
             break;
@@ -1384,7 +1437,8 @@ function activateSyncAudio(videoElement, isVjs) {
 function initPage() {
     previousVideos.push(undefined)
     // player = videojs('videoPlayer');
-    loadVideoSyncOffsetsFromServer().then(function() {
+    if (likeFilterSelect) likeFilterMode = likeFilterSelect.value;
+    Promise.all([loadVideoSyncOffsetsFromServer(), loadLikedVideosFromServer()]).then(function() {
         getVideo();
     });
 }
