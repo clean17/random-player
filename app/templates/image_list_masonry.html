@@ -624,12 +624,15 @@
     }
 
     // 현재 렌더된 이미지+비디오를 data-index 순으로 합쳐 파일명 배열 반환
-    function buildRefineFileList() {
+    // (원래 refine 전용이라 이름이 buildRefineFileList였다 — temp/trip 이미지는 data-filename이
+    // 없어서(위 #image-data 템플릿 참고) alt 속성으로 대체한다)
+    function buildMediaFileList() {
         const imgItems = Array.from(
-            msr_container.querySelectorAll('img.thumbnail[data-filename]')
+            msr_container.querySelectorAll('img.thumbnail')
         ).map(function(el) {
-            return { fn: decodeURIComponent(el.dataset.filename), idx: Number(el.dataset.index) };
-        });
+            const raw = el.dataset.filename || el.getAttribute('alt') || '';
+            return { fn: raw ? decodeURIComponent(raw) : '', idx: Number(el.dataset.index) };
+        }).filter(function(item) { return item.fn; });
         const vidItems = Array.from(
             msr_container.querySelectorAll('video[data-index] source[data-filename]')
         ).map(function(el) {
@@ -1196,16 +1199,18 @@
             }
         });
 
-        // 비디오 클릭 → refine 슬라이드쇼 (더블클릭으로 열기)
+        // 비디오 클릭 → 슬라이드쇼로 크게보기 (더블클릭으로 열기 — 원래 refine 전용이었는데
+        // temp도 동일한 크게보기가 필요해서 확장; 싱글클릭은 네이티브 video controls(재생/탐색)와
+        // 겹쳐서 그대로 둔다)
         document.addEventListener('dblclick', function (e) {
-            if (dir !== 'refine') return;
+            if (dir !== 'refine' && dir !== 'temp') return;
             if (e.target.closest('.delete-btn')) return;
             const videoEl = e.target.closest('video.video-thumbnail');
             if (!videoEl) return;
             const sourceEl = videoEl.querySelector('source[data-filename]');
             if (!sourceEl) return;
             const filename = decodeURIComponent(sourceEl.dataset.filename);
-            const list = buildRefineFileList();
+            const list = buildMediaFileList();
             const startIdx = list.indexOf(filename);
             showSlideshowModal(list, startIdx >= 0 ? startIdx : 0);
             clearTimeout(slideShowTimer);
@@ -1216,15 +1221,15 @@
             const img = e.target.closest('img.thumbnail');
             if (!img) return;
 
-            if (dir === 'trip' || dir === 'temp') return;
+            if (dir === 'trip') return;
 
             const imageItem = img.closest('.image-item');
             if (!imageItem) return;
 
-            if (dir === 'refine') {
+            if (dir === 'refine' || dir === 'temp') {
                 const imgEl = imageItem.querySelector('img.thumbnail');
                 const filename = decodeURIComponent(imgEl?.dataset.filename || imgEl?.alt || '');
-                const list = buildRefineFileList();
+                const list = buildMediaFileList();
                 const startIdx = list.indexOf(filename);
                 showSlideshowModal(list, startIdx >= 0 ? startIdx : 0);
                 clearTimeout(slideShowTimer);

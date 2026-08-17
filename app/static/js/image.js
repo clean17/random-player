@@ -50,12 +50,18 @@ let pendingMasonryScrollY = null;
 function _preventTouchScroll(e) { e.preventDefault(); }
 
 // masonry에 새로 렌더된 항목을 slideShowImgs에 추가 (data-index 순)
+// 원래 refine 전용이라 [data-filename]만 봤다 — temp/trip 이미지는 data-filename이 없어서
+// (image_list_masonry.html의 #image-data 템플릿 참고) alt 속성으로 대체한다.
 function extendSlideShowImgs() {
     const msr = document.getElementById('masonry');
     if (!msr) return;
     const existing = new Set(slideShowImgs);
-    const imgItems = Array.from(msr.querySelectorAll('img.thumbnail[data-filename]'))
-        .map(el => ({ fn: decodeURIComponent(el.dataset.filename), idx: Number(el.dataset.index) }));
+    const imgItems = Array.from(msr.querySelectorAll('img.thumbnail'))
+        .map(el => {
+            const raw = el.dataset.filename || el.getAttribute('alt') || '';
+            return { fn: raw ? decodeURIComponent(raw) : '', idx: Number(el.dataset.index) };
+        })
+        .filter(item => item.fn);
     const vidItems = Array.from(msr.querySelectorAll('video[data-index] source[data-filename]'))
         .map(el => ({ fn: decodeURIComponent(el.dataset.filename), idx: Number(el.closest('video').dataset.index) }));
     const newItems = imgItems.concat(vidItems)
@@ -139,22 +145,31 @@ function setSlide(filename) {
     const videoEl = document.getElementById('slideshow-video');
     const videoSrcEl = document.getElementById('slideshow-video-source');
     const videoExts = ['mp4', 'mov', 'mkv', 'avi'];
-    const imageBase = "https://chickchick.kr/image/images";
     const videoBase = "/video/temp-video";
     const enc = encodeURIComponent(filename);
     const isVid = videoExts.includes(filename.split('.').pop().toLowerCase());
 
+    // 슬라이드쇼는 원래 dir==='refine' 전용이라 URL을 통째로 하드코딩했다(운영 CDN 도메인 포함).
+    // refine 화면은 그대로 두고, temp 등 다른 화면에서 열릴 때는 그 페이지의 dir/selected_dir로
+    // 앱 자체의 /image, /video 라우트를 쓴다(썸네일이 이미 쓰는 것과 동일한 방식).
+    const activeDir = (typeof dir !== 'undefined' && dir) ? dir : 'refine';
+    const selDir = (typeof selected_dir !== 'undefined' && selected_dir && selected_dir !== 'None') ? selected_dir : '';
+
     if (isVid) {
         imgEl.style.display = "none";
         videoEl.style.display = "block";
-        videoSrcEl.src = `${videoBase}/${enc}?dir=refine`;
+        videoSrcEl.src = activeDir === 'refine'
+            ? `${videoBase}/${enc}?dir=refine`
+            : `${videoBase}/${enc}?dir=${encodeURIComponent(activeDir)}&selected_dir=${encodeURIComponent(selDir)}`;
         videoEl.load();
         videoEl.play().catch(() => {});
     } else {
         videoEl.pause();
         videoEl.style.display = "none";
         imgEl.style.display = "block";
-        imgEl.src = `${imageBase}?filename=${enc}&dir=refine`;
+        imgEl.src = activeDir === 'refine'
+            ? `https://chickchick.kr/image/images?filename=${enc}&dir=refine`
+            : `/image/images?filename=${enc}&dir=${encodeURIComponent(activeDir)}&selected_dir=${encodeURIComponent(selDir)}&original=1`;
     }
 
     // 라벨 (masonry item-label과 동일 로직)
@@ -174,7 +189,7 @@ function setSlide(filename) {
 
     // masonry에서 현재 슬라이드 아이템을 화면 가운데로 스크롤 (이미지 또는 비디오)
     // display:none 부모(#image-data)에 속한 요소는 offsetParent===null 로 제외
-    const imgMatches = Array.from(document.querySelectorAll(`img.thumbnail[data-filename="${enc}"]`));
+    const imgMatches = Array.from(document.querySelectorAll(`img.thumbnail[data-filename="${enc}"], img.thumbnail[alt="${enc}"]`));
     const vidMatches = Array.from(document.querySelectorAll(`video source[data-filename="${enc}"]`))
         .map(el => el.closest('video')).filter(Boolean);
     const masonryEl = imgMatches.concat(vidMatches).find(el => el.offsetParent !== null);
@@ -213,18 +228,23 @@ function slideShowDeleteCurrent() {
     const filename = slideShowImgs[slideShowIdx];
     const enc = encodeURIComponent(filename);
 
-    // DOM에서 찾아 즉시 제거 (현재 페이지에 있을 때만 적용)
-    const mediaEls = document.querySelectorAll(`img[data-filename="${enc}"], source[data-filename="${enc}"]`);
+    // DOM에서 찾아 즉시 제거 (현재 페이지에 있을 때만 적용) — temp/trip 이미지는 data-filename이
+    // 없어서 alt 속성도 같이 확인한다.
+    const mediaEls = document.querySelectorAll(`img[data-filename="${enc}"], img[alt="${enc}"], source[data-filename="${enc}"]`);
     const removed = [...new Set([...mediaEls].map(el => el.closest('.image-item')).filter(Boolean))];
     removed.forEach(item => item.remove());
     if (removed.length) decrementTotalCount();
     if (typeof adjustColumnsIfNeeded === 'function') adjustColumnsIfNeeded();
 
-    // API 직접 호출 (DOM 조회 성공 여부와 무관하게 항상 실행)
+    // API 직접 호출 (DOM 조회 성공 여부와 무관하게 항상 실행) — 원래 refine 전용이라 imagepath를
+    // 하드코딩했다. temp는 /image/move-image가 subpath(=selected_dir)까지 받아야 올바른 경로를
+    // 찾으므로(app/image.py move_image 참고) 같이 보낸다 — refine에서는 백엔드가 무시하니 무해하다.
+    const activeDir = (typeof dir !== 'undefined' && dir) ? dir : 'refine';
+    const selDir = (typeof selected_dir !== 'undefined' && selected_dir && selected_dir !== 'None') ? selected_dir : '';
     fetch('/image/move-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagepath: 'refine', filename })
+        body: JSON.stringify({ imagepath: activeDir, subpath: selDir, filename })
     }).catch(err => console.error('slideShowDelete:', err));
 
     slideShowImgs.splice(slideShowIdx, 1);
