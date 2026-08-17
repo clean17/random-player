@@ -36,6 +36,15 @@ function closeVideoCallWindow() {
         window.visualViewport.removeEventListener("resize", onViewportResize);
     }
     window.removeEventListener("resize", onViewportResize);
+
+    // 명시적으로 닫은 것은 애매할 게 없는 확실한 신호다 — 서버의 video_call_ended(핑 타임아웃 기반
+    // 감지) + 그 뒤에 붙은 유예시간(15초)을 기다릴 필요 없이 상대에게 바로 알린다.
+    // custom 소켓 이벤트(video_call_closed_by_user)는 중계 서버가 모르는 이벤트라 relay를 안 해줄
+    // 수 있어서(edit_msg와 같은 함정), 확실히 relay되는 new_msg 채널로도 같이 보낸다 — chat.js의
+    // new_msg 핸들러가 이 마커(fa-phone-slash)를 보면 즉시 버튼을 끈다.
+    socket.emit("video_call_closed_by_user", { username, room: roomName });
+    const endMsg = '<span style="color:#999;"><i class="fa-solid fa-phone-slash" style="color: red;"></i></span>  통화 종료';
+    socket.emit("new_msg", { username, msg: endMsg, room: roomName });
 }
 
 // 모듈 스코프에서 딱 한 번만 등록한다. 예전엔 openVideoCallWindow() 안에서 매번 등록하고
@@ -44,10 +53,30 @@ function closeVideoCallWindow() {
 window.addEventListener("message", (event) => {
     if (event.data === "force-close") closeVideoCallWindow();
     if (event.data === "video-call-reconnected") {
-        // 홈 화면 이동 등으로 통화가 끊겼다가 다시 이어진 경우 — "통화요청"이 아니라
+        // 홈 화면 이동 등으로 통화가 끊겼다가 다시 이어진 경우 — "통화 요청"이 아니라
         // 다시 이어졌다는 걸 명확히 구분해서 알린다 (새 통화 요청으로 오해하지 않게)
         const reconnectMsg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화 재연결';
         socket.emit("new_msg", { username, msg: reconnectMsg, room: roomName });
+        // 실제로 WebRTC 연결이 다시 붙은 확실한 신호이니, 초록불도 바로 다시 켜준다 —
+        // 이걸 빼먹어서 상대가 돌아와 재연결돼도 초록불이 계속 꺼진 채로 남는 버그가 있었다.
+        videoCallRoomName = roomName;
+        setVideoCallButtonActive(true);
+    }
+    if (event.data === "video-call-no-response") {
+        // 실제로 연결을 시도해봤는데 일정 시간 안에 상대가 한 번도 응답하지 않은 경우 —
+        // 상대 인터넷이 끊겼을 가능성을 알려주고, 낡은 초록불도 바로 꺼서 다음에 볼 때
+        // 같은 오해가 반복되지 않게 한다
+        if (typeof showDebugToast === "function") {
+            showDebugToast("⚠️ 상대방 연결이 확인되지 않아요 (인터넷이 끊겼을 수 있음)");
+        }
+        videoCallRoomName = null;
+        setVideoCallButtonActive(false);
+    }
+    if (event.data === "video-call-peer-disconnected") {
+        // 정상 연결됐다가 실제로 끊긴 경우 — 외부 서버의 disconnect 감지를 기다리지 않고
+        // 우리가 직접 보고 있는 WebRTC 연결 상태로 바로 초록불을 끈다
+        videoCallRoomName = null;
+        setVideoCallButtonActive(false);
     }
 });
 
@@ -144,7 +173,7 @@ function openVideoCallWindow() {
     // eslint-disable-next-line no-unused-vars (module-level timer)
     window._vcallPlaceTimer = null;
 
-    const msg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화요청';
+    const msg = '<span style="color:green;"><i class="fa-solid fa-phone"></i></span>  통화 요청';
     socket.emit("new_msg", { username, msg, room: roomName });
     socket.emit("stop_typing", { room: roomName, username: username });
 }

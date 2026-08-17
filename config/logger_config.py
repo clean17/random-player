@@ -28,6 +28,7 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "/func/chat/save-file", "/func/logs/stream", "/func/logs/",
                 "update-session-time", "apple-touch-icon",
                 "/func/last-read-chat-id?username",
+                "/func/heartbeat",
                 # [video]
                 # "video-player",
                 "dir=refine", "dir=image", "dir=move", "?dir=1", "?dir=2", "?dir=3", "?dir=4", "?dir=5", "?dir=7",

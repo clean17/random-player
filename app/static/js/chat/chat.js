@@ -19,6 +19,7 @@ const chatContainer = document.getElementById("chat-container"),
     roomUserCount = document.getElementById('userCount'),
     userCountIndicator = document.getElementById('user-count-indicator'),
     userListPanel = document.getElementById('userListPanel'),
+    peerLastSeenEl = document.getElementById('peerLastSeen'),
     typingIndicator = document.getElementById('typingIndicator');
 
 let currentRoomUserList = [];
@@ -343,6 +344,18 @@ function connectSocket() {
     });
 
     socket.on("new_msg", async function (data) {
+        rememberPeerUsername(data.username);
+
+        // 상대가 통화창을 명시적으로 닫으면 video_call_window.js가 이 마커(fa-phone-slash)를
+        // new_msg로도 보낸다 — custom 소켓 이벤트는 중계 서버가 relay 안 해줄 수 있어서, 확실히
+        // relay되는 채팅 메세지 채널을 빌려 즉시 반응한다(15초 유예 없이).
+        if (data.username !== username && typeof data.msg === 'string' && data.msg.includes('fa-phone-slash')) {
+            clearTimeout(videoCallEndedGraceTimer);
+            videoCallEndedGraceTimer = null;
+            videoCallRoomName = null;
+            setVideoCallButtonActive(false);
+        }
+
         if (lastChatId < Number(data.chatId)) {
             await addMessage(data);
         }
@@ -377,9 +390,15 @@ function connectSocket() {
     // enter_room >> room_user_list
     socket.on("room_user_list", (userList) => {
         // console.log('현재 접속 중인 유저 목록:', userList);
-        updateUserCount(userList.length);
         currentRoomUserList = userList;
+        // userCount는 유저 목록 패널과 완전히 같은 소스(currentRoomUserList)만 쓴다 — 하트비트로
+        // 보정하려던 시도가 계정이 3개 이상일 때 "그 하트비트가 이 방의 어느 참가자를 말하는 건지"
+        // 계속 헷갈려서(관리자 계정 등) 패널과 숫자가 서로 다른 걸 보여주는 문제가 반복됐다.
+        // 숫자와 패널이 항상 똑같은 걸 보장하는 쪽을 택한다. 빠른 끊김 감지는 "최근 접속" 표시가
+        // 하트비트 기준으로 독립적으로 보여준다.
+        updateUserCount(userList.length);
         renderUserListPanel();
+        userList.forEach(rememberPeerUsername);
         const tempUserList = [];
         userList.forEach(user => {
             if (user !== username) {
@@ -455,6 +474,15 @@ function connectSocket() {
             videoCallEndedGraceTimer = null;
             setVideoCallButtonActive(false);
         }, 15000);
+    });
+
+    // 상대가 통화창의 X 버튼을 눌러 명시적으로 닫은 경우 — 애매할 게 없으니 유예시간 없이 바로 끈다
+    socket.on("video_call_closed_by_user", (data) => {
+        if (data.username === username) return; // 내가 닫은 신호면 내 버튼(상대 상태 표시)과는 무관
+        clearTimeout(videoCallEndedGraceTimer);
+        videoCallEndedGraceTimer = null;
+        videoCallRoomName = null;
+        setVideoCallButtonActive(false);
     });
 }
 
@@ -535,8 +563,9 @@ document.addEventListener('visibilitychange', async () => {
     if (!document.hidden) { // 최초 실행 x, 다시 브라우저를 방문하면 한 번만 실행된다
         if (!isChatRoomVisible) {
             isChatRoomVisible = true;
-            if (socket && socket.io) socket.io.reconnection(true);
-            if (socket && !socket.connected) socket.connect();
+            // 백그라운드에서 오래 있다 돌아왔을 때 기존 소켓을 .connect()로 되살리려다 실패하는
+            // 경우가 있었다(참여자 목록이 안 돌아옴) — connectSocket()으로 확실하게 새로 붙인다.
+            if (!socket || !socket.connected) connectSocket();
         }
         startPolling();
         if (shouldAutoFocusChatInput()) chatInput.focus();
@@ -579,6 +608,7 @@ document.addEventListener('visibilitychange', async () => {
                             msg: msg.replace('\n', '').trim(),
                             chatRoomId: chatRoomId.trim(),
                         }
+                        rememberPeerUsername(chatObj.username);
                         if (lastChatId < Number(chatObj.chatId)) {
                             addMessage(chatObj);
                             setCheckIconsGreenUpTo();
@@ -612,8 +642,6 @@ document.addEventListener('visibilitychange', async () => {
         socket.emit("exit_room", { username: username, room: roomName });
         // 소켓을 끊어버리면 알림이 안온다..
         // if (typeof socket !== "undefined") socket.disconnect();
-        // 지금 살아있는 연결은 안 끊지만, 백그라운드 중 연결이 끊기면 자동 재연결(flapping)은 멈춰둔다
-        if (socket && socket.io) socket.io.reconnection(false);
     }
 });
 
@@ -628,7 +656,13 @@ function forceBlurInput() {
 
 // 상대가 마지막으로 읽은 chatId 조회
 function getPeerLastReadChatId(option = null) {
-    peername = username === 'nh824' ? 'fkaus14' : 'nh824'
+    const peername = getPeerUsername();
+    if (!peername) {
+        // 아직 상대를 특정 못했어도(곧 다시 폴링되어 자동 보정됨) 채팅 기록 로딩(loadMoreChats)은
+        // 이 함수 완료에 얹혀 있으니 막으면 안 된다 — 안 그러면 상대를 모르는 동안 채팅 자체가 안 뜬다
+        if (option === 'init') loadMoreChats('init');
+        return;
+    }
     fetch('/func/last-read-chat-id?username=' + peername, {
         method: 'GET',
         headers: {
@@ -673,6 +707,85 @@ function updateUserReadChatId(option = false) {
                 // console.log('POST /last-read-chat-id:', data);
             });
     }
+}
+
+// nh824/fkaus14 두 계정만 가정한 하드코딩이 코드베이스 여러 곳에 있는데, 로그인 계정이 그 둘이
+// 아니면(예: 제3의 계정으로 같은 방에 들어온 경우) 상대를 잘못 가리키게 된다. 그래서 실제로 방에서
+// 마주친 상대 아이디를 기억해두고, 그게 없을 때만 하드코딩된 추측을 임시로 쓴다 — 추측도 안 맞으면
+// null을 반환해 틀린 상대의 정보를 잘못 보여주지 않는다.
+let knownPeerUsername = null;
+
+function rememberPeerUsername(candidate) {
+    if (candidate && candidate !== username && candidate !== knownPeerUsername) {
+        const learnedForFirstTime = !knownPeerUsername;
+        knownPeerUsername = candidate;
+        // 상대를 처음 알게 된 시점엔 읽음표시(read-receipt) 조회를 다음 폴링까지 기다리지 않고 바로 한 번 해본다
+        if (learnedForFirstTime) getPeerLastReadChatId();
+    }
+}
+
+function getPeerUsername() {
+    if (knownPeerUsername) return knownPeerUsername;
+    if (username === 'nh824') return 'fkaus14';
+    if (username === 'fkaus14') return 'nh824';
+    return null;
+}
+
+// 인터넷이 연결돼 있고 이 채팅창이 열려 있는 한, 5초마다 "나 아직 접속해 있음"을 서버에 남긴다.
+// 상대는 top-bar의 "최근 접속" 표시로 이 시간을 보고 인터넷이 끊겼는지 추측할 수 있다. 소켓과는
+// 별개의 일반 fetch라 소켓이 흔들리는 상태와 무관하게 동작한다.
+const HEARTBEAT_INTERVAL_MS = 5 * 1000;
+let heartbeatIntervalId = null;
+
+function sendHeartbeat() {
+    fetch('/func/heartbeat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ username: username })
+    }).catch(() => {}); // 오프라인이면 그냥 실패 — 그게 곧 신호를 못 보낸다는 뜻이라 별도 처리 불필요
+}
+
+function startHeartbeat() {
+    if (heartbeatIntervalId) return;
+    sendHeartbeat();
+    heartbeatIntervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+}
+
+// 특정 상대를 지정하지 않고, 나를 제외한 유저 중 가장 최근에 접속한 사람을 top-bar에 표시한다.
+// userCount(접속자 수)는 이 정보로 보정하지 않는다 — room_user_list(소켓)만 쓰는 유저 목록
+// 패널과 항상 똑같은 숫자를 보장하기 위해서다. 여기서는 오직 텍스트 표시만 담당한다.
+function fetchPeerLastSeen() {
+    fetch('/func/heartbeat', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!peerLastSeenEl) return;
+            if (!data.last_seen || !data.username) {
+                peerLastSeenEl.textContent = '';
+                return;
+            }
+            const displayTime = data.last_seen.slice(0, 16); // "YYYY-MM-DD HH:MM:SS" → 분 단위까지만
+            const displayName = data.realname || data.username; // 이름 있으면 이름, 없으면 아이디
+            peerLastSeenEl.textContent = `최근 접속 : ${displayTime} (${displayName})`;
+        })
+        .catch(() => {});
+}
+
+// userCount(+최근 접속 표시)는 하트비트를 보내는 주기(20초)보다 훨씬 자주 확인해서 더 즉각적으로
+// 반영되게 한다. top-bar 보임/숨김과도 무관하게 스스로 계속 갱신한다.
+const USER_COUNT_POLL_MS = 3 * 1000;
+
+function startPeerLastSeenPolling() {
+    fetchPeerLastSeen();
+    setInterval(fetchPeerLastSeen, USER_COUNT_POLL_MS);
 }
 
 // 오차 발생
@@ -1227,7 +1340,11 @@ function createDateDivider(dateStr) {
 
 // 참여중 인원 수 표기 변경
 function updateUserCount(number) {
-    roomUserCount.textContent = number < 0 ? 1 : number;
+    // 이 페이지를 보고 있는 나 자신은 항상 방에 있는 게 맞으므로 0 이하는 절대 유효하지 않다.
+    // room_user_list가 재연결 타이밍 때문에 서버가 아직 내 소켓을 방에 반영하기 전 스냅샷을
+    // 보내주면 0으로 올 수 있는데, 그걸 그대로 표시하면 "내가 들어와 있는데 0명"이라는
+    // 말도 안 되는 상태가 화면에 뜬다.
+    roomUserCount.textContent = number < 1 ? 1 : number;
     /*if (number === 1) {
         setVideoCallButtonActive(false);
     }*/
@@ -1460,7 +1577,6 @@ function renewChatSession() {
 function renderVideoCallWindow() {
     if (!videoCallWindow) {
         openVideoCallWindow();
-        // trottledUpdate();
         renewChatSession();
     } else {
         if (isMinimized) {
@@ -1552,6 +1668,8 @@ async function initPage() {
     }
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
     getPeerLastReadChatId('init'); // 상대가 마지막으로 읽은 채팅 ID 조회
+    startHeartbeat(); // 내 접속 상태를 1분마다 서버에 남긴다
+    startPeerLastSeenPolling(); // 상대의 최근 접속을 주기적으로 조회해 표시
 
     // 웹 소켓 최초 연결
     if (typeof socket !== "undefined") {

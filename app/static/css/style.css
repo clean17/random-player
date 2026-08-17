@@ -123,7 +123,7 @@ button:hover {
     top: 100px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 9999;
+    z-index: 2147483001; /* 영상통화 창(z-index:2147483000)보다 항상 위에 뜨도록 */
     display: flex;
     flex-direction: column;
     align-items: center;

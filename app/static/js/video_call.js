@@ -147,6 +147,7 @@ const CONNECT_WATCHDOG_MS = 4000;      // offer/answer 보낸 뒤 연결 확인�
 const ICE_DISCONNECT_GRACE_MS = 1500;  // iceConnectionState=disconnected 후 자연 복구를 기다리는 시간 (기존 2500)
 const NEGOTIATION_WAIT_MS = 3000;      // welcome/answer가 잘못된 state에서 온 경우 재시도 대기 시간 (기존 5000)
 const MAX_NEGOTIATION_RETRY = 6;
+const NO_RESPONSE_TIMEOUT_MS = 8000;   // 연결 시도 후 이 시간 안에도 한 번도 못 붙으면 부모 페이지에 알림
 
 let connectWatchdogTimer = null;
 let iceDisconnectTimer = null;
@@ -180,6 +181,10 @@ function tryRestartNegotiation(reason) {
             // 다른 진짜 문제(인터넷 끊김 등)일 가능성이 높다 — 조용한 대기 문구 대신 명확하게 알린다.
             // (새 welcome/offer가 오면 "연결 시도 중"으로, 실제로 연결되면 사라짐)
             showCallStatus('상대방과 연결이 끊겼어요');
+            // 채팅 페이지의 초록불은 외부 시그널링 서버의 disconnect 감지에 의존하는데, 그게 정확히
+            // "영상통화 종료"를 의미하는지 불확실하다 — 여기서는 실제 WebRTC 연결 상태를 직접 보고
+            // 있으니, 이 확실한 신호로 부모 페이지의 초록불도 바로 꺼준다.
+            window.parent.postMessage('video-call-peer-disconnected', '*');
         } else {
             // 이번 세션에서 한 번도 연결된 적이 없다면 그냥 상대가 아직 안 들어온 것일 수 있으니
             // "재연결 중"처럼 계속 진행 중인 척 띄우지 않고 조용한 대기 상태로 돌아간다
@@ -1171,6 +1176,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     socket.emit('join_video_socket', roomName, username);
     setSwitchCameraPos();
     startFreezeDetection();
+
+    // 서버에 미리 물어보는 방식은 타이밍이 안 맞아 정상 연결되는 경우에도 잘못된 경고를 띄우는
+    // 문제가 있었다 — 그래서 실제 연결 시도 결과를 기준으로 판단한다. 일정 시간 안에 한 번도
+    // 연결 성공(hasConnectedOnce)을 못 했으면 그때 부모(채팅) 페이지에 알린다.
+    setTimeout(() => {
+        if (!hasConnectedOnce) {
+            window.parent.postMessage('video-call-no-response', '*');
+        }
+    }, NO_RESPONSE_TIMEOUT_MS);
 })
 
 // 백그라운드에서는 소켓이 짧게 붙었다 끊기는 자동 재연결을 반복하며(flapping) 서버 쪽에서

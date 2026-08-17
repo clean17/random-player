@@ -656,6 +656,40 @@ def last_read_chat_id():
         chat_id = state.get("users", {}).get(username, {}).get("last_read_chat_id", 0)
         return jsonify({'username': username, 'last_read_chat_id': chat_id})
 
+# ✅ 접속 중임을 주기적으로 알리는 하트비트 — 상대가 "최근 접속"으로 인터넷 끊김을 추측할 수 있게 함
+@func.route('/heartbeat', methods=['GET', 'POST'], endpoint='heartbeat')
+@login_required
+def heartbeat():
+    state = load_state()
+
+    if request.method == 'POST':
+        # 누가 보냈는지는 로그인 세션(current_user)으로 판단한다 — 클라이언트가 보낸 username은
+        # 신뢰하지 않는다(다른 유저인 척 하트비트를 위조할 수 있게 되므로)
+        me = current_user.get_id()
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        state.setdefault("users", {}).setdefault(me, {})["last_seen"] = now_str
+        save_state(state)
+        return jsonify({'result': 'success', 'last_seen': now_str})
+
+    else:
+        # GET — 특정 상대를 지정하지 않고, 나를 제외한 유저 중 가장 최근에 접속한 사람을 그냥 알려준다.
+        # (누가 "상대"인지 pairing 로직으로 특정하려던 이전 방식은 계정이 2명을 넘어가면 깨졌다)
+        me = current_user.get_id()
+        users = state.get("users", {})
+        candidates = [
+            (uname, info.get("last_seen"))
+            for uname, info in users.items()
+            if uname != me and info.get("last_seen")
+        ]
+        if not candidates:
+            return jsonify({'username': None, 'last_seen': None, 'realname': None})
+
+        # "YYYY-MM-DD HH:MM:SS" 형식 문자열은 사전순 정렬이 곧 시간순 정렬과 같다
+        target_username, last_seen = max(candidates, key=lambda item: item[1])
+        user = find_user_by_username(target_username)
+        realname = user.realname if user else None
+        return jsonify({'username': target_username, 'last_seen': last_seen, 'realname': realname})
+
 # ✅ 전체 마지막 채팅 ID 관리
 @func.route('/last-chat-id', methods=['GET'], endpoint='last-chat-id')
 @login_required
