@@ -18,15 +18,17 @@ fire(급상승 관심종목) 자동 매수 전략.
                            kiwoom_trailing_stop.py의 evaluate_and_trade()가 새 평단가 기준으로
                            자동 리셋한다.
   5. 사이징             : 기준은 총자산이 아니라 '가용 현금'(총자산 - 보유종목 평가금액).
-                           가용현금 × CASH_DEPLOY_RATIO(70%)가 그날 매수한도(deploy_limit).
-                           예산은 후보마다 '남은 한도 ÷ 남은 후보 수'로 재계산하고,
-                           종목당 상한 = 한도 ÷ POS_CAP_DIVISOR(12) = 가용현금의 5.8%로 제한한다.
-                           하루 최대 BUY_SLOTS(20)종목. 배정 예산보다 주가가 비싸면(1주도 못 삼)
+                           가용현금 × CASH_DEPLOY_RATIO(65%)가 그날 매수한도(deploy_limit).
+                           예산은 후보마다 '남은 한도 ÷ min(남은 후보 수, 남은 슬롯 수)'로
+                           재계산하고, 종목당 상한 = 한도 ÷ POS_CAP_DIVISOR(=BUY_SLOTS)로 제한한다.
+                           하루 최대 BUY_SLOTS(5)종목. 배정 예산보다 주가가 비싸면(1주도 못 삼)
                            그 종목은 skip하고 그 예산은 뒤 후보로 흘러간다.
                            ⚠️ CASH_DEPLOY_RATIO는 '보유 목표 비율'이 아니라 '그날 남은 현금 중
-                              신규 매수에 쓸 최대 비율'이다. 평균 보유 2.28일이면 정상상태 보유비율은
-                              u = h·r/(1+h·r)이라 r=0.70의 이론 상한이 61.5%다 — r=0.70으로
-                              '자산의 70% 보유'는 구조적으로 불가능하다.
+                              신규 매수에 쓸 최대 비율'이다. 정상상태 보유비율은 u = h·r/(1+h·r)
+                              (h=평균 보유일)이라 둘은 같은 값이 아니다. 현재 청산규칙(손절 -6% /
+                              최대 5영업일)의 h는 3.48일이고, r=0.65의 실측 보유비율이 약 79%,
+                              즉 현금 약 21%다. 목표 현금비율을 바꾸려면 이 대응표를
+                              cash_ratio_test.py로 다시 뽑을 것.
 
 쿨다운/슬롯 재검증 (2026-08-10, 포트폴리오 레벨 재시뮬레이션 — 246거래일 하루 단위 현금흐름 +
 보유중 추가매수 반영. 1차는 초기자본 1000만원, 2차는 3천만원 가정):
@@ -143,7 +145,24 @@ FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트
 # 낮으면 장중 급등이 밀린 것(윗꼬리)이고, 그런 종목은 이후 성과가 나쁘다 — 데드캣 판별용.
 # 근거: auto_trading/backtest/first_signal_filter.py (첫 신호일 11,759건, 기간분할 검증)
 CLOSE_POS_MIN = 0.6
-CASH_DEPLOY_RATIO = 0.70   # 가용 현금 중 자동매수에 쓸 최대 비율 (나머지 30%는 현금 버퍼로 남김)
+CASH_DEPLOY_RATIO = 0.65   # 가용 현금 중 자동매수에 쓸 최대 비율. 0.70→0.65 (2026-08-18).
+                           # 요청: '전체 계좌의 20% 정도만 현금으로 남기고 싶다'.
+                           # 같은 날 예산 분모 버그(아래 run_fire_buy_cycle 참고)를 고치면서
+                           # 노출이 올라가므로 ratio는 반대로 내려 목표 현금비율에 맞췄다.
+                           # 부트스트랩 25회(하루 후보 80% 표집, 초기자본 199만원, 슬롯5/divisor5,
+                           # 왕복비용 0.2%) — 분모 수정본 기준, 후보 상위 7개로 제한:
+                           #   ratio 0.50 → 현금 30.8%  평균 +21.2%  최저 -15.9%  음수 8%   MDD -39.0%
+                           #   ratio 0.65 → 현금 20.9%  평균 +17.1%  최저 -24.0%  음수 12%  MDD -43.9%  ← 채택
+                           #   ratio 0.70 → 현금 18.1%  평균 +15.6%  최저 -26.1%  음수 12%  MDD -45.2%
+                           #   ratio 0.80 → 현금 13.2%  평균 +10.6%  최저 -31.6%  음수 28%  MDD -47.8%
+                           #   ratio 1.00 → 현금  5.3%  평균  +1.3%  최저 -37.7%  음수 52%  MDD -51.7%
+                           # ⚠️ 노출과 수익이 단조 역상관이다 — 현금을 줄일수록 평균이 떨어지고
+                           #    꼬리가 나빠진다. TRADING_RULES §6의 '노출을 늘리는 쪽이 항상
+                           #    불리하다'와 방향이 같다. 20% 현금은 성과 최적점이 아니라
+                           #    요청받은 목표치이고, 그 대가가 위 표다.
+                           # 0.65가 0.70보다 목표(20%)에 가까우면서 평균·최저·MDD 전부 낫기 때문에
+                           # 0.70을 유지할 이유는 없다. 더 벌고 싶으면 0.50~0.55로 내릴 것.
+                           # 근거: auto_trading/backtest/cash_ratio_test.py
 BUY_SLOTS = 5              # 하루 최대 신규 매수 종목 수. 20→5 (2026-08-14).
                            # 새 전략(첫 신호일 + 종가위치>=0.6 + 손절-6%/5일보유)으로
                            # 부트스트랩 25회(후보 80% 표집, 초기자본 229만원) 결과:
@@ -461,6 +480,8 @@ def run_fire_buy_cycle():
               f'가용현금 {cash:,.0f}원 → 매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}), '
               f'종목당 상한 {pos_cap:,.0f}원(한도/{POS_CAP_DIVISOR}), 최대 {BUY_SLOTS}종목')
 
+    skipped_price = 0   # 배정 예산으로 1주도 못 사 건너뛴 종목 수 (사후 진단용)
+
     for k, cand in enumerate(ranked):
         if buys_today >= BUY_SLOTS:
             break
@@ -468,12 +489,20 @@ def run_fire_buy_cycle():
         price = cand['_price']
         close_pos = cand['_close_pos']
 
-        # 남은 한도를 '남은 후보 수'로 재분할 → 비싸서 못 산 종목의 예산이 뒤 후보로 흘러간다.
-        # 종목당 상한(pos_cap)과 한도 잔액으로 이중 제한.
-        budget = (deploy_limit - deployed) / max(1, len(ranked) - k)
+        # 남은 한도를 '앞으로 실제로 살 수 있는 종목 수'로 재분할 → 비싸서 못 산 종목의
+        # 예산이 뒤 후보로 흘러간다. 종목당 상한(pos_cap)과 한도 잔액으로 이중 제한.
+        #
+        # 분모는 '남은 후보'와 '남은 슬롯' 중 작은 쪽이다. 2026-08-18 수정 — 예전엔 남은
+        # 후보 수만 썼는데, 후보가 슬롯보다 많은 날엔 한도를 후보 수로 잘게 쪼개 놓고
+        # 슬롯이 먼저 소진돼 한도의 (후보-슬롯)/후보가 통째로 남았다.
+        # 실제 사고: 2026-08-14 후보 7 / 슬롯 20 / divisor 20이라 종목당 상한이
+        # 69,640원까지 쪼개져 한도 1,392,796원 중 325,840원(23%)만 집행됐다.
+        remaining = min(len(ranked) - k, BUY_SLOTS - buys_today)
+        budget = (deploy_limit - deployed) / max(1, remaining)
         spendable = min(budget, pos_cap, deploy_limit - deployed)
         qty = int(spendable // price)
         if qty <= 0:
+            skipped_price += 1
             _log.info(f'[fire] {cand["stk_nm"]}({stk_cd}) 매수 예산 부족 '
                       f'(배정 예산 {spendable:,.0f}원 < 현재가 {price:,.0f}원)')
             continue
@@ -503,6 +532,25 @@ def run_fire_buy_cycle():
         buys_today += 1
         state['_daily'] = {'date': today.isoformat(), 'count': buys_today}
         _save_fire_state(state)
+
+    # 한도를 얼마나 못 썼는지와 그 원인을 매일 한 줄로 남긴다. 2026-08-14처럼 '현금은 있는데
+    # 조금밖에 안 샀다'가 다시 생겼을 때 로그만 보고 원인이 후보 부족인지 상한인지 슬롯인지
+    # 바로 구분하기 위한 것 — 진단용이고 매수 로직에는 영향이 없다.
+    unspent = deploy_limit - deployed
+    reasons = []
+    if buys_today >= BUY_SLOTS:
+        reasons.append(f'슬롯 {BUY_SLOTS}개 소진')
+    if skipped_price:
+        reasons.append(f'가격이 배정예산 초과 {skipped_price}종목')
+    if len(ranked) < BUY_SLOTS:
+        reasons.append(f'후보 부족({len(ranked)} < 슬롯 {BUY_SLOTS})')
+    held = summary['tot_evlt_amt'] + deployed
+    hold_ratio = (held / summary['total_asset']) if summary['total_asset'] > 0 else 0.0
+    _log.info(f'[fire] 집행 완료 — {buys_today}종목 {deployed:,.0f}원 '
+              f'(한도 {deploy_limit:,.0f}원의 {deployed / deploy_limit:.0%}), '
+              f'미사용 {unspent:,.0f}원'
+              f'{" — " + ", ".join(reasons) if reasons else ""} / '
+              f'매수 후 보유비율 약 {hold_ratio:.0%} (현금 약 {1 - hold_ratio:.0%})')
 
 
 if __name__ == '__main__':
