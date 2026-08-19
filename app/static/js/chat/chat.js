@@ -754,11 +754,25 @@ function startHeartbeat() {
     heartbeatIntervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 }
 
-// 특정 상대를 지정하지 않고, 나를 제외한 유저 중 가장 최근에 접속한 사람을 top-bar에 표시한다.
+// 상대의 접속 상태를 top-bar에 표시한다.
 // userCount(접속자 수)는 이 정보로 보정하지 않는다 — room_user_list(소켓)만 쓰는 유저 목록
 // 패널과 항상 똑같은 숫자를 보장하기 위해서다. 여기서는 오직 텍스트 표시만 담당한다.
+//
+// ⚠️ last_seen은 "세션"이 아니라 "계정" 단위 기록이다. 같은 계정이 다른 기기/탭에 하나라도
+// 열려 있으면 계속 갱신되므로, 이 표시가 곧 "이 사람이 이 방을 보고 있다"는 뜻은 아니다.
+// (영상통화는 그 탭의 iframe에만 붙어 있어서 탭이 닫히는 즉시 끊긴다 — 둘의 수명이 다르다)
+//
+// 접속 중으로 볼 임계값. 하트비트는 5초 간격이지만, 브라우저가 백그라운드 탭의 setInterval을
+// 1분에 1번 수준으로 throttle하기 때문에 임계값을 그보다 짧게 잡으면 "폰을 잠깐 다른 앱으로
+// 옮긴 상대"까지 오프라인으로 깜빡인다. 60초 + 여유 10초로 둔다.
+const PEER_ONLINE_THRESHOLD_SEC = 70;
+
 function fetchPeerLastSeen() {
-    fetch('/func/heartbeat', {
+    // 실제 대화 상대를 알고 있으면 서버에 알려준다 — 안 보내면 서버가 "나를 뺀 계정 중 가장
+    // 최신"으로 추측하는데, 계정이 3개 이상이면 대화 상대가 아닌 사람의 시간이 표시된다.
+    const peer = getPeerUsername();
+    const query = peer ? ('?peer=' + encodeURIComponent(peer)) : '';
+    fetch('/func/heartbeat' + query, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json'
@@ -770,16 +784,23 @@ function fetchPeerLastSeen() {
             if (!peerLastSeenEl) return;
             if (!data.last_seen || !data.username) {
                 peerLastSeenEl.textContent = '';
+                peerLastSeenEl.classList.remove('is-online');
                 return;
             }
             const displayTime = data.last_seen.slice(0, 16); // "YYYY-MM-DD HH:MM:SS" → 분 단위까지만
             const displayName = data.realname || data.username; // 이름 있으면 이름, 없으면 아이디
-            peerLastSeenEl.textContent = `최근 접속 : ${displayTime} (${displayName})`;
+            // 경과 시간은 서버가 자기 시계로 계산해 내려준다 (클라이언트 시계 오차 무관)
+            const elapsed = typeof data.elapsed_seconds === 'number' ? data.elapsed_seconds : null;
+            const online = elapsed !== null && elapsed <= PEER_ONLINE_THRESHOLD_SEC;
+            peerLastSeenEl.classList.toggle('is-online', online);
+            peerLastSeenEl.textContent = online
+                ? `접속 중 (${displayName})`
+                : `최근 접속 : ${displayTime} (${displayName})`;
         })
         .catch(() => {});
 }
 
-// userCount(+최근 접속 표시)는 하트비트를 보내는 주기(20초)보다 훨씬 자주 확인해서 더 즉각적으로
+// userCount(+최근 접속 표시)는 하트비트를 보내는 주기(5초)보다 자주 확인해서 더 즉각적으로
 // 반영되게 한다. top-bar 보임/숨김과도 무관하게 스스로 계속 갱신한다.
 const USER_COUNT_POLL_MS = 3 * 1000;
 
@@ -1668,7 +1689,7 @@ async function initPage() {
     }
     renderBottomScrollButton(); // 스크롤 버튼 렌더링
     getPeerLastReadChatId('init'); // 상대가 마지막으로 읽은 채팅 ID 조회
-    startHeartbeat(); // 내 접속 상태를 1분마다 서버에 남긴다
+    startHeartbeat(); // 내 접속 상태를 5초마다 서버에 남긴다 (HEARTBEAT_INTERVAL_MS)
     startPeerLastSeenPolling(); // 상대의 최근 접속을 주기적으로 조회해 표시
 
     // 웹 소켓 최초 연결

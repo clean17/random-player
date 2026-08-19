@@ -1315,6 +1315,18 @@ body.page-chat .top-bar .chat-app-title #peerLastSeen {
     white-space: nowrap !important;
     color: var(--chat-header-text, inherit) !important;
 }
+/* 상대가 접속 중일 때(마지막 하트비트가 70초 이내) — 흐릿한 회색 대신 초록 점을 붙여
+   "지금 켜져 있음"과 "예전에 접속했던 시간"이 한눈에 구분되게 한다. */
+body.page-chat .top-bar .chat-app-title #peerLastSeen.is-online {
+    opacity: 0.9 !important;
+    color: #22c55e !important;
+}
+body.page-chat .top-bar .chat-app-title #peerLastSeen.is-online::before {
+    content: "●";
+    margin-right: 3px;
+    font-size: 8px;
+    vertical-align: 1px;
+}
 body.page-chat .top-bar .chat-app-title > span {
     font-size: 15px !important;
     font-weight: 850 !important;
