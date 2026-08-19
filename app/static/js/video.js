@@ -65,7 +65,7 @@ function setVideoOptions(vodUrl, videoFileType) {
             remainingTimeDisplay: true, // 남은 시간 표시
             progressControl: true // 재생 진행바
         },
-        inactivityTimeout: 2000,
+        inactivityTimeout: 3000,
     };
     return videoOptions;
 }
@@ -200,6 +200,7 @@ function resetLoop() {
 
 function selectVideoFromArr(videos, randomIndex) {
     flushSyncOffsetPost(); // 다음 영상으로 넘어가기 전, 디바운스 중이던 이전 영상의 싱크 값을 즉시 저장
+    scheduleLikeFlush();   // 방금 하트한 영상이 있으면, 스트림이 닫힌 뒤 like 폴더로 옮기게 한다
     currentVideo = videos[randomIndex]
     fetchVideoArr.splice(randomIndex, 1); // randomIndex에서 1개 제거
     // console.log('currentVideo', currentVideo)
@@ -674,7 +675,7 @@ const hideControls = () => {
         // 네이티브 <video controls> 바의 자동숨김을 브라우저에 맡기지 않고 직접 제어한다
         // (영상 교체 후 브라우저 자체 유휴 타이머가 멈춰 계속 떠있던 문제 — video.css 참고).
         if (videoPlayer) videoPlayer.classList.add('controls-idle');
-    }, 2000);
+    }, 3000);
 };
 
 const showControls = () => {
@@ -698,8 +699,81 @@ heartButton?.addEventListener('click', function() {
         likedVideosSet.delete(currentVideo);
     }
     updateHeartButton();
-    axios.post('/video/like', {dir: dir, filename: currentVideo, liked: newLiked}).catch(() => {});
+    // 하트 상태가 바뀌면 현재 영상이 지금 보고 있는 필터 목록에서 빠지거나(-1) 다시 들어온다(+1) —
+    // 목록을 새로 받아올 때까지 기다리지 않고 카운트에 즉시 반영한다(삭제 경로와 동일한 낙관적 갱신).
+    const stillInFilter = (likeFilterMode === 'liked') === newLiked;
+    if (totalVideoCount !== null) {
+        totalVideoCount = Math.max(0, totalVideoCount + (stillInFilter ? 1 : -1));
+        updateVideoCountDisplay();
+    }
+    const likedVideo = currentVideo; // 응답이 오기 전에 다음 영상으로 넘어갈 수 있으므로 미리 캡처
+    hasPendingLikeMove = true;       // 이 영상에서 넘어갈 때 서버에 실제 파일 이동을 시킨다
+    axios.post('/video/like', {dir: dir, filename: likedVideo, liked: newLiked})
+        .catch(() => { // 저장 실패 — 낙관적으로 바꾼 캐시/카운트를 되돌린다
+            if (newLiked) likedVideosSet.delete(likedVideo);
+            else likedVideosSet.add(likedVideo);
+            if (currentVideo === likedVideo) updateHeartButton();
+            if (totalVideoCount !== null) {
+                totalVideoCount = Math.max(0, totalVideoCount + (stillInFilter ? -1 : 1));
+                updateVideoCountDisplay();
+            }
+        });
 });
+// 하트를 누르면 서버는 그 파일을 <디렉터리>/like/ 폴더로 실제 이동시킨다. 다만 재생 중인
+// 파일은 Windows에서 잠겨 있어 못 옮기고, 옮겨봤자 브라우저가 이어서 요청할 range가 404가 돼
+// 재생이 끊긴다 — 그래서 서버는 예약만 해두고, 그 영상에서 넘어간 뒤 여기서 실제 이동을 시킨다.
+let hasPendingLikeMove = false;
+let likeFlushTimer = null;
+const LIKE_FLUSH_DELAY_MS = 1500; // 이전 영상의 스트림이 확실히 닫힌 뒤에 요청 (서버도 재시도한다)
+
+function scheduleLikeFlush() {
+    if (!hasPendingLikeMove) return;
+    clearTimeout(likeFlushTimer);
+    likeFlushTimer = setTimeout(function() { flushLikeMoves(); }, LIKE_FLUSH_DELAY_MS);
+}
+
+// 서버가 파일을 옮기면 상대경로가 바뀐다(./a.mp4 → like/a.mp4). 클라이언트가 들고 있는 경로도
+// 같이 갱신해야 Prev로 되돌아갔을 때 404가 나지 않고, 하트/싱크 값도 계속 맞는다.
+function applyLikeMoves(moves) {
+    if (!moves) return;
+    Object.keys(moves).forEach(function(oldRel) {
+        const newRel = moves[oldRel];
+        if (!newRel || newRel === oldRel) return;
+        for (let i = 0; i < previousVideos.length; i++) {
+            if (previousVideos[i] === oldRel) previousVideos[i] = newRel;
+        }
+        const idx = fetchVideoArr.indexOf(oldRel);
+        if (idx !== -1) fetchVideoArr[idx] = newRel;
+        if (currentVideo === oldRel) currentVideo = newRel;
+        if (likedVideosSet.delete(oldRel)) likedVideosSet.add(newRel);
+        if (videoSyncOffsetsMap[oldRel] !== undefined) {
+            videoSyncOffsetsMap[newRel] = videoSyncOffsetsMap[oldRel];
+            delete videoSyncOffsetsMap[oldRel];
+        }
+    });
+}
+
+function flushLikeMoves(useBeacon) {
+    if (!hasPendingLikeMove) return;
+    clearTimeout(likeFlushTimer);
+    likeFlushTimer = null;
+    hasPendingLikeMove = false;
+    const payload = {dir: dir};
+    if (useBeacon && navigator.sendBeacon) {
+        // 페이지를 벗어나는 시점엔 axios 요청이 완료 전에 취소될 수 있다 (싱크 오프셋과 동일한 사정)
+        const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+        navigator.sendBeacon('/video/like/flush', blob);
+        return;
+    }
+    axios.post('/video/like/flush', payload)
+        .then(function(res) {
+            applyLikeMoves(res.data && res.data.moves);
+            // 잠겨 있어서 못 옮긴 게 남았으면 다음 기회에 다시 시도한다
+            if (res.data && res.data.deferred > 0) hasPendingLikeMove = true;
+        })
+        .catch(function() { hasPendingLikeMove = true; }); // 실패하면 예약을 살려둔다
+}
+
 likeFilterSelect?.addEventListener('change', function() {
     likeFilterMode = likeFilterSelect.value;
     fetchVideoArr = []; // 필터가 바뀌었으니 이전 목록 캐시는 버리고 새로 받아온다
@@ -748,6 +822,7 @@ prevButton?.addEventListener('click', function () {
 
     if (prevVideo) {
         flushSyncOffsetPost(); // 다음 영상으로 넘어가기 전, 디바운스 중이던 이전 영상의 싱크 값을 즉시 저장
+        scheduleLikeFlush();
         const videoFilename = extractFilename(decodeURIComponent(prevVideo));
         console.log('prevButton', videoFilename);
         pushVideoArr(currentVideo)
@@ -937,8 +1012,8 @@ function cancelSyncOffsetPost() {
     syncOffsetPendingPayload = null;
 }
 
-window.addEventListener('beforeunload', function() { flushSyncOffsetPost(true); });
-window.addEventListener('pagehide', function() { flushSyncOffsetPost(true); });
+window.addEventListener('beforeunload', function() { flushSyncOffsetPost(true); flushLikeMoves(true); });
+window.addEventListener('pagehide', function() { flushSyncOffsetPost(true); flushLikeMoves(true); });
 
 function applySavedSyncOffset() {
     const saved = videoSyncOffsetsMap[currentVideo];

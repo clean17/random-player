@@ -38,26 +38,238 @@ def _save_sync_offsets(data):
         json.dump(data, f, ensure_ascii=False)
     os.replace(tmp_path, SYNC_OFFSET_FILE)  # 쓰다가 죽어도 원본 파일이 깨지지 않도록 원자적 교체
 
-# 하트(좋아요) 표시한 영상 목록 — { "<dir>": ["<filename>", ...], ... }
+# ── 좋아요 = 파일을 그 디렉터리의 'like' 하위 폴더로 실제 이동시키는 방식 ────────────
+# 목록의 진실은 JSON이 아니라 "파일이 like 폴더 안에 있는가"다.
+#   - Liked   : <VIDEO_DIRECTORYn>/like/**
+#   - Unliked : <VIDEO_DIRECTORYn>/** 에서 like 폴더만 제외
+LIKE_DIR_NAME = 'like'
+
+# 하트를 누른 순간 바로 옮기지 않고 예약해두는 이유:
+# 그 영상은 지금 재생 중이라 (a) Windows에서 파일이 잠겨 있어 이동이 실패하고(WinError 32),
+# (b) 성공하더라도 브라우저가 뒤이어 요청할 range가 404가 되어 재생이 끊긴다.
+# 그래서 의사만 기록해두고, 그 영상에서 넘어갈 때(/like/flush)나 목록을 새로 받을 때 실제로 옮긴다.
+#   { "<dir>": { "pending": { "<현재 상대경로>": true(=like로) / false(=원위치로) },
+#                "origin":  { "like/a.mp4": "원래 상대경로" } } }
+LIKE_STATE_FILE = os.path.join(os.path.dirname(__file__), 'video_like_state.json')
+_like_state_lock = threading.Lock()
+
+# 폴더 방식으로 바꾸기 전에 쓰던 기록 — /like/migrate에서 한 번 옮겨줄 때만 읽는다
 LIKED_VIDEOS_FILE = os.path.join(os.path.dirname(__file__), 'liked_videos.json')
 _liked_videos_lock = threading.Lock()
 
 
-def _load_liked_videos():
-    if not os.path.exists(LIKED_VIDEOS_FILE):
+def _load_json_file(path):
+    if not os.path.exists(path):
         return {}
     try:
-        with open(LIKED_VIDEOS_FILE, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (IOError, ValueError):
         return {}
 
 
-def _save_liked_videos(data):
-    tmp_path = LIKED_VIDEOS_FILE + '.tmp'
+def _save_json_file(path, data):
+    tmp_path = path + '.tmp'
     with open(tmp_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
-    os.replace(tmp_path, LIKED_VIDEOS_FILE)  # 쓰다가 죽어도 원본 파일이 깨지지 않도록 원자적 교체
+    os.replace(tmp_path, path)  # 쓰다가 죽어도 원본 파일이 깨지지 않도록 원자적 교체
+
+
+def _load_like_state():
+    return _load_json_file(LIKE_STATE_FILE)
+
+
+def _save_like_state(data):
+    _save_json_file(LIKE_STATE_FILE, data)
+
+
+def _load_liked_videos():
+    return _load_json_file(LIKED_VIDEOS_FILE)
+
+
+def _save_liked_videos(data):
+    _save_json_file(LIKED_VIDEOS_FILE, data)
+
+
+def _video_root(directory):
+    if directory is None:
+        return None
+    return settings.get('VIDEO_DIRECTORY' + str(directory))
+
+
+def _to_rel(video_directory, abs_path):
+    """목록(get_videos)이 만들어내는 상대경로 표기와 똑같은 문자열을 만든다.
+    루트 파일은 './a.mp4', like 폴더 파일은 'like/a.mp4' — 표기가 어긋나면
+    video_sync_offsets.json 키와 클라이언트의 currentVideo가 서로 안 맞는다."""
+    rel_dir = os.path.relpath(os.path.dirname(abs_path), video_directory)
+    return os.path.join(rel_dir, os.path.basename(abs_path)).replace(os.path.sep, '/')
+
+
+def _to_abs(video_directory, rel):
+    return os.path.join(video_directory, rel.replace('/', os.path.sep))
+
+
+def _is_in_like_dir(rel):
+    return (rel or '').replace('\\', '/').split('/')[0].lower() == LIKE_DIR_NAME
+
+
+def _unique_path(path):
+    """서로 다른 하위 폴더에 같은 파일명이 있으면 like 폴더에서 충돌한다 — 덮어쓰지 말고 번호를 붙인다."""
+    if not os.path.exists(path):
+        return path
+    base, ext = os.path.splitext(path)
+    i = 2
+    while os.path.exists('%s (%d)%s' % (base, i, ext)):
+        i += 1
+    return '%s (%d)%s' % (base, i, ext)
+
+
+def _move_with_backoff(src, dst, attempts=5, base=0.2):
+    """재생 중이라 잠겨 있으면(WinError 32/33) 핸들이 풀릴 때까지 지수 백오프로 재시도한다.
+    try_trash_with_backoff()와 같은 방식. 끝내 실패하면 False — 예약을 남겨두고 다음에 다시 시도한다."""
+    for i in range(attempts):
+        try:
+            os.rename(src, dst)
+            return True
+        except OSError as e:
+            if getattr(e, 'winerror', None) in (5, 32, 33) or isinstance(e, PermissionError):
+                if i == attempts - 1:
+                    return False
+                gc.collect()                 # 참조 정리(잠재적 핸들 해제 유도)
+                time.sleep(base * (2 ** i))  # 0.2s, 0.4s, 0.8s, ...
+                continue
+            raise
+    return False
+
+
+def _rename_sync_offset(directory, old_rel, new_rel):
+    """파일이 옮겨지면 video_sync_offsets.json의 키도 같이 따라가야 저장해둔 싱크 값을 안 잃는다."""
+    if old_rel == new_rel:
+        return
+    with _sync_offset_lock:
+        all_offsets = _load_sync_offsets()
+        dir_offsets = all_offsets.get(str(directory))
+        if not dir_offsets or old_rel not in dir_offsets:
+            return
+        dir_offsets[new_rel] = dir_offsets.pop(old_rel)
+        _save_sync_offsets(all_offsets)
+
+
+def _prune_dir_state(state, key):
+    dir_state = state.get(key) or {}
+    if not dir_state.get('pending'):
+        dir_state.pop('pending', None)
+    if not dir_state.get('origin'):
+        dir_state.pop('origin', None)
+    if not dir_state:
+        state.pop(key, None)
+
+
+def _flush_pending_moves(directory, attempts=5):
+    """예약된 이동을 실제로 수행한다. 잠겨서 못 옮긴 건 예약에 남겨 다음 기회에 다시 시도한다."""
+    video_directory = _video_root(directory)
+    if not video_directory:
+        return {'moved': 0, 'deferred': 0, 'moves': {}}
+
+    key = str(directory)
+    moved = 0
+    deferred = 0
+    moves = {}   # {옮기기 전 상대경로: 옮긴 뒤 상대경로} — 클라이언트가 들고 있는 경로를 갱신하는 데 쓴다
+    with _like_state_lock:
+        state = _load_like_state()
+        dir_state = state.get(key) or {}
+        pending = dict(dir_state.get('pending') or {})
+        if not pending:
+            return {'moved': 0, 'deferred': 0, 'moves': {}}
+        origin = dict(dir_state.get('origin') or {})
+
+        for rel, want_like in list(pending.items()):
+            src = _to_abs(video_directory, rel)
+            if not os.path.exists(src):
+                pending.pop(rel, None)  # 그새 삭제됐거나 이미 옮겨진 파일
+                continue
+
+            if want_like:
+                like_dir = os.path.join(video_directory, LIKE_DIR_NAME)
+                try:
+                    if not os.path.isdir(like_dir):
+                        os.makedirs(like_dir)
+                except OSError as e:
+                    print('[video] like 폴더 생성 실패: %s' % e)
+                    deferred += 1
+                    continue
+                dst = _unique_path(os.path.join(like_dir, os.path.basename(src)))
+            else:
+                back = origin.get(rel)  # 좋아요 누르기 전 위치를 기억해뒀으면 그리로 되돌린다
+                dst = None
+                if back:
+                    candidate = _to_abs(video_directory, back)
+                    parent = os.path.dirname(candidate)
+                    if os.path.isdir(parent):
+                        dst = candidate
+                    else:
+                        try:
+                            os.makedirs(parent)
+                            dst = candidate
+                        except OSError:
+                            dst = None
+                if dst is None:
+                    dst = os.path.join(video_directory, os.path.basename(src))
+                dst = _unique_path(dst)
+
+            try:
+                ok = _move_with_backoff(src, dst, attempts=attempts)
+            except OSError as e:
+                print('[video] like 이동 실패(%s): %s' % (rel, e))
+                ok = False
+
+            if not ok:
+                deferred += 1
+                continue
+
+            new_rel = _to_rel(video_directory, dst)
+            moves[rel] = new_rel
+            _rename_sync_offset(key, rel, new_rel)
+            if want_like:
+                origin[new_rel] = rel   # 나중에 하트를 풀면 여기로 되돌린다
+            else:
+                origin.pop(rel, None)
+            pending.pop(rel, None)
+            moved += 1
+
+        dir_state['pending'] = pending
+        dir_state['origin'] = origin
+        state[key] = dir_state
+        _prune_dir_state(state, key)
+        _save_like_state(state)
+
+    return {'moved': moved, 'deferred': deferred, 'moves': moves}
+
+
+def _list_video_files(video_directory, liked_param):
+    """liked_param: 'true'=like 폴더 안, 'false'=like 폴더 제외한 나머지, None=전체"""
+    like_root = os.path.join(video_directory, LIKE_DIR_NAME)
+    want_liked = (liked_param or '').lower() == 'true'
+
+    if want_liked:
+        if not os.path.isdir(like_root):
+            return []
+        walk_root = like_root
+    else:
+        walk_root = video_directory
+
+    exclude_like = (liked_param is not None) and not want_liked
+    videos = []
+    for root, dirs, files in os.walk(walk_root):
+        if exclude_like and os.path.abspath(root) == os.path.abspath(video_directory):
+            # like 폴더는 '안 누른 영상' 목록에서 빼고, 그 아래로 내려가지도 않는다
+            dirs[:] = [d for d in dirs if d.lower() != LIKE_DIR_NAME]
+        for file in files:
+            if file.lower().endswith(('.mp4', '.avi', '.mkv', '.ts', '.mov')):
+                rel_dir = os.path.relpath(root, video_directory)
+                rel_file = os.path.join(rel_dir, file)
+                videos.append(rel_file.replace(os.path.sep, '/'))
+    return videos
 
 # 설정
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
@@ -87,23 +299,16 @@ def video_player(directory):
 def get_videos():
     directory = request.args.get('dir')
     liked_param = request.args.get('liked')  # 'true' / 'false' / 없음(전체)
-    video_directory = settings['VIDEO_DIRECTORY' + directory]  # 딕셔너리 접근 방식으로 수정
-    videos = []
-    for root, dirs, files in os.walk(video_directory):
-        for file in files:
-            if file.endswith(('.mp4', '.avi', '.mkv', 'ts', 'mov')):
-                rel_dir = os.path.relpath(root, video_directory)
-                rel_file = os.path.join(rel_dir, file)
+    video_directory = _video_root(directory)
+    if not video_directory:
+        abort(404)
 
-                rel_file = rel_file.replace(os.path.sep, '/')
-                videos.append(rel_file)
+    # 목록을 만들기 전에 밀린 이동부터 처리한다 — 안 그러면 방금 하트한 영상이 아직 제자리에 있어
+    # 'Unliked' 목록에 다시 섞여 나온다. 재생 중이라 잠긴 파일까지 기다리진 않고(attempts=1)
+    # 넘어간다 — 그건 /like/flush가 다시 맡는다.
+    _flush_pending_moves(directory, attempts=1)
 
-    if liked_param is not None:
-        with _liked_videos_lock:
-            all_liked = _load_liked_videos()
-        liked_set = set(all_liked.get(directory, []))
-        want_liked = liked_param.lower() == 'true'
-        videos = [v for v in videos if (v in liked_set) == want_liked]
+    videos = _list_video_files(video_directory, liked_param)
 
     # print('############### video_list ###############')
     random.seed(time.time())
@@ -113,34 +318,119 @@ def get_videos():
 @video.route('/liked-videos', methods=['GET'])
 @login_required
 def get_liked_videos():
+    """하트 버튼 표시용 — like 폴더에 들어있는 영상 + 아직 못 옮긴 예약분까지 합쳐서 돌려준다."""
     directory = request.args.get('dir')
-    with _liked_videos_lock:
-        all_liked = _load_liked_videos()
-    return jsonify(all_liked.get(directory, []))
+    video_directory = _video_root(directory)
+    if not video_directory:
+        return jsonify([])
+
+    liked = set(_list_video_files(video_directory, 'true'))
+    with _like_state_lock:
+        state = _load_like_state()
+        pending = (state.get(str(directory)) or {}).get('pending') or {}
+    for rel, want_like in pending.items():
+        if want_like:
+            liked.add(rel)      # 아직 제자리에 있지만 하트는 켜져 있어야 한다
+        else:
+            liked.discard(rel)  # 아직 like 폴더에 있지만 하트는 꺼져 있어야 한다
+    return jsonify(sorted(liked))
 
 @video.route('/like', methods=['POST'])
 @login_required
 def set_liked_video():
+    """하트 토글 — 실제 파일 이동은 예약만 하고, 그 영상에서 넘어갈 때(/like/flush) 수행한다.
+    지금 재생 중인 파일을 그 자리에서 옮기면 스트림이 끊기고 Windows에선 잠겨서 실패한다."""
     data = request.get_json(silent=True) or {}
     directory = data.get('dir')
     filename = data.get('filename')
-    liked = data.get('liked')
+    liked = bool(data.get('liked'))
     if not directory or not filename:
         return '', 400
+    if not _video_root(directory):
+        return '', 404
+
+    key = str(directory)
+    with _like_state_lock:
+        state = _load_like_state()
+        dir_state = state.setdefault(key, {})
+        pending = dir_state.setdefault('pending', {})
+        # 이미 like 폴더 안에 있는 파일을 또 하트하는 등, 원하는 상태가 지금 위치와 같으면
+        # 예약할 게 없다 (하트를 두 번 눌러 원위치로 돌아온 경우도 여기서 예약이 취소된다)
+        if liked == _is_in_like_dir(filename):
+            pending.pop(filename, None)
+        else:
+            pending[filename] = liked
+        _prune_dir_state(state, key)
+        _save_like_state(state)
+    return '', 204
+
+@video.route('/like/flush', methods=['POST'])
+@login_required
+def flush_liked_videos():
+    """예약된 이동을 실제로 수행한다. 클라이언트가 그 영상에서 넘어갈 때/페이지를 벗어날 때 호출한다."""
+    data = request.get_json(silent=True) or {}
+    directory = data.get('dir') or request.args.get('dir')
+    if not directory:
+        return '', 400
+    if not _video_root(directory):
+        return '', 404
+    return jsonify(_flush_pending_moves(directory))
+
+@video.route('/like/migrate', methods=['POST'])
+@login_required
+def migrate_liked_videos():
+    """폴더 방식으로 바꾸기 전 liked_videos.json에 쌓여 있던 좋아요를 실제 like 폴더로 옮긴다.
+    파일을 대량으로 움직이는 작업이라 자동 실행하지 않는다 — 직접 호출할 때만 동작한다.
+    dir 없이 부르면 기록에 있는 모든 디렉터리를 처리한다."""
+    data = request.get_json(silent=True) or {}
+    only_dir = data.get('dir') or request.args.get('dir')
 
     with _liked_videos_lock:
-        all_liked = _load_liked_videos()
-        dir_liked = all_liked.setdefault(directory, [])
-        if liked:
-            if filename not in dir_liked:
-                dir_liked.append(filename)
-        else:
-            if filename in dir_liked:
-                dir_liked.remove(filename)
-        if not dir_liked:
-            all_liked.pop(directory, None)
-        _save_liked_videos(all_liked)
-    return '', 204
+        legacy = _load_liked_videos()
+
+    result = {}
+    for key in list(legacy.keys()):
+        if only_dir and str(only_dir) != str(key):
+            continue
+        video_directory = _video_root(key)
+        if not video_directory:
+            result[key] = {'skipped': 'unknown directory'}
+            continue
+
+        queued = 0
+        missing = 0
+        with _like_state_lock:
+            state = _load_like_state()
+            dir_state = state.setdefault(str(key), {})
+            pending = dir_state.setdefault('pending', {})
+            for rel in legacy.get(key) or []:
+                if _is_in_like_dir(rel):
+                    continue  # 이미 like 폴더
+                if not os.path.exists(_to_abs(video_directory, rel)):
+                    missing += 1
+                    continue
+                pending[rel] = True
+                queued += 1
+            _prune_dir_state(state, str(key))
+            _save_like_state(state)
+
+        moved = _flush_pending_moves(key)
+        result[key] = {'queued': queued, 'missing': missing,
+                       'moved': moved['moved'], 'deferred': moved['deferred']}
+
+        # 옮긴 만큼 legacy 기록에서 제거 (다시 실행해도 중복 이동되지 않도록)
+        with _liked_videos_lock:
+            legacy_now = _load_liked_videos()
+            video_directory = _video_root(key)
+            remain = [rel for rel in (legacy_now.get(key) or [])
+                      if os.path.exists(_to_abs(video_directory, rel)) and not _is_in_like_dir(rel)]
+            if remain:
+                legacy_now[key] = remain
+            else:
+                legacy_now.pop(key, None)
+            _save_liked_videos(legacy_now)
+
+    return jsonify(result)
 
 @video.route('/sync-offsets', methods=['GET'])
 @login_required
@@ -267,15 +557,22 @@ def delete_video(filename):
         except TrashPermissionError as e:
             print(f"Permission Error: {e}")
 
-        # 지워진 영상의 하트 상태도 같이 정리 (안 하면 파일명이 재사용될 때 엉뚱하게 하트 표시됨)
-        with _liked_videos_lock:
-            all_liked = _load_liked_videos()
-            dir_liked = all_liked.get(directory, [])
-            if filename in dir_liked:
-                dir_liked.remove(filename)
-                if not dir_liked:
-                    all_liked.pop(directory, None)
-                _save_liked_videos(all_liked)
+        # 지워진 영상의 예약/원위치 기록도 같이 정리 (안 하면 없는 파일을 계속 옮기려 든다)
+        key = str(directory)
+        with _like_state_lock:
+            state = _load_like_state()
+            dir_state = state.get(key) or {}
+            changed = False
+            if filename in (dir_state.get('pending') or {}):
+                dir_state['pending'].pop(filename, None)
+                changed = True
+            if filename in (dir_state.get('origin') or {}):
+                dir_state['origin'].pop(filename, None)
+                changed = True
+            if changed:
+                state[key] = dir_state
+                _prune_dir_state(state, key)
+                _save_like_state(state)
 
         # print(f"[ {filename} ] is successfully deleted")
         # os.remove(file_path)
