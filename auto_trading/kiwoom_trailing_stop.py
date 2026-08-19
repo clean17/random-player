@@ -55,14 +55,12 @@
     (ANOMALY_DROP / ANOMALY_RATE). 값이 정상 범위로 돌아오면 자동 재개.
 
 30초 간격으로 호출되는 것을 전제로 설계됨 (job/batch_runner.py에 등록).
-실제 평가/매매는 is_market_open() 기준 월~금 아래 세 구간에서만 수행됨:
-  - 08:00~08:50 : 넥스트트레이드(NXT) 프리마켓
-  - 09:00~15:20 : KRX 정규장
-  - 15:30~20:00 : 넥스트트레이드(NXT) 애프터마켓
+실제 평가/매매는 is_market_open() 기준 월~금 **09:00~15:20(KRX 정규장)** 에서만 수행됨.
 08:50~09:00(동시호가)과 15:20~15:30(KRX 종가 단일가매매)은 연속체결이 아니라서 제외한다.
-주문 시 거래소 구분(dmst_stex_tp)은 current_exchange()로 시간대에 맞게 자동 선택됨
-(NXT 세션에선 'NXT', KRX 정규장에선 'KRX'). NXT 미지원 종목은 그 시간대 주문이 거부될 수 있음.
-실전 투자 전 반드시 KIWOOM_ENV=mock(모의투자)으로 먼저 검증할 것.
+
+NXT(넥스트트레이드) 프리 08:00~08:50 / 애프터 15:30~20:00은 2026-08-18에 제외했다 —
+시장가 주문을 받지 않아 실계좌에서도 전량 거부됐다(407022). 상세는 is_market_open() 위 주석.
+따라서 프리마켓 갭 하락은 09:00까지 방치된다. 실전 투자 전 KIWOOM_ENV=mock으로 먼저 검증할 것.
 """
 import os
 import json
@@ -190,38 +188,42 @@ BASELINE_FILE = env_path(os.path.join(_LOG_DIR, 'asset_baseline.json'))  # 일/�
 ACNT_NO, ACNT_PWD = get_account_credentials()
 
 
-# 넥스트트레이드(NXT, 대체거래소) 세션. 종목별 NXT 거래가능 여부는 별도 확인 안 함 — 이 시간대에
-# 보유/매매 대상 종목이 NXT 미지원이면 주문이 거부될 수 있음. 정확한 경계는 변경될 수 있으니
-# 실거래 전 Kiwoom API 문서로 재확인할 것.
-NXT_PREMARKET_START = datetime.time(8, 0)
-NXT_PREMARKET_END = datetime.time(8, 50)      # 08:50~09:00은 NXT/KRX 둘 다 세션 없음
-NXT_AFTERMARKET_START = datetime.time(15, 30)
-NXT_AFTERMARKET_END = datetime.time(20, 0)
 KRX_REGULAR_START = datetime.time(9, 0)
 KRX_REGULAR_END = datetime.time(15, 20)       # 15:20~15:30은 KRX 종가 단일가매매(연속체결 아님)
 
+# 넥스트트레이드(NXT, 대체거래소) 세션. 2026-08-18 실계좌 실측으로 **자동매매에서 제외**했다.
+#   NXT_PREMARKET  08:00~08:50
+#   NXT_AFTERMARKET 15:30~20:00
+# 이 구간에 주문을 넣으면 거부된다:
+#   mock : RC9000 모의투자에서는 해당업무가 제공되지 않습니다
+#   real : 407022 주문이 불가능한 주문종류입니다   ← NXT는 시장가를 받지 않는다
+# buy_market/sell_market은 항상 trde_tp='3'(시장가)를 보내므로(kiwoom_api.py:322-327)
+# 실계좌에서도 NXT 구간은 통째로 거부됐다. 예전에는 is_market_open()이 이 구간을 열어둬서
+# 청산 조건이 걸린 종목이 08:00~08:50 동안 30초마다 거부 로그를 쌓다가 09:00에야 체결됐다.
+# 결과가 같으면서 로그만 더러워지므로 구간 자체를 뺀다.
+# 다시 열려면 이 구간만 지정가(trde_tp='0' + 호가)로 보내는 분기가 먼저 필요하다.
+NXT_PREMARKET_START = datetime.time(8, 0)
+NXT_PREMARKET_END = datetime.time(8, 50)
+NXT_AFTERMARKET_START = datetime.time(15, 30)
+NXT_AFTERMARKET_END = datetime.time(20, 0)
+
 
 def is_market_open() -> bool:
+    """시장가 주문이 실제로 체결될 수 있는 구간인지. KRX 정규장만 True."""
     now = datetime.datetime.now()
     if now.weekday() >= 5:  # 토/일 제외
         return False
-    t = now.time()
-    if NXT_PREMARKET_START <= t < NXT_PREMARKET_END:
-        return True
-    if KRX_REGULAR_START <= t < KRX_REGULAR_END:
-        return True
-    if NXT_AFTERMARKET_START <= t <= NXT_AFTERMARKET_END:
-        return True
-    return False
+    return KRX_REGULAR_START <= now.time() < KRX_REGULAR_END
 
 
 def current_exchange() -> str:
-    """현재 시각 기준 주문을 넣을 거래소 코드. is_market_open()이 False인 시간대에 호출하면
-    의미 없음(호출 전 is_market_open()으로 이미 걸러졌다고 가정)."""
-    t = datetime.datetime.now().time()
-    if KRX_REGULAR_START <= t < KRX_REGULAR_END:
-        return 'KRX'
-    return 'NXT'  # 프리마켓(08:00~08:50)/애프터마켓(15:30~20:00)
+    """주문을 넣을 거래소 코드.
+
+    is_market_open()이 KRX 정규장만 통과시키므로 자동매매 경로에서는 항상 'KRX'다.
+    수동 주문(--buy/--sell)은 is_market_open()을 거치지 않으므로 장 밖에서 호출될 수 있는데,
+    그때 'NXT'를 보내면 407022로 거부된다. 어차피 거부될 주문이면 'KRX'로 보내
+    '장종료'라는 이유가 정확히 찍히게 한다."""
+    return 'KRX'
 
 
 def _load_state() -> Dict:
