@@ -672,23 +672,44 @@ def heartbeat():
         return jsonify({'result': 'success', 'last_seen': now_str})
 
     else:
-        # GET — 특정 상대를 지정하지 않고, 나를 제외한 유저 중 가장 최근에 접속한 사람을 그냥 알려준다.
-        # (누가 "상대"인지 pairing 로직으로 특정하려던 이전 방식은 계정이 2명을 넘어가면 깨졌다)
+        # GET — 화면에 표시할 "상대"의 최근 접속 시간.
+        # 클라이언트가 실제 대화 상대(peer)를 알려주면 그 계정만 조회한다. 예전엔 나를 제외한
+        # 전체 계정 중 last_seen이 가장 최신인 사람을 돌려줬는데, 계정이 3개 이상이면
+        # (nh824 / fkaus14 / piw1994) 대화 상대가 아닌 계정의 접속 시간이 "상대"로 표시돼서
+        # 상대가 로그아웃했는데도 접속 시간이 계속 올라가는 것처럼 보였다.
         me = current_user.get_id()
         users = state.get("users", {})
-        candidates = [
-            (uname, info.get("last_seen"))
-            for uname, info in users.items()
-            if uname != me and info.get("last_seen")
-        ]
-        if not candidates:
-            return jsonify({'username': None, 'last_seen': None, 'realname': None})
+        peer = request.args.get('peer')
 
-        # "YYYY-MM-DD HH:MM:SS" 형식 문자열은 사전순 정렬이 곧 시간순 정렬과 같다
-        target_username, last_seen = max(candidates, key=lambda item: item[1])
+        if peer and peer != me:
+            target_username = peer
+            last_seen = users.get(peer, {}).get("last_seen")
+        else:
+            # 클라이언트가 아직 상대를 모를 때만(소켓으로 마주치기 전) 예전 방식으로 추측한다.
+            # "YYYY-MM-DD HH:MM:SS" 형식 문자열은 사전순 정렬이 곧 시간순 정렬과 같다
+            candidates = [
+                (uname, info.get("last_seen"))
+                for uname, info in users.items()
+                if uname != me and info.get("last_seen")
+            ]
+            if not candidates:
+                return jsonify({'username': None, 'last_seen': None, 'realname': None, 'elapsed_seconds': None})
+            target_username, last_seen = max(candidates, key=lambda item: item[1])
+
+        if not last_seen:
+            return jsonify({'username': None, 'last_seen': None, 'realname': None, 'elapsed_seconds': None})
+
+        # 접속 중인지 판정은 서버 시각 기준으로 계산해서 내려준다 — 클라이언트 시계가 서버와
+        # 어긋나 있으면(폰 시간이 몇 분 밀리는 건 흔하다) 브라우저에서 빼기만 해선 엉뚱한 값이 나온다.
+        try:
+            elapsed_seconds = int((datetime.now() - datetime.strptime(last_seen, '%Y-%m-%d %H:%M:%S')).total_seconds())
+        except (TypeError, ValueError):
+            elapsed_seconds = None
+
         user = find_user_by_username(target_username)
         realname = user.realname if user else None
-        return jsonify({'username': target_username, 'last_seen': last_seen, 'realname': realname})
+        return jsonify({'username': target_username, 'last_seen': last_seen, 'realname': realname,
+                        'elapsed_seconds': elapsed_seconds})
 
 # ✅ 전체 마지막 채팅 ID 관리
 @func.route('/last-chat-id', methods=['GET'], endpoint='last-chat-id')
