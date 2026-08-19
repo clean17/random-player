@@ -1,4 +1,4 @@
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 from config.db_connect import db_transaction
 import psycopg
 from utils.wsgi_midleware import logger
@@ -129,7 +129,10 @@ def get_favorite_stocks(user_id, conn=None) -> int:
 
 
 @db_transaction
-def upsert_favorite_stocks(stock: "StockDTO", conn=None) -> int:
+def upsert_favorite_stocks(stock: "StockDTO", conn=None) -> Tuple[Optional[int], Optional[bool]]:
+    """토글 후의 flag를 함께 돌려준다 — 이 SQL은 조건 없는 반전(flag = NOT flag)이라
+    클라이언트가 알고 있던 상태가 낡아 있으면 의도와 반대로 뒤집힌다. 화면이 서버와
+    어긋나지 않도록 '반영된 실제 값'을 응답에 실어 클라이언트가 그대로 그리게 한다."""
     with conn.cursor() as cur:
         sql = """
         INSERT INTO favorite_stocks (
@@ -142,7 +145,7 @@ def upsert_favorite_stocks(stock: "StockDTO", conn=None) -> int:
         DO UPDATE SET
             updated_at               = now(),
             flag                     = NOT favorite_stocks.flag
-        RETURNING id;
+        RETURNING id, flag;
         """
         cur.execute(
             sql,
@@ -151,7 +154,7 @@ def upsert_favorite_stocks(stock: "StockDTO", conn=None) -> int:
             )
         )
         row = cur.fetchone()
-        return row[0] if row else None
+        return (row[0], row[1]) if row else (None, None)
 
 
 # ── reserved_stocks (자동매수 대상으로 직접 체크한 종목) ─────────────────────
@@ -183,7 +186,8 @@ def get_reserved_stock_codes(conn=None) -> set:
 
 
 @db_transaction
-def upsert_reserved_stocks(stock: "StockDTO", conn=None) -> int:
+def upsert_reserved_stocks(stock: "StockDTO", conn=None) -> Tuple[Optional[int], Optional[bool]]:
+    """upsert_favorite_stocks()와 동일하게 토글 후의 flag를 함께 돌려준다."""
     with conn.cursor() as cur:
         sql = """
         INSERT INTO reserved_stocks (
@@ -196,7 +200,7 @@ def upsert_reserved_stocks(stock: "StockDTO", conn=None) -> int:
         DO UPDATE SET
             updated_at               = now(),
             flag                     = NOT reserved_stocks.flag
-        RETURNING id;
+        RETURNING id, flag;
         """
         cur.execute(
             sql,
@@ -205,7 +209,7 @@ def upsert_reserved_stocks(stock: "StockDTO", conn=None) -> int:
             )
         )
         row = cur.fetchone()
-        return row[0] if row else None
+        return (row[0], row[1]) if row else (None, None)
 
 
 @db_transaction

@@ -498,6 +498,8 @@ function renderTradingCards(rows, section, tableName) {
     if (tableName === 'table-reserved') renderFavoriteCardHtml(track, rows);
     initFavoriteButtons();
     initReserveButtons();
+    applyStockFlagState();      // 우선 캐시 값으로 즉시 그리고
+    syncStockFlagsFromServer(); // 서버 목록을 다시 받아 어긋난 표기를 정정한다(비동기)
 
     track.addEventListener("click", (e) => {
         if (isDragging) return;
@@ -831,7 +833,7 @@ function renderButton(btn) {
     btn.setAttribute("aria-label", favorited ? "즐겨찾기 해제" : "즐겨찾기 추가");
 }
 
-async function requestToggleFavorite({ stockCode, next }) {
+async function requestToggleFavorite({ stockCode }) {
     const res = await fetch("/stocks/favorite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -842,10 +844,7 @@ async function requestToggleFavorite({ stockCode, next }) {
         const text = await res.text().catch(() => "");
         throw new Error(text || "Server request failed");
     }
-    showDebugToast(next ? "즐겨찾기 등록 완료" : "즐겨찾기 취소 완료")
     return res.json().catch(() => ({}));
-
-
 }
 
 // ── 자동매수 대상(reserved) 토글 ──────────────────────────────────────────
@@ -882,91 +881,143 @@ async function requestToggleReserved({ stockCode }) {
     return res.json().catch(() => ({}));
 }
 
+// ── 즐겨찾기(별) / 자동매수 대상(체크) 상태를 서버와 일치시키는 공통 로직 ────────────
+// 어긋나던 원인:
+//  1) 서버 upsert가 조건 없는 토글(flag = NOT flag)인데 클라이언트는 자기가 알던 상태의
+//     반대값을 그렸다 — 알던 값이 낡아 있으면 서버는 반대로 뒤집혀 영구히 어긋난다.
+//     → 이제 응답의 flag(반영된 실제 값)를 그대로 그린다.
+//  2) favoriteStocks/reservedStocks가 페이지 최초 로드 시점 스냅샷에 고정돼 있었다.
+//     → 카드를 그릴 때마다, 그리고 탭에 다시 돌아올 때마다 서버 목록을 다시 받아 맞춘다.
+//  3) init*Buttons가 목록에 있으면 'true'로 켜기만 하고 꺼주지는 않아서, 이미 그려져 있던
+//     다른 탭 패널의 버튼이 해제 후에도 켜진 채로 남았다.
+//     → applyStockFlagState()가 문서 전체 버튼에 on/off를 모두 반영한다.
+function flagCacheHas(list, code) {
+    return typeof list !== "undefined" && !!list && list.indexOf(code) !== -1;
+}
+
+function updateFlagCache(list, code, on) {
+    if (typeof list === "undefined" || !list) return;
+    const i = list.indexOf(code);
+    if (on && i === -1) list.push(code);
+    if (!on && i !== -1) list.splice(i, 1);
+}
+
+// 캐시(= 서버에서 받은 목록)를 문서 안의 모든 버튼에 반영한다. 요청이 진행 중인 버튼
+// (disabled)은 응답이 곧 정답을 덮어쓰므로 건드리지 않는다.
+function applyStockFlagState() {
+    // 상태가 그대로면 다시 그리지 않는다 — 주기 동기화가 카드 전부의 innerHTML을 매번
+    // 새로 쓰지 않도록. 단, 갓 만들어진 버튼은 아직 아이콘이 없으므로(innerHTML 비어있음)
+    // 상태가 같아도 한 번은 그려줘야 한다.
+    document.querySelectorAll(".fav-btn").forEach((btn) => {
+        if (btn.disabled) return;
+        const next = String(flagCacheHas(typeof favoriteStocks !== "undefined" ? favoriteStocks : null, btn.dataset.stockCode));
+        if (btn.dataset.favorited === next && btn.innerHTML !== "") return;
+        btn.dataset.favorited = next;
+        renderButton(btn);
+    });
+    document.querySelectorAll(".reserve-btn").forEach((btn) => {
+        if (btn.disabled) return;
+        const next = String(flagCacheHas(typeof reservedStocks !== "undefined" ? reservedStocks : null, btn.dataset.stockCode));
+        if (btn.dataset.reserved === next && btn.innerHTML !== "") return;
+        btn.dataset.reserved = next;
+        renderReserveButton(btn);
+    });
+}
+
+// 서버에서 즐겨찾기/자동매수 목록을 다시 받아 화면에 반영한다. 목록을 받아오는 함수는
+// 템플릿(interesting_stocks.html)에 있으므로 window 훅으로 주입받는다 — 없으면 캐시만 반영.
+let stockFlagSyncInFlight = null;
+function syncStockFlagsFromServer() {
+    if (typeof window.refreshStockFlagCaches !== "function") {
+        applyStockFlagState();
+        return Promise.resolve();
+    }
+    // 탭 전환/뷰 토글로 짧은 시간에 여러 번 불려도 요청은 한 번만 나가게 묶는다.
+    if (stockFlagSyncInFlight) return stockFlagSyncInFlight;
+    stockFlagSyncInFlight = Promise.resolve(window.refreshStockFlagCaches())
+        .then(() => { applyStockFlagState(); })
+        .catch((e) => { console.error("즐겨찾기/자동매수 목록 동기화 실패", e); })
+        .finally(() => { stockFlagSyncInFlight = null; });
+    return stockFlagSyncInFlight;
+}
+window.syncStockFlagsFromServer = syncStockFlagsFromServer;
+
+async function onReserveButtonClick(e) {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    const code = btn.dataset.stockCode;
+    const current = btn.dataset.reserved === "true";
+    const next = !current;
+
+    // optimistic UI
+    btn.dataset.reserved = String(next);
+    renderReserveButton(btn);
+    btn.disabled = true;
+
+    try {
+        const res = await requestToggleReserved({ stockCode: code });
+        // 서버가 실제로 반영한 값을 진실로 삼는다 (응답에 flag가 없는 구버전 서버면 추측값 유지)
+        const serverFlag = typeof res.flag === "boolean" ? res.flag : next;
+        btn.dataset.reserved = String(serverFlag);
+        renderReserveButton(btn);
+        updateFlagCache(typeof reservedStocks !== "undefined" ? reservedStocks : null, code, serverFlag);
+        showDebugToast(serverFlag ? "자동매수 대상 추가" : "자동매수 대상 해제");
+    } catch (err) {
+        btn.dataset.reserved = String(current);   // 실패 시 rollback
+        renderReserveButton(btn);
+        console.error(err);
+        alert("자동매수 대상 변경에 실패했어요. 다시 시도해주세요.");
+    } finally {
+        btn.disabled = false;
+        applyStockFlagState(); // 다른 탭에 그려진 같은 종목 버튼까지 같은 상태로 맞춘다
+    }
+}
+
+async function onFavoriteButtonClick(e) {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    const code = btn.dataset.stockCode;
+    const current = btn.dataset.favorited === "true";
+    const next = !current;
+
+    // optimistic UI
+    btn.dataset.favorited = String(next);
+    renderButton(btn);
+    btn.disabled = true;
+
+    try {
+        const res = await requestToggleFavorite({ stockCode: code });
+        const serverFlag = typeof res.flag === "boolean" ? res.flag : next;
+        btn.dataset.favorited = String(serverFlag);
+        renderButton(btn);
+        updateFlagCache(typeof favoriteStocks !== "undefined" ? favoriteStocks : null, code, serverFlag);
+        showDebugToast(serverFlag ? "즐겨찾기 등록 완료" : "즐겨찾기 취소 완료");
+    } catch (err) {
+        btn.dataset.favorited = String(current);  // 실패 시 rollback
+        renderButton(btn);
+        console.error(err);
+        alert("즐겨찾기 변경에 실패했어요. 다시 시도해주세요.");
+    } finally {
+        btn.disabled = false;
+        applyStockFlagState();
+    }
+}
+
+// 카드는 매 렌더마다 innerHTML로 새로 그려지지만, 다른 탭 패널에 남아있는 예전 버튼은 그대로다 —
+// data-bound로 이미 바인딩된 버튼은 건너뛰어 클릭 리스너가 중복 누적되지 않게 한다.
 function initReserveButtons() {
     document.querySelectorAll(".reserve-btn").forEach((btn) => {
-        const stockCode = btn.dataset.stockCode;
-        if (typeof reservedStocks !== "undefined" && reservedStocks.includes(stockCode)) {
-            btn.dataset.reserved = "true";
-        }
-        renderReserveButton(btn);
-
-        btn.addEventListener("click", async () => {
-            if (btn.disabled) return;
-            const code = btn.dataset.stockCode;
-            const current = btn.dataset.reserved === "true";
-            const next = !current;
-
-            // optimistic UI
-            btn.dataset.reserved = String(next);
-            renderReserveButton(btn);
-            btn.disabled = true;
-
-            try {
-                await requestToggleReserved({ stockCode: code });
-                // 다른 카드/탭에서도 같은 상태를 보도록 로컬 캐시 동기화
-                if (typeof reservedStocks !== "undefined") {
-                    const i = reservedStocks.indexOf(code);
-                    if (next && i === -1) reservedStocks.push(code);
-                    if (!next && i !== -1) reservedStocks.splice(i, 1);
-                }
-                showDebugToast(next ? "자동매수 대상 추가" : "자동매수 대상 해제");
-            } catch (e) {
-                btn.dataset.reserved = String(current);   // 실패 시 rollback
-                renderReserveButton(btn);
-                console.error(e);
-                alert("자동매수 대상 변경에 실패했어요. 다시 시도해주세요.");
-            } finally {
-                btn.disabled = false;
-            }
-        });
+        if (btn.dataset.bound === "true") return;
+        btn.dataset.bound = "true";
+        btn.addEventListener("click", onReserveButtonClick);
     });
 }
 
 function initFavoriteButtons() {
     document.querySelectorAll(".fav-btn").forEach((btn) => {
-        renderButton(btn);
-
-        const stockCode = btn.dataset.stockCode;
-        const favorited = favoriteStocks.includes(stockCode);
-        if (favorited) {
-            btn.dataset.favorited = String(true);
-            renderButton(btn);
-        }
-
-        btn.addEventListener("click", async () => {
-            if (btn.disabled) return;
-
-            const stockCode = btn.dataset.stockCode;
-            const current = btn.dataset.favorited === "true";
-            const next = !current;
-
-            // optimistic UI
-            btn.dataset.favorited = String(next);
-            renderButton(btn);
-            btn.disabled = true;
-
-            try {
-                await requestToggleFavorite({ stockCode, next });
-                // 다른 카드/탭에서도 같은 상태를 보도록 로컬 캐시 동기화 (reservedStocks와 동일 패턴).
-                // 이게 없으면 favoriteStocks가 페이지 로드 시점 스냅샷에 고정돼, 토글 이후 탭을
-                // 전환해 카드가 다시 그려질 때(initFavoriteButtons 재실행) 방금 누른 상태가 반영
-                // 안 되고 예전 값으로 되돌아가 보인다 — 그 상태에서 다시 누르면 실제로는 서버가
-                // unconditional TOGGLE(flag = NOT flag)이라 의도와 반대로 뒤집혀 버린다.
-                if (typeof favoriteStocks !== "undefined") {
-                    const i = favoriteStocks.indexOf(stockCode);
-                    if (next && i === -1) favoriteStocks.push(stockCode);
-                    if (!next && i !== -1) favoriteStocks.splice(i, 1);
-                }
-            } catch (e) {
-                // 실패: rollback
-                btn.dataset.favorited = String(current);
-                renderButton(btn);
-                console.error(e);
-                alert("즐겨찾기 변경에 실패했어요. 다시 시도해주세요.");
-            } finally {
-                btn.disabled = false;
-            }
-        });
+        if (btn.dataset.bound === "true") return;
+        btn.dataset.bound = "true";
+        btn.addEventListener("click", onFavoriteButtonClick);
     });
 }
 

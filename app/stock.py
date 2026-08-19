@@ -235,8 +235,9 @@ def get_stock_company_info():
 def upsert_favorite_stock():
     s = StockDTO.from_json(request.json)
     s.user_id = find_user_by_username(session["_user_id"]).id
-    result = upsert_favorite_stocks(s)
-    return {"status": "success", "result": result}, 200
+    row_id, flag = upsert_favorite_stocks(s)
+    # flag는 토글이 반영된 뒤의 서버 실제 값 — 클라이언트는 자기가 추측한 상태 대신 이 값으로 그린다.
+    return {"status": "success", "result": row_id, "flag": bool(flag)}, 200
 
 
 @stock.route("/favorite", methods=["GET"])
@@ -278,8 +279,8 @@ def upsert_reserved_stock():
     """자동매수 대상 토글 (favorite와 동일하게 flag를 뒤집는 upsert)."""
     s = StockDTO.from_json(request.json)
     s.user_id = find_user_by_username(session["_user_id"]).id
-    result = upsert_reserved_stocks(s)
-    return {"status": "success", "result": result}, 200
+    row_id, flag = upsert_reserved_stocks(s)
+    return {"status": "success", "result": row_id, "flag": bool(flag)}, 200
 
 
 @stock.route("/reserved", methods=["GET"])

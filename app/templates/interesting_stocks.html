@@ -1508,9 +1508,24 @@
         startTimer();
     }
 
+    // 이 화면이 떠 있는 동안 다른 기기/탭에서 즐겨찾기·자동매수 대상을 바꿨을 수 있으므로
+    // 주기적으로 서버 목록을 다시 받아 별·체크 표기를 맞춘다. 가격 갱신(10초)만큼 자주 볼
+    // 필요는 없어서 60초로 둔다 (조회 2건이라 부담은 작지만 굳이 자주 칠 이유도 없다).
+    let flagSyncTimer = null;
+    const FLAG_SYNC_INTERVAL_MS = 60 * 1000;
+
+    function startFlagSyncTimer() {
+        if (flagSyncTimer) clearInterval(flagSyncTimer);
+        flagSyncTimer = setInterval(() => {
+            if (document.hidden) return; // 안 보이는 동안은 굳이 요청하지 않는다 (복귀 시 한 번 맞춘다)
+            if (typeof window.syncStockFlagsFromServer === 'function') window.syncStockFlagsFromServer();
+        }, FLAG_SYNC_INTERVAL_MS);
+    }
+
     function startTimer() {
         if (timer) clearInterval(timer);
         if (timer2) clearInterval(timer2);
+        startFlagSyncTimer();
 
         // 금일 등락률
         timer = setInterval(()=>{
@@ -1647,9 +1662,16 @@
                 favoriteStocks.push(item["stock_code"])
             })
         }).catch(error => {
-            throw error; // 기타 에러는 그대로 던짐
+            // 즐겨찾기 조회 실패해도 화면 나머지는 정상 동작해야 함 (별만 미체크 상태로 보임)
+            console.error('favorite 목록 조회 실패', error);
         });
     }
+
+    // stock_card.js가 카드를 그릴 때/탭에 다시 돌아올 때 서버 목록을 다시 받아 별·체크 표기를
+    // 검증하는 훅. (목록 조회는 여기서만 하므로 window에 얹어 stock_card.js에 주입한다)
+    window.refreshStockFlagCaches = function () {
+        return Promise.all([getFavoriteStocks(), getReservedStocks()]);
+    };
 
     function getReservedStocks() {
         return axios.get('/stocks/reserved').then(res => {
@@ -1694,11 +1716,15 @@
     document.addEventListener('visibilitychange', () => {
         const activeTabId = getActiveTabTarget();
         if (!document.hidden) { // 다시 브라우저를 방문하면 한 번만 실행된다
+            // 자리를 비운 사이 다른 기기/탭에서 즐겨찾기·자동매수 대상이 바뀌었을 수 있으므로
+            // 서버 목록을 다시 받아 별·체크 표기를 맞춘다.
+            if (typeof window.syncStockFlagsFromServer === 'function') window.syncStockFlagsFromServer();
             startTimer();
             if (activeTabId === '#tab-mystocks') msStartTimer();
         } else { // 창을 나가면
             stopTimer(timer);
             stopTimer(timer2);
+            stopTimer(flagSyncTimer);
             msStopTimer();
         }
     })
