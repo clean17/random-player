@@ -48,6 +48,12 @@ const callStatusText = document.getElementById('callStatusText');
 let myStream;
 let muted = false;
 let myPeerConnection;
+// makeConnection()이 진행 중일 때(트랙 추가까지 포함) 그 완료를 다른 호출자도 같이 기다리게 하는
+// 공유 프로미스. myPeerConnection은 RTCPeerConnection 생성 시점에 동기적으로 바로 채워지는데,
+// 트랙 추가(addTrack)는 그 뒤 requestAnimationFrame을 기다렸다가 비동기로 일어난다 — 그 사이에
+// 'welcome'/'offer' 핸들러가 "!myPeerConnection"만 보고 이미 준비됐다고 오판해 트랙이 하나도
+// 없는 offer를 만들어 보내는 레이스가 있었다(탭이 백그라운드라 rAF가 하필 그 사이 안 돌면 특히).
+let connectionReadyPromise = null;
 let myDataChannel;
 let peerLeftTimeout;
 let cameraOn = true;
@@ -325,11 +331,10 @@ socket.on('welcome', async () => { // room에 있는 Peer들은 각자의 offer�
         clearIceDisconnectTimer();
         myPeerConnection.close();
         myPeerConnection = null;
+        connectionReadyPromise = null;
     }
 
-    if (!myPeerConnection) {
-        await makeConnection();
-    }
+    await ensureConnection();
 
     // 이미 offer 진행 중이면 중복 welcome 무시하되, 타이밍이 꼬여 잠깐 stable이 아닐 수 있으니 재시도를 걸어둔다
     if (myPeerConnection.signalingState !== 'stable') {
@@ -357,10 +362,8 @@ socket.on('offer', async (offer) => {
     if (!(myPeerConnection && myPeerConnection.connectionState === 'connected')) {
         showCallStatus('연결 시도 중...'); // 상대가 실제로 offer를 보내온 시점이므로 활성 표시로 전환
     }
-    // offer가 getMedia()/makeConnection() 완료보다 먼저 도착하는 레이스 대비
-    if (!myPeerConnection) {
-        await makeConnection();
-    }
+    // offer가 getMedia()/makeConnection() 완료(트랙 추가까지)보다 먼저 도착하는 레이스 대비
+    await ensureConnection();
     myPeerConnection.addEventListener('datachannel', event => { // datachannel 감지
         myDataChannel = event.channel;
         myDataChannel.addEventListener('message', console.log);
@@ -626,6 +629,16 @@ async function updatePeerConnection() {
  * WebRTC 연결을 설정
  * 내 스트림(영상/음성)을 상대방에게 전송할 준비를 마친다
  */
+// myPeerConnection 존재 여부만 보지 않고, 진행 중인 makeConnection()이 있으면(트랙 추가까지)
+// 그 완료를 항상 같이 기다린다 — welcome/offer 핸들러가 이 함수를 통해서만 연결을 확보하게 해서
+// "PC는 있는데 아직 트랙이 안 붙은 채로 offer가 나가는" 레이스를 원천적으로 막는다.
+function ensureConnection() {
+    if (!myPeerConnection) {
+        connectionReadyPromise = makeConnection();
+    }
+    return connectionReadyPromise || Promise.resolve();
+}
+
 async function makeConnection() { // 연결을 만든다.
     myPeerConnection = new RTCPeerConnection({
         // STUN; 내 외부 IP를 알려주는 서버 (ICE 후보 생성을 도와줌)
@@ -723,8 +736,22 @@ async function makeConnection() { // 연결을 만든다.
     // WebRTC 파이프라인이 트랙을 가져가도록 해 Android freeze 방지.
     // 단, makeConnection()을 await하는 호출자가 트랙이 실제로 붙기 전에 offer를 만들어버리는
     // 레이스를 막기 위해 프레임 하나를 Promise로 감싸서 여기서 기다린다.
+    //
+    // ⚠️ requestAnimationFrame은 탭이 백그라운드(hidden)면 브라우저가 아예 호출을 멈춘다 —
+    // "느려지는" 게 아니라 완전히 0번 실행된다. 영상통화 창을 연 직후(카메라 초기화가 끝나기 전)
+    // 곧바로 다른 탭으로 전환하면 이 await가 탭이 다시 보일 때까지 무기한 멈춰있었다. 그 사이
+    // 상대가 통화를 걸면 myPeerConnection은 이미 만들어져 있으니(동기 생성) '준비된 것으로 오판돼
+    // welcome/offer 핸들러가 트랙이 하나도 안 붙은 채로 offer를 만들어 보냈다 — 그 결과 상대에게
+    // 내 화면(과 음성)이 아예 안 보이는 문제였다. setTimeout으로 상한을 걸어 탭이 안 보여도
+    // 진행을 보장한다(ensureConnection()이 이 함수 자체를 기다리므로, 다른 호출자는 이 함수가
+    // 실제로 끝나야 다음 단계로 넘어간다 — 더 이상 무기한 기다리지 않는다).
     if (myStream) {
-        await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => {
+            let settled = false;
+            const done = () => { if (!settled) { settled = true; resolve(); } };
+            requestAnimationFrame(done);
+            setTimeout(done, 300);
+        });
         myStream.getTracks().forEach(track => {
             myPeerConnection.addTrack(track, myStream);
         });
@@ -1171,7 +1198,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setVideoCallButtonsOpacity(0.5);
     showCallStatus('상대방을 기다리는 중', { subtle: true });
     await getMedia();
-    await makeConnection();
+    await ensureConnection();
     hasAnnouncedToRoom = true;
     socket.emit('join_video_socket', roomName, username);
     setSwitchCameraPos();
