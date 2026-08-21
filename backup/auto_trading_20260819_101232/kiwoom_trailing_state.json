@@ -1,0 +1,50 @@
+{
+  "020150": {
+    "original_qty": 6,
+    "tranche_qty": 2,
+    "remaining_qty": 6,
+    "peak_rate": null,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 34500.0,
+    "halted": false
+  },
+  "093370": {
+    "original_qty": 11,
+    "tranche_qty": 3,
+    "remaining_qty": 11,
+    "peak_rate": null,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 12530.0,
+    "halted": false
+  },
+  "123330": {
+    "original_qty": 10,
+    "tranche_qty": 3,
+    "remaining_qty": 10,
+    "peak_rate": null,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 30700.0,
+    "halted": false
+  },
+  "457190": {
+    "original_qty": 3,
+    "tranche_qty": 1,
+    "remaining_qty": 3,
+    "peak_rate": 0.079,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 67600.0,
+    "halted": false
+  }
+}

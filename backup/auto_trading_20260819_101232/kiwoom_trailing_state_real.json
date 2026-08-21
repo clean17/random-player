@@ -1,0 +1,54 @@
+{
+  "093370": {
+    "original_qty": 15,
+    "tranche_qty": 5,
+    "remaining_qty": 15,
+    "peak_rate": null,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 12610.0,
+    "halted": false,
+    "entry_date": "2026-08-18"
+  },
+  "102940": {
+    "original_qty": 33,
+    "tranche_qty": 11,
+    "remaining_qty": 33,
+    "peak_rate": null,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 17800.0,
+    "halted": false,
+    "entry_date": "2026-08-18"
+  },
+  "0015N0": {
+    "original_qty": 15,
+    "tranche_qty": 5,
+    "remaining_qty": 15,
+    "peak_rate": null,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 9810.0,
+    "halted": false,
+    "entry_date": "2026-08-18"
+  },
+  "028670": {
+    "original_qty": 24,
+    "tranche_qty": 8,
+    "remaining_qty": 24,
+    "peak_rate": null,
+    "last_sold_peak": null,
+    "thirds_sold": 0,
+    "target_idx": 0,
+    "exited": false,
+    "last_price": 6170.0,
+    "halted": false,
+    "entry_date": "2026-08-18"
+  }
+}
