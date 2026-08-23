@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import logging
 import threading
 import requests
 from typing import Dict, List, Optional, Tuple
@@ -74,6 +75,46 @@ def env_path(path: str, env: Optional[str] = None) -> str:
     if env is not None and env not in _ENV_CONFIG:
         raise ValueError('알 수 없는 KIWOOM 환경: {!r}'.format(env))
     return f'{root}_{env or KIWOOM_ENV}{ext}'
+
+
+_TRADING_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                'logs', 'kiwoom_trading')
+
+
+def get_trading_logger(name: str) -> 'logging.Logger':
+    """자동매매 모듈 공용 파일 로거. `trading.log`(real) / `trading_mock.log`(mock)에 쓴다.
+
+    2026-08-24 도입 — kiwoom_v8_strategy / kiwoom_v8_exit 가 `logging.getLogger(name)`만
+    하고 핸들러를 붙이지 않아, `__main__`이 아닌 스케줄러 경로(run.py)에서는 INFO 로그가
+    핸들러 없는 로거로 사라지고 있었다(2026-08-19 v8 가동 이후 5일간 trading.log에 v8
+    관련 줄이 0건). 이 헬퍼로 kiwoom_trailing_stop.py 와 동일한 파일·포맷·로테이션 정책을
+    강제해, 새 모듈이 같은 실수를 반복하지 않게 한다.
+
+    이름별로 로거가 다르되(모듈 구분은 %(name)s 없이도 메시지 접두어로 이미 구분됨) 같은
+    파일에 append 하므로, 여러 모듈이 호출해도 핸들러가 중복 추가되지 않는다
+    (logger.handlers 가 비어 있을 때만 붙인다 — 표준 idempotent 패턴).
+    """
+    os.makedirs(_TRADING_LOG_DIR, exist_ok=True)
+    log = logging.getLogger(name)
+    if log.handlers:
+        return log
+    log.setLevel(logging.INFO)
+    log.propagate = False   # 앱 root/waitress 로거로 전파 안 함 (logs/app 쪽에 중복 기록 방지)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+
+    # real -> trading.log (기존 파일 그대로, 180일 백업 이력 연속성 유지) / mock -> trading_mock.log
+    log_name = 'trading.log' if KIWOOM_ENV == 'real' else f'trading_{KIWOOM_ENV}.log'
+    from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
+    file_handler = ConcurrentTimedRotatingFileHandler(
+        os.path.join(_TRADING_LOG_DIR, log_name), when='midnight', backupCount=180, encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+    log.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    log.addHandler(console_handler)
+    return log
 
 # 호출 간격. 2026-08-19 ka10001(현재가) 로 실측한 값이다.
 #

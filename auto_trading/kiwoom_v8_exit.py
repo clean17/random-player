@@ -33,9 +33,11 @@ if ROOT not in sys.path:
 
 from auto_trading import kiwoom_api as api          # noqa: E402
 from auto_trading import kiwoom_v8_strategy as v8   # noqa: E402
-from auto_trading.kiwoom_api import env_path       # noqa: E402
+from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
 
-_log = logging.getLogger('kiwoom_v8_exit')
+# 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
+# INFO 로그가 전부 사라졌다. 상세는 kiwoom_api.get_trading_logger() docstring 참고.
+_log = get_trading_logger('kiwoom_v8_exit')
 
 V8_EXIT_ENABLED = True         # 소유권 분리(v8_owned_codes)로 기존 트레일링과 공존한다
 

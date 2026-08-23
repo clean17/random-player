@@ -41,9 +41,12 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from auto_trading import kiwoom_api as api  # noqa: E402
-from auto_trading.kiwoom_api import env_path  # noqa: E402
+from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
 
-_log = logging.getLogger('kiwoom_v8')
+# 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
+# INFO 로그가 전부 사라졌다(가동 후 5일간 trading.log에 v8 관련 줄 0건). 상세는
+# kiwoom_api.get_trading_logger() docstring 참고.
+_log = get_trading_logger('kiwoom_v8')
 
 _last_regap_ts = 0.0   # 마지막으로 현재가를 조회해 live_gap 을 다시 세운 시각
 
@@ -337,6 +340,48 @@ def _atr14(d: pd.DataFrame) -> float:
     return float(v) if np.isfinite(v) else float('nan')
 
 
+# 거래정지 이력 검사 구간. RUN_LOOKBACK(20)의 rolling(20)이 최대 25행 전(shift(5)+rolling(20))까지
+# 보고, ATR(14)도 14행이 필요하다 — 그 구간에 거래정지(거래량 0)가 하나라도 섞이면 5일수익률·
+# MA20·ATR이 전부 오염된다. 여유를 조금 더 둬서 25로 잡는다.
+HALT_CHECK_WINDOW = 25
+
+
+def _recently_halted(d: pd.DataFrame, i: int, window: int = HALT_CHECK_WINDOW) -> bool:
+    """i번째 행 기준 최근 window거래일 안에 거래정지(거래량=0)가 있었는지.
+
+    2026-08-24 추가 — 183300 실사고 대응. 이 종목은 16거래일 거래정지 후 재개일에
+      1) 정지 중 얼어붙은 가격과 비교해 '5일수익률 +27%'라는 가짜 신호가 발생했고
+      2) 정지 전(가격 재조정 전) 저장된 낡은 지정가가 재조정 후 가격과 뒤섞여
+         gap=+30%라는 말이 안 되는 값으로 최우선 순위에 올라갔다.
+    두 문제 다 '최근 거래일이 실제 가격 변동을 담보하지 않는다'는 같은 원인이라,
+    신호 생성(screen_today)과 매일 재계산(_features_now) 양쪽에서 이 검사로 막는다.
+    score 같은 순위 지표로는 못 거른다 — 실측(2026-08-24)으로 정지 이력이 있는 종목의
+    score가 0.01~1.99 전 구간에 흩어져 있어 상관이 없었다.
+    """
+    lo = max(0, i - window + 1)
+    return bool((d['volume'].iloc[lo:i + 1] <= 0).any())
+
+
+# 데이터 최신성 검사 문턱. 실계좌 pkl 갱신은 09-15시 :10/:30/:50 이라 정상 종목은 항상
+# 오늘이나 어제 행이 있다. 연휴가 겹쳐도 5일이면 충분한 여유다.
+STALE_MAX_DAYS = 5
+
+
+def _data_stale(d: pd.DataFrame, max_days: int = STALE_MAX_DAYS) -> bool:
+    """마지막 행이 오늘로부터 max_days 이상 지났는지.
+
+    2026-08-24 추가 — 183300 대응으로 만든 _recently_halted() 만으로는 부족했다.
+    일부 종목(175250 등)은 정지 구간을 거래량=0 이 아니라 **시가/고가/저가=0** 으로
+    표시하는데, 이는 _load_daily() 의 가격>0 필터에 걸려 그 구간의 행 자체가 통째로
+    사라진다. 그 결과 남은 마지막 유효 행이 1년 전(175250: 2025-08-05)까지 밀려도
+    len(dd)>=21 은 가볍게 넘겨 정상 종목처럼 통과했다. 거래량 검사로는 애초에 안 보이는
+    행이라 window 를 늘려도 못 잡는다 — '마지막 행이 언제냐' 자체를 봐야 한다.
+    """
+    if d is None or len(d) == 0:
+        return True
+    return (datetime.date.today() - d.index[-1].date()).days > max_days
+
+
 def _tick(price: float) -> int:
     for bound, t in ((2000, 1), (5000, 5), (20000, 10), (50000, 50),
                      (200000, 100), (500000, 500)):
@@ -422,6 +467,10 @@ def screen_today() -> List[Dict]:
         d = _load_daily(code)
         if d is None:
             continue
+        if _data_stale(d):
+            continue   # 마지막 유효 행이 너무 오래됨 (정지 구간이 가격=0으로 지워진 경우 포함)
+        if _recently_halted(d, len(d) - 1):
+            continue   # 최근 거래정지 이력 — 5일수익률/MA20/ATR이 얼어붙은 가격으로 오염됨
         c = d['close']
         close = float(c.iloc[-1])
         amount = close * float(d['volume'].iloc[-1])
@@ -587,6 +636,13 @@ def _features_now(code: str, v: Dict) -> Optional[Dict]:
         return None
     dd = d[d.index < pd.Timestamp(datetime.date.today())]
     if len(dd) < 21:
+        return None
+    if _data_stale(dd):
+        return None   # 마지막 유효 행이 너무 오래됨 (정지 구간이 가격=0으로 지워진 경우 포함)
+    if _recently_halted(dd, len(dd) - 1):
+        # 최근 거래정지 이력 — 이 종목의 지정가/랭킹 재료를 오늘 신뢰할 수 없다.
+        # (2026-08-24 183300 사고: 정지 전 가격 기준으로 저장된 낡은 지정가가
+        #  재조정된 현재가와 뒤섞여 gap이 말이 안 되는 값으로 나왔다.)
         return None
     c = dd['close']
     pc = float(c.iloc[-1])
