@@ -11,6 +11,15 @@
     <link rel="stylesheet" href="/static/css/interest_stocks.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/carousel.css?v={{ version }}">
     <style>
+        /* 계좌(실전/모의) 안내문 — select 는 상단 탭바의 #kiwoomEnvFilter */
+        .ms-env-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 8px 0; flex-wrap: wrap; }
+        .ms-env-note { font-size: 12px; color: #888; }
+        /* 실전을 보고 있을 때만 붉게 — 수동 매수/매도가 실계좌로 나간다는 경고 */
+        .ms-env-note.is-live { color: #d93025; font-weight: 600; }
+        #kiwoomEnvFilter.is-real { color: #d93025; font-weight: 700; border-color: #d93025; }
+        /* 주문가능금액이 음수 = 예수금 초과 주문(미수금) */
+        #ms-cash.is-negative { color: #d93025; }
+
         .mystocks-summary {
             display: flex;
             flex-wrap: nowrap;
@@ -297,6 +306,9 @@
             <option value="interest" selected>V1</option>
             <option value="interest_v2">V2</option>
         </select>
+        <!-- 내 계좌 탭 전용: 조회할 계좌(실전/모의). 조회와 수동주문이 모두 이 값을 따라간다.
+             옵션은 /stocks/kiwoom/envs 응답으로 JS가 채운다(서버가 가진 환경 목록이 곧 진실). -->
+        <select id="kiwoomEnvFilter" class="rule-filter" style="display:none"></select>
         <input id="stockSearchInput" class="date" type="text" placeholder="종목명/코드 검색" style="display:none" autocomplete="off">
     </div>
 
@@ -447,6 +459,12 @@
 
     <!-- 탭 6: 내 종목 (키움 모의투자 대시보드) -->
     <section id="tab-mystocks" class="tab-panel" style="display:none;">
+        <!-- 계좌 선택은 상단 탭바의 #kiwoomEnvFilter(select). 여기는 어느 계좌를 보고 있는지
+             알려주는 안내문만 둔다 — 조회·수동주문이 모두 그 select 값을 따라간다. -->
+        <div class="ms-env-bar">
+            <span class="ms-env-note" id="ms-env-note"></span>
+        </div>
+
         <div class="mystocks-summary" id="mystocksSummary">
             <div class="mystocks-stat"><span class="label">총자산</span><span class="value" id="ms-total-asset">-</span></div>
             <div class="mystocks-stat"><span class="label">보유 현금</span><span class="value" id="ms-cash">-</span></div>
@@ -559,6 +577,7 @@
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
     const interestVersionFilterEl = document.getElementById('interestVersionFilter');
+    const kiwoomEnvFilterEl = document.getElementById('kiwoomEnvFilter');
     const stockSearchInputEl = document.getElementById('stockSearchInput');
     // 검색창이 노출되는 탭(실시간/관심종목)에서 서버로부터 받은 원본 데이터.
     // 검색은 서버 재조회 없이 이 배열을 필터링해서 다시 그린다.
@@ -594,6 +613,9 @@
         interestVersionFilterEl.style.display = (tabId === 'tab-summary') ? '' : 'none';
         if (tabId === 'tab-summary') interestVersionFilterEl.value = interestVersionFilterEl.value || 'interest';
         else interestVersionFilterEl.value = 'interest';
+
+        // 내 계좌 탭에서만 계좌(실전/모의) 선택 노출
+        kiwoomEnvFilterEl.style.display = (tabId === 'tab-mystocks') ? '' : 'none';
 
         // 실시간/관심종목 탭에서만 종목명/코드 검색창 노출.
         // 탭마다 데이터셋이 달라 검색어를 유지할 이유가 없으므로 탭 전환 시 항상 비운다.
@@ -983,7 +1005,20 @@
 
     function renderMyStocksSummary(summary) {
         document.getElementById('ms-total-asset').textContent = msFmtWon(summary.total_asset);
-        document.getElementById('ms-cash').textContent = msFmtWon(summary.total_asset - summary.tot_evlt_amt);
+        // 보유 현금 = 주문가능금액(kt00001 의 ord_alow_amt). 예전엔 `추정예탁자산 - 총평가금액`으로
+        // 근사했는데, 추정예탁자산은 '예수금+평가금액'이 아니라 결제·비용을 반영한 추정치라서
+        // 계좌가 거의 full 투자 상태가 되면 부호까지 뒤집혀 음수로 표시됐다(2026-08-20 모의계좌).
+        // 예수금 조회가 실패하면(deposit=null) 옛 근사식으로 폴백한다.
+        const dep = summary.deposit;
+        const cash = dep ? dep.ord_alow_amt : (summary.total_asset - summary.tot_evlt_amt);
+        const cashEl = document.getElementById('ms-cash');
+        cashEl.textContent = msFmtWon(cash);
+        // 주문가능금액이 음수면 예수금 초과 주문(미수금)이다 — 눈에 띄게 표시한다
+        cashEl.classList.toggle('is-negative', cash < 0);
+        cashEl.title = dep
+            ? `주문가능 ${msFmtWon(dep.ord_alow_amt)} / 예수금 ${msFmtWon(dep.entr)}`
+              + ` / 출금가능 ${msFmtWon(dep.pymn_alow_amt)} / D+2 추정예수금 ${msFmtWon(dep.d2_entra)}`
+            : '예수금 조회 실패 — 추정예탁자산 − 평가금액으로 근사한 값';
 
         document.getElementById('ms-evlt-amt').textContent = msFmtWon(summary.tot_evlt_amt);
 
@@ -1131,12 +1166,73 @@
         }).join('');
     }
 
+    // ── 계좌 환경(실전/모의) ───────────────────────────────────────────────
+    // 조회와 수동주문이 모두 msEnv를 따라간다. 화면은 모의인데 주문은 실전으로 나가는 사고를
+    // 막기 위해 모든 요청에 같은 값을 실어 보낸다.
+    const MS_ENV_KEY = 'mystocksEnv';
+    let msEnv = null;              // null이면 서버 기본값(.env의 KIWOOM_ENV)
+    let msEnvDefault = null;       // 자동매매가 실제로 붙어 있는 환경
+    const MS_ENV_LABEL = { real: '실전', mock: '모의' };
+
+    function msEnvQuery(sep = '?') {
+        return msEnv ? `${sep}env=${encodeURIComponent(msEnv)}` : '';
+    }
+
+    // 선택 상태를 select 와 안내문에 반영. 실전이면 붉게 표시해 실계좌라는 걸 알린다.
+    function renderMsEnvNote() {
+        if (kiwoomEnvFilterEl && kiwoomEnvFilterEl.value !== msEnv) kiwoomEnvFilterEl.value = msEnv;
+        if (kiwoomEnvFilterEl) kiwoomEnvFilterEl.classList.toggle('is-real', msEnv === 'real');
+        const note = document.getElementById('ms-env-note');
+        if (!note) return;
+        const label = MS_ENV_LABEL[msEnv] || msEnv;
+        note.textContent = (msEnv === msEnvDefault)
+            ? `${label} 계좌 — 이 서버(run.py)의 자동매매가 붙어 있습니다`
+            : `${label} 계좌 — 별도 프로세스(run_mock.py)에서 자동매매가 돕니다`;
+        note.classList.toggle('is-live', msEnv === 'real');
+    }
+
+    async function initMsEnv() {
+        if (msEnvDefault) return;                       // 1회만
+        try {
+            const res = await fetch('/stocks/kiwoom/envs');
+            const d = await res.json();
+            msEnvDefault = d.default;
+            const envs = d.envs || [];
+            let saved = null;
+            try { saved = localStorage.getItem(MS_ENV_KEY); } catch (e) { /* 무시 */ }
+            msEnv = envs.includes(saved) ? saved : d.default;
+
+            if (kiwoomEnvFilterEl) {
+                // 실전을 먼저 노출 (자동매매 본계좌)
+                const order = ['real', 'mock'].filter(e => envs.includes(e))
+                    .concat(envs.filter(e => e !== 'real' && e !== 'mock'));
+                kiwoomEnvFilterEl.innerHTML = order.map(e =>
+                    `<option value="${e}">${(d.labels && d.labels[e]) || MS_ENV_LABEL[e] || e}</option>`
+                ).join('');
+                kiwoomEnvFilterEl.value = msEnv;
+            }
+            renderMsEnvNote();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    kiwoomEnvFilterEl?.addEventListener('change', () => {
+        const next = kiwoomEnvFilterEl.value;
+        if (!next || next === msEnv) return;
+        msEnv = next;
+        try { localStorage.setItem(MS_ENV_KEY, msEnv); } catch (e) { /* 저장 불가 무시 */ }
+        renderMsEnvNote();
+        loadMyStocksData(true);      // 계좌가 바뀌었으니 즉시 다시 조회
+    });
+
     async function loadMyStocksData(showOverlay = true) {
         if (showOverlay) renderLoadingOverlay();
         try {
+            await initMsEnv();
             const [holdingsRes, historyRes] = await Promise.all([
-                fetch('/stocks/kiwoom/holdings'),
-                fetch('/stocks/kiwoom/history?limit=100'),
+                fetch(`/stocks/kiwoom/holdings${msEnvQuery()}`),
+                fetch(`/stocks/kiwoom/history?limit=100${msEnvQuery('&')}`),
             ]);
             if (!holdingsRes.ok || !historyRes.ok) throw new Error('요청 실패');
             const holdingsData = await holdingsRes.json();
@@ -1198,7 +1294,7 @@
         msBuyResolved = null;
         msBuyPricePreview.textContent = '현재가 조회 중...';
         try {
-            const res = await fetch(`/stocks/kiwoom/price?stk_cd=${encodeURIComponent(code)}`);
+            const res = await fetch(`/stocks/kiwoom/price?stk_cd=${encodeURIComponent(code)}${msEnvQuery('&')}`);
             if (!res.ok) throw new Error('조회 실패');
             const data = await res.json();
             if (!data.price) {
@@ -1307,7 +1403,7 @@
         if (!confirm(`${display} ${qtyRaw ? qtyRaw + '주' : '가용 현금 전액'} 시장가로 매수할까요?`)) return;
 
         try {
-            await axios.post('/stocks/kiwoom/buy', { stk_cd: code, qty: qtyRaw || null });
+            await axios.post('/stocks/kiwoom/buy', { stk_cd: code, qty: qtyRaw || null, env: msEnv });
             showDebugToast('매수 요청 완료');
             msRefreshAfterOrder();
         } catch (e) {
@@ -1333,7 +1429,7 @@
             if (qtyRaw === null) return;
             if (!confirm(`${display} ${qtyRaw ? qtyRaw + '주' : '가용 현금 전액'} 매수할까요?`)) return;
             try {
-                await axios.post('/stocks/kiwoom/buy', { stk_cd: stkCd, qty: qtyRaw || null });
+                await axios.post('/stocks/kiwoom/buy', { stk_cd: stkCd, qty: qtyRaw || null, env: msEnv });
                 showDebugToast('매수 요청 완료');
                 msRefreshAfterOrder();
             } catch (err) {
@@ -1356,7 +1452,7 @@
                 if (!confirm(`${display} ${qtyRaw}주 매도할까요?`)) return;
             }
             try {
-                await axios.post('/stocks/kiwoom/sell', { stk_cd: stkCd, qty: qtyRaw });
+                await axios.post('/stocks/kiwoom/sell', { stk_cd: stkCd, qty: qtyRaw, env: msEnv });
                 showDebugToast('매도 요청 완료');
                 msRefreshAfterOrder();
             } catch (err) {
