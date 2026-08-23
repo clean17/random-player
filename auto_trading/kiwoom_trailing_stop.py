@@ -2,7 +2,9 @@
 키움 계좌 보유 종목 자동 청산.
 
 ━━━ 현재 운영 규칙 (2026-08-14~) ━━━
-  손절 -6% 전량 청산  +  보유 5영업일 상한 전량 청산.  트레일링은 꺼져 있다(TRAILING_ENABLED=False).
+  실전(KIWOOM_ENV=real): 손절 -6% + 보유 5영업일 상한. 트레일링 OFF.
+  모의(KIWOOM_ENV=mock): 손절 -6% + 트레일링 ON + 보유 15영업일 상한 (2026-08-14 이전 '예전 방식').
+  환경별 분기는 TRAILING_ENABLED / MAX_HOLD_DAYS 정의부 주석 참고 (2026-08-20).
 
   3년치(2023-04~2026-08, 신호 30,205건) 연도별 검증에서 트레일링이 4개 연도 '전부' 손실을
   냈다(현행 상회 0/4). 같은 신호에 청산만 바꾼 연도별 평균 %(왕복비용 0.2% 반영 전):
@@ -71,7 +73,8 @@ from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
 from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
-    dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path
+    dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path, \
+    KIWOOM_ENV, VALID_ENVS
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -90,9 +93,16 @@ if not _log.handlers:
 
     # 서버(run.py)와 CLI(-m auto_trading.kiwoom_*)가 같은 파일에 동시에 쓰므로,
     # Windows에서 다중 프로세스 로테이션이 안전한 concurrent_log_handler 사용
+    #
+    # 2026-08-20: 모의 계좌를 별 프로세스(run_mock.py)로 동시에 돌리기 시작하면서 로그를 나눴다.
+    # 파일 쓰기 자체는 ConcurrentTimedRotatingFileHandler 라 안전하지만, 한 파일에 섞이면
+    # `[손절] ...` 한 줄만 보고 어느 계좌인지 알 수 없다.
+    #   real -> trading.log        (기존 파일 그대로. 180일 백업 이력 연속성 유지)
+    #   mock -> trading_mock.log
+    _log_name = 'trading.log' if KIWOOM_ENV == 'real' else f'trading_{KIWOOM_ENV}.log'
     from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
     _file_handler = ConcurrentTimedRotatingFileHandler(
-        os.path.join(_LOG_DIR, 'trading.log'), when='midnight', backupCount=180, encoding='utf-8'
+        os.path.join(_LOG_DIR, _log_name), when='midnight', backupCount=180, encoding='utf-8'
     )
     _file_handler.setFormatter(_formatter)
     _log.addHandler(_file_handler)
@@ -163,8 +173,31 @@ STALL_GAP = 0.06  # 정체 보호: 마지막 트레일링 매도 이후 새 고�
 # ⚠️ 3년 평균 +0.267%(비용 후 +0.067%)는 '간신히 본전 위'다. 2023·2024년은 개선 후에도
 #    마이너스이고, pkl에 상장폐지 종목이 빠져 있어(생존편향) 실제는 이보다 낮다.
 # 되돌리려면 TRAILING_ENABLED=True로 바꾸면 원래 로직이 그대로 살아난다.
-TRAILING_ENABLED = False
-MAX_HOLD_DAYS = 5   # 이 영업일수를 넘겨 보유 중이면 잔여 전량 시장가 청산 (0 이하면 상한 없음)
+#
+# ── 2026-08-20: 계좌 환경별로 청산 규칙을 분리한다 ───────────────────────────
+# 같은 모듈이 실전/모의 두 프로세스에서 각각 import 되므로(run.py / run_mock.py),
+# KIWOOM_ENV 로 갈라 두면 프로세스마다 다른 규칙이 적용된다.
+#
+#   real : 트레일링 OFF + 손절 -6% + 보유 5영업일
+#          v8 이 매수·청산을 담당하고, 이 모듈은 v8 이 사지 않은 잔존 종목만 정리한다.
+#          위 3년 검증에서 채택된 현행 규칙이다.
+#   mock : 트레일링 ON + 최대 15영업일 (2026-08-14 이전 '예전 방식' 재현)
+#          fire 매수와 짝이던 원래 청산 규칙을 모의계좌에서 병행 관측하기 위한 것.
+#
+# ⚠️ 위 검증 표에 따르면 mock 쪽 규칙(트레일링)은 4개 연도 전부에서 real 쪽 규칙보다 나빴다
+#    (비용후 -0.994% vs +0.067%). 성능이 좋아서 켜는 게 아니라 **예전 방식을 실계좌와 나란히
+#    관측하기 위해** 켜는 것이다. 모의 성적을 실전 판단 근거로 쓸 때 이 차이를 반드시 감안할 것.
+#
+# 한쪽만 바꾸고 싶으면 아래 삼항식을 건드리고, 둘 다 같게 하려면 상수로 되돌리면 된다.
+_IS_MOCK = (KIWOOM_ENV == 'mock')
+TRAILING_ENABLED = _IS_MOCK
+MAX_HOLD_DAYS = 15 if _IS_MOCK else 5   # 이 영업일수를 넘겨 보유 중이면 잔여 전량 시장가 청산 (0 이하면 상한 없음)
+
+# ── v8 전환용 마스터 스위치 (2026-08-19 추가) ────────────────────────────────
+# v8 청산(auto_trading/kiwoom_v8_exit.py)으로 넘어갈 때 이걸 False 로 내린다.
+# 둘 다 보유 종목 전체를 훑기 때문에 **동시에 켜두면 서로의 포지션을 다른 규칙으로 청산한다.**
+# kiwoom_v8_exit 는 이 값이 True 면 스스로 실행을 거부한다(인터록).
+LEGACY_EXIT_ENABLED = True
 
 # ── 기업행위(액면분할·권리락)/데이터 이상 방어 ──────────────────────────────
 # 액면분할 당일 아침엔 증권사가 '현재가는 분할 후 가격, 평단가·수량은 아직 조정 전'으로 주는
@@ -183,6 +216,24 @@ ANOMALY_RATE = -0.25
 STATE_FILE = env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_state.json'))
 TRADES_FILE = env_path(os.path.join(_LOG_DIR, 'trades.jsonl'))  # 실현손익 이력(승률/손익비 계산용) — 기록 누락 가능성 있음
 BASELINE_FILE = env_path(os.path.join(_LOG_DIR, 'asset_baseline.json'))  # 일/주/월 시작 시점 총자산 스냅샷
+
+
+# ── 대시보드용 환경별 경로 ────────────────────────────────────────────────────
+# 2026-08-20: '내 계좌' 탭에서 모의/실전을 골라 볼 수 있게 하면서 추가했다.
+# **자동매매(쓰기) 경로는 위 모듈 상수를 그대로 쓴다** — env를 넘기는 건 조회 경로뿐이다.
+# 이렇게 분리해 두면 스케줄러 동작이 바뀌지 않는다.
+
+def _trades_file(env: Optional[str] = None) -> str:
+    if env is None:
+        return TRADES_FILE
+    return env_path(os.path.join(_LOG_DIR, 'trades.jsonl'), env)
+
+
+def _baseline_file(env: Optional[str] = None) -> str:
+    if env is None:
+        return BASELINE_FILE
+    return env_path(os.path.join(_LOG_DIR, 'asset_baseline.json'), env)
+
 
 # KIWOOM_ENV(mock/real)에 맞는 계좌번호 쌍을 가져옴 — 모의/실전 계좌번호가 다르므로 직접 os.environ으로 읽지 않음
 ACNT_NO, ACNT_PWD = get_account_credentials()
@@ -273,7 +324,7 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
                    asset_ratio: Optional[float] = None, holding_ratio: Optional[float] = None,
                    rate: Optional[float] = None, peak_rate: Optional[float] = None,
                    trigger_level: Optional[float] = None, tranche: Optional[str] = None,
-                   ord_no: Optional[str] = None):
+                   ord_no: Optional[str] = None, env: Optional[str] = None):
     """매수/매도 1건을 거래 이력 파일에 append. 대시보드 이력/기간별 손익 집계에 사용.
     asset_ratio  : 이 거래대금(qty*price)이 총자산에서 차지한 비율 (0.05 = 5%)
     holding_ratio: 매도 시 그 종목 보유수량 대비 이번에 판 비율 (0.33 = 33%). 매수는 None.
@@ -308,7 +359,7 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
         'ord_no': ord_no,
     }
     try:
-        with open(TRADES_FILE, 'a', encoding='utf-8') as f:
+        with open(_trades_file(env), 'a', encoding='utf-8') as f:
             f.write(json.dumps(event, ensure_ascii=False) + '\n')
     except OSError as e:
         _log.error(f'거래 기록 저장 실패: {e}')
@@ -465,12 +516,13 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
     return stats
 
 
-def get_trade_history(limit: int = 200) -> List[Dict]:
-    """최근 거래 이력 (최신순)."""
-    if not os.path.exists(TRADES_FILE):
+def get_trade_history(limit: int = 200, env: Optional[str] = None) -> List[Dict]:
+    """최근 거래 이력 (최신순). env로 조회할 계좌 환경을 지정(None이면 프로세스 기본값)."""
+    path = _trades_file(env)
+    if not os.path.exists(path):
         return []
     events = []
-    with open(TRADES_FILE, 'r', encoding='utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -483,12 +535,13 @@ def get_trade_history(limit: int = 200) -> List[Dict]:
     return events[:limit]
 
 
-def _iter_sell_events() -> List[Dict]:
+def _iter_sell_events(env: Optional[str] = None) -> List[Dict]:
     """trades.jsonl에서 매도(side='sell') 이벤트만 읽어 (날짜 파싱된) dict 리스트로 반환."""
     events = []
-    if not os.path.exists(TRADES_FILE):
+    path = _trades_file(env)
+    if not os.path.exists(path):
         return events
-    with open(TRADES_FILE, 'r', encoding='utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -507,7 +560,7 @@ def _iter_sell_events() -> List[Dict]:
     return events
 
 
-def get_pnl_summary() -> Dict:
+def get_pnl_summary(env: Optional[str] = None) -> Dict:
     """일별/주별/월별/전체 실현손익 합계·수익률 (매도 이벤트 기준)."""
     today = datetime.date.today()
     week_start = today - datetime.timedelta(days=today.weekday())
@@ -520,7 +573,7 @@ def get_pnl_summary() -> Dict:
         'all': {'pnl': 0.0, 'cost': 0.0},
     }
 
-    for ev in _iter_sell_events():
+    for ev in _iter_sell_events(env):
         pnl = ev.get('pnl', 0.0)
         cost = ev.get('avg_price', 0.0) * ev.get('qty', 0)
         ev_date = ev['_date']
@@ -542,11 +595,12 @@ def get_pnl_summary() -> Dict:
     }
 
 
-def get_win_loss_ratio() -> Optional[float]:
+def get_win_loss_ratio(env: Optional[str] = None) -> Optional[float]:
     """손익비(Risk-Reward Ratio) = 실현 평균이익 / 실현 평균손실(절대값). 매도 이력 전체 기준.
     손실 거래가 하나도 없으면 None(무한대 취급)."""
-    wins = [ev['pnl'] for ev in _iter_sell_events() if ev.get('pnl', 0.0) > 0]
-    losses = [-ev['pnl'] for ev in _iter_sell_events() if ev.get('pnl', 0.0) < 0]
+    sells = _iter_sell_events(env)
+    wins = [ev['pnl'] for ev in sells if ev.get('pnl', 0.0) > 0]
+    losses = [-ev['pnl'] for ev in sells if ev.get('pnl', 0.0) < 0]
     if not losses:
         return None
     if not wins:
@@ -556,26 +610,27 @@ def get_win_loss_ratio() -> Optional[float]:
     return avg_win / avg_loss
 
 
-def _load_baseline() -> Dict:
-    if not os.path.exists(BASELINE_FILE):
+def _load_baseline(env: Optional[str] = None) -> Dict:
+    path = _baseline_file(env)
+    if not os.path.exists(path):
         return {}
     try:
-        with open(BASELINE_FILE, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         return {}
 
 
-def _save_baseline(data: Dict):
-    with open(BASELINE_FILE, 'w', encoding='utf-8') as f:
+def _save_baseline(data: Dict, env: Optional[str] = None):
+    with open(_baseline_file(env), 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def _ensure_baseline(current_total_asset: float) -> Dict:
+def _ensure_baseline(current_total_asset: float, env: Optional[str] = None) -> Dict:
     """일/주/월이 바뀌면 새 기준선을 기록. 기준선은 '전일 마지막 관측 자산'(사실상 전일 종가 자산)을
     사용한다 — 오늘 첫 조회 시점 자산으로 잡으면 그 전에 발생한 수익/손실이 0으로 묻히기 때문.
     API 오류로 총자산이 0/음수로 들어오면 기준선을 건드리지 않는다."""
-    data = _load_baseline()
+    data = _load_baseline(env)
     if not current_total_asset or current_total_asset <= 0:
         return data
 
@@ -612,7 +667,7 @@ def _ensure_baseline(current_total_asset: float) -> Dict:
         changed = True
 
     if changed:
-        _save_baseline(data)
+        _save_baseline(data, env)
     return data
 
 
@@ -655,7 +710,7 @@ def record_cash_transfer(amount: float, note: str = '') -> Dict:
     return data
 
 
-def get_asset_based_pnl(current_total_asset: float) -> Dict:
+def get_asset_based_pnl(current_total_asset: float, env: Optional[str] = None) -> Dict:
     """실제 총자산 변동 기준 일/주/월 손익. 거래 누락·수수료·세금과 무관하게 항상 정확함
     (trades.jsonl 기반 get_pnl_summary()의 실현손익 집계는 기록되지 않은 거래가 있으면 틀릴 수 있음)."""
     zero = {'pnl': 0.0, 'rate': 0.0}
@@ -663,7 +718,7 @@ def get_asset_based_pnl(current_total_asset: float) -> Dict:
         # API 오류 등으로 총자산이 비정상이면 기준선을 오염시키지 않고 0 반환
         return {'daily': dict(zero), 'weekly': dict(zero), 'monthly': dict(zero)}
 
-    baseline = _ensure_baseline(current_total_asset)
+    baseline = _ensure_baseline(current_total_asset, env)
 
     def calc(start):
         start = start if start and start > 0 else current_total_asset
@@ -988,6 +1043,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
 
 
 def run_cycle():
+    if not LEGACY_EXIT_ENABLED:
+        return          # v8 청산으로 전환됨 (kiwoom_v8_exit.py)
     if not (ACNT_NO and ACNT_PWD):
         _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
         return
@@ -1000,8 +1057,20 @@ def run_cycle():
     state = _load_state()
     held_codes = set()
 
+    # v8 이 매수한 종목은 kiwoom_v8_exit 가 담당한다(ATR 샹들리에 + 트레일링 절반 + 익절 +20%).
+    # 여기서 제외하지 않으면 같은 포지션을 두 모듈이 서로 다른 규칙으로 팔아버린다.
+    # 조회 실패 시에는 중복 매도 위험이 있으므로 기존 청산을 아예 건너뛴다(보수적 선택).
+    try:
+        from auto_trading import kiwoom_v8_strategy as _v8
+        v8_owned = _v8.v8_owned_codes()
+    except Exception as e:
+        _log.error(f'v8 소유권 조회 실패 — 중복 매도를 막기 위해 기존 청산을 건너뜀: {e}')
+        return
+
     for holding in holdings:
         stk_cd = holding['stk_cd']
+        if stk_cd in v8_owned:
+            continue
         held_codes.add(stk_cd)
         state[stk_cd] = evaluate_and_trade(holding, state.get(stk_cd), total_asset)
 
@@ -1040,18 +1109,23 @@ def log_account_summary():
     )
 
 
-def manual_buy(stk_cd: str, qty: Optional[int] = None):
-    """수동 시장가 매수. qty 생략 시 가용 현금(총자산-보유종목평가금액) 전액으로 매수."""
-    if not (ACNT_NO and ACNT_PWD):
-        _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
+def manual_buy(stk_cd: str, qty: Optional[int] = None, env: Optional[str] = None):
+    """수동 시장가 매수. qty 생략 시 가용 현금(총자산-보유종목평가금액) 전액으로 매수.
+
+    env: 'mock' | 'real' | None(프로세스 기본). 대시보드에서 계좌를 골라 주문할 때 쓴다 —
+    화면에 모의 계좌를 띄워놓고 실전에 주문이 나가는 사고를 막기 위해 조회와 같은 env를 넘긴다.
+    """
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if not (acnt_no and acnt_pwd):
+        _log.error(f'[수동매수] 계좌 정보 미설정 (env={env or KIWOOM_ENV})')
         return
 
-    price, stk_nm = get_current_price_and_name(stk_cd)
+    price, stk_nm = get_current_price_and_name(stk_cd, env=env)
     if price <= 0:
         _log.error(f'[수동매수] {stk_cd} 현재가 조회 실패')
         return
 
-    s = get_account_summary(ACNT_NO, ACNT_PWD)
+    s = get_account_summary(acnt_no, acnt_pwd, env)
     total_asset = s['total_asset']
     if qty is None:
         cash = total_asset - s['tot_evlt_amt']
@@ -1064,26 +1138,31 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None):
     trade_value = qty * price
     asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
 
-    result = buy_market(stk_cd, qty, dmst_stex_tp=current_exchange())
+    result = buy_market(stk_cd, qty, dmst_stex_tp=current_exchange(), env=env)
     if not order_accepted(result):
         # 모의투자는 NXT 주문(프리/애프터마켓)과 장종료 후 주문을 거부한다 → 이력에 남기지 않는다.
         _log.error(f'[수동매수-주문거부] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result} '
                    f'(거래 이력에 기록하지 않음)')
         return result
-    _log.info(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}, '
+    _log.info(f'[수동매수:{env or KIWOOM_ENV}] {stk_nm}({stk_cd}) 현재가={price:,}원 {qty}주 → {result}, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
     _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0, asset_ratio=asset_ratio,
-                  ord_no=result.get('ord_no'))
+                  ord_no=result.get('ord_no'), env=env)
     return result
 
 
-def manual_sell(stk_cd: str, qty: int):
-    """수동 시장가 매도. qty는 실제 보유수량으로 자동 제한됨."""
-    if not (ACNT_NO and ACNT_PWD):
-        _log.error('KIWOOM_ACNT_NO / KIWOOM_ACNT_PWD가 .env에 설정되지 않음')
+def manual_sell(stk_cd: str, qty: int, env: Optional[str] = None):
+    """수동 시장가 매도. qty는 실제 보유수량으로 자동 제한됨.
+
+    env: 'mock' | 'real' | None(프로세스 기본). manual_buy()와 같은 이유로 조회와 동일한
+    env를 받는다 — 화면의 계좌와 주문이 나가는 계좌가 어긋나면 안 된다.
+    """
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if not (acnt_no and acnt_pwd):
+        _log.error(f'[수동매도] 계좌 정보 미설정 (env={env or KIWOOM_ENV})')
         return
 
-    holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
+    holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
     match = next((h for h in holdings if h['stk_cd'] == stk_cd), None)
     if not match:
         _log.error(f'[수동매도] {stk_cd} 보유 내역 없음')
@@ -1100,16 +1179,17 @@ def manual_sell(stk_cd: str, qty: int):
     asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
     holding_ratio = sell_qty / match['qty'] if match['qty'] > 0 else 0.0
 
-    result = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+    result = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange(), env=env)
     if not order_accepted(result):
         _log.error(f'[수동매도-주문거부] {match["stk_nm"]}({stk_cd}) {sell_qty}주 → {result} '
                    f'(거래 이력에 기록하지 않음)')
         return result
-    _log.info(f'[수동매도] {match["stk_nm"]}({stk_cd}) 매입가={match["avg_price"]:,.0f}원 '
+    _log.info(f'[수동매도:{env or KIWOOM_ENV}] {match["stk_nm"]}({stk_cd}) 매입가={match["avg_price"]:,.0f}원 '
               f'현재가={match["cur_price"]:,.0f}원 {sell_qty}주 매도, 손익={pnl:+,.0f}원, '
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}, 보유수량의 {holding_ratio:.0%}) → {result}')
     _record_trade(stk_cd, match['stk_nm'], 'sell', 'manual', sell_qty, match['cur_price'], match['avg_price'], pnl,
-                  asset_ratio=asset_ratio, holding_ratio=holding_ratio, ord_no=result.get('ord_no'))
+                  asset_ratio=asset_ratio, holding_ratio=holding_ratio,
+                  ord_no=result.get('ord_no'), env=env)
     return result
 
 

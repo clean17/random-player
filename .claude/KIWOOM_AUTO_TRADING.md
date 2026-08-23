@@ -1,6 +1,6 @@
 # 키움 자동매매 — API 레이어 & 운영 노트
 
-최종 갱신 2026-08-12 · 코드 기준 `auto_trading/`
+최종 갱신 2026-08-19 · 코드 기준 `auto_trading/`
 
 > **이 문서의 역할**: 키움 REST 레이어의 실사양과 이 코드를 건드릴 때 알아야 할 함정.
 > **전략 파라미터(매수/매도 조건)는 여기 없다** → `auto_trading/TRADING_RULES.md` 참고.
@@ -16,12 +16,19 @@
 auto_trading/
 ├── kiwoom_api.py               # REST 공통 호출 + 조회/주문 래퍼
 ├── renew_kiwoom_token.py       # 토큰 발급 (fn_au10001)
-├── kiwoom_fire_strategy.py     # 신규 매수 (fire 신호)
+├── kiwoom_fire_strategy.py     # fire 매수 — 2026-08-19 스케줄 중단(코드는 유지)
 ├── kiwoom_trailing_stop.py     # 청산 + 거래이력/손익집계 + 수동매수/매도
+│                               #   v8 소유 종목은 건너뛴다 (v8_owned_codes)
+├── kiwoom_v8_strategy.py       # v8 매수 — 매일 스크리닝 + 지정가 대기  (2026-08-19~)
+├── kiwoom_v8_exit.py           # v8 청산 — ATR 샹들리에/트레일링/익절/보유상한
+├── v8_limit_order_test.py      # 지정가 주문 1주 검증용 CLI
 ├── request_kiwoom_thema.py     # 테마 조회 (스케줄 미등록)
 ├── kiwoom_fire_state.json      # 종목별 마지막 매수일, 당일 매수 건수  (gitignore)
 ├── kiwoom_trailing_state.json  # 종목별 고점·분할 진행상태            (gitignore)
-├── TRADING_RULES.md            # 매수/매도 조건 스펙
+├── kiwoom_v8_pending_real.json # v8 대기 후보 + 소유권 원장 + 아침 캐시 (gitignore)
+├── kiwoom_v8_positions_real.json # v8 포지션 peak/분할 진행상태        (gitignore)
+├── TRADING_RULES.md            # 매수/매도 조건 스펙 (0절 = v8)
+├── V8_SWITCHOVER.md            # v8 전환 절차·차이·리스크
 └── backtest/
     ├── fire_backtest_regen.py      # 현재 규칙으로 백테스트 CSV 재생성
     └── fire_sizing_backtest.py     # 사이징 규칙 포트폴리오 재시뮬레이션
@@ -31,7 +38,7 @@ auto_trading/
 로그·이력은 `logs/kiwoom_trading/` (`trading.log`, `trades.jsonl`, `asset_baseline.json`,
 `market_breadth_cache.json`).
 
-> ⚠️ 상태 파일 2개의 경로는 `os.path.dirname(__file__)` 기준이다. **코드를 다른 디렉터리로
+> ⚠️ 상태 파일 4개의 경로는 `os.path.dirname(__file__)` 기준이다. **코드를 다른 디렉터리로
 > 옮기면 상태 파일도 반드시 같이 옮겨야 한다.** 잃으면 쿨다운이 초기화돼 2일 내 재매수가
 > 발생하고, 트레일링 분할 진행상태가 리셋된다. 로그 경로는 루트 기준이라 영향 없다.
 
@@ -78,6 +85,8 @@ auto_trading/
 | 매도 주문 | `kt10001` | `/api/dostk/ordr` | 매수/매도를 **api-id로 구분**한다 |
 | 당일 체결내역 | `ka10076` | `/api/dostk/acnt` | `get_filled_orders()`. `ordr`이 아니라 **`acnt`** |
 | 미체결 주문 | `ka10075` | `/api/dostk/acnt` | `get_unfilled_orders()`. 리스트 키는 `oso` |
+| 매수 취소 | `kt10003` | `/api/dostk/ordr` | `cancel_order(side='1')` (2026-08-19 추가) |
+| 매도 취소 | `kt10004` | `/api/dostk/ordr` | `cancel_order(side='2')` |
 
 `ka10076` 응답(2026-08-12 모의투자 실응답으로 검증): `{'cntr': [ {...} ]}`.
 항목 필드는 전부 문자열 — `ord_no` / `stk_cd` / `io_tp_nm`('+매수'/'-매도') / `ord_qty` /
@@ -90,8 +99,16 @@ auto_trading/
 
 ### 미구현
 
-- 주문 취소/정정 — 전량 시장가만 쓰므로 취소할 미체결 잔량이 사실상 없다(의도된 생략).
+- 주문 **정정**(수량/가격 변경) — v8은 '취소 후 재주문'으로 처리한다. 호가 대기순번을 잃으므로
+  `RESIZE_TOL`(20%) / `REGAP_MARGIN`(3%p) 문턱을 두고 함부로 바꾸지 않는다.
 - 연속조회(`cont-yn: Y` / `next-key`) 페이징 — `_call()`이 파라미터는 받지만 호출부에서 쓰지 않는다.
+
+> **주문 취소는 2026-08-19 구현됐다** (`cancel_order`). v8이 지정가 미체결을 다루기 때문에 필요해졌다.
+> 실계좌에서 접수/취소 왕복 확인됨(주문번호 0274100).
+> ⚠️ 지정가 매수는 **하한가보다 낮으면 거부**된다: `[2000](571552:주문단가가 하한가보다 낮습니다.)`.
+> 하한가 = 전일 종가 × 0.70 (호가단위 올림). **전일 종가는 pkl 마지막 행이 아니다** —
+> 장중 pkl 마지막 행은 오늘 진행중 데이터다(2026-08-19 005930: pkl 251,000 vs 실제 전일 268,500).
+> `kiwoom_v8_strategy.prev_close_of()` 처럼 `index < today` 로 잘라내야 한다.
 
 ### 주문 요청 body
 
@@ -130,7 +147,8 @@ auto_trading/
 - 채우는 필드: `fill_qty` `fill_price` `unfilled` `cmsn` `tax` `slippage` `fill_pnl` `fill_src`
 - 원자적 파일 교체(`.tmp` → `os.replace`), 이미 정산된 건은 건너뛰어 여러 번 돌려도 안전.
 - 주문 직후가 아니라 사후에 하는 이유: ① 체결 지연으로 직후 조회는 미체결로 보일 수 있다
-  ② fire 매수는 15:18~15:20 2분 안에 최대 20건인데 건당 0.35초 조회를 끼우면 마감을 넘길 수 있다
+  ② fire 매수는 15:18~15:20 2분 안에 최대 20건인데 건당 호출 간격(당시 0.35초, 현재 0.143초)
+     조회를 끼우면 마감을 넘길 수 있다
   ③ 정산이 실패해도 주문 시점 기록은 남는다.
 
 ---
@@ -144,7 +162,24 @@ auto_trading/
    `_is_invalid_token_response()`가 이걸 잡아 토큰 재발급 후 1회 재시도한다.
 2. **Rate limit은 호출별 sleep으로 부족하다.** 30초 트레일링 잡·5분 계좌현황 잡·대시보드 요청이
    서로 다른 스레드에서 동시에 때린다. `threading.Lock` + 전역 `_last_call_ts`로 프로세스 전체에서
-   호출 간격 **0.35초**를 보장한다.
+   호출 간격을 보장한다.
+
+   **간격 값 (2026-08-19 `ka10001` 실측으로 0.35초 → 0.143초 변경)**
+
+   | 설정 | 목표 건/초 | 429 발생 | 실효 건/초 |
+   |---:|---:|---:|---:|
+   | 0.0556 | 18.0 | 2건 | 6.0 |
+   | 0.1000 | 10.0 | 1건 | 6.8 |
+   | **0.1429** | **7.0** | **0건** | **6.3** |
+   | 0.2000 | 5.0 | 0건 | 4.9 |
+
+   문서에는 계좌·토큰당 20건/초라고 되어 있지만 **10건/초에서도 429가 났다.** 그리고 429 백오프
+   재시도 비용 때문에 **실효 처리량이 어느 설정에서든 6~7건/초로 수렴**한다 — 18건/초로 설정하면
+   실효 6.0건/초로 7건/초 설정보다 오히려 낮다. 더 밀어붙이는 게 순손실이다.
+   그래서 429가 나지 않는 최대치인 **7건/초(0.143초)**를 쓴다.
+   이전 값 0.35초(2.86건/초)는 근거 주석 없이 보수적으로 잡혀 있었다.
+
+   ⚠️ 프로세스 전역 값이다. 한 계좌에 여러 프로세스를 붙이면 합산이 한도를 넘으므로 더 낮춰야 한다.
 3. **429는 별도로 백오프 재시도**한다(0.5s → 1.0s → 1.5s, 최대 3회). 실매매 로그에 자주 찍힌다 —
    2026-08-11 15:18 매수 사이클(18후보/11매수, 16초)에 429 재시도가 6회 있었다.
 
@@ -161,7 +196,9 @@ auto_trading/
 |---|---|
 | `kiwoom_trailing_stop.py` | **필요.** 30초 잡이 이미 로드해 캐시하고 있다 |
 | `kiwoom_api.py` | **필요.** 위 모듈이 import 시점에 끌어온다 |
-| `kiwoom_fire_strategy.py` | **조건부.** `batch_process.py:257`이 함수 내부에서 import하므로, 그날 15:18 잡이 아직 안 돌았고 프로세스가 그 이후 시작됐다면 다음 15:18에 새 코드를 읽는다 |
+| `kiwoom_fire_strategy.py` | **조건부.** `batch_process.py:257`이 함수 내부에서 import하므로, 그날 15:18 잡이 아직 안 돌았고 프로세스가 그 이후 시작됐다면 다음 15:18에 새 코드를 읽는다 (⚠️ 2026-08-19 이후 이 잡은 주석 처리돼 돌지 않는다) |
+| `kiwoom_v8_strategy.py` | **필요.** 60초 매수 잡이 캐시하고 있다 |
+| `kiwoom_v8_exit.py` | **필요.** 30초 청산 잡이 캐시하고 있다 |
 | 파일 이동·이름 변경 | **반드시 필요.** 캐시된 `batch_process`가 구 경로를 참조해 `ImportError`가 나고, 매수가 조용히 스킵된다 |
 | `batch_runner.py` / `batch_process.py` | **필요** |
 

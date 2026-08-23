@@ -23,9 +23,9 @@ def auto_endpoint(bp_or_app):
         return decorator
     return route_wrapper
 
-def register_shutdown_handlers(scheduler=None, node_process=None):
+def register_shutdown_handlers(scheduler=None, node_process=None, child_processes=None):
     def handler(sig, frame):
-        cleanup(scheduler=scheduler, node_process=node_process)
+        cleanup(scheduler=scheduler, node_process=node_process, child_processes=child_processes)
 
         # raise SystemExit(0)은 "정상 종료 절차"를 타서, concurrent.futures가 등록해둔
         # atexit 훅(_python_exit)이 "io" ThreadPoolExecutor의 워커 스레드들을 join()하며
@@ -47,7 +47,7 @@ def signal_handler(sig, frame):
     # os.system('taskkill /f /im python.exe')
     # sys.exit(0)
 
-def cleanup(scheduler=None, node_process=None):
+def cleanup(scheduler=None, node_process=None, child_processes=None):
     global already_cleaned
     if already_cleaned:
         return
@@ -98,6 +98,20 @@ def cleanup(scheduler=None, node_process=None):
             db_pool.close()
     except Exception as e:
         print("db_pool close error:", e)
+
+    # 4-0) 추가 자식 프로세스 (run_mock.py 등). node_process 와 같은 방식으로 트리째 종료한다.
+    #      안 죽이면 서버가 내려가도 모의 자동매매가 고아로 남아 계속 주문을 낸다.
+    for proc in (child_processes or []):
+        if proc is None or proc.poll() is not None:
+            continue
+        try:
+            print(f"🧹 서버 종료 중: 자식 프로세스 정리 (pid={proc.pid})")
+            if os.name == 'nt':
+                subprocess.call(['taskkill', '/F', '/T', '/PID', str(proc.pid)])
+            else:
+                proc.terminate()
+        except Exception as e:
+            print(f"⚠️ 자식 프로세스 종료 중 예외: {e}")
 
     # 4) node_process
     if node_process is not None and node_process.poll() is None:

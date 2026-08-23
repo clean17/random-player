@@ -281,3 +281,45 @@ def run_kiwoom_fire_buy():
         run_fire_buy_cycle()
     except Exception as e:
         _log.error(f'run_kiwoom_fire_buy 실패: {e}')
+
+# ── v8 전략 (매일 스크리닝 + 지정가 매수) ────────────────────────────────────
+# 근거: C:\my-project\strategy-ab-backtest\ANALYSIS_V8.md
+# ⚠️ 기존 fire(15:18 시장가 추격) / kiwoom_trailing_stop 과 **동시에 켜지 말 것**.
+#    방향이 정반대이고, 둘 다 보유 종목 전체를 훑어 서로의 포지션을 청산한다.
+#    각 모듈의 V8_ENABLED / V8_EXIT_ENABLED 가 False 면 아래 함수들은 즉시 반환한다.
+def run_v8_screen():
+    from auto_trading.kiwoom_v8_strategy import run_v8_screen as _f
+    from auto_trading.kiwoom_trailing_stop import _log
+    try:
+        _f()
+    except Exception as e:
+        _log.error(f'run_v8_screen 실패: {e}')
+
+
+def run_v8_buy():
+    from auto_trading.kiwoom_v8_strategy import run_v8_buy_cycle as _f
+    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
+    try:
+        if is_market_open():
+            _f()
+    except Exception as e:
+        _log.error(f'run_v8_buy 실패: {e}')
+
+
+def run_v8_exit():
+    from auto_trading.kiwoom_v8_exit import run_v8_exit_cycle as _f
+    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
+    try:
+        if is_market_open():
+            _f()
+    except Exception as e:
+        _log.error(f'run_v8_exit 실패: {e}')
+
+
+def run_v8_eod():
+    from auto_trading.kiwoom_v8_exit import run_v8_eod as _f
+    from auto_trading.kiwoom_trailing_stop import _log
+    try:
+        _f()
+    except Exception as e:
+        _log.error(f'run_v8_eod 실패: {e}')

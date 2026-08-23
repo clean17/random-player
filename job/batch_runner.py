@@ -12,7 +12,8 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     renew_kiwoom_token_job, renew_kiwoom_mock_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
-    reconcile_kiwoom_fills
+    reconcile_kiwoom_fills, \
+    run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -170,6 +171,87 @@ def debug_scheduler():
     print("Scheduler running.... ")
 
 
+def create_mock_scheduler():
+    """모의투자 계좌 전용 스케줄러 (2026-08-20).
+
+    ━━━ 왜 별도 프로세스인가 ━━━
+    `kiwoom_fire_strategy` / `kiwoom_trailing_stop` 은 **import 시점에** 계좌번호와 상태파일
+    경로를 모듈 상수로 굳힌다(`ACNT_NO`, `STATE_FILE`, `FIRE_STATE_FILE` ...).
+    한 프로세스에서 실전(v8)과 모의(fire)를 같이 돌리려면 그 모듈 상수를 환경별 인스턴스로
+    쪼개야 하는데, 그건 지금 실계좌가 붙어 있는 코드를 통째로 건드리는 일이다.
+    별도 프로세스로 띄우면 `KIWOOM_ENV=mock` 하나로 전부 자동 분리된다 —
+    계좌번호·토큰·API 호스트·상태파일(`*_mock.json`)·거래이력(`trades_mock.jsonl`) 모두.
+
+    레이트리밋도 별도 프로세스가 유리하다. `_RATE_LIMIT_SLEEP` 은 프로세스 전역이고 키움 한도는
+    계좌·토큰당이므로, 다른 계좌를 별 프로세스로 붙이면 실전 쪽 예산을 잠식하지 않는다.
+
+    ━━━ 여기에 등록하지 않는 것 (중요) ━━━
+    pkl 갱신·스크래핑·로또·Flask·node 는 **절대 넣지 않는다.** 메인 프로세스가 이미 돌리고 있고,
+    두 프로세스가 같은 pkl 을 쓰면 잠금 사고가 난다(과거 WinError5 pickle 잠금이 죽은 PID
+    유령 참조로 며칠 지속된 전례). fire 전략은 pkl 을 **읽기만** 하므로 안전하다.
+    v8 잡도 넣지 않는다 — 모의는 '예전 방식(fire)' 으로 돌리는 것이 목적이다.
+
+    ⚠️ `market_breadth_cache.json` 은 계좌와 무관한 시장지표라 env 분리가 안 돼 있다.
+       두 프로세스가 같은 파일을 쓸 수 있는데, 하루 1회 쓰기이고 값이 같아 실害는 없다.
+       (BREADTH_MIN=0.0 으로 게이트가 꺼져 있어 매수 판단에도 쓰이지 않는다.)
+    """
+    global scheduler, executors
+    from auto_trading.kiwoom_api import KIWOOM_ENV
+    if KIWOOM_ENV != 'mock':
+        raise RuntimeError(
+            f'create_mock_scheduler()는 KIWOOM_ENV=mock 에서만 실행해야 한다 (현재 {KIWOOM_ENV!r}). '
+            'run_mock.py 로 띄우거나 프로세스 환경변수에 KIWOOM_ENV=mock 을 주고 실행할 것.')
+    print('🕒 Mock scheduler start.... (KIWOOM_ENV=mock, fire 전략)')
+
+    executors = {"io": ThreadPoolExecutor(max_workers=4)}
+    scheduler = BackgroundScheduler(
+        timezone="Asia/Seoul",
+        executors=executors,
+        job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 300},
+    )
+
+    # 모의 토큰 갱신 — 이 프로세스의 os.environ 에 반영되어야 하므로 자기 프로세스에서 돌린다.
+    # (메인 프로세스가 갱신해 .env 에 써도 이 프로세스의 메모리에는 반영되지 않는다.
+    #  401 자동 재발급 경로가 있어 없어도 동작하지만, 장 시작 전에 미리 받아둔다.)
+    scheduler.add_job(
+        renew_kiwoom_mock_token_job,
+        trigger=CronTrigger(hour=6, minute=55),
+        id="mock_renew_token", executor="io", replace_existing=True,
+    )
+
+    # fire 자동매수 — 평일 15:18 1회. 근거·시각 선정 이유는 create_scheduler() 의 2-0-2 주석 참고.
+    scheduler.add_job(
+        run_kiwoom_fire_buy,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=18),
+        id="mock_fire_buy", executor="io", replace_existing=True,
+    )
+
+    # fire 청산 (손절 -6% / 보유 5영업일) — 30초. v8 소유권 집합이 모의에서는 비어 있으므로
+    # 모의 보유 종목 전부를 이 잡이 담당한다.
+    scheduler.add_job(
+        run_kiwoom_trailing_stop,
+        trigger=IntervalTrigger(seconds=30),
+        id="mock_trailing_stop", executor="io", replace_existing=True,
+    )
+
+    # 계좌 현황 로그 (10분) / 체결 정산 (20:10)
+    scheduler.add_job(
+        log_kiwoom_account_summary,
+        trigger=IntervalTrigger(minutes=10),
+        id="mock_account_summary", executor="io", replace_existing=True,
+    )
+    scheduler.add_job(
+        reconcile_kiwoom_fills,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=10),
+        id="mock_reconcile_fills", executor="io", replace_existing=True,
+    )
+
+    scheduler.start()
+    for j in scheduler.get_jobs():
+        print(f'  · {j.id:<22}{j.trigger}')
+    return scheduler
+
+
 def create_scheduler():
     global scheduler, executors
     print("🕒 Scheduler start.... ")
@@ -301,12 +383,53 @@ def create_scheduler():
     #        소진했고(실매수 5건 전부 09:35~10:55), (2) 15:35/15:55는 NXT 시간대인데 buy_market의
     #        기본 거래소가 KRX라 세션 불일치 주문이 나갈 수 있었다.
     #        스케줄러가 밀려 15:20을 넘기면 is_market_open()이 False라 주문 없이 그냥 스킵된다.
+    # ⚠️ 2026-08-19 v8 전환으로 중단. fire 는 '당일 급등 추격(시장가)'이고 v8 은 '급락 대기(지정가)'라
+    #    방향이 정반대이고, 같은 예수금을 두고 경쟁한다(v8 은 미체결 지정가로 예수금을 묶는다).
+    #    되돌리려면 아래 주석을 풀고 kiwoom_v8_strategy.V8_ENABLED = False 로 바꾼 뒤 재시작.
+    # scheduler.add_job(
+    #     run_kiwoom_fire_buy,
+    #     trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=18),
+    #     id="kiwoom_fire_buy",
+    #     executor="io",
+    #     replace_existing=True,
+    # )
+
+    # ── 2-0-3) v8 전략 (매일 스크리닝 + 지정가 매수) ─────────────────────────
+    # 근거: C:\my-project\strategy-ab-backtest\ANALYSIS_V8.md
+    # 2026-08-19 가동 시작. 상세는 auto_trading/V8_SWITCHOVER.md
+    #
+    #   청산 소유권 분리 — 두 청산 모듈이 동시에 돌지만 담당 종목이 겹치지 않는다.
+    #     · v8 이 매수 주문을 낸 종목  -> kiwoom_v8_exit  (ATR 샹들리에/트레일링 절반/익절/10일)
+    #     · 그 외 기존 보유 종목        -> kiwoom_trailing_stop (손절 -6% / 보유 5일)
+    #     기준은 kiwoom_v8_strategy.v8_owned_codes() = pending 파일의 ordered 원장.
+    #
+    #   되돌리기: kiwoom_v8_strategy.V8_ENABLED=False, kiwoom_v8_exit.V8_EXIT_ENABLED=False,
+    #            위 kiwoom_fire_buy 주석 해제, 프로세스 재시작.
+    #            (또는 backup/auto_trading_20260819_101232/ 를 덮어쓰기)
+    # ⚠️ pkl 갱신(minutely_20_fetch_stock_data)은 09-15시의 :10/:30/:50 에 돈다.
+    #    v8 지정가 = 당일 '종가' x 0.70 이므로 확정 종가가 들어온 뒤에 스크리닝해야 한다.
+    #    KRX 정규장 15:20 종료 + 종가단일가 15:20~15:30 -> 15:50 갱신분이 첫 확정 종가다.
+    #    15:45 에 돌리면 15:30 갱신분(종가단일가 진행중 값)으로 지정가가 정해진다.
     scheduler.add_job(
-        run_kiwoom_fire_buy,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=18),
-        id="kiwoom_fire_buy",
-        executor="io",
-        replace_existing=True,
+        run_v8_screen,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=55),
+        id="v8_screen", executor="io", replace_existing=True,
+    )
+    scheduler.add_job(
+        run_v8_buy,
+        trigger=IntervalTrigger(seconds=60),
+        id="v8_buy", executor="io", replace_existing=True,
+    )
+    scheduler.add_job(
+        run_v8_exit,
+        trigger=IntervalTrigger(seconds=30),
+        id="v8_exit", executor="io", replace_existing=True,
+    )
+    # peak 갱신도 당일 확정 고가가 필요하므로 15:50 갱신분 뒤에 둔다(스크리닝보다 먼저).
+    scheduler.add_job(
+        run_v8_eod,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=52),
+        id="v8_eod", executor="io", replace_existing=True,
     )
 
     # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 2시 전체 종목 데이터 fetch)

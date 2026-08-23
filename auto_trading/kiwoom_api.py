@@ -33,16 +33,33 @@ _ENV_CONFIG = {
 }
 
 _cfg = _ENV_CONFIG[KIWOOM_ENV]
-BASE_URL = _cfg['base_url']
+BASE_URL = _cfg['base_url']     # 프로세스 기본 환경의 호스트. env 인수를 쓰는 경로는 _cfg_for()를 볼 것
+VALID_ENVS = tuple(_ENV_CONFIG)
 
 
-def get_account_credentials() -> tuple:
-    """KIWOOM_ENV(mock/real)에 맞는 계좌번호/비밀번호를 반환. 모의·실전 계좌번호는 서로 다르므로
+def _cfg_for(env: Optional[str] = None) -> dict:
+    """환경 설정 딕셔너리. env가 None이면 프로세스 기본값(KIWOOM_ENV).
+
+    2026-08-20 추가 — 대시보드에서 모의/실전 계좌를 **동시에 조회**하기 위해 환경을 호출
+    인수로 받을 수 있게 했다. 기존 호출부는 전부 인수 없이 부르므로 동작이 바뀌지 않는다
+    (스케줄러·자동매매는 여전히 .env의 KIWOOM_ENV 하나만 쓴다).
+    """
+    if env is None:
+        return _cfg
+    if env not in _ENV_CONFIG:
+        raise ValueError('알 수 없는 KIWOOM 환경: {!r} (가능: {})'
+                         .format(env, ', '.join(_ENV_CONFIG)))
+    return _ENV_CONFIG[env]
+
+
+def get_account_credentials(env: Optional[str] = None) -> tuple:
+    """KIWOOM 환경(mock/real)에 맞는 계좌번호/비밀번호를 반환. 모의·실전 계좌번호는 서로 다르므로
     호출부에서 acnt_no를 직접 .env 키로 읽지 말고 반드시 이 함수를 통해서만 가져올 것."""
-    return os.environ.get(_cfg['acnt_no_env']), os.environ.get(_cfg['acnt_pwd_env'])
+    c = _cfg_for(env)
+    return os.environ.get(c['acnt_no_env']), os.environ.get(c['acnt_pwd_env'])
 
 
-def env_path(path: str) -> str:
+def env_path(path: str, env: Optional[str] = None) -> str:
     """상태·이력 파일 경로에 KIWOOM_ENV를 붙여 모의/실전을 분리한다.
 
         logs/kiwoom_trading/trades.jsonl → trades_real.jsonl   (KIWOOM_ENV=real)
@@ -54,23 +71,43 @@ def env_path(path: str) -> str:
        실현손익 기준점(asset_baseline)도 모의 자산(749만원)이 실계좌(172만원)에 적용되고 있었다.
     """
     root, ext = os.path.splitext(path)
-    return f'{root}_{KIWOOM_ENV}{ext}'
+    if env is not None and env not in _ENV_CONFIG:
+        raise ValueError('알 수 없는 KIWOOM 환경: {!r}'.format(env))
+    return f'{root}_{env or KIWOOM_ENV}{ext}'
 
-_RATE_LIMIT_SLEEP = 0.35  # 키움 초당 호출 제한 대응
+# 호출 간격. 2026-08-19 ka10001(현재가) 로 실측한 값이다.
+#
+#   설정      목표건/초    429 발생    실효건/초
+#   0.0556      18.0         2          6.0
+#   0.1000      10.0         1          6.8
+#   0.1429       7.0         0          6.3
+#   0.2000       5.0         0          4.9
+#
+# 문서에는 계좌·토큰당 20건/초로 적혀 있지만 실제로는 10건/초에서도 429가 났다.
+# 그리고 429 백오프 재시도(_call 의 _max_429_retries) 비용 때문에 **실효 처리량은
+# 어느 설정에서든 6~7건/초에서 수렴**한다 — 18건/초로 설정해도 실효 6.0건/초로,
+# 7건/초 설정(6.3건/초)보다 오히려 낮다. 더 밀어붙이는 게 순손실이다.
+# 그래서 429 가 나지 않는 최대치인 7건/초를 쓴다.
+#
+# ⚠️ 프로세스 전역 간격이다. 트레일링 청산·계좌현황·대시보드·v8 이 이 예산을 공유한다.
+#    한 계좌에 여러 프로세스를 동시에 붙이면 합산이 한도를 넘으므로 더 낮춰야 한다.
+# 참고: 이전 값은 0.35초(2.86건/초)로, 근거 주석 없이 보수적으로 잡혀 있었다.
+_RATE_LIMIT_SLEEP = 1.0 / 7.0  # ≈0.143초
 
 
-def _get_token() -> str:
-    return os.environ.get(_cfg['token_env'], '')
+def _get_token(env: Optional[str] = None) -> str:
+    return os.environ.get(_cfg_for(env)['token_env'], '')
 
 
-def _refresh_token():
+def _refresh_token(env: Optional[str] = None):
     from auto_trading.renew_kiwoom_token import fn_au10001
+    c = _cfg_for(env)
     params = {
         'grant_type': 'client_credentials',
-        'appkey': os.environ.get(_cfg['app_key_env']),
-        'secretkey': os.environ.get(_cfg['secret_key_env']),
+        'appkey': os.environ.get(c['app_key_env']),
+        'secretkey': os.environ.get(c['secret_key_env']),
     }
-    fn_au10001(data=params, host=_cfg['base_url'], token_env_key=_cfg['token_env'])
+    fn_au10001(data=params, host=c['base_url'], token_env_key=c['token_env'])
 
 
 # 30초 트레일링 스탑 잡, 5분 계좌현황 잡, 대시보드 페이지 로드 등 서로 다른 스레드가
@@ -101,12 +138,18 @@ def _is_invalid_token_response(resp) -> bool:
 
 
 def _call(api_id: str, endpoint: str, body: dict,
-          cont_yn: str = 'N', next_key: str = '', _max_429_retries: int = 3) -> dict:
-    """키움 REST API 공통 호출. 401(또는 200+인증실패 응답) 시 토큰 재발급 후 1회 재시도, 429 시 백오프 재시도."""
-    url = BASE_URL + endpoint
+          cont_yn: str = 'N', next_key: str = '', _max_429_retries: int = 3,
+          env: Optional[str] = None) -> dict:
+    """키움 REST API 공통 호출. 401(또는 200+인증실패 응답) 시 토큰 재발급 후 1회 재시도, 429 시 백오프 재시도.
+
+    env로 호출 대상 환경(mock/real)을 지정할 수 있다. None이면 프로세스 기본값.
+    ⚠️ _rate_limit_wait()은 **환경과 무관한 프로세스 전역 예산**이다. 대시보드가 두 계좌를
+       동시에 조회하면 그만큼 호출이 늘어 자동매매 쪽 처리량을 잠식한다(상단 _RATE_LIMIT_SLEEP 주석).
+    """
+    url = _cfg_for(env)['base_url'] + endpoint
     headers = {
         'Content-Type': 'application/json;charset=UTF-8',
-        'authorization': f'Bearer {_get_token()}',
+        'authorization': f'Bearer {_get_token(env)}',
         'cont-yn': cont_yn,
         'next-key': next_key,
         'api-id': api_id,
@@ -117,8 +160,8 @@ def _call(api_id: str, endpoint: str, body: dict,
         resp = requests.post(url, headers=headers, json=body, timeout=10)
 
         if resp.status_code == 401 or _is_invalid_token_response(resp):
-            _refresh_token()
-            headers['authorization'] = f'Bearer {_get_token()}'
+            _refresh_token(env)
+            headers['authorization'] = f'Bearer {_get_token(env)}'
             _rate_limit_wait()
             resp = requests.post(url, headers=headers, json=body, timeout=10)
 
@@ -134,10 +177,10 @@ def _call(api_id: str, endpoint: str, body: dict,
 
 # ── 현재가 조회 ──────────────────────────────────────────────────────────────
 
-def get_current_price_and_name(stk_cd: str) -> Tuple[int, str]:
+def get_current_price_and_name(stk_cd: str, env: Optional[str] = None) -> Tuple[int, str]:
     """(현재가(원), 종목명) 반환. 실패 시 (0, '')."""
     try:
-        data = _call('ka10001', '/api/dostk/stkinfo', {'stk_cd': stk_cd})
+        data = _call('ka10001', '/api/dostk/stkinfo', {'stk_cd': stk_cd}, env=env)
         raw = data.get('cur_prc', '0')
         price = abs(int(str(raw).replace(',', '').replace('+', '').replace('-', '')))
         return price, data.get('stk_nm', '') or ''
@@ -175,6 +218,9 @@ def get_intraday_range(stk_cd: str) -> Optional[Tuple[int, int, int]]:
 # ── 계좌 잔고 조회 ───────────────────────────────────────────────────────────
 
 def get_balance(acnt_no: str, acnt_pwd: str) -> dict:
+    """⚠️ 죽은 코드다. ka10007 은 /api/dostk/acnt 에서 지원하지 않는다
+    (2026-08-21 실측: `1504:해당 URI에서는 지원하는 API ID가 아닙니다`).
+    예수금이 필요하면 아래 get_deposit() 을 쓸 것."""
     body = {
         'acnt_no': acnt_no,
         'acnt_pwd': acnt_pwd,
@@ -182,6 +228,37 @@ def get_balance(acnt_no: str, acnt_pwd: str) -> dict:
         'dmst_stex_tp': 'KRX',
     }
     return _call('ka10007', '/api/dostk/acnt', body)
+
+
+# ── 예수금 상세 (kt00001) ────────────────────────────────────────────────────
+# 2026-08-21 추가. kt00018(계좌평가잔고)에는 **예수금 필드가 아예 없어서**, 그동안
+# `보유현금 = 추정예탁자산 - 총평가금액` 으로 근사하고 있었다. 그 근사식이 계좌가 거의
+# full 투자 상태가 되면 부호까지 뒤집힌다 — 추정예탁자산(prsm_dpst_aset_amt)은
+# '예수금+평가금액'이 아니라 결제·비용을 반영한 추정치이기 때문이다.
+# 실측 사고(2026-08-20 모의계좌): 추정예탁자산 27,939,203 - 총평가 28,155,600 = -216,397 로
+# 대시보드 '보유 현금'이 음수로 표시됐다.
+def get_deposit(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> Dict:
+    """예수금/주문가능금액. 한국 주식은 매수대금이 T+2 에 결제되므로 세 값이 다 다르다.
+
+      entr          예수금        — 결제 전 기준. 오늘 매수한 대금이 아직 안 빠져 있다
+      ord_alow_amt  주문가능금액   — **지금 더 살 수 있는 돈.** 사이징·표시에 쓸 값
+      pymn_alow_amt 출금가능금액   — 실제로 뺄 수 있는 돈
+      d2_entra      D+2 추정예수금 — 결제 완료 후 예수금. 음수면 미수금이다
+
+    ord_alow_amt 가 음수면 예수금을 초과해 주문한 것이다(미수).
+    """
+    body = {'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd, 'qry_tp': '1'}
+    data = _call('kt00001', '/api/dostk/acnt', body, env=env)
+    if data.get('return_code') not in (0, None):
+        raise RuntimeError(f'kt00001 응답 오류: {data.get("return_msg")} '
+                           f'(return_code={data.get("return_code")})')
+    return {
+        'entr': _to_number(data.get('entr')),
+        'ord_alow_amt': _to_number(data.get('ord_alow_amt')),
+        'pymn_alow_amt': _to_number(data.get('pymn_alow_amt')),
+        'd1_entra': _to_number(data.get('d1_entra')),
+        'd2_entra': _to_number(data.get('d2_entra')),
+    }
 
 
 # ── 보유 종목별 평가 (계좌평가잔고내역요청, kt00018) ──────────────────────────
@@ -211,9 +288,9 @@ def _to_number(raw, default=0.0) -> float:
         return default
 
 
-def _fetch_kt00018(acnt_no: str, acnt_pwd: str) -> dict:
+def _fetch_kt00018(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> dict:
     body = {'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd, 'qry_tp': '1', 'dmst_stex_tp': 'KRX'}
-    return _call('kt00018', '/api/dostk/acnt', body)
+    return _call('kt00018', '/api/dostk/acnt', body, env=env)
 
 
 def _parse_holdings(data: dict) -> List[Dict]:
@@ -268,26 +345,27 @@ def _parse_summary(data: dict) -> Dict:
     }
 
 
-def get_holdings(acnt_no: str, acnt_pwd: str) -> List[Dict]:
+def get_holdings(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> List[Dict]:
     """
     보유 종목별 수량/평균단가/현재가/수익률을 한 번의 호출로 반환.
     반환: [{stk_cd, stk_nm, qty, avg_price, cur_price, profit_rate}, ...]
     profit_rate는 0.05 = +5% 형태(비율)로 정규화해서 반환.
     """
-    return _parse_holdings(_fetch_kt00018(acnt_no, acnt_pwd))
+    return _parse_holdings(_fetch_kt00018(acnt_no, acnt_pwd, env))
 
 
-def get_account_summary(acnt_no: str, acnt_pwd: str) -> Dict:
+def get_account_summary(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> Dict:
     """
     계좌 총 자산/평가/손익 요약 (kt00018 재사용).
     total_asset = 추정예탁자산(예수금 + 보유종목 평가금액 합계 = 총 계좌 자산).
     """
-    return _parse_summary(_fetch_kt00018(acnt_no, acnt_pwd))
+    return _parse_summary(_fetch_kt00018(acnt_no, acnt_pwd, env))
 
 
-def get_holdings_and_summary(acnt_no: str, acnt_pwd: str) -> Tuple[List[Dict], Dict]:
+def get_holdings_and_summary(acnt_no: str, acnt_pwd: str,
+                             env: Optional[str] = None) -> Tuple[List[Dict], Dict]:
     """kt00018을 한 번만 호출해 보유종목·계좌요약을 함께 반환 (호출 횟수 절반으로)."""
-    data = _fetch_kt00018(acnt_no, acnt_pwd)
+    data = _fetch_kt00018(acnt_no, acnt_pwd, env)
     return _parse_holdings(data), _parse_summary(data)
 
 
@@ -297,7 +375,8 @@ def get_holdings_and_summary(acnt_no: str, acnt_pwd: str) -> Tuple[List[Dict], D
 #    실거래 전 반드시 모의투자로 1주만 직접 주문해서 정상 동작 확인할 것.
 
 def place_order(stk_cd: str, qty: int, price: int,
-                side: str, trde_tp: str = '3', dmst_stex_tp: str = 'KRX') -> dict:
+                side: str, trde_tp: str = '3', dmst_stex_tp: str = 'KRX',
+                env: Optional[str] = None) -> dict:
     """
     side         : '1' 매수(kt10000) / '2' 매도(kt10001)
     trde_tp      : '3' 시장가 (기본) / '0' 보통(지정가)
@@ -312,19 +391,35 @@ def place_order(stk_cd: str, qty: int, price: int,
         'trde_tp': trde_tp,
     }
     api_id = 'kt10000' if side == '1' else 'kt10001'
-    result = _call(api_id, '/api/dostk/ordr', body)
+    result = _call(api_id, '/api/dostk/ordr', body, env=env)
     # 로깅은 호출부 책임 — 여기서 print하면 호출부의 상세 로그(_log.info)와 항상 겹친다.
     # 단, kiwoom_trailing_stop.py의 손절/트레일링/정체보호 성공 로그는 result를 찍지 않으므로
     # ord_no를 그쪽 로그 문자열에 직접 넣어뒀다(2026-08-12) — 여기서 지우기 전에 확인할 것.
     return result
 
 
-def buy_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX') -> dict:
-    return place_order(stk_cd, qty, 0, side='1', trde_tp='3', dmst_stex_tp=dmst_stex_tp)
+def cancel_order(orig_ord_no: str, stk_cd: str, qty: int = 0,
+                 side: str = '1', dmst_stex_tp: str = 'KRX') -> dict:
+    """주문 취소. qty=0 이면 잔량 전부 취소.
+    api-id: kt10003(매수취소) / kt10004(매도취소). 2026-08-19 실계좌 확인."""
+    body = {
+        'dmst_stex_tp': dmst_stex_tp,
+        'orig_ord_no': str(orig_ord_no),
+        'stk_cd': stk_cd,
+        'cncl_qty': str(qty) if qty else '0',
+    }
+    api_id = 'kt10003' if side == '1' else 'kt10004'
+    return _call(api_id, '/api/dostk/ordr', body)
 
 
-def sell_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX') -> dict:
-    return place_order(stk_cd, qty, 0, side='2', trde_tp='3', dmst_stex_tp=dmst_stex_tp)
+def buy_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',
+               env: Optional[str] = None) -> dict:
+    return place_order(stk_cd, qty, 0, side='1', trde_tp='3', dmst_stex_tp=dmst_stex_tp, env=env)
+
+
+def sell_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',
+                env: Optional[str] = None) -> dict:
+    return place_order(stk_cd, qty, 0, side='2', trde_tp='3', dmst_stex_tp=dmst_stex_tp, env=env)
 
 
 # ── 체결 조회 (ka10076) ──────────────────────────────────────────────────────

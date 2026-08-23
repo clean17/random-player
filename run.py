@@ -1,11 +1,39 @@
+import os
 import signal
 import subprocess
+import sys
 # from flask_cors import CORS
 from config.config import settings
 from utils.common import signal_handler, register_shutdown_handlers, cleanup
 from job.batch_runner import initialize_directories, create_scheduler
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
+
+
+def spawn_mock_trading():
+    """모의투자 자동매매(run_mock.py)를 자식 프로세스로 띄운다. (2026-08-20)
+
+    왜 별 프로세스인가: kiwoom_fire_strategy / kiwoom_trailing_stop 이 import 시점에 계좌번호와
+    상태파일 경로를 모듈 상수로 굳히므로, 한 프로세스에서 실전(v8)과 모의(fire)를 같이 돌릴 수
+    없다. KIWOOM_ENV=mock 인 별 프로세스로 띄우면 계좌·토큰·호스트·상태·이력·로그가 전부
+    자동 분리된다. 상세는 job/batch_runner.create_mock_scheduler() docstring 참고.
+
+    중복 실행은 run_mock.py 쪽 OS 파일 잠금이 막는다 — 수동으로 이미 띄워둔 게 있으면
+    이 자식은 즉시 '[SKIP]' 을 찍고 스스로 종료한다. 그래서 여기서 따로 검사하지 않는다.
+    """
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_mock.py')
+    if not os.path.exists(script):
+        print(f'⚠️ run_mock.py 없음, 모의 자동매매 생략: {script}')
+        return None
+    try:
+        # sys.executable = 현재 실행 중인 venv 파이썬. 시스템 파이썬으로 뜨면 psycopg 등이 없다.
+        proc = subprocess.Popen([sys.executable, '-u', script],
+                                cwd=os.path.dirname(script))
+        print(f'🧪 모의투자 자동매매 시작 (run_mock.py, pid={proc.pid})')
+        return proc
+    except Exception as e:
+        print(f'⚠️ 모의투자 자동매매 시작 실패: {e}')
+        return None
 # CORS(app, origins="http://127.0.0.1:3000", supports_credentials=True) # 해당 출처를 통해서만 리소스 접근 허용
 
 
@@ -30,6 +58,7 @@ if __name__ == '__main__':
     # 그래서 앱 import(create_app)를 먼저 끝내고 나서 스케줄러를 시작한다.
     scheduler = None
     node_process = None
+    mock_process = None
 
     try:
         if select_server == 0: # werkzeug, 개발
@@ -42,8 +71,10 @@ if __name__ == '__main__':
             scheduler = create_scheduler()
             # 'npm run dev' 실행 (백그라운드 실행)
             node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
+            # 모의투자 자동매매 (별 프로세스, KIWOOM_ENV=mock)
+            mock_process = spawn_mock_trading()
             # 종료 핸들러
-            register_shutdown_handlers(scheduler, node_process)
+            register_shutdown_handlers(scheduler, node_process, [mock_process])
 
             # 실제 클라이언트 IP (X-Forwarded-For) 를 읽도록
             app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
@@ -60,8 +91,10 @@ if __name__ == '__main__':
             scheduler = create_scheduler()
             # 'npm run dev' 실행 (백그라운드 실행)
             node_process = subprocess.Popen(["cmd", "/c", "node src/server_io.js"], cwd=NODE_SERVER_PATH, text=True)
+            # 모의투자 자동매매 (별 프로세스, KIWOOM_ENV=mock)
+            mock_process = spawn_mock_trading()
             # 종료 핸들러
-            register_shutdown_handlers(scheduler, node_process)
+            register_shutdown_handlers(scheduler, node_process, [mock_process])
 
             # Hop-by-Hop 헤더 필터 미들웨어 적용
             app.wsgi_app = HopByHopHeaderFilter(app.wsgi_app)
@@ -74,4 +107,4 @@ if __name__ == '__main__':
             # nginx 프록시 서버만 접근 허용
             serve(app, host='127.0.0.1', port=8090, threads=12, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
     finally:
-        cleanup(scheduler, node_process)
+        cleanup(scheduler, node_process, [mock_process])

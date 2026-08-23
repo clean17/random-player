@@ -15,7 +15,8 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
     request_stock_volume_and_amount, request_stock_category
 from job.batch_runner import predict_stock_graph
 from config.config import settings
-from auto_trading.kiwoom_api import get_holdings_and_summary, get_account_credentials, get_current_price_and_name
+from auto_trading.kiwoom_api import get_holdings_and_summary, get_account_credentials, \
+    get_current_price_and_name, get_deposit, KIWOOM_ENV, VALID_ENVS
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell
 
 stock = Blueprint('stocks', __name__)
@@ -323,7 +324,37 @@ def get_favorite_stocks_data_schedule():
     return stocks
 
 
-# ── 키움 모의투자 대시보드 (내 종목 탭) ──────────────────────────────────────
+# ── 키움 대시보드 (내 계좌 탭) ────────────────────────────────────────────────
+# 2026-08-20: 모의/실전을 화면에서 골라 볼 수 있게 env 파라미터를 받는다.
+# 스케줄러(자동매매)는 여전히 .env의 KIWOOM_ENV 하나만 쓴다 — 여기서 바꾸는 건 조회/수동주문 대상뿐이다.
+
+
+def _req_env(from_json: bool = False):
+    """요청에서 kiwoom 환경을 읽어 검증. 값이 없으면 None(=프로세스 기본값)을 반환한다.
+
+    ⚠️ 매수/매도에도 이 값이 쓰인다. 화면에 모의 계좌를 띄운 채 실전으로 주문이 나가면 안 되므로
+       프런트는 조회와 주문에 **같은 env**를 보내야 한다.
+    """
+    raw = ((request.get_json(silent=True) or {}).get("env") if from_json
+           else request.args.get("env"))
+    raw = (raw or "").strip().lower()
+    if not raw:
+        return None
+    if raw not in VALID_ENVS:
+        raise ValueError(f"env는 {'/'.join(VALID_ENVS)} 중 하나여야 합니다: {raw!r}")
+    return raw
+
+
+@stock.route("/kiwoom/envs", methods=["GET"])
+@login_required
+def get_kiwoom_envs():
+    """선택 가능한 계좌 환경과, 스케줄러가 실제로 돌고 있는 기본 환경."""
+    return jsonify({
+        "envs": list(VALID_ENVS),
+        "default": KIWOOM_ENV,          # .env의 KIWOOM_ENV — 자동매매가 붙어 있는 계좌
+        "labels": {"real": "실전", "mock": "모의"},
+    })
+
 
 @stock.route("/kiwoom/lookup-code", methods=["GET"])
 @login_required
@@ -346,7 +377,8 @@ def get_kiwoom_price():
     if not stk_cd:
         return {"status": "error", "message": "stk_cd is required"}, 400
     try:
-        price, stk_nm = get_current_price_and_name(stk_cd)
+        env = _req_env()
+        price, stk_nm = get_current_price_and_name(stk_cd, env=env)
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
@@ -356,16 +388,28 @@ def get_kiwoom_price():
 @stock.route("/kiwoom/holdings", methods=["GET"])
 @login_required
 def get_kiwoom_holdings():
-    acnt_no, acnt_pwd = get_account_credentials()
-    if not (acnt_no and acnt_pwd):
-        return {"status": "error", "message": "계좌 정보가 설정되지 않음"}, 500
     try:
-        holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd)
-        asset_pnl = get_asset_based_pnl(summary['total_asset'])
+        env = _req_env()
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if not (acnt_no and acnt_pwd):
+        return {"status": "error",
+                "message": f"계좌 정보가 설정되지 않음 (env={env or KIWOOM_ENV})"}, 500
+    try:
+        holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
+        asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
+        # 예수금은 kt00018 에 없어서 별도 조회(kt00001). 없으면 화면이 죽지 않게 None 으로 넘긴다.
+        try:
+            summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)
+        except Exception as de:
+            print(f'예수금 조회 실패: {de}')
+            summary['deposit'] = None
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
-    return jsonify({"holdings": holdings, "summary": summary, "asset_pnl": asset_pnl})
+    return jsonify({"holdings": holdings, "summary": summary, "asset_pnl": asset_pnl,
+                    "env": env or KIWOOM_ENV})
 
 
 @stock.route("/kiwoom/history", methods=["GET"])
@@ -373,12 +417,16 @@ def get_kiwoom_holdings():
 def get_kiwoom_history():
     limit = request.args.get("limit", 200, type=int)
     try:
-        history = get_trade_history(limit)
-        pnl_summary = get_pnl_summary()
+        env = _req_env()
+        history = get_trade_history(limit, env)
+        pnl_summary = get_pnl_summary(env)
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
-    return jsonify({"history": history, "pnl_summary": pnl_summary})
+    return jsonify({"history": history, "pnl_summary": pnl_summary,
+                    "env": env or KIWOOM_ENV})
 
 
 @stock.route("/kiwoom/buy", methods=["POST"])
@@ -394,7 +442,10 @@ def post_kiwoom_buy():
         return {"status": "error", "message": "stk_cd is required"}, 400
 
     try:
-        result = manual_buy(stk_cd, int(qty) if qty else None)
+        env = _req_env(from_json=True)
+        result = manual_buy(stk_cd, int(qty) if qty else None, env=env)
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
@@ -414,7 +465,10 @@ def post_kiwoom_sell():
         return {"status": "error", "message": "stk_cd, qty is required"}, 400
 
     try:
-        result = manual_sell(stk_cd, int(qty))
+        env = _req_env(from_json=True)
+        result = manual_sell(stk_cd, int(qty), env=env)
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500

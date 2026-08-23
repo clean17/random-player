@@ -128,7 +128,8 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials, env_path
+from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials, \
+    env_path, KIWOOM_ENV
 from auto_trading.kiwoom_trailing_stop import _log, _record_trade, is_market_open, order_accepted
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
@@ -144,7 +145,17 @@ FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트
 # 종가위치 = (현재가-당일저가)/(당일고가-당일저가). 1에 가까울수록 고가 근처 마감.
 # 낮으면 장중 급등이 밀린 것(윗꼬리)이고, 그런 종목은 이후 성과가 나쁘다 — 데드캣 판별용.
 # 근거: auto_trading/backtest/first_signal_filter.py (첫 신호일 11,759건, 기간분할 검증)
-CLOSE_POS_MIN = 0.6
+_IS_MOCK_ENV = (KIWOOM_ENV == 'mock')
+# 종가위치 필터 = (종가-저가)/(고가-저가). 낮으면 장중 급등이 밀린 윗꼬리다.
+#   mock : 0.6  (켬)  — 검증된 필터를 적용해 후보 품질을 올린다
+#   real : 0.0  (끔)
+# 2026-08-20 요청으로 위와 같이 설정. 검증치는 limitup_recheck.py (상한가 제외, 3년):
+#   종가위치 0.0~0.3 건당 -0.558% / 0.3~0.6 -0.462% / 0.6 이상 +0.070%
+#   → 0.6 미만 구간은 기대값이 확실히 마이너스다. 켜는 쪽이 성능상 유리하다.
+# ⚠️ real 을 0.0 으로 두면 그 마이너스 구간까지 매수한다. 다만 **real 의 fire 매수는 현재
+#    batch_runner 에서 꺼져 있어(kiwoom_fire_buy add_job 주석) 실질 영향이 없다.**
+#    real fire 매수를 되살릴 때는 이 값을 0.6 으로 다시 올릴지 먼저 판단할 것.
+CLOSE_POS_MIN = 0.6 if _IS_MOCK_ENV else 0.0
 CASH_DEPLOY_RATIO = 0.65   # 가용 현금 중 자동매수에 쓸 최대 비율. 0.70→0.65 (2026-08-18).
                            # 요청: '전체 계좌의 20% 정도만 현금으로 남기고 싶다'.
                            # 같은 날 예산 분모 버그(아래 run_fire_buy_cycle 참고)를 고치면서
@@ -163,7 +174,17 @@ CASH_DEPLOY_RATIO = 0.65   # 가용 현금 중 자동매수에 쓸 최대 비율
                            # 0.65가 0.70보다 목표(20%)에 가까우면서 평균·최저·MDD 전부 낫기 때문에
                            # 0.70을 유지할 이유는 없다. 더 벌고 싶으면 0.50~0.55로 내릴 것.
                            # 근거: auto_trading/backtest/cash_ratio_test.py
-BUY_SLOTS = 5              # 하루 최대 신규 매수 종목 수. 20→5 (2026-08-14).
+# ── 2026-08-20: 계좌 환경별로 슬롯 수를 분리한다 ───────────────────────────
+# 슬롯 수의 적정값은 **계좌 규모**에 달려 있다. 아래 docstring 근거를 그대로 따른 것:
+#   "계좌 자산이 작으면(예 300만원대) 슬롯20은 슬롯당 예산이 너무 작아져 매수 시도의 40%+가
+#    '1주도 못 사서' 버려진다. 계좌가 3,000만원 이상일 때 슬롯20이 감당 가능한 걸로 검증됨"
+#   "3천만원 기준으로는 오히려 슬롯25(+4.4%, Sharpe0.30)가 20(-0.6%)보다 낫게 나왔다"
+#   real : 189만원  -> 5   (2026-08-14 부트스트랩 근거, 아래 표)
+#   mock : 3,000만원 -> 20  (위 근거. 25도 후보지만 검증치가 1경로짜리라 20으로 둔다)
+# fire 매수는 현재 real 에서 꺼져 있으므로(batch_runner 의 kiwoom_fire_buy 주석) 실질적으로
+# 이 값은 mock 에만 적용된다. 그래도 명시적으로 갈라 둔다.
+_IS_MOCK = (KIWOOM_ENV == 'mock')
+BUY_SLOTS = 20 if _IS_MOCK else 5   # 하루 최대 신규 매수 종목 수. real 은 20→5 (2026-08-14).
                            # 새 전략(첫 신호일 + 종가위치>=0.6 + 손절-6%/5일보유)으로
                            # 부트스트랩 25회(후보 80% 표집, 초기자본 229만원) 결과:
                            #   슬롯 3 : 평균 +11.1%  표준편차 17.2  최저 -25.6%
@@ -418,9 +439,25 @@ def run_fire_buy_cycle():
 
     _, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
 
-    # 사이징 기준은 총자산이 아니라 '가용 현금'. 그중 CASH_DEPLOY_RATIO(70%)까지만 쓰고
+    # 사이징 기준은 총자산이 아니라 '가용 현금'. 그중 CASH_DEPLOY_RATIO 까지만 쓰고
     # 나머지는 손대지 않는다(버퍼). deployed 누적으로 총 사용액이 그 한도를 넘지 않도록 막는다.
-    cash = summary['total_asset'] - summary['tot_evlt_amt']
+    #
+    # ⚠️ 2026-08-21: 가용현금을 **주문가능금액(kt00001 ord_alow_amt)** 으로 바꿨다.
+    # 종전 `총자산 - 총평가금액` 은 두 가지로 틀렸다.
+    #   1) 매수 당일에는 평가금액이 아직 0/과소라 가용현금이 과대평가된다.
+    #      실제 사고(2026-08-20 모의): 같은 날 3회 실행하는 동안 매번 '현금 3,000만원'으로
+    #      보고돼 한도가 새로 잡혔고, 누적 29,865,615원을 매수해 D+2 예수금이 -61,556원
+    #      (미수금)이 됐다. 주문가능금액을 썼다면 2회차부터 한도가 줄어 막혔다.
+    #   2) 추정예탁자산은 '예수금+평가금액'이 아니라 결제·비용을 반영한 추정치여서, 계좌가
+    #      거의 full 투자 상태면 이 차가 음수까지 간다.
+    # 주문가능금액은 이미 결제 예정분과 증거금을 반영한 값이라 같은 날 재실행에도 안전하다.
+    # 조회 실패 시에는 종전 근사식으로 폴백한다(사이징이 멈추는 것보다 낫다).
+    try:
+        from auto_trading.kiwoom_api import get_deposit
+        cash = get_deposit(ACNT_NO, ACNT_PWD)['ord_alow_amt']
+    except Exception as e:
+        cash = summary['total_asset'] - summary['tot_evlt_amt']
+        _log.error(f'[fire] 주문가능금액 조회 실패 — 근사식으로 폴백 ({cash:,.0f}원): {e}')
     deploy_limit = max(0.0, cash) * CASH_DEPLOY_RATIO
     # 종목당 상한 (2026-08-11 도입). 재분배가 소수 종목에 몰리는 것을 막는 안전장치이자
     # 실질 사이징 기준. 근거는 위 docstring '사이징 재검증' 참고.

@@ -644,9 +644,7 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
             -- '며칠 더 지켜보고 확인'하는 접근은 이 데이터와 pkl 3년 반등 분석 두 곳에서
             -- 모두 부정됐다 — 확인을 기다리는 사이 수익 구간이 끝난다.
             -- 근거: auto_trading/backtest/entry_timing.py
-            -- 주의: 이 SQL 문자열은 psycopg 파라미터 바인딩을 쓰므로 주석에도 퍼센트 기호를
-            --      넣지 말 것 (플레이스홀더로 해석돼 ProgrammingError가 난다)
-            AND b.signal_days = 1
+            --AND b.signal_days = 1
             and b.last_trading_value/b.avg_trading_value > 0.5
               /*
                * 한국시간 기준:
@@ -657,15 +655,8 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
                *    오늘 interest 신호가 발생한 종목만 통과
                */
               AND (
-                     %s::date
-                         <> (
-                             CURRENT_TIMESTAMP
-                             AT TIME ZONE 'Asia/Seoul'
-                         )::date
-                  OR (
-                         CURRENT_TIMESTAMP
-                         AT TIME ZONE 'Asia/Seoul'
-                     )::time < TIME '09:00:00'
+                     (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date <> %s::date
+                  OR (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::time < TIME '09:00:00'
                   OR b.last_date = %s::date
               )
         """
