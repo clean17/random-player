@@ -500,6 +500,7 @@ function renderTradingCards(rows, section, tableName) {
     initReserveButtons();
     applyStockFlagState();      // 우선 캐시 값으로 즉시 그리고
     syncStockFlagsFromServer(); // 서버 목록을 다시 받아 어긋난 표기를 정정한다(비동기)
+    setupViewedDwellObserver(track); // 카드를 5초 이상 보고 있으면 '확인함' 처리
 
     track.addEventListener("click", (e) => {
         if (isDragging) return;
@@ -508,7 +509,10 @@ function renderTradingCards(rows, section, tableName) {
         const article = trigger.closest("article.trade-card");
         if (!article) return;
         const stockCode = article.querySelector(".fav-btn")?.dataset.stockCode;
-        if (stockCode) window.open(`https://m.stock.naver.com/domestic/stock/${stockCode}/total`, "_blank");
+        if (stockCode) {
+            window.open(`https://m.stock.naver.com/domestic/stock/${stockCode}/total`, "_blank");
+            markStockViewed(stockCode, article);
+        }
     });
 
     // dots (많으면 12개로 축약)
@@ -886,6 +890,69 @@ async function requestToggleReserved({ stockCode }) {
     return res.json().catch(() => ({}));
 }
 
+// ── '확인함' 표시 — 종목명/로고를 눌러 상세를 열어본 카드에 배지를 남긴다 ──────────────
+// 토글이 아니라 한 방향(계속 확인함 상태 유지)이라 즉시 낙관적으로 클래스부터 붙이고,
+// 실패해도 롤백하지 않는다 — 다음 동기화(syncStockFlagsFromServer)가 알아서 맞춰준다.
+function markStockViewed(stockCode, article) {
+    if (!stockCode) return;
+    article?.classList.add("is-viewed");
+    updateFlagCache(typeof viewedStocks !== "undefined" ? viewedStocks : null, stockCode, true);
+    fetch("/stocks/viewed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "stock_code": stockCode })
+    }).catch((e) => console.error("확인함 기록 실패", e));
+}
+
+// ── '확인함' — 카드를 5초 이상 계속 보고 있으면 자동으로 확인 처리 ──────────────────
+// 캐러셀은 한 화면에 카드 1장(grid-auto-columns:100%)이라, IntersectionObserver로 지금
+// 화면에 꽉 찬(ratio>=0.9) 카드를 찾아 5초 타이머를 걸고, 스크롤로 빠져나가면 취소한다.
+const VIEWED_DWELL_MS = 5000;
+let activeDwellTimers = null;   // 가장 최근에 렌더된 캐러셀의 Map(article -> timeoutId)만 추적
+
+function armViewedDwell(article) {
+    if (!activeDwellTimers || activeDwellTimers.has(article)) return;
+    const code = article.querySelector(".fav-btn")?.dataset.stockCode;
+    if (!code) return;
+    const t = setTimeout(() => {
+        activeDwellTimers?.delete(article);
+        markStockViewed(code, article);
+    }, VIEWED_DWELL_MS);
+    activeDwellTimers.set(article, t);
+}
+function disarmViewedDwell(article) {
+    const t = activeDwellTimers?.get(article);
+    if (t) { clearTimeout(t); activeDwellTimers.delete(article); }
+}
+
+function setupViewedDwellObserver(track) {
+    const timers = new Map();
+    activeDwellTimers = timers;   // 이전 렌더의 트랙은 DOM에서 이미 제거됐으니 이걸로 교체
+
+    const observer = new IntersectionObserver((entries) => {
+        if (document.hidden) return;   // 탭이 안 보이는 동안은 '보고 있다'로 치지 않는다
+        entries.forEach((entry) => {
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.9) armViewedDwell(entry.target);
+            else disarmViewedDwell(entry.target);
+        });
+    }, { root: track, threshold: [0, 0.9, 1] });
+
+    track.querySelectorAll("article.trade-card").forEach((el) => observer.observe(el));
+}
+
+// 백그라운드로 가면 진행 중이던 타이머를 전부 취소한다 — 안 보는 동안 몰래 5초가
+// 채워지는 걸 막는다. 복귀 시엔 지금 화면 중앙 카드부터 다시 5초를 잰다.
+document.addEventListener("visibilitychange", () => {
+    if (!activeDwellTimers) return;
+    if (document.hidden) {
+        activeDwellTimers.forEach((t) => clearTimeout(t));
+        activeDwellTimers.clear();
+    } else {
+        const current = getCurrentArticle();
+        if (current) armViewedDwell(current);
+    }
+});
+
 // ── 즐겨찾기(별) / 자동매수 대상(체크) 상태를 서버와 일치시키는 공통 로직 ────────────
 // 어긋나던 원인:
 //  1) 서버 upsert가 조건 없는 토글(flag = NOT flag)인데 클라이언트는 자기가 알던 상태의
@@ -926,6 +993,13 @@ function applyStockFlagState() {
         if (btn.dataset.reserved === next && btn.innerHTML !== "") return;
         btn.dataset.reserved = next;
         renderReserveButton(btn);
+    });
+    // '확인함' 배지 — 버튼이 아니라 카드(article) 자체에 클래스로 표시한다.
+    // fav-btn의 data-stock-code를 그대로 재사용해 카드마다 코드를 다시 마크업에 넣지 않는다.
+    document.querySelectorAll("article.trade-card").forEach((card) => {
+        const code = card.querySelector(".fav-btn")?.dataset.stockCode;
+        if (!code) return;
+        card.classList.toggle("is-viewed", flagCacheHas(typeof viewedStocks !== "undefined" ? viewedStocks : null, code));
     });
 }
 

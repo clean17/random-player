@@ -685,6 +685,7 @@
     const dd = String(today.getDate()).padStart(2, '0');
     const favoriteStocks = [];
     const reservedStocks = [];   // 자동매수 대상으로 체크한 종목코드 (stock_card.js의 reserve-btn이 참조)
+    const viewedStocks = [];     // 카드를 한 번이라도 눌러서 확인한 종목코드 (stock_card.js의 is-viewed 배지가 참조)
     const startDateInputEl = document.getElementById('dateInputStart');
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
@@ -2049,7 +2050,7 @@
     // stock_card.js가 카드를 그릴 때/탭에 다시 돌아올 때 서버 목록을 다시 받아 별·체크 표기를
     // 검증하는 훅. (목록 조회는 여기서만 하므로 window에 얹어 stock_card.js에 주입한다)
     window.refreshStockFlagCaches = function () {
-        return Promise.all([getFavoriteStocks(), getReservedStocks()]);
+        return Promise.all([getFavoriteStocks(), getReservedStocks(), getViewedStocks()]);
     };
 
     function getReservedStocks() {
@@ -2061,6 +2062,18 @@
         }).catch(error => {
             // reserved 조회 실패해도 화면 나머지는 정상 동작해야 함 (버튼만 미체크 상태로 보임)
             console.error('reserved 목록 조회 실패', error);
+        });
+    }
+
+    function getViewedStocks() {
+        return axios.get('/stocks/viewed').then(res => {
+            viewedStocks.length = 0;
+            (res.data || []).forEach(item => {
+                viewedStocks.push(item["stock_code"])
+            })
+        }).catch(error => {
+            // viewed 조회 실패해도 화면 나머지는 정상 동작해야 함 ('확인함' 배지만 안 보임)
+            console.error('viewed 목록 조회 실패', error);
         });
     }
 
@@ -2144,7 +2157,7 @@
 
         setDefaultDateToday(0, startDateInputEl);
         setDefaultDateToday(0, endDateInputEl);
-        await Promise.all([getFavoriteStocks(), getReservedStocks()]);
+        await Promise.all([getFavoriteStocks(), getReservedStocks(), getViewedStocks()]);
         // activateTab이 탭별 패널 표시/부가 UI/데이터 로드를 전부 처리한다 —
         // 수동으로 탭을 바꿀 때와 완전히 같은 경로를 타야 tab-mystocks 등에서 어긋나지 않는다.
         activateTab(tabSelectEl ? tabSelectEl.value : getActiveTabTarget());

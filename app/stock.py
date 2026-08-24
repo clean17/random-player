@@ -8,7 +8,8 @@ from app.repository.stocks.stocks import merge_daily_interest_stocks, get_intere
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
     get_favorite_stocks_latest, \
     update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix, \
-    upsert_reserved_stocks, get_reserved_stocks, clear_reserved_stocks
+    upsert_reserved_stocks, get_reserved_stocks, clear_reserved_stocks, \
+    mark_stock_viewed, get_viewed_stocks
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
@@ -300,6 +301,24 @@ def clear_all_reserved_stocks():
     fetch_user = find_user_by_username(session["_user_id"])
     count = clear_reserved_stocks(fetch_user.id)
     return {"status": "success", "cleared": count}, 200
+
+
+@stock.route("/viewed", methods=["POST"])
+@login_required
+def upsert_viewed_stock():
+    """카드를 한 번이라도 확인(클릭)했음을 기록. 토글이 아니라 항상 True로 upsert."""
+    s = StockDTO.from_json(request.json)
+    s.user_id = find_user_by_username(session["_user_id"]).id
+    row_id = mark_stock_viewed(s)
+    return {"status": "success", "result": row_id}, 200
+
+
+@stock.route("/viewed", methods=["GET"])
+@login_required
+def fetch_viewed_stocks():
+    fetch_user = find_user_by_username(session["_user_id"])
+    stocks = get_viewed_stocks(fetch_user.id)
+    return jsonify(stocks)
 
 
 @stock.route("/interest/data/reserved", methods=["POST"])

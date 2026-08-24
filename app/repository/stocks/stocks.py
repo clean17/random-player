@@ -225,6 +225,45 @@ def clear_reserved_stocks(user_id, conn=None) -> int:
         return cur.rowcount
 
 
+# ── viewed_stocks (카드를 한 번이라도 눌러서 확인한 종목) ────────────────────
+# favorite_stocks/reserved_stocks와 동일 구조. 다만 이건 토글이 아니라 '한 번 봤으면
+# 계속 본 것'인 한 방향 표시라 flag를 뒤집지 않고 항상 True로 upsert한다.
+# updated_at이 '마지막으로 다시 확인한 시각'을 겸한다.
+
+@db_transaction
+def get_viewed_stocks(user_id, conn=None):
+    sql = """
+    select stock_code from viewed_stocks
+    where user_id = %s
+    and flag = True;
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(sql, (user_id,))
+        rows = cur.fetchall()
+    return rows
+
+
+@db_transaction
+def mark_stock_viewed(stock: "StockDTO", conn=None) -> Optional[int]:
+    with conn.cursor() as cur:
+        sql = """
+        INSERT INTO viewed_stocks (
+            created_at, updated_at, user_id, stock_code, flag
+        )
+        VALUES (
+            now(), now(), %s, %s, True
+        )
+        ON CONFLICT (stock_code, user_id)
+        DO UPDATE SET
+            updated_at = now(),
+            flag       = True
+        RETURNING id;
+        """
+        cur.execute(sql, (stock.user_id, stock.stock_code))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
 # 관심 종목 insert, EXCLUDED: 새로 들어온 값
 @db_transaction
 def merge_daily_interest_stocks(stock: "StockDTO", conn=None) -> int:
