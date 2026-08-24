@@ -219,10 +219,15 @@ def create_mock_scheduler():
         id="mock_renew_token", executor="io", replace_existing=True,
     )
 
-    # fire 자동매수 — 평일 15:18 1회. 근거·시각 선정 이유는 create_scheduler() 의 2-0-2 주석 참고.
+    # fire 자동매수 — 평일 15:19 1회 (2026-08-24: 15:18→15:19로 변경, 사용자 요청).
+    # 근거·시각 선정 이유는 create_scheduler() 의 2-0-2 주석 참고(원래 15:18은 KRX 정규장
+    # 종료 15:20 전 2분 여유를 두려던 것 — 15:19면 여유가 1분으로 줄어든다. 오늘(2026-08-24)
+    # 15:18 실행은 429 재시도 때문에 스크리닝만 15초 걸렸고 전체(스크리닝+18건 매수)는
+    # 28초 소요됐다 — 15:19 시작이면 15:19:28경 종료로 15:20 컷오프 전에는 끝나지만,
+    # 후보가 더 많거나 429가 더 심하면 여유가 빠듯해질 수 있다.
     scheduler.add_job(
         run_kiwoom_fire_buy,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=18),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=19),
         id="mock_fire_buy", executor="io", replace_existing=True,
     )
 

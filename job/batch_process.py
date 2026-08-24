@@ -242,8 +242,10 @@ def generate_fullchain_pem_daily():
 
 
 def run_kiwoom_trailing_stop():
-    from auto_trading.kiwoom_trailing_stop import run_cycle, is_market_open, _log
-    if not is_market_open():
+    # is_market_open()이 아니라 전용 게이트(15:19 종료) — fire 자동매수(15:19 시작)와
+    # is_market_open()을 공유하면 fire가 트리거되는 순간 이미 막혀버린다.
+    from auto_trading.kiwoom_trailing_stop import run_cycle, is_trailing_window_open, _log
+    if not is_trailing_window_open():
         return
     try:
         run_cycle()

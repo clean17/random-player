@@ -267,6 +267,21 @@ def is_market_open() -> bool:
     return KRX_REGULAR_START <= now.time() < KRX_REGULAR_END
 
 
+# run_kiwoom_trailing_stop() 전용 종료 시각. 2026-08-24: fire 자동매수를 15:19에 시작하도록
+# 옮기면서, KRX_REGULAR_END(15:20)를 그대로 같이 낮추면 is_market_open()을 공유하는
+# run_kiwoom_fire_buy도 같이 막혀버린다(잡이 트리거되는 순간 이미 15:19를 넘겨 있어
+# 사실상 실행이 안 됨) — 그래서 trailing_stop만 별도 상수/함수로 분리했다.
+TRAILING_STOP_END = datetime.time(15, 19)
+
+
+def is_trailing_window_open() -> bool:
+    """run_kiwoom_trailing_stop() 전용 — is_market_open()과 시작은 같고 종료만 1분 이르다."""
+    now = datetime.datetime.now()
+    if now.weekday() >= 5:
+        return False
+    return KRX_REGULAR_START <= now.time() < TRAILING_STOP_END
+
+
 def current_exchange() -> str:
     """주문을 넣을 거래소 코드.
 

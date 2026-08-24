@@ -286,6 +286,24 @@ def v8_owned_codes() -> set:
     return set((_load_pending().get('ordered') or {}).keys())
 
 
+def _load_prev_open_codes() -> set:
+    """직전 사이클 종료 시점에 실제로 미체결 주문이 걸려 있던 종목코드.
+
+    2026-08-24 사고: 체결 감지를 v8_owned_codes()(한 번이라도 주문 낸 적 있으면 계속 포함)로
+    했더니, 이미 v8 주문이 다 체결되어 사라진 지 오래된 종목을 사용자가 대시보드에서
+    수동으로 추가매수했을 때도 "v8이 방금 체결시켰다"고 오판해 거래이력에 중복 기록됐다
+    (SHD 001770: 수동 2주 기록 직후 v8_buy 2주가 또 기록됨). '한 번이라도 주문한 적 있다'와
+    '방금 내 주문이 체결됐다'는 다른 질문이다 — 후자만 판단하려면 "직전 사이클엔 미체결
+    주문이 있었는데 이번엔 없어졌다"는 전이(transition)를 봐야 한다."""
+    return set(_load_pending().get('open_codes') or [])
+
+
+def _save_open_codes(codes) -> None:
+    st = _load_pending()
+    st['open_codes'] = sorted(set(codes))
+    _save_pending(st)
+
+
 def _mark_ordered(code: str):
     st = _load_pending()
     od = st.setdefault('ordered', {})
@@ -825,6 +843,12 @@ def run_v8_buy_cycle():
     open_buy = {u['stk_cd']: u for u in unfilled
                 if '매수' in str(u.get('io_tp_nm', '')) and int(u.get('oso_qty') or 0) > 0}
     _ordered_codes = v8_owned_codes()
+    # '한 번이라도 v8이 주문한 적 있다'(_ordered_codes)와 '방금 내 주문이 체결됐다'는 다르다 —
+    # 후자만 거래이력에 기록해야 한다. 판단 기준은 "직전 사이클엔 미체결 주문이 있었는데
+    # 이번엔 사라졌다"는 전이(transition). 2026-08-24 SHD(001770) 사고: 이 구분이 없어서
+    # 이미 오래전에 체결 완료된 종목을 사용자가 대시보드에서 수동으로 추가매수했을 때도
+    # "v8이 방금 체결시켰다"고 오판해 거래이력에 중복 기록됐다.
+    prev_open_codes = _load_prev_open_codes()
 
     # 체결 감지 -> 그 가격 이상의 지정가 소진 (백테스트 taken 규칙)
     #  v8 이 주문했던 종목이 보유로 넘어왔으면 체결된 것이다.
@@ -836,11 +860,15 @@ def run_v8_buy_cycle():
                 consume_limits(code, px)
                 qty = int(h.get('qty') or 0)
                 delta = _take_fill_delta(code, qty)
-                if delta > 0:
+                if delta > 0 and code in prev_open_codes:
                     asset_ratio = (px * delta / equity) if equity > 0 else None
                     _record_trade(code, h.get('stk_nm'), 'buy', 'v8_buy', delta, px, px, 0.0,
                                   asset_ratio=asset_ratio)
                     _log.info('v8 매수체결 기록 %s qty=%d(누적%d) px=%.0f', code, delta, qty, px)
+                elif delta > 0:
+                    _log.info('v8 보유수량 증가 감지했지만 직전 미체결 주문 없음(수동매수 등으로 '
+                              '추정) %s qty=%d(누적%d) px=%.0f — 거래이력 기록 생략',
+                              code, delta, qty, px)
 
     # 하루 1회 계산된 캐시를 쓴다 (첫 사이클에서만 pkl 을 읽는다)
     #  · 보유 중 종목 제외      = 동일 종목 중복 보유 금지
@@ -876,6 +904,7 @@ def run_v8_buy_cycle():
 
     room = SLOTS - len(held)
     if room <= 0:
+        _save_open_codes(open_buy.keys())   # 다음 사이클의 체결 전이 판단 기준선 갱신
         return
 
     # ── 주문 순서 ────────────────────────────────────────────────────────────
@@ -963,6 +992,7 @@ def run_v8_buy_cycle():
 
     slots_for_orders = min(MAX_OPEN_ORDERS, room, int(cash // amt) if amt > 0 else 0)
     placed = len(open_buy)
+    newly_placed = set()   # 이번 사이클에 새로 낸 주문 — open_buy 딕셔너리엔 안 넣으므로 따로 추적
 
     for c in cands:
         if c['code'] in open_buy:
@@ -1012,7 +1042,12 @@ def run_v8_buy_cycle():
                   res.get('return_msg') if isinstance(res, dict) else res)
         if ok:
             placed += 1
+            newly_placed.add(c['code'])
             _mark_ordered(c['code'])
+
+    # 다음 사이클의 체결 전이 판단 기준선 갱신 — 이번 사이클에 새로 낸 주문도 포함해야
+    # 그 주문이 다음 사이클까지 체결됐을 때 정상적으로 감지된다.
+    _save_open_codes(set(open_buy.keys()) | newly_placed)
 
 
 if __name__ == '__main__':
