@@ -16,6 +16,8 @@
         .ms-env-note { font-size: 12px; color: #888; }
         /* 실전을 보고 있을 때만 붉게 — 수동 매수/매도가 실계좌로 나간다는 경고 */
         .ms-env-note.is-live { color: #d93025; font-weight: 600; }
+        .ms-refresh-status { font-size: 12px; color: #9aa0a6; margin-left: auto; }
+        .ms-refresh-status.is-refreshing { color: #1a73e8; }
         #kiwoomEnvFilter.is-real { color: #d93025; font-weight: 700; border-color: #d93025; }
         /* 주문가능금액이 음수 = 예수금 초과 주문(미수금) */
         #ms-cash.is-negative { color: #d93025; }
@@ -484,6 +486,7 @@
              알려주는 안내문만 둔다 — 조회·수동주문이 모두 그 select 값을 따라간다. -->
         <div class="ms-env-bar">
             <span class="ms-env-note" id="ms-env-note"></span>
+            <span class="ms-refresh-status" id="ms-refresh-status"></span>
         </div>
 
         <div class="mystocks-summary" id="mystocksSummary">
@@ -725,13 +728,44 @@
 
     // '내 계좌' 탭이 활성화되어 있는 동안만 3초마다 자동 새로고침 (탭 전환 시 정지)
     // 주기적 새로고침은 로딩 오버레이 없이 조용히 갱신 (화면 깜빡임 방지)
+    // 1초마다 카운트다운 표시를 갱신하다가, 남은 시간이 0이 되면 실제 새로고침을 건다.
+    // loadMyStocksData()는 이 타이머 말고도(매수/매도 직후, 계좌 전환 시) 여러 곳에서
+    // 호출되므로, 남은 시간 재설정은 msStartTimer()가 아니라 loadMyStocksData() 안에서
+    // "매번 요청이 끝난 시점"에 한다 — 그래야 수동 새로고침 직후 곧바로 또 자동 새로고침이
+    // 겹쳐 나가지 않는다.
+    const MS_REFRESH_SEC = 3;
+    let msNextRefreshAt = 0;
+    let msIsRefreshing = false;
+
+    function msUpdateRefreshStatus() {
+        const el = document.getElementById('ms-refresh-status');
+        if (!el) return;
+        if (msIsRefreshing) {
+            el.textContent = '갱신 중...';
+            el.classList.add('is-refreshing');
+            return;
+        }
+        el.classList.remove('is-refreshing');
+        const remain = Math.max(0, Math.ceil((msNextRefreshAt - Date.now()) / 1000));
+        el.textContent = msTimer ? `${remain}초 후 새로고침` : '';
+    }
+
     function msStartTimer() {
         if (msTimer) clearInterval(msTimer);
-        msTimer = setInterval(() => loadMyStocksData(false), 3000);
+        msNextRefreshAt = Date.now() + MS_REFRESH_SEC * 1000;
+        msUpdateRefreshStatus();
+        msTimer = setInterval(() => {
+            if (!msIsRefreshing && Date.now() >= msNextRefreshAt) {
+                loadMyStocksData(false);
+            } else {
+                msUpdateRefreshStatus();
+            }
+        }, 1000);
     }
     function msStopTimer() {
         if (msTimer) clearInterval(msTimer);
         msTimer = null;
+        msUpdateRefreshStatus();
     }
 
     ruleFilterEl.addEventListener('change', loadData);
@@ -1305,6 +1339,8 @@
 
     async function loadMyStocksData(showOverlay = true) {
         if (showOverlay) renderLoadingOverlay();
+        msIsRefreshing = true;
+        msUpdateRefreshStatus();
         try {
             await initMsEnv();
             const [holdingsRes, historyRes, ordersRes] = await Promise.all([
@@ -1328,6 +1364,9 @@
             showDebugToast('내 종목 데이터를 불러오지 못했습니다');
         } finally {
             if (showOverlay) removeLoadingOverlay();
+            msIsRefreshing = false;
+            msNextRefreshAt = Date.now() + MS_REFRESH_SEC * 1000;
+            msUpdateRefreshStatus();
         }
     }
 
