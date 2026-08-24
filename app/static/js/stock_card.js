@@ -783,6 +783,11 @@ setTimeout(()=>{
                     const currentArticle1 = getCurrentArticle();
                     currentArticle1.querySelector('.fav-btn').click();
                     break;
+                case 'o':
+                    event.preventDefault();
+                    const currentArticle3 = getCurrentArticle();
+                    currentArticle3?.querySelector('.reserve-btn')?.click();
+                    break;
                 case 'Enter':
                     event.preventDefault();
                     const currentArticle2 = getCurrentArticle();
