@@ -963,7 +963,7 @@
 
     // ── 내 종목 (키움 모의투자 대시보드) ──────────────────────────────────
     const isGuestUser = {{ 'true' if current_user.get_id() == config.GUEST_USERNAME else 'false' }};
-    const MS_REASON_LABEL = { stop_loss: '손절', giveback_stop: '되돌림손절', trailing: '트레일링', trailing_gap: '트레일링', trailing_floor: '트레일링-보호선', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호' };
+    const MS_REASON_LABEL = { stop_loss: '손절', giveback_stop: '되돌림손절', trailing: '트레일링', trailing_gap: '트레일링', trailing_floor: '트레일링-보호선', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호', v8_buy: 'v8매수', v8_atr_stop: 'v8손절(ATR)', v8_trailing: 'v8트레일링', v8_take_profit: 'v8익절', v8_max_hold: 'v8보유상한', v8_buy_backfilled: 'v8매수(소급기록)', v8_sell_backfilled: 'v8매도(소급기록, 사유불명)', v8_trailing_backfilled: 'v8트레일링(소급기록)' };
 
     // 매도 시 그 종목 보유수량 대비 이번에 판 비율 표시용 (전량/1/3/1/2 등)
     function msHoldingRatioText(ev) {
@@ -978,7 +978,7 @@
     // "몇 분할째, 어느 고점에서, 어느 선에 걸려 팔렸는지"를 바로 보이게 한다.
     function msReasonDetailText(ev) {
         if (ev.side !== 'sell') return '';
-        const pct = (v) => isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(1)}%` : null;
+        const pct = (v) => (v != null && isFinite(Number(v))) ? `${(Number(v) * 100).toFixed(1)}%` : null;
         const peak = pct(ev.peak_rate);
         const trig = pct(ev.trigger_level);
         const parts = [];

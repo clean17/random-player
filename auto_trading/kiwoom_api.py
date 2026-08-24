@@ -178,14 +178,13 @@ def _is_invalid_token_response(resp) -> bool:
     return data.get('return_code') not in (0, None) and '인증' in str(data.get('return_msg', ''))
 
 
-def _call(api_id: str, endpoint: str, body: dict,
-          cont_yn: str = 'N', next_key: str = '', _max_429_retries: int = 3,
-          env: Optional[str] = None) -> dict:
-    """키움 REST API 공통 호출. 401(또는 200+인증실패 응답) 시 토큰 재발급 후 1회 재시도, 429 시 백오프 재시도.
+def _call_raw(api_id: str, endpoint: str, body: dict,
+              cont_yn: str = 'N', next_key: str = '', _max_429_retries: int = 3,
+              env: Optional[str] = None):
+    """_call()과 동일하지만 (json, response.headers)를 함께 반환한다.
 
-    env로 호출 대상 환경(mock/real)을 지정할 수 있다. None이면 프로세스 기본값.
-    ⚠️ _rate_limit_wait()은 **환경과 무관한 프로세스 전역 예산**이다. 대시보드가 두 계좌를
-       동시에 조회하면 그만큼 호출이 늘어 자동매매 쪽 처리량을 잠식한다(상단 _RATE_LIMIT_SLEEP 주석).
+    페이지네이션(연속조회)이 필요한 곳(kt00007 등)은 응답 헤더의 cont-yn/next-key를
+    읽어야 다음 페이지를 요청할 수 있는데, _call()은 json 본문만 반환해 그 정보를 버린다.
     """
     url = _cfg_for(env)['base_url'] + endpoint
     headers = {
@@ -213,7 +212,20 @@ def _call(api_id: str, endpoint: str, body: dict,
             continue
 
         resp.raise_for_status()
-        return resp.json()
+        return resp.json(), resp.headers
+
+
+def _call(api_id: str, endpoint: str, body: dict,
+          cont_yn: str = 'N', next_key: str = '', _max_429_retries: int = 3,
+          env: Optional[str] = None) -> dict:
+    """키움 REST API 공통 호출. 401(또는 200+인증실패 응답) 시 토큰 재발급 후 1회 재시도, 429 시 백오프 재시도.
+
+    env로 호출 대상 환경(mock/real)을 지정할 수 있다. None이면 프로세스 기본값.
+    ⚠️ _rate_limit_wait()은 **환경과 무관한 프로세스 전역 예산**이다. 대시보드가 두 계좌를
+       동시에 조회하면 그만큼 호출이 늘어 자동매매 쪽 처리량을 잠식한다(상단 _RATE_LIMIT_SLEEP 주석).
+    """
+    data, _ = _call_raw(api_id, endpoint, body, cont_yn, next_key, _max_429_retries, env)
+    return data
 
 
 # ── 현재가 조회 ──────────────────────────────────────────────────────────────
@@ -515,6 +527,45 @@ def get_filled_orders(acnt_no: str, acnt_pwd: str, stk_cd: str = '') -> List[Dic
             'ord_stt': r.get('ord_stt'),
             'ord_tm': str(r.get('ord_tm') or ''),
         })
+    return out
+
+
+# ── 계좌별 주문체결내역상세 (kt00007) — 날짜 지정 소급 조회 ────────────────────
+# 2026-08-24 실계좌로 검증 완료 (20260819/20260820/20260821, ord_dt별 각 9/30/30건).
+# 기존 주석은 모의투자 테스트만 근거로 "안 씀"이라 적었으나 실계좌는 정상 동작한다.
+# ka10076과 달리 ord_dt로 과거 날짜를 조회할 수 있어, v8 거래이력 소급 백필에 이 API를 쓴다.
+def get_order_history(acnt_no: str, acnt_pwd: str, ord_dt: str,
+                      env: Optional[str] = None) -> List[Dict]:
+    """지정한 날짜(YYYYMMDD)의 주문/체결 내역 전체(페이지네이션 처리 포함).
+
+    반환: [{'ord_no','stk_cd','stk_nm','side','ord_qty','cntr_qty','cntr_pric',
+            'ord_tm'}] — cntr_qty=0인 항목은 미체결(취소/거부 포함)이니 실제 체결만
+    보려면 cntr_qty>0으로 걸러야 한다.
+    """
+    body = {'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd, 'ord_dt': ord_dt, 'qry_tp': '1',
+            'stk_bond_tp': '0', 'sell_tp': '0', 'stk_cd': '', 'fr_ord_no': '',
+            'dmst_stex_tp': 'KRX'}
+    out = []
+    cont_yn, next_key = 'N', ''
+    for _ in range(50):   # 안전판 — 무한루프 방지
+        data, headers = _call_raw('kt00007', '/api/dostk/acnt', body,
+                                  cont_yn=cont_yn, next_key=next_key, env=env)
+        for r in (data.get('acnt_ord_cntr_prps_dtl') or []):
+            io = str(r.get('io_tp_nm') or '')
+            out.append({
+                'ord_no': str(r.get('ord_no') or '').strip(),
+                'stk_cd': str(r.get('stk_cd') or '').lstrip('A'),
+                'stk_nm': r.get('stk_nm'),
+                'side': 'buy' if '매수' in io else ('sell' if '매도' in io else None),
+                'ord_qty': int(_to_number(r.get('ord_qty'))),
+                'cntr_qty': int(_to_number(r.get('cntr_qty'))),
+                'cntr_pric': _to_number(r.get('cntr_uv')),
+                'ord_tm': str(r.get('ord_tm') or ''),
+            })
+        cont_yn = headers.get('cont-yn', 'N')
+        next_key = headers.get('next-key', '')
+        if cont_yn != 'Y' or not next_key:
+            break
     return out
 
 

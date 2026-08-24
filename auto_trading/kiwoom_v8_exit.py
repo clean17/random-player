@@ -34,6 +34,7 @@ if ROOT not in sys.path:
 from auto_trading import kiwoom_api as api          # noqa: E402
 from auto_trading import kiwoom_v8_strategy as v8   # noqa: E402
 from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
+from auto_trading.kiwoom_trailing_stop import _record_trade  # noqa: E402
 
 # 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
 # INFO 로그가 전부 사라졌다. 상세는 kiwoom_api.get_trading_logger() docstring 참고.
@@ -163,18 +164,28 @@ def run_v8_exit_cycle():
             v8.mark_sold(code)
             _log.info('v8 손절(ATR샹들리에) %s qty=%d px=%.0f stop=%.0f -> %s',
                       code, qty, px, stop_px, res)
+            pnl = (px - entry) * qty
+            _record_trade(code, h.get('stk_nm'), 'sell', 'v8_atr_stop', qty, px, entry, pnl,
+                          holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
+                          trigger_level=stop_px / entry - 1.0, ord_no=res.get('ord_no'))
             st.pop(code, None)
             v8.release_ordered(code)
             continue
 
         # 2) 트레일링 -5% — 최초수량의 1/2
-        if pos.get('trail_armed') and px <= peak * (1.0 - TRAIL_PCT):
+        trail_trigger = peak * (1.0 - TRAIL_PCT)
+        if pos.get('trail_armed') and px <= trail_trigger:
             sell_qty = min(trail_qty, qty)
             if sell_qty >= 1:
                 res = api.sell_market(code, sell_qty)
                 v8.mark_sold(code)
                 _log.info('v8 트레일링 %s qty=%d px=%.0f peak=%.0f -> %s',
                           code, sell_qty, px, peak, res)
+                pnl = (px - entry) * sell_qty
+                _record_trade(code, h.get('stk_nm'), 'sell', 'v8_trailing', sell_qty, px, entry, pnl,
+                              holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
+                              peak_rate=peak / entry - 1.0, trigger_level=trail_trigger / entry - 1.0,
+                              tranche='1/2', ord_no=res.get('ord_no'))
                 pos['trail_armed'] = False
                 pos['last_fire_peak'] = peak
                 qty -= sell_qty
@@ -184,13 +195,19 @@ def run_v8_exit_cycle():
                     continue
 
         # 3) 익절 +20% — 최초수량의 1/2, 1회
-        if (not pos.get('tp_done')) and px >= entry * (1.0 + TP_PCT):
+        tp_trigger = entry * (1.0 + TP_PCT)
+        if (not pos.get('tp_done')) and px >= tp_trigger:
             sell_qty = min(tp_qty, qty)
             if sell_qty >= 1:
                 res = api.sell_market(code, sell_qty)
                 v8.mark_sold(code)
                 _log.info('v8 익절 %s qty=%d px=%.0f (+%.0f%%) -> %s',
                           code, sell_qty, px, TP_PCT * 100, res)
+                pnl = (px - entry) * sell_qty
+                _record_trade(code, h.get('stk_nm'), 'sell', 'v8_take_profit', sell_qty, px, entry, pnl,
+                              holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
+                              peak_rate=peak / entry - 1.0, trigger_level=tp_trigger / entry - 1.0,
+                              tranche='1/2', ord_no=res.get('ord_no'))
                 pos['tp_done'] = True
                 qty -= sell_qty
                 if qty <= 0:
@@ -203,6 +220,10 @@ def run_v8_exit_cycle():
             res = api.sell_market(code, qty)
             v8.mark_sold(code)
             _log.info('v8 보유상한(%d영업일) %s qty=%d -> %s', MAX_HOLD_DAYS, code, qty, res)
+            pnl = (px - entry) * qty
+            _record_trade(code, h.get('stk_nm'), 'sell', 'v8_max_hold', qty, px, entry, pnl,
+                          holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
+                          ord_no=res.get('ord_no'))
             st.pop(code, None)
             v8.release_ordered(code)
             continue

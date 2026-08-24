@@ -42,6 +42,7 @@ if ROOT not in sys.path:
 
 from auto_trading import kiwoom_api as api  # noqa: E402
 from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
+from auto_trading.kiwoom_trailing_stop import _record_trade  # noqa: E402
 
 # 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
 # INFO 로그가 전부 사라졌다(가동 후 5일간 trading.log에 v8 관련 줄 0건). 상세는
@@ -298,9 +299,31 @@ def release_ordered(code: str):
     """v8 이 해당 종목을 완전히 청산했을 때 호출 — 소유권 해제."""
     st = _load_pending()
     od = st.setdefault('ordered', {})
-    if od.pop(code, None) is not None:
+    fq = st.setdefault('filled_qty', {})
+    changed = od.pop(code, None) is not None
+    if fq.pop(code, None) is not None:
+        changed = True
+    if changed:
         _save_pending(st)
         _log.info('v8 소유권 해제 %s', code)
+
+
+def _take_fill_delta(code: str, cur_qty: int) -> int:
+    """직전 사이클 대비 늘어난 보유수량. 체결 감지 시 _record_trade 중복 기록을 막는 데 쓴다.
+
+    2026-08-24: v8 은 지금까지 _record_trade 를 한 번도 호출하지 않아 실거래 이력이
+    전부 누락됐다(trades_real.jsonl 에 v8 매수 0건). 이 함수는 보유수량 증가분만큼만
+    1회 기록하도록 보장한다 — 같은 종목을 같은 사이클(30초)마다 반복 조회해도
+    이미 반영된 수량은 delta=0 이라 중복 기록되지 않는다.
+    """
+    st = _load_pending()
+    fq = st.setdefault('filled_qty', {})
+    prev = int(fq.get(code, 0))
+    delta = cur_qty - prev
+    if delta != 0:
+        fq[code] = cur_qty
+        _save_pending(st)
+    return delta
 
 
 # ── 일봉 ─────────────────────────────────────────────────────────────────────
@@ -748,6 +771,13 @@ def run_v8_buy_cycle():
             px = float(h.get('avg_price') or 0)
             if px > 0:
                 consume_limits(code, px)
+                qty = int(h.get('qty') or 0)
+                delta = _take_fill_delta(code, qty)
+                if delta > 0:
+                    asset_ratio = (px * delta / equity) if equity > 0 else None
+                    _record_trade(code, h.get('stk_nm'), 'buy', 'v8_buy', delta, px, px, 0.0,
+                                  asset_ratio=asset_ratio)
+                    _log.info('v8 매수체결 기록 %s qty=%d(누적%d) px=%.0f', code, delta, qty, px)
 
     # 하루 1회 계산된 캐시를 쓴다 (첫 사이클에서만 pkl 을 읽는다)
     #  · 보유 중 종목 제외      = 동일 종목 중복 보유 금지
