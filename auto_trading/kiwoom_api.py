@@ -452,7 +452,8 @@ def place_order(stk_cd: str, qty: int, price: int,
 
 
 def cancel_order(orig_ord_no: str, stk_cd: str, qty: int = 0,
-                 side: str = '1', dmst_stex_tp: str = 'KRX') -> dict:
+                 side: str = '1', dmst_stex_tp: str = 'KRX',
+                 env: Optional[str] = None) -> dict:
     """주문 취소. qty=0 이면 잔량 전부 취소.
     api-id: kt10003(매수취소) / kt10004(매도취소). 2026-08-19 실계좌 확인."""
     body = {
@@ -462,7 +463,7 @@ def cancel_order(orig_ord_no: str, stk_cd: str, qty: int = 0,
         'cncl_qty': str(qty) if qty else '0',
     }
     api_id = 'kt10003' if side == '1' else 'kt10004'
-    return _call(api_id, '/api/dostk/ordr', body)
+    return _call(api_id, '/api/dostk/ordr', body, env=env)
 
 
 def buy_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',

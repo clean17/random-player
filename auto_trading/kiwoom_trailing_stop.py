@@ -74,7 +74,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
     dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path, \
-    KIWOOM_ENV, VALID_ENVS
+    cancel_order, KIWOOM_ENV, VALID_ENVS
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -1190,6 +1190,31 @@ def manual_sell(stk_cd: str, qty: int, env: Optional[str] = None):
     _record_trade(stk_cd, match['stk_nm'], 'sell', 'manual', sell_qty, match['cur_price'], match['avg_price'], pnl,
                   asset_ratio=asset_ratio, holding_ratio=holding_ratio,
                   ord_no=result.get('ord_no'), env=env)
+    return result
+
+
+def manual_cancel_order(stk_cd: str, ord_no: str, side: str, qty: int = 0,
+                        env: Optional[str] = None):
+    """미체결 주문 취소(대시보드 '주문 목록'의 취소 버튼).
+
+    side는 주문 목록 응답의 'buy'/'sell'을 그대로 받아 kt10003/kt10004 선택에 쓴다(내부적으로
+    '1'/'2'로 변환). qty=0이면 잔량 전부 취소.
+
+    ⚠️ v8이 낸 주문(v8_owned=True)을 취소해도 **v8 자신의 상태(kiwoom_v8_pending*.json)는
+    그대로**다. v8은 다음 장중 주기(run_v8_buy_cycle)에서 해당 후보가 여전히 유효하다고
+    판단하면 같은 자리에 주문을 다시 낼 수 있다 — 이 함수는 딱 "지금 이 주문"만 취소한다.
+    """
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if not (acnt_no and acnt_pwd):
+        _log.error(f'[수동취소] 계좌 정보 미설정 (env={env or KIWOOM_ENV})')
+        return
+    api_side = '1' if side == 'buy' else '2'
+    result = cancel_order(ord_no, stk_cd, qty, side=api_side,
+                          dmst_stex_tp=current_exchange(), env=env)
+    if not order_accepted(result):
+        _log.error(f'[수동취소-거부] {stk_cd} ord_no={ord_no} qty={qty or "전량"} -> {result}')
+        return result
+    _log.info(f'[수동취소:{env or KIWOOM_ENV}] {stk_cd} ord_no={ord_no} qty={qty or "전량"} -> {result}')
     return result
 
 

@@ -11,6 +11,36 @@
     <link rel="stylesheet" href="/static/css/interest_stocks.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/carousel.css?v={{ version }}">
     <style>
+        /* .btn-main/.btn-secondary 배경색은 원래 post.css가 정의하는데 이 페이지는 post.css를
+           안 불러온다. 배경색이 없으면 style.css의 범용 button 규칙(기본 #0056b3, 호버
+           #007BFF)으로 흘러 내려가서, 사이트 공통 규칙(.btn:hover의 filter:brightness(.94)
+           — 호버 시 살짝 어둡게)과 반대로 밝아져 보인다.
+           post.css와 같은 배경색을 여기서도 정의해 공통 규칙이 정상적으로 어둡게 먹히게 한다. */
+        .btn-main {
+            background: linear-gradient(90deg, #1565c0, #2492ff 90%);
+            color: #fff;
+            border: none;
+            padding: 10px 26px;
+            box-shadow: 0 1px 6px #0001;
+        }
+        /* post.css 원본(#f1f3f7 배경 + #dbe7fa 옅은 테두리)은 흰 배경 위에서 버튼처럼 안
+           보인다는 피드백을 받아, 이 페이지에서는 대비를 더 준 톤으로 조정했다. */
+        .btn-secondary {
+            background: #dce8fb;
+            color: #0b3d91;
+            border: 1px solid #8fb8ee;
+            padding: 10px 24px;
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
+        }
+        /* 명시적 :hover가 없으면 위 button:hover(#007BFF, 요소+가상클래스라 특이도가 더 높음)로
+           떨어져서 버튼 색이 갑자기 진한 파랑으로 바뀌어 버린다 — 은은하게만 톤이 바뀌게 한다
+           (그 위에 공통 filter:brightness(.94)가 덧입혀짐). */
+        .btn-secondary:hover {
+            background: #c5daf7;
+            border-color: #2492ff;
+        }
+
         /* 계좌(실전/모의) 안내문 — select 는 상단 탭바의 #kiwoomEnvFilter */
         .ms-env-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 8px 0; flex-wrap: wrap; }
         .ms-env-note { font-size: 12px; color: #888; }
@@ -570,9 +600,12 @@
                         <th class="right">수량</th>
                         <th>주문시간</th>
                         <th>주문번호</th>
+                        {% if current_user.get_id() != config.GUEST_USERNAME %}
+                        <th>액션</th>
+                        {% endif %}
                     </tr>
                     </thead>
-                    <tbody><tr><td colspan="10" class="empty">불러오는 중...</td></tr></tbody>
+                    <tbody><tr><td colspan="11" class="empty">불러오는 중...</td></tr></tbody>
                 </table>
             </div>
         </details>
@@ -1243,6 +1276,11 @@
           <td class="right">${qtyText}</td>
           <td>${o.ord_tm ?? ''}</td>
           <td>${o.ord_no ?? ''}</td>
+          ${isGuestUser ? '' : `<td>
+            <button type="button" class="btn btn-secondary ms-cancel-order" data-ord-no="${o.ord_no ?? ''}"
+                    data-stk-cd="${o.stk_cd ?? ''}" data-stk-nm="${o.stk_nm ?? ''}" data-side="${o.side ?? ''}"
+                    data-qty="${o.oso_qty ?? o.ord_qty ?? 0}" data-v8-owned="${o.v8_owned ? '1' : ''}">취소</button>
+          </td>`}
         </tr>`;
         }).join('');
     }
@@ -1587,11 +1625,30 @@
         if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
     });
 
-    document.getElementById('table-mystocks-orders')?.addEventListener('click', (e) => {
+    document.getElementById('table-mystocks-orders')?.addEventListener('click', async (e) => {
         const nameCell = e.target.closest('.ms-stock-name');
-        if (!nameCell) return;
-        const stkCd = nameCell.dataset.stkCd;
-        if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
+        if (nameCell) {
+            const stkCd = nameCell.dataset.stkCd;
+            if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
+            return;
+        }
+
+        const cancelBtn = e.target.closest('.ms-cancel-order');
+        if (!cancelBtn) return;
+        const { ordNo, stkCd, side, qty, v8Owned } = cancelBtn.dataset;
+        const display = cancelBtn.dataset.stkNm ? `${cancelBtn.dataset.stkNm}(${stkCd})` : stkCd;
+        const sideText = side === 'buy' ? '매수' : '매도';
+        // v8이 낸 주문은 취소해도 다음 장중 주기에 후보가 여전히 유효하면 v8이 같은 자리에
+        // 다시 주문을 낼 수 있다(v8 자체 상태는 이 취소로 안 바뀜) — 미리 알려서 오해를 막는다.
+        const warn = v8Owned ? '\n\n⚠️ v8이 관리 중인 주문입니다 — 취소해도 조건이 그대로면 다음 주기에 다시 걸릴 수 있습니다.' : '';
+        if (!confirm(`${display} ${sideText} 주문(${qty}주)을 취소할까요?${warn}`)) return;
+        try {
+            await axios.post('/stocks/kiwoom/cancel_order', { stk_cd: stkCd, ord_no: ordNo, side, qty, env: msEnv });
+            showDebugToast('취소 요청 완료');
+            msRefreshAfterOrder();
+        } catch (err) {
+            alert('취소 실패: ' + (err.response?.data?.message || err.message));
+        }
     });
 
 

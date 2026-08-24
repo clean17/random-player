@@ -17,7 +17,7 @@ from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_account_credentials, \
     get_current_price_and_name, get_deposit, get_unfilled_orders, KIWOOM_ENV, VALID_ENVS
-from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell
+from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order
 from auto_trading import kiwoom_v8_strategy as v8_strategy
 
 stock = Blueprint('stocks', __name__)
@@ -522,5 +522,29 @@ def post_kiwoom_sell():
         return {"status": "error", "message": str(e)}, 500
     return jsonify({"status": "success", "result": result})
 
+
+@stock.route("/kiwoom/cancel_order", methods=["POST"])
+@login_required
+def post_kiwoom_cancel_order():
+    if _is_guest():
+        return {"status": "error", "message": "게스트는 주문을 취소할 수 없습니다"}, 403
+
+    data = request.get_json() or {}
+    stk_cd = data.get("stk_cd")
+    ord_no = data.get("ord_no")
+    side = data.get("side")
+    qty = data.get("qty") or 0
+    if not stk_cd or not ord_no or side not in ("buy", "sell"):
+        return {"status": "error", "message": "stk_cd, ord_no, side(buy/sell)는 필수입니다"}, 400
+
+    try:
+        env = _req_env(from_json=True)
+        result = manual_cancel_order(stk_cd, ord_no, side, int(qty), env=env)
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"status": "success", "result": result})
 
 
