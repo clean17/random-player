@@ -477,6 +477,34 @@ def get_kiwoom_orders():
     return jsonify({"orders": orders, "env": env or KIWOOM_ENV})
 
 
+@stock.route("/kiwoom/live_gap_ranking", methods=["GET"])
+@login_required
+def get_kiwoom_live_gap_ranking():
+    """v8 후보 상위 N개의 실시간(현재가 기준) gap 순위. 종목당 현재가 조회 1회씩 필요해
+    N=60이면 ~8~9초 걸린다 — 프론트에서 수동 새로고침으로만 호출해야 한다(자동 폴링 금지)."""
+    try:
+        env = _req_env()
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    top_n = request.args.get("top", 60, type=int)
+    try:
+        ranking = v8_strategy.get_live_gap_ranking(env, top_n)
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    out = [{
+        'rank': i + 1,
+        'stk_cd': c.get('code'),
+        'stk_nm': c.get('name'),
+        'ord_px': c.get('ord_px'),
+        'cur_px': c.get('cur_px'),
+        'gap': c.get('gap'),
+        'live_gap': c.get('live_gap'),
+        'score': c.get('score'),
+    } for i, c in enumerate(ranking)]
+    return jsonify({"ranking": out, "env": env or KIWOOM_ENV})
+
+
 @stock.route("/kiwoom/buy", methods=["POST"])
 @login_required
 def post_kiwoom_buy():

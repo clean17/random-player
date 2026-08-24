@@ -171,7 +171,9 @@
         }
         .mystocks-buy-row input#ms-buy-code { flex: 1 1 0; }
         .mystocks-buy-row input#ms-buy-qty { flex: 1 1 0; }
-        .mystocks-buy-row button { flex: 0 0 auto; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+        /* 다른 액션 버튼(추가매수/매도/취소, .btn-secondary 24px 좌우패딩)과 크기를 맞춘다.
+           예전엔 여기서 10px로 눌러놔서 이 버튼만 유독 좁고 납작해 보였다. */
+        .mystocks-buy-row button { flex: 0 0 auto; white-space: nowrap; }
         .ms-positive { color: #d32f2f; }
         .ms-negative { color: #1565c0; }
         /* interest_stocks.css의 .table td { color: #111827 }가 특이도(요소+클래스)로 이겨버려서 별도 지정 */
@@ -206,6 +208,8 @@
             transform: rotate(90deg);
         }
         .mystocks-orders-count { font-weight: 400; font-size: 13px; color: #6b7280; }
+        .mystocks-livegap-toolbar { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+        .mystocks-livegap-toolbar .ms-refresh-status { margin-left: 0; }
 
         .mystocks-pie-wrap {
             display: flex;
@@ -558,7 +562,7 @@
             <div class="mystocks-buy-row">
                 <input type="text" id="ms-buy-code" placeholder="종목명/코드" autocomplete="off">
                 <input type="number" id="ms-buy-qty" placeholder="수량(생략시 가용현금 전액)" min="1">
-                <button type="button" class="btn btn-main" id="ms-buy-btn">매수</button>
+                <button type="button" class="btn btn-secondary" id="ms-buy-btn">매수</button>
             </div>
             <div class="mystocks-buy-price-preview" id="ms-buy-price-preview"></div>
             <ul class="mystocks-code-suggestions" id="ms-buy-code-suggestions" style="display:none;"></ul>
@@ -606,6 +610,34 @@
                     </tr>
                     </thead>
                     <tbody><tr><td colspan="11" class="empty">불러오는 중...</td></tr></tbody>
+                </table>
+            </div>
+        </details>
+
+        <!-- 종목당 현재가 조회 1회씩 필요해(60개 ≈ 8~9초) 3초 자동새로고침에 절대 태우지 않는다.
+             처음 펼칠 때 1회 자동 조회하고, 그 뒤로는 새로고침 버튼으로만 재조회한다. -->
+        <details class="mystocks-orders-details" id="ms-livegap-details">
+            <summary class="mystocks-subtitle mystocks-orders-summary">실시간 gap 순위 (상위 60)
+                <span class="mystocks-orders-count" id="ms-livegap-count"></span>
+            </summary>
+            <div class="mystocks-livegap-toolbar">
+                <button type="button" class="btn btn-secondary" id="ms-livegap-refresh">새로고침</button>
+                <span class="ms-refresh-status" id="ms-livegap-status">현재가를 종목마다 하나씩 조회해 8~9초 걸립니다 — 자동 새로고침되지 않습니다.</span>
+            </div>
+            <div class="table-scroller">
+                <table class="table" id="table-mystocks-livegap">
+                    <thead>
+                    <tr>
+                        <th class="right">순위</th>
+                        <th>종목명</th>
+                        <th class="right">주문가</th>
+                        <th class="right">현재가</th>
+                        <th class="right">gap</th>
+                        <th class="right">실시간gap</th>
+                        <th class="right">score</th>
+                    </tr>
+                    </thead>
+                    <tbody><tr><td colspan="7" class="empty">펼치면 자동으로 조회합니다</td></tr></tbody>
                 </table>
             </div>
         </details>
@@ -1285,6 +1317,69 @@
         }).join('');
     }
 
+    function renderMyStocksLiveGap(ranking) {
+        const table = document.getElementById('table-mystocks-livegap');
+        const tbody = table.querySelector('tbody');
+        const thCount = table.querySelectorAll('thead tr th').length;
+        const countEl = document.getElementById('ms-livegap-count');
+        if (countEl) countEl.textContent = ranking && ranking.length ? `(${ranking.length}건)` : '';
+        if (!ranking || !ranking.length) {
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">오늘자 후보 캐시가 없어요(장 시작 전 등)</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = ranking.map(c => `
+        <tr>
+          <td class="right">${c.rank}</td>
+          <td><span class="ms-stock-name" data-stk-cd="${c.stk_cd}">${c.stk_nm ?? ''}<br>(${c.stk_cd ?? ''})</span></td>
+          <td class="right">${msFmtWon(c.ord_px)}</td>
+          <td class="right">${msFmtWon(c.cur_px)}</td>
+          <td class="right">${msFmtPct(c.gap)}</td>
+          <td class="right">${msFmtPct(c.live_gap)}</td>
+          <td class="right">${c.score != null ? Number(c.score).toFixed(3) : '-'}</td>
+        </tr>`).join('');
+    }
+
+    let msLiveGapLoaded = false;
+    let msLiveGapLoading = false;
+
+    async function loadMyStocksLiveGap() {
+        if (msLiveGapLoading) return;   // 8~9초 걸리는 조회라 중복 클릭 방지
+        msLiveGapLoading = true;
+        const statusEl = document.getElementById('ms-livegap-status');
+        const btn = document.getElementById('ms-livegap-refresh');
+        if (btn) btn.disabled = true;
+        if (statusEl) statusEl.textContent = '조회 중... (종목당 하나씩, 8~9초 소요)';
+        try {
+            await initMsEnv();
+            const res = await fetch(`/stocks/kiwoom/live_gap_ranking?top=60${msEnvQuery('&')}`);
+            if (!res.ok) throw new Error('요청 실패');
+            const data = await res.json();
+            renderMyStocksLiveGap(data.ranking || []);
+            msLiveGapLoaded = true;
+            if (statusEl) statusEl.textContent = `${new Date().toLocaleTimeString('ko-KR')} 기준 (수동 새로고침 전까지 갱신 안 됨)`;
+        } catch (e) {
+            console.error(e);
+            if (statusEl) statusEl.textContent = '조회 실패 — 새로고침을 다시 눌러주세요';
+        } finally {
+            msLiveGapLoading = false;
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.getElementById('ms-livegap-refresh')?.addEventListener('click', loadMyStocksLiveGap);
+    // 처음 펼칠 때 1회만 자동 조회 — 접었다 다시 펴는 것으로 재조회하지 않는다(비용 때문에
+    // 새로고침 버튼으로만 다시 조회하게 유도).
+    document.getElementById('ms-livegap-details')?.addEventListener('toggle', function () {
+        if (this.open && !msLiveGapLoaded) loadMyStocksLiveGap();
+    });
+
+    document.getElementById('table-mystocks-livegap')?.addEventListener('click', (e) => {
+        const nameCell = e.target.closest('.ms-stock-name');
+        if (!nameCell) return;
+        const stkCd = nameCell.dataset.stkCd;
+        if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
+    });
+
     function renderMyStocksHistory(history) {
         const table = document.getElementById('table-mystocks-history');
         const tbody = table.querySelector('tbody');
@@ -1335,8 +1430,8 @@
         if (!note) return;
         const label = MS_ENV_LABEL[msEnv] || msEnv;
         note.textContent = (msEnv === msEnvDefault)
-            ? `${label} 계좌 — 이 서버(run.py)의 자동매매가 붙어 있습니다`
-            : `${label} 계좌 — 별도 프로세스(run_mock.py)에서 자동매매가 돕니다`;
+            ? `${label} 계좌 — 이 서버에 자동매매가 붙어 있습니다`
+            : `${label} 계좌 — 별도 프로세스에서 자동매매가 돕니다`;
         note.classList.toggle('is-live', msEnv === 'real');
     }
 
@@ -1373,6 +1468,11 @@
         try { localStorage.setItem(MS_ENV_KEY, msEnv); } catch (e) { /* 저장 불가 무시 */ }
         renderMsEnvNote();
         loadMyStocksData(true);      // 계좌가 바뀌었으니 즉시 다시 조회
+        // 실시간gap 순위는 자동 재조회 대상이 아니므로(비용), 계좌가 바뀌면 캐시만 무효화해
+        // 다음에 열거나 새로고침을 누를 때 새 계좌 기준으로 다시 받게 한다. 이미 펼쳐져 있으면
+        // 그 자리에서 바로 다시 받는다(안 그러면 화면엔 옛 계좌 데이터가 계속 남아 있게 된다).
+        msLiveGapLoaded = false;
+        if (document.getElementById('ms-livegap-details')?.open) loadMyStocksLiveGap();
     });
 
     async function loadMyStocksData(showOverlay = true) {
@@ -1992,14 +2092,26 @@
         }
     });
 
-    document.addEventListener('visibilitychange', () => {
+    // 모바일에서 홈화면 갔다가 한참 뒤 돌아오면(20분+) 새로고침이 멈춰 있던 걸로 보이는
+    // 사고가 있었다 — syncStockFlagsFromServer()가 던지면(예: 세션 만료) 그 아래
+    // startTimer()/msStartTimer()가 아예 실행되지 않아 타이머가 영영 안 돌아가는 구조였다.
+    // try/catch로 분리하고, 복귀 즉시 한 번 더 갱신해서(다음 3초 tick까지 안 기다리고)
+    // 오래된 화면이 그대로 남아있는 걸 방지한다.
+    function resumeMyStocksTimers() {
         const activeTabId = getActiveTabTarget();
-        if (!document.hidden) { // 다시 브라우저를 방문하면 한 번만 실행된다
-            // 자리를 비운 사이 다른 기기/탭에서 즐겨찾기·자동매수 대상이 바뀌었을 수 있으므로
-            // 서버 목록을 다시 받아 별·체크 표기를 맞춘다.
+        try {
             if (typeof window.syncStockFlagsFromServer === 'function') window.syncStockFlagsFromServer();
-            startTimer();
-            if (activeTabId === '#tab-mystocks') msStartTimer();
+        } catch (e) { console.error(e); }
+        startTimer();
+        if (activeTabId === '#tab-mystocks') {
+            msStartTimer();
+            loadMyStocksData(false);   // 자리를 비운 동안 밀린 갱신을 즉시 한 번 만회
+        }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) { // 다시 브라우저를 방문하면 한 번만 실행된다
+            resumeMyStocksTimers();
         } else { // 창을 나가면
             stopTimer(timer);
             stopTimer(timer2);
@@ -2007,6 +2119,12 @@
             msStopTimer();
         }
     })
+
+    // visibilitychange가 일부 모바일 브라우저에서 아주 긴 백그라운드 뒤 안정적으로 안 붙는
+    // 경우에 대비한 이중 안전장치 — focus/pageshow(bfcache 복원 포함)에서도 같은 복귀 로직을 탄다.
+    // resumeMyStocksTimers 자체가 멱등(타이머 재시작 + 즉시 갱신)이라 중복 호출돼도 무해하다.
+    window.addEventListener('focus', () => { if (!document.hidden) resumeMyStocksTimers(); });
+    window.addEventListener('pageshow', (e) => { if (e.persisted && !document.hidden) resumeMyStocksTimers(); });
 
     // 날짜 변경 시 즉시 불러오기
     startDateInputEl.addEventListener('change', loadData);

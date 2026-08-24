@@ -733,6 +733,33 @@ def get_owned_codes_for_env(env: Optional[str] = None) -> set:
     return set((_load_state_for_env(env).get('ordered') or {}).keys())
 
 
+def get_live_gap_ranking(env: Optional[str] = None, top_n: int = 60) -> List[Dict]:
+    """오늘 후보 중 정적 gap 상위 top_n개의 현재가를 조회해 실시간 gap으로 재정렬.
+
+    run_v8_buy_cycle()의 LIVE_REGAP_TOP(=60) 개념과 동일하고 비용도 같다(60개 x 0.143초
+    ≈ 8.6초, API 60회) — 다만 이건 v8 매매 루프와 완전히 분리된 **대시보드 조회 전용**
+    복사본이라, 여기서 조회한 결과가 v8의 실제 주문/랭킹에는 아무 영향을 주지 않는다.
+    LIVE_REGAP=False로 꺼져 있어 실매매 루프 자체는 이 계산을 안 하고 있다.
+
+    ⚠️ 비용이 있으니(순수 계산인 daily_candidates() 캐시 조회와 다름) 호출부가 자동 새로고침
+    루프에 넣지 않도록 주의할 것 — 대시보드 쪽에서 수동 새로고침으로만 트리거해야 한다.
+    """
+    day = _load_state_for_env(env).get('day') or {}
+    if day.get('date') != datetime.date.today().isoformat() or not isinstance(day.get('cands'), list):
+        return []
+    head = sorted(day['cands'], key=lambda x: -x['gap'])[:top_n]
+    out = []
+    for c in head:
+        try:
+            px, nm = api.get_current_price_and_name(c['code'], env=env)
+        except Exception:
+            px, nm = 0, ''
+        live_gap = (float(c['ord_px']) / px - 1.0) if px > 0 else c['gap']
+        out.append(dict(c, name=nm, cur_px=px, live_gap=live_gap))
+    out.sort(key=lambda x: -x['live_gap'])
+    return out
+
+
 def daily_candidates(force: bool = False) -> List[Dict]:
     """오늘 주문 가능한 후보 목록. **하루 1회만 계산하고 캐시**한다.
 
