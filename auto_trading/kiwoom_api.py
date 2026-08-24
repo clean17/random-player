@@ -569,11 +569,22 @@ def get_order_history(acnt_no: str, acnt_pwd: str, ord_dt: str,
     return out
 
 
-def get_unfilled_orders(acnt_no: str, acnt_pwd: str) -> List[Dict]:
-    """미체결 주문(ka10075). 응답 리스트 키는 'oso'. 시장가만 쓰는 동안은 보통 빈 리스트다."""
+def get_unfilled_orders(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> List[Dict]:
+    """미체결 주문(ka10075). 응답 리스트 키는 'oso'. 시장가만 쓰는 동안은 보통 빈 리스트다.
+
+    원본 키(ord_no/stk_cd/oso_qty/io_tp_nm 등, 값은 전부 문자열)는 v8_strategy가 그대로 쓰므로
+    유지하고, 숫자로 바로 쓰기 편하게 *_num 필드만 덧붙인다. cur_prc는 원본에 +/- 부호가
+    붙어 있어(전일대비 방향) cur_prc_num은 절대값으로 정규화한다.
+    """
     body = {
         'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd,
         'all_stk_tp': '0', 'trde_tp': '0', 'stk_cd': '', 'stex_tp': '0',
     }
-    data = _call('ka10075', '/api/dostk/acnt', body)
-    return data.get('oso') or []
+    data = _call('ka10075', '/api/dostk/acnt', body, env=env)
+    rows = data.get('oso') or []
+    for r in rows:
+        r['cur_prc_num'] = abs(_to_number(r.get('cur_prc')))
+        r['ord_pric_num'] = abs(_to_number(r.get('ord_pric')))
+        r['ord_qty_num'] = int(_to_number(r.get('ord_qty')))
+        r['oso_qty_num'] = int(_to_number(r.get('oso_qty')))
+    return rows

@@ -697,6 +697,42 @@ def _features_now(code: str, v: Dict) -> Optional[Dict]:
     return r
 
 
+def _load_state_for_env(env: Optional[str] = None) -> Dict:
+    """지정한 env의 pending 상태 파일을 조회 전용으로 읽는다 — 대시보드용.
+
+    ⚠️ 매매 루프(run_v8_buy_cycle)는 이 함수를 쓰지 않는다. 그쪽 STATE_PATH는 이
+    프로세스(run.py)의 KIWOOM_ENV에 고정돼야 하지만, 대시보드(Flask)는 별도 프로세스라
+    env가 요청마다 달라진다 — env_path()로 경로를 매번 다시 계산해야 실전/모의를
+    실수로 섞지 않는다.
+    """
+    path = env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_v8_pending.json'), env)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def get_today_candidates_by_code(env: Optional[str] = None) -> Dict[str, Dict]:
+    """오늘자 후보 캐시를 코드로 조회 — 대시보드 주문 목록의 gap/score 조회용.
+
+    ⚠️ daily_candidates()와 달리 **재계산하지 않는다** — 캐시가 없거나 날짜가 다르면
+    (장 시작 전 등) 빈 dict를 돌려준다. 조회 요청 하나 때문에 pkl 731개를 다시
+    읽어들이는 부작용을 만들지 않기 위함.
+    """
+    day = _load_state_for_env(env).get('day') or {}
+    if day.get('date') != datetime.date.today().isoformat() or not isinstance(day.get('cands'), list):
+        return {}
+    return {c['code']: c for c in day['cands']}
+
+
+def get_owned_codes_for_env(env: Optional[str] = None) -> set:
+    """v8_owned_codes()의 대시보드용 버전 — 지정한 env를 명시적으로 읽는다."""
+    return set((_load_state_for_env(env).get('ordered') or {}).keys())
+
+
 def daily_candidates(force: bool = False) -> List[Dict]:
     """오늘 주문 가능한 후보 목록. **하루 1회만 계산하고 캐시**한다.
 

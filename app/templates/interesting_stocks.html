@@ -154,6 +154,27 @@
             margin: 24px 0 10px;
         }
 
+        .mystocks-orders-details { margin: 24px 0 10px; }
+        .mystocks-orders-details > .table-scroller { margin-top: 10px; }
+        .mystocks-orders-summary {
+            margin: 0;
+            cursor: pointer;
+            user-select: none;
+            list-style: none;
+        }
+        .mystocks-orders-summary::-webkit-details-marker { display: none; }
+        .mystocks-orders-summary::before {
+            content: '▶';
+            display: inline-block;
+            font-size: 11px;
+            margin-right: 6px;
+            transition: transform 0.15s ease;
+        }
+        .mystocks-orders-details[open] > .mystocks-orders-summary::before {
+            transform: rotate(90deg);
+        }
+        .mystocks-orders-count { font-weight: 400; font-size: 13px; color: #6b7280; }
+
         .mystocks-pie-wrap {
             display: flex;
             align-items: center;
@@ -529,6 +550,29 @@
                 <tbody><tr><td colspan="6" class="empty">불러오는 중...</td></tr></tbody>
             </table>
         </div>
+
+        <details class="mystocks-orders-details" id="ms-orders-details">
+            <summary class="mystocks-subtitle mystocks-orders-summary">주문 목록 <span class="mystocks-orders-count" id="ms-orders-count"></span></summary>
+            <div class="table-scroller">
+                <table class="table" id="table-mystocks-orders">
+                    <thead>
+                    <tr>
+                        <th>종목명</th>
+                        <th>구분</th>
+                        <th class="right">주문가</th>
+                        <th class="right">현재가</th>
+                        <th class="right">gap</th>
+                        <th class="right">실시간gap</th>
+                        <th class="right">score</th>
+                        <th class="right">수량</th>
+                        <th>주문시간</th>
+                        <th>주문번호</th>
+                    </tr>
+                    </thead>
+                    <tbody><tr><td colspan="10" class="empty">불러오는 중...</td></tr></tbody>
+                </table>
+            </div>
+        </details>
 
         <h3 class="mystocks-subtitle">거래 이력</h3>
         <div class="table-scroller ms-history-scroller">
@@ -1136,6 +1180,39 @@
         }).join('');
     }
 
+    function renderMyStocksOrders(orders) {
+        const table = document.getElementById('table-mystocks-orders');
+        const tbody = table.querySelector('tbody');
+        const thCount = table.querySelectorAll('thead tr th').length;
+        const countEl = document.getElementById('ms-orders-count');
+        if (countEl) countEl.textContent = orders && orders.length ? `(${orders.length}건)` : '';
+        if (!orders || !orders.length) {
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">미체결 주문이 없어요</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = orders.map(o => {
+            const qtyText = o.oso_qty != null && o.oso_qty !== o.ord_qty
+                ? `${o.oso_qty ?? 0}/${o.ord_qty ?? 0}주` : `${o.ord_qty ?? 0}주`;
+            // 실시간gap: v8_strategy.run_v8_buy_cycle()의 live_gap과 같은 식(주문가/현재가 - 1).
+            // 전일종가 기준 gap과 달리 장중 등락을 그대로 반영해, 지금 체결까지 얼마나 남았는지 보여준다.
+            const liveGap = (o.cur_prc != null && Number(o.cur_prc) > 0)
+                ? Number(o.ord_pric) / Number(o.cur_prc) - 1.0 : null;
+            return `
+        <tr>
+          <td><span class="ms-stock-name" data-stk-cd="${o.stk_cd}">${o.stk_nm ?? ''}<br>(${o.stk_cd ?? ''})</span></td>
+          <td>${o.side === 'buy' ? '매수' : (o.side === 'sell' ? '매도' : (o.side ?? ''))}</td>
+          <td class="right">${msFmtWon(o.ord_pric)}</td>
+          <td class="right">${msFmtWon(o.cur_prc)}</td>
+          <td class="right">${msFmtPct(o.gap)}</td>
+          <td class="right">${msFmtPct(liveGap)}</td>
+          <td class="right">${o.score != null ? Number(o.score).toFixed(3) : '-'}</td>
+          <td class="right">${qtyText}</td>
+          <td>${o.ord_tm ?? ''}</td>
+          <td>${o.ord_no ?? ''}</td>
+        </tr>`;
+        }).join('');
+    }
+
     function renderMyStocksHistory(history) {
         const table = document.getElementById('table-mystocks-history');
         const tbody = table.querySelector('tbody');
@@ -1230,19 +1307,22 @@
         if (showOverlay) renderLoadingOverlay();
         try {
             await initMsEnv();
-            const [holdingsRes, historyRes] = await Promise.all([
+            const [holdingsRes, historyRes, ordersRes] = await Promise.all([
                 fetch(`/stocks/kiwoom/holdings${msEnvQuery()}`),
                 fetch(`/stocks/kiwoom/history?limit=100${msEnvQuery('&')}`),
+                fetch(`/stocks/kiwoom/orders${msEnvQuery()}`),
             ]);
-            if (!holdingsRes.ok || !historyRes.ok) throw new Error('요청 실패');
+            if (!holdingsRes.ok || !historyRes.ok || !ordersRes.ok) throw new Error('요청 실패');
             const holdingsData = await holdingsRes.json();
             const historyData = await historyRes.json();
+            const ordersData = await ordersRes.json();
 
             renderMyStocksSummary(holdingsData.summary || {});
             renderMyStocksHoldings(holdingsData.holdings || []);
             renderMyStocksPieChart(holdingsData.holdings || []);
             renderMyStocksPnl(historyData.pnl_summary || {});
             renderMyStocksHistory(historyData.history || []);
+            renderMyStocksOrders(ordersData.orders || []);
         } catch (e) {
             console.error(e);
             showDebugToast('내 종목 데이터를 불러오지 못했습니다');
@@ -1462,6 +1542,13 @@
     });
 
     document.getElementById('table-mystocks-history')?.addEventListener('click', (e) => {
+        const nameCell = e.target.closest('.ms-stock-name');
+        if (!nameCell) return;
+        const stkCd = nameCell.dataset.stkCd;
+        if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
+    });
+
+    document.getElementById('table-mystocks-orders')?.addEventListener('click', (e) => {
         const nameCell = e.target.closest('.ms-stock-name');
         if (!nameCell) return;
         const stkCd = nameCell.dataset.stkCd;

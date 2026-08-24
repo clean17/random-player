@@ -44,6 +44,7 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "/stocks/interest/insert", # 관심 종목 insert
                 "/stocks/interest/graph", '/stocks/low/graph',
                 "/stocks/kiwoom/holdings", "/stocks/kiwoom/history",
+                "/stocks/kiwoom/orders",
 
                 # [scrap]
                 "/func/scrap-posts",

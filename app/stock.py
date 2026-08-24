@@ -16,8 +16,9 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
 from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_account_credentials, \
-    get_current_price_and_name, get_deposit, KIWOOM_ENV, VALID_ENVS
+    get_current_price_and_name, get_deposit, get_unfilled_orders, KIWOOM_ENV, VALID_ENVS
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell
+from auto_trading import kiwoom_v8_strategy as v8_strategy
 
 stock = Blueprint('stocks', __name__)
 
@@ -427,6 +428,53 @@ def get_kiwoom_history():
         return {"status": "error", "message": str(e)}, 500
     return jsonify({"history": history, "pnl_summary": pnl_summary,
                     "env": env or KIWOOM_ENV})
+
+
+@stock.route("/kiwoom/orders", methods=["GET"])
+@login_required
+def get_kiwoom_orders():
+    try:
+        env = _req_env()
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if not (acnt_no and acnt_pwd):
+        return {"status": "error",
+                "message": f"계좌 정보가 설정되지 않음 (env={env or KIWOOM_ENV})"}, 500
+    try:
+        raw = get_unfilled_orders(acnt_no, acnt_pwd, env=env)
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+
+    # gap/score는 v8 후보 캐시(당일자)에만 있다. v8이 아닌 주문(레거시 fire/manual)은 None.
+    cands = v8_strategy.get_today_candidates_by_code(env)
+    owned = v8_strategy.get_owned_codes_for_env(env)
+
+    orders = []
+    for r in raw:
+        code = str(r.get('stk_cd') or '')
+        io = str(r.get('io_tp_nm') or '')
+        side = 'buy' if '매수' in io else ('sell' if '매도' in io else io)
+        tm = str(r.get('tm') or '')
+        ord_tm = f'{tm[0:2]}:{tm[2:4]}:{tm[4:6]}' if len(tm) == 6 else tm
+        cand = cands.get(code)
+        orders.append({
+            'ord_no': r.get('ord_no'),
+            'stk_cd': code,
+            'stk_nm': r.get('stk_nm'),
+            'side': side,
+            'ord_qty': r.get('ord_qty_num'),
+            'ord_pric': r.get('ord_pric_num'),
+            'oso_qty': r.get('oso_qty_num'),
+            'cur_prc': r.get('cur_prc_num'),
+            'ord_tm': ord_tm,
+            'gap': cand.get('gap') if cand else None,
+            'score': cand.get('score') if cand else None,
+            'v8_owned': code in owned,
+        })
+    orders.sort(key=lambda o: o.get('ord_tm') or '', reverse=True)
+    return jsonify({"orders": orders, "env": env or KIWOOM_ENV})
 
 
 @stock.route("/kiwoom/buy", methods=["POST"])
