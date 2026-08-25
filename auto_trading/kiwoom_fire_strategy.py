@@ -108,11 +108,18 @@ fire(급상승 관심종목) 자동 매수 전략.
 진입 시점 (중요):
   백테스트의 매수가는 신호일 '종가'다(fire_backtest_result.csv의 buy 컬럼 = 해당일 종가로 확인됨).
   H2 필터도 20일 신고가 대비/당일 등락률이라 완성된 일봉을 전제한 지표다. 따라서 이 전략은
-  장 마감 직전 1회만 평가/매수한다 (batch_runner의 kiwoom_fire_buy 잡, 평일 15:18).
+  장 마감 직전 1회만 평가/매수한다 (batch_runner의 kiwoom_fire_buy 잡, 평일 15:21).
   예전처럼 장중 :15/:35/:55로 21번 돌리면 아직 절반만 만들어진 일봉으로 판단하게 되고,
   급등 중인 장중 고점을 추격해 하루 매수 한도(BUY_SLOTS)를 아침에 소진한다. 실제로 2026-07-24
   HD현대에너지솔루션은 10:35에 196,600원에 샀는데 그날 종가가 164,000원(-16.6%),
   SK오션플랜트는 10:55에 20,450원에 샀는데 종가 18,350원(-10.3%)이었다.
+  ⚠️ 2026-08-25: 15:18/19 연속거래 시장가 → 15:20~15:30 동시호가 시장가로 전환.
+     연속거래 중 시장가는 '그 순간 현재가'에 체결되는데, 그건 '신호일 종가'라는 백테스트
+     가정과 다르다 — 실측으로 15:18 매수~종가 사이 평균 -0.9% 추가 하락이 관측됐다.
+     동시호가에 시장가로 넣으면 KRX가 15:30에 정하는 균형가격(그날 종가) 그대로
+     체결되어 이 갭이 사라진다. 게이트는 is_market_open()이 아니라
+     kiwoom_trailing_stop.is_closing_auction_open()(15:20~15:30)을 쓴다 — 15:20 이후를
+     '장 마감'으로 보는 is_market_open()을 그대로 쓰면 이 구간 자체가 막힌다.
 
 매수 후 청산은 kiwoom_trailing_stop.py의 30초 잡이 자동으로 담당한다.
 2026-08-11 확인한 실제 값 (기존 '손절 -3% / 트레일링 -2%p' 표기는 코드와 달라 수정):
@@ -130,7 +137,7 @@ import pandas as pd
 
 from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials, \
     env_path, KIWOOM_ENV
-from auto_trading.kiwoom_trailing_stop import _log, _record_trade, is_market_open, order_accepted
+from auto_trading.kiwoom_trailing_stop import _log, _record_trade, order_accepted
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
 CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
@@ -628,9 +635,10 @@ if __name__ == '__main__':
             mark = '★매수대상' if c['stk_cd'] in reserved else '         '
             print(f'  {i:2d}. {mark} {c["stk_nm"]}({c["stk_cd"]}) 총상승률 {c["total_rate"]}{ref}')
     elif '--run' in sys.argv:
-        if is_market_open():
+        from auto_trading.kiwoom_trailing_stop import is_closing_auction_open
+        if is_closing_auction_open():
             run_fire_buy_cycle()
         else:
-            print('장 시간이 아님')
+            print('동시호가 시간(15:20~15:30)이 아님')
     else:
         print('사용법: python -m auto_trading.kiwoom_fire_strategy --check | --run')

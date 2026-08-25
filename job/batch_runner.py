@@ -219,15 +219,20 @@ def create_mock_scheduler():
         id="mock_renew_token", executor="io", replace_existing=True,
     )
 
-    # fire 자동매수 — 평일 15:19 1회 (2026-08-24: 15:18→15:19로 변경, 사용자 요청).
-    # 근거·시각 선정 이유는 create_scheduler() 의 2-0-2 주석 참고(원래 15:18은 KRX 정규장
-    # 종료 15:20 전 2분 여유를 두려던 것 — 15:19면 여유가 1분으로 줄어든다. 오늘(2026-08-24)
-    # 15:18 실행은 429 재시도 때문에 스크리닝만 15초 걸렸고 전체(스크리닝+18건 매수)는
-    # 28초 소요됐다 — 15:19 시작이면 15:19:28경 종료로 15:20 컷오프 전에는 끝나지만,
-    # 후보가 더 많거나 429가 더 심하면 여유가 빠듯해질 수 있다.
+    # fire 자동매수 — 평일 15:21 1회 (2026-08-25: 연속거래 시장가(15:18→15:19) 대신
+    # 동시호가(15:20~15:30) 시장가로 전환, 사용자 요청).
+    # 계기: 15:18/19에 연속거래 시장가로 사면 그 순간 현재가에 체결되는데, 백테스트는
+    # '신호일 종가'를 매수가로 가정한다(kiwoom_fire_strategy.py 헤더 참고). 실측으로
+    # 15:18 매수 후 종가까지 평균 -0.9% 추가 하락이 관측됐다 — 체결가 자체가 백테스트
+    # 가정과 어긋나고 있었다는 뜻. 동시호가에 시장가로 들어가면 KRX가 15:30에 정하는
+    # 균형가격(=그날 종가) 그대로 체결되어 이 갭이 없어진다(auto_trading/kiwoom_trailing_stop.py
+    # is_closing_auction_open() 참고 — is_market_open()과 별개 게이트를 쓴다).
+    # 15:21로 잡은 이유: 동시호가는 구간 내 아무 때 들어가도 체결가가 같으므로 정각(15:20:00)
+    # 직후를 피해 스케줄러 지터에 여유를 주고, 15:30 마감까지 ~9분을 남겨 스크리닝+매수
+    # 루프(2026-08-24 실측 28초)가 429 재시도로 늘어져도 넉넉하다.
     scheduler.add_job(
         run_kiwoom_fire_buy,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=19),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=21),
         id="mock_fire_buy", executor="io", replace_existing=True,
     )
 
@@ -382,18 +387,20 @@ def create_scheduler():
     # 2-0-2) fire 자동매수 (H2 필터 + 시장폭 레짐) — 장 마감 직전 1회만 실행.
     #        근거: 백테스트(fire_backtest_result.csv)가 '신호일 종가 매수' 가정이고, H2 필터 자체가
     #        일봉 지표(20일 신고가 대비/당일 등락률)라 장중에 평가하면 아직 절반만 만들어진 일봉으로
-    #        판단하게 된다. pkl 정규장 마지막 갱신이 15:10, KRX 정규장 종료가 15:20이므로 그 사이인
-    #        15:18에 평가 — 종가에 최대한 붙이되 정규장 안에서 체결되도록 2분 여유를 둔다.
+    #        판단하게 된다. pkl 정규장 마지막 갱신이 15:10이라 그 이후 평가.
     #        예전엔 :15/:35/:55로 하루 21번 돌아 (1) 아침 급등 추격분이 하루 매수 한도를 먼저
     #        소진했고(실매수 5건 전부 09:35~10:55), (2) 15:35/15:55는 NXT 시간대인데 buy_market의
     #        기본 거래소가 KRX라 세션 불일치 주문이 나갈 수 있었다.
-    #        스케줄러가 밀려 15:20을 넘기면 is_market_open()이 False라 주문 없이 그냥 스킵된다.
+    #        2026-08-25: mock과 동일하게 15:20~15:30 동시호가 시장가 매수로 전환(mock_fire_buy
+    #        주석 참고 — 연속거래 시장가는 체결가가 '그 순간 현재가'라 백테스트의 '종가 매수'
+    #        가정과 어긋난다. 실측 -0.9% 갭). 되살릴 때는 is_closing_auction_open() 게이트와
+    #        15:21 트리거를 그대로 맞출 것 — is_market_open()/15:18을 쓰면 이 갭이 재발한다.
     # ⚠️ 2026-08-19 v8 전환으로 중단. fire 는 '당일 급등 추격(시장가)'이고 v8 은 '급락 대기(지정가)'라
     #    방향이 정반대이고, 같은 예수금을 두고 경쟁한다(v8 은 미체결 지정가로 예수금을 묶는다).
     #    되돌리려면 아래 주석을 풀고 kiwoom_v8_strategy.V8_ENABLED = False 로 바꾼 뒤 재시작.
     # scheduler.add_job(
     #     run_kiwoom_fire_buy,
-    #     trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=18),
+    #     trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=21),
     #     id="kiwoom_fire_buy",
     #     executor="io",
     #     replace_existing=True,

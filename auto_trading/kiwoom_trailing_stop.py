@@ -282,6 +282,26 @@ def is_trailing_window_open() -> bool:
     return KRX_REGULAR_START <= now.time() < TRAILING_STOP_END
 
 
+# fire 자동매수 전용 — 2026-08-25: 15:18/19 시장가(연속거래) 매수를 15:20~15:30 동시호가
+# (단일가매매) 시장가 매수로 바꿨다. 백테스트는 '신호일 종가'를 매수가로 가정하는데
+# (kiwoom_fire_strategy.py 헤더 참고), 연속거래 중 시장가로 사면 그 순간의 현재가일 뿐
+# 종가가 아니다 — 실측으로 15:18 매수 후 종가까지 평균 -0.9% 추가 하락이 관측됐다.
+# 동시호가는 이 구간에 들어온 주문을 15:30에 KRX가 정하는 균형가격(=그날 종가) 하나로
+# 전부 체결시키는 콜옥션이라, 시장가로 넣으면 정확히 '종가 매수'가 된다.
+# ⚠️ is_market_open()과 별개 함수다 — is_market_open()은 15:20 이후 False라 그 함수를
+#    그대로 쓰면 동시호가 구간 자체가 '장 마감'으로 막혀버린다.
+CLOSING_AUCTION_START = datetime.time(15, 20)
+CLOSING_AUCTION_END = datetime.time(15, 30)
+
+
+def is_closing_auction_open() -> bool:
+    """run_kiwoom_fire_buy() 전용 — 15:20~15:30 동시호가(단일가매매) 구간."""
+    now = datetime.datetime.now()
+    if now.weekday() >= 5:
+        return False
+    return CLOSING_AUCTION_START <= now.time() < CLOSING_AUCTION_END
+
+
 def current_exchange() -> str:
     """주문을 넣을 거래소 코드.
 

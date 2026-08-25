@@ -275,8 +275,10 @@ def reconcile_kiwoom_fills():
 
 
 def run_kiwoom_fire_buy():
-    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
-    if not is_market_open():
+    # is_market_open()이 아니라 동시호가 전용 게이트(15:20~15:30) — 2026-08-25부터
+    # 연속거래 시장가(15:18/19) 대신 동시호가 시장가로 바꿔 '종가 매수'가 되게 한다.
+    from auto_trading.kiwoom_trailing_stop import is_closing_auction_open, _log
+    if not is_closing_auction_open():
         return
     try:
         from auto_trading.kiwoom_fire_strategy import run_fire_buy_cycle
