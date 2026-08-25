@@ -73,7 +73,7 @@ try:
 except Exception:
     pass
 
-from auto_trading.kiwoom_fire_strategy import PKL_DIR                 # noqa: E402
+from auto_trading.kiwoom_fire_strategy_mock import PKL_DIR                 # noqa: E402
 from auto_trading.backtest.track_compare import prep                  # noqa: E402
 from auto_trading.backtest.entry_threshold_test import (              # noqa: E402
     CLUSTER_GAP, CLOSE_POS_MIN, STOP, MAX_HOLD,

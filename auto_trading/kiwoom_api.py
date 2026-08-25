@@ -250,7 +250,7 @@ def get_current_price(stk_cd: str) -> int:
 def get_intraday_range(stk_cd: str) -> Optional[Tuple[int, int, int]]:
     """(현재가, 당일 고가, 당일 저가) 반환. 실패하거나 값이 이상하면 None.
 
-    kiwoom_fire_strategy의 '종가위치' 필터용. 값에 +/- 부호와 콤마가 섞여 오므로 정규화한다.
+    kiwoom_fire_strategy_mock의 '종가위치' 필터용. 값에 +/- 부호와 콤마가 섞여 오므로 정규화한다.
     """
     try:
         data = _call('ka10001', '/api/dostk/stkinfo', {'stk_cd': stk_cd})

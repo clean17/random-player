@@ -281,7 +281,7 @@ def run_kiwoom_fire_buy():
     if not is_closing_auction_open():
         return
     try:
-        from auto_trading.kiwoom_fire_strategy import run_fire_buy_cycle
+        from auto_trading.kiwoom_fire_strategy_mock import run_fire_buy_cycle
         run_fire_buy_cycle()
     except Exception as e:
         _log.error(f'run_kiwoom_fire_buy 실패: {e}')

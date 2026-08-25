@@ -641,4 +641,4 @@ if __name__ == '__main__':
         else:
             print('동시호가 시간(15:20~15:30)이 아님')
     else:
-        print('사용법: python -m auto_trading.kiwoom_fire_strategy --check | --run')
+        print('사용법: python -m auto_trading.kiwoom_fire_strategy_mock --check | --run')

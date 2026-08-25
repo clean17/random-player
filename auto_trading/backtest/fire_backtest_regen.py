@@ -59,7 +59,7 @@ import pandas as pd
 # auto_trading/backtest/ → 저장소 루트까지 세 단계 올라가야 auto_trading 패키지가 import된다
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from auto_trading.kiwoom_fire_strategy import FIRE_WINDOW_DAYS, PKL_DIR, _parse_pct   # noqa: E402
+from auto_trading.kiwoom_fire_strategy_mock import FIRE_WINDOW_DAYS, PKL_DIR, _parse_pct   # noqa: E402
 from auto_trading.kiwoom_trailing_stop import (                                   # noqa: E402
     STOP_LOSS_RATE, ARMED_GIVEBACK_STOP, TARGET_RATES,
     TRAIL_ACTIVATE_RATE, TRAIL_GAP, MIN_PROFIT_FLOOR, STALL_GAP,

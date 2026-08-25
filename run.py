@@ -13,7 +13,7 @@ NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
 def spawn_mock_trading():
     """모의투자 자동매매(run_mock.py)를 자식 프로세스로 띄운다. (2026-08-20)
 
-    왜 별 프로세스인가: kiwoom_fire_strategy / kiwoom_trailing_stop 이 import 시점에 계좌번호와
+    왜 별 프로세스인가: kiwoom_fire_strategy_mock / kiwoom_trailing_stop 이 import 시점에 계좌번호와
     상태파일 경로를 모듈 상수로 굳히므로, 한 프로세스에서 실전(v8)과 모의(fire)를 같이 돌릴 수
     없다. KIWOOM_ENV=mock 인 별 프로세스로 띄우면 계좌·토큰·호스트·상태·이력·로그가 전부
     자동 분리된다. 상세는 job/batch_runner.create_mock_scheduler() docstring 참고.

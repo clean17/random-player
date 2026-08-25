@@ -40,7 +40,7 @@ except Exception:
     pass
 
 from auto_trading.backtest.fire_backtest_regen import load_ohlc, simulate_exit  # noqa: E402
-from auto_trading.kiwoom_fire_strategy import PKL_DIR  # noqa: E402
+from auto_trading.kiwoom_fire_strategy_mock import PKL_DIR  # noqa: E402
 
 # 2_finding_stocks_advanced.py와 같은 값으로 유지할 것
 TRADING_VALUE = 2_000_000_000

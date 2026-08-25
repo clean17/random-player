@@ -50,7 +50,7 @@ try:
 except Exception:
     pass
 
-from auto_trading.kiwoom_fire_strategy import PKL_DIR                # noqa: E402
+from auto_trading.kiwoom_fire_strategy_mock import PKL_DIR                # noqa: E402
 from auto_trading.backtest.cash_ratio_test import simulate           # noqa: E402
 
 MIN_TV = 2_000_000_000

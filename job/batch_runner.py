@@ -175,7 +175,7 @@ def create_mock_scheduler():
     """모의투자 계좌 전용 스케줄러 (2026-08-20).
 
     ━━━ 왜 별도 프로세스인가 ━━━
-    `kiwoom_fire_strategy` / `kiwoom_trailing_stop` 은 **import 시점에** 계좌번호와 상태파일
+    `kiwoom_fire_strategy_mock` / `kiwoom_trailing_stop` 은 **import 시점에** 계좌번호와 상태파일
     경로를 모듈 상수로 굳힌다(`ACNT_NO`, `STATE_FILE`, `FIRE_STATE_FILE` ...).
     한 프로세스에서 실전(v8)과 모의(fire)를 같이 돌리려면 그 모듈 상수를 환경별 인스턴스로
     쪼개야 하는데, 그건 지금 실계좌가 붙어 있는 코드를 통째로 건드리는 일이다.
@@ -222,7 +222,7 @@ def create_mock_scheduler():
     # fire 자동매수 — 평일 15:21 1회 (2026-08-25: 연속거래 시장가(15:18→15:19) 대신
     # 동시호가(15:20~15:30) 시장가로 전환, 사용자 요청).
     # 계기: 15:18/19에 연속거래 시장가로 사면 그 순간 현재가에 체결되는데, 백테스트는
-    # '신호일 종가'를 매수가로 가정한다(kiwoom_fire_strategy.py 헤더 참고). 실측으로
+    # '신호일 종가'를 매수가로 가정한다(kiwoom_fire_strategy_mock.py 헤더 참고). 실측으로
     # 15:18 매수 후 종가까지 평균 -0.9% 추가 하락이 관측됐다 — 체결가 자체가 백테스트
     # 가정과 어긋나고 있었다는 뜻. 동시호가에 시장가로 들어가면 KRX가 15:30에 정하는
     # 균형가격(=그날 종가) 그대로 체결되어 이 갭이 없어진다(auto_trading/kiwoom_trailing_stop.py

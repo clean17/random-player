@@ -83,7 +83,7 @@ try:
 except Exception:
     pass
 
-from auto_trading.kiwoom_fire_strategy import PKL_DIR   # noqa: E402
+from auto_trading.kiwoom_fire_strategy_mock import PKL_DIR   # noqa: E402
 
 TRADING_VALUE = 2_000_000_000   # 거래대금 20억
 MIN_CLOSE = 700
