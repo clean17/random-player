@@ -367,6 +367,11 @@
              옵션은 /stocks/kiwoom/envs 응답으로 JS가 채운다(서버가 가진 환경 목록이 곧 진실). -->
         <select id="kiwoomEnvFilter" class="rule-filter" style="display:none"></select>
         <input id="stockSearchInput" class="date" type="text" placeholder="종목명/코드 검색" style="display:none" autocomplete="off">
+        <select id="viewedFilter" class="rule-filter" style="display:none">
+            <option value="" selected>전체</option>
+            <option value="viewed">확인</option>
+            <option value="unviewed">미확인</option>
+        </select>
     </div>
 
     <h3 class="section-title" id="searchResultsHeader">검색 결과
@@ -692,16 +697,23 @@
     const interestVersionFilterEl = document.getElementById('interestVersionFilter');
     const kiwoomEnvFilterEl = document.getElementById('kiwoomEnvFilter');
     const stockSearchInputEl = document.getElementById('stockSearchInput');
+    const viewedFilterEl = document.getElementById('viewedFilter');
     // 검색창이 노출되는 탭(실시간/관심종목)에서 서버로부터 받은 원본 데이터.
     // 검색은 서버 재조회 없이 이 배열을 필터링해서 다시 그린다.
     let searchableDataFull = [];
 
     function applyStockSearchFilter() {
         const q = (stockSearchInputEl.value || '').trim().toLowerCase();
-        const filtered = !q ? searchableDataFull : searchableDataFull.filter(r =>
+        let filtered = !q ? searchableDataFull : searchableDataFull.filter(r =>
             (r.stock_name || '').toLowerCase().includes(q) ||
             (r.stock_code || '').toLowerCase().includes(q)
         );
+        const viewedMode = viewedFilterEl ? viewedFilterEl.value : '';
+        if (viewedMode === 'viewed') {
+            filtered = filtered.filter(r => viewedStocks.indexOf(r.stock_code) !== -1);
+        } else if (viewedMode === 'unviewed') {
+            filtered = filtered.filter(r => viewedStocks.indexOf(r.stock_code) === -1);
+        }
         renderTradingView(filtered);
     }
 
@@ -730,10 +742,15 @@
         // 내 계좌 탭에서만 계좌(실전/모의) 선택 노출
         kiwoomEnvFilterEl.style.display = (tabId === 'tab-mystocks') ? '' : 'none';
 
-        // 실시간/관심종목 탭에서만 종목명/코드 검색창 노출.
+        // 실시간/관심종목 탭에서만 종목명/코드 검색창 + 확인여부 필터 노출.
         // 탭마다 데이터셋이 달라 검색어를 유지할 이유가 없으므로 탭 전환 시 항상 비운다.
-        stockSearchInputEl.style.display = (tabId === 'tab-trading' || tabId === 'tab-summary') ? '' : 'none';
+        const showSearch = (tabId === 'tab-trading' || tabId === 'tab-summary');
+        stockSearchInputEl.style.display = showSearch ? '' : 'none';
         stockSearchInputEl.value = '';
+        if (viewedFilterEl) {
+            viewedFilterEl.style.display = showSearch ? '' : 'none';
+            viewedFilterEl.value = '';
+        }
 
         const isMyStocks = (tabId === 'tab-mystocks');
         const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved');
@@ -837,6 +854,16 @@
     ruleFilterEl.addEventListener('change', loadData);
     interestVersionFilterEl.addEventListener('change', loadData);
     stockSearchInputEl.addEventListener('input', applyStockSearchFilter);
+    // 확인/미확인 필터는 카드 전체를 다시 그려서(특히 종목이 많으면) 순간 버벅일 수 있다.
+    // setTimeout으로 한 틱 미뤄야 오버레이가 실제로 화면에 그려진 뒤 필터링이 시작된다
+    // (동기 실행이면 오버레이가 페인트되기 전에 다 끝나 안 보일 수 있다).
+    viewedFilterEl?.addEventListener('change', () => {
+        renderLoadingOverlay();
+        setTimeout(() => {
+            applyStockSearchFilter();
+            removeLoadingOverlay();
+        }, 0);
+    });
 
     // 오늘 날짜 기본값
     function setDefaultDateToday(interval=0, dateEl){
@@ -1110,12 +1137,20 @@
     const MS_REASON_LABEL = { stop_loss: '손절', giveback_stop: '되돌림손절', trailing: '트레일링', trailing_gap: '트레일링', trailing_floor: '트레일링-보호선', target: '목표가', manual: '수동', fire: 'fire자동', stall: '정체보호', v8_buy: 'v8매수', v8_atr_stop: 'v8손절(ATR)', v8_trailing: 'v8트레일링', v8_take_profit: 'v8익절', v8_max_hold: 'v8보유상한', v8_buy_backfilled: 'v8매수(소급기록)', v8_sell_backfilled: 'v8매도(소급기록, 사유불명)', v8_trailing_backfilled: 'v8트레일링(소급기록)' };
 
     // 매도 시 그 종목 보유수량 대비 이번에 판 비율 표시용 (전량/1/3/1/2 등)
+    // holding_ratio = 이번 매도수량 / '이번 매도 직전' 보유수량이다 — 최초 매수수량이 아니다.
+    // 트레일링/익절처럼 여러 번에 걸쳐 파는 경우, 2차 이후엔 분모가 이미 줄어든 잔량이라
+    // (예: 9주 중 1차로 4주 팔고 5주 남은 상태에서 2차로 또 4주 팔면 4/5=80%) 원래 수량
+    // 대비로 오해하기 쉽다. 그래서 퍼센트만 보여주지 않고 실제 "판 수량/그때 잔량"도 같이 쓴다.
     function msHoldingRatioText(ev) {
         if (ev.side !== 'sell' || ev.holding_ratio == null) return '';
-        const pct = Number(ev.holding_ratio) * 100;
+        const ratio = Number(ev.holding_ratio);
+        const pct = ratio * 100;
         if (!isFinite(pct)) return '';
-        if (pct >= 99.5) return ' (전량)';
-        return ` (${Math.round(pct)}%)`;
+        const soldQty = Number(ev.qty);
+        const beforeQty = (ratio > 0 && isFinite(soldQty)) ? Math.round(soldQty / ratio) : null;
+        const countTxt = beforeQty ? `${soldQty}/${beforeQty}주, ` : '';
+        if (pct >= 99.5) return ` (${countTxt}전량)`;
+        return ` (${countTxt}${Math.round(pct)}%)`;
     }
 
     // "사유" 칸에 tranche/고점/트리거선을 덧붙여, reason 라벨 하나로는 안 보이던

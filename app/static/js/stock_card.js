@@ -906,8 +906,8 @@ function markStockViewed(stockCode, article) {
 
 // ── '확인함' — 카드를 5초 이상 계속 보고 있으면 자동으로 확인 처리 ──────────────────
 // 캐러셀은 한 화면에 카드 1장(grid-auto-columns:100%)이라, IntersectionObserver로 지금
-// 화면에 꽉 찬(ratio>=0.9) 카드를 찾아 5초 타이머를 걸고, 스크롤로 빠져나가면 취소한다.
-const VIEWED_DWELL_MS = 5000;
+// 화면에 꽉 찬(ratio>=0.9) 카드를 찾아 4초 타이머를 걸고, 스크롤로 빠져나가면 취소한다.
+const VIEWED_DWELL_MS = 4000;
 let activeDwellTimers = null;   // 가장 최근에 렌더된 캐러셀의 Map(article -> timeoutId)만 추적
 
 function armViewedDwell(article) {
@@ -925,6 +925,19 @@ function disarmViewedDwell(article) {
     if (t) { clearTimeout(t); activeDwellTimers.delete(article); }
 }
 
+// 카드 전환(스와이프/스크롤)마다 서버 상태를 다시 물어본다 — 안 그러면 다른 기기에서
+// 방금 확인한 카드로 넘어와도 다음 60초 폴링 전까지 체크 표시가 안 보인다. 빠르게 여러 장
+// 넘길 때 매 카드마다 요청이 나가지 않도록 최소 간격을 둔다.
+let _lastCardSyncTs = 0;
+const CARD_SYNC_MIN_GAP_MS = 3000;
+
+function syncOnCardChange() {
+    const now = Date.now();
+    if (now - _lastCardSyncTs < CARD_SYNC_MIN_GAP_MS) return;
+    _lastCardSyncTs = now;
+    if (typeof window.syncStockFlagsFromServer === 'function') window.syncStockFlagsFromServer();
+}
+
 function setupViewedDwellObserver(track) {
     const timers = new Map();
     activeDwellTimers = timers;   // 이전 렌더의 트랙은 DOM에서 이미 제거됐으니 이걸로 교체
@@ -932,8 +945,12 @@ function setupViewedDwellObserver(track) {
     const observer = new IntersectionObserver((entries) => {
         if (document.hidden) return;   // 탭이 안 보이는 동안은 '보고 있다'로 치지 않는다
         entries.forEach((entry) => {
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.9) armViewedDwell(entry.target);
-            else disarmViewedDwell(entry.target);
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.9) {
+                armViewedDwell(entry.target);
+                syncOnCardChange();
+            } else {
+                disarmViewedDwell(entry.target);
+            }
         });
     }, { root: track, threshold: [0, 0.9, 1] });
 

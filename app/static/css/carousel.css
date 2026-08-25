@@ -39,22 +39,12 @@
     background: #fff;
 }
 
-/* 종목명/로고를 눌러(또는 5초 이상 봐서) 확인한 카드 표시 — fav-toggle이 inline-flex라
-   ::before는 항상 fav-btn/reserve-btn보다 앞(왼쪽)에 놓인다. 마크업을 안 건드리고
-   즐겨찾기 버튼 바로 왼쪽에 배지를 붙일 수 있다. */
-.table-scroller .trade-card.is-viewed .fav-toggle::before {
-    content: '확인함';
-    order: -1;
-    align-self: center;
-    background: rgba(17, 24, 39, .72);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 999px;
-    margin-right: 4px;
-    white-space: nowrap;
-    pointer-events: none;
+/* 종목명/로고를 눌러(또는 5초 이상 봐서) 확인한 카드 표시 — trade-name 바로 옆에 체크 표시.
+   마크업을 안 건드리고 CSS ::after만으로 붙인다. */
+.table-scroller .trade-card.is-viewed .trade-name::after {
+    content: ' ✓';
+    color: #16a34a;
+    font-weight: 900;
 }
 
 /* Header */

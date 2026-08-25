@@ -45,6 +45,9 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "/stocks/interest/graph", '/stocks/low/graph',
                 "/stocks/kiwoom/holdings", "/stocks/kiwoom/history",
                 "/stocks/kiwoom/orders",
+                "/stocks/viewed",
+                "/stocks/reserved",
+                "/stocks/favorite",
 
                 # [scrap]
                 "/func/scrap-posts",
