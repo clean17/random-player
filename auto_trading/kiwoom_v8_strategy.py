@@ -31,6 +31,7 @@ import glob
 import time
 import datetime
 import logging
+import threading
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -180,21 +181,38 @@ def is_market_open() -> bool:
 
 
 # ── 상태 ─────────────────────────────────────────────────────────────────────
+# 2026-08-26 사고: run_v8_buy_cycle(60초)과 run_v8_exit_cycle(30초, mark_sold/
+# release_ordered을 통해 이 파일을 건드림)이 같은 프로세스 안에서 동시에 이 파일을
+# 읽고 쓰다가 충돌했다 — 둘 다 고정된 이름의 임시파일(STATE_PATH+'.tmp')을 써서,
+# 한쪽이 쓰는 도중 다른 쪽이 같은 임시파일을 열거나 os.replace()하면서
+# "[WinError 32] 다른 프로세스가 파일을 사용 중" 이 나고 파일 내용이 JSON 두 개가
+# 이어붙은 형태로 깨졌다. 이후 모든 읽기가 "Extra data" 파싱 실패로 빈 상태
+# ({'pending': {}, 'ordered': {}, ...})를 돌려받았고, 그 빈 'ordered'가 그대로
+# 저장되면서 v8이 실제 보유 중인 종목 5개의 소유권 기록이 통째로 사라졌다
+# (v8_owned_codes()가 빈 집합을 반환 → kiwoom_v8_exit.py가 그 종목들을 전부
+# "내가 산 게 아니다"로 보고 손절/트레일링 관리에서 제외 — 실계좌 보호 공백 발생).
+# 고치는 법: (1) 프로세스 전역 락으로 읽기+쓰기를 직렬화, (2) 임시파일 이름에
+# pid+스레드ID를 넣어 서로 다른 스레드가 같은 임시파일을 절대 공유하지 않게 함.
+_pending_lock = threading.RLock()
+
+
 def _load_pending() -> Dict:
-    if os.path.exists(STATE_PATH):
-        try:
-            with open(STATE_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            _log.error('pending 로드 실패: %s', e)
-    return {'pending': {}, 'ordered': {}, 'updated': None}
+    with _pending_lock:
+        if os.path.exists(STATE_PATH):
+            try:
+                with open(STATE_PATH, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                _log.error('pending 로드 실패: %s', e)
+        return {'pending': {}, 'ordered': {}, 'updated': None}
 
 
 def _save_pending(state: Dict):
-    tmp = STATE_PATH + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(state, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, STATE_PATH)
+    with _pending_lock:
+        tmp = f'{STATE_PATH}.{os.getpid()}.{threading.get_ident()}.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, STATE_PATH)
 
 
 # ── 소유권 원장 ──────────────────────────────────────────────────────────────
