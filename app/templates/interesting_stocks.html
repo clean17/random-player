@@ -94,6 +94,28 @@
         #table-mystocks-holdings .value-sub {
             font-size: 13px;
         }
+        #table-mystocks-holdings th.ms-sortable {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        #table-mystocks-holdings th.ms-sortable:hover {
+            color: var(--accent, #4a9eff);
+        }
+        #table-mystocks-holdings th.ms-sortable::after {
+            content: '';
+            display: inline-block;
+            width: 0.7em;
+        }
+        #table-mystocks-holdings th.ms-sorted::after {
+            content: attr(data-sort-dir);
+        }
+        #table-mystocks-holdings th.ms-sorted[data-sort-dir="asc"]::after {
+            content: '▲';
+        }
+        #table-mystocks-holdings th.ms-sorted[data-sort-dir="desc"]::after {
+            content: '▼';
+        }
         .mystocks-pnl-line {
             display: flex;
             justify-content: space-between;
@@ -579,12 +601,12 @@
             <table class="table" id="table-mystocks-holdings">
                 <thead>
                 <tr>
-                    <th>종목명</th>
-                    <th class="right">매수가</th>
-                    <th class="right">현재가</th>
-                    <th class="right">등락률</th>
-                    <th class="right">평가금</th>
-                    <th class="right">수량</th>
+                    <th class="ms-sortable" data-sort="stk_nm">종목명</th>
+                    <th class="right ms-sortable" data-sort="avg_price">매수가</th>
+                    <th class="right ms-sortable" data-sort="cur_price">현재가</th>
+                    <th class="right ms-sortable" data-sort="day_change_rate">등락률</th>
+                    <th class="right ms-sortable" data-sort="evlt_amt">평가금</th>
+                    <th class="right ms-sortable" data-sort="qty">수량</th>
                     {% if current_user.get_id() != config.GUEST_USERNAME %}
                     <th>액션</th>
                     {% endif %}
@@ -1284,19 +1306,65 @@
         }).join('');
     }
 
+    // 종목 상세 헤더 클릭 정렬. 평가금은 원본 필드가 아니라 cur_price*qty 계산값이라 getter로 뺐다.
+    const MS_HOLDINGS_SORT_GETTERS = {
+        stk_nm: h => h.stk_nm ?? '',
+        avg_price: h => Number(h.avg_price || 0),
+        cur_price: h => Number(h.cur_price || 0),
+        day_change_rate: h => Number(h.day_change_rate ?? -Infinity),
+        evlt_amt: h => Number(h.cur_price || 0) * Number(h.qty || 0),
+        qty: h => Number(h.qty || 0),
+    };
+    let msHoldingsSort = { key: 'evlt_amt', dir: 'desc' };  // 기존 기본 정렬(평가금 내림차순)과 동일
+    let msLastHoldings = [];
+
+    function msSortHoldings(holdings) {
+        const get = MS_HOLDINGS_SORT_GETTERS[msHoldingsSort.key] || MS_HOLDINGS_SORT_GETTERS.evlt_amt;
+        const sign = msHoldingsSort.dir === 'asc' ? 1 : -1;
+        return holdings.slice().sort((a, b) => {
+            const va = get(a), vb = get(b);
+            if (typeof va === 'string' || typeof vb === 'string') {
+                return sign * String(va).localeCompare(String(vb), 'ko');
+            }
+            return sign * (va - vb);
+        });
+    }
+
+    function renderMyStocksHoldingsSortIndicators() {
+        document.querySelectorAll('#table-mystocks-holdings th[data-sort]').forEach(th => {
+            const active = th.dataset.sort === msHoldingsSort.key;
+            th.classList.toggle('ms-sorted', active);
+            th.dataset.sortDir = active ? msHoldingsSort.dir : '';
+        });
+    }
+
+    // 같은 헤더를 다시 누르면 방향 반전, 다른 헤더면 새로 선택(문자열은 오름차순부터, 숫자는
+    // 내림차순부터 — 종목명은 가나다순이 자연스럽고 나머지는 '큰 값 먼저'가 자연스럽다).
+    document.querySelector('#table-mystocks-holdings thead')?.addEventListener('click', (e) => {
+        const th = e.target.closest('th[data-sort]');
+        if (!th) return;
+        const key = th.dataset.sort;
+        if (msHoldingsSort.key === key) {
+            msHoldingsSort.dir = msHoldingsSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            msHoldingsSort = { key, dir: key === 'stk_nm' ? 'asc' : 'desc' };
+        }
+        renderMyStocksHoldings(msLastHoldings);
+    });
+
     function renderMyStocksHoldings(holdings) {
+        msLastHoldings = holdings || [];
         const table = document.getElementById('table-mystocks-holdings');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
+        renderMyStocksHoldingsSortIndicators();
         if (!holdings || !holdings.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">보유 종목이 없어요</td></tr>`;
             return;
         }
-        // 평가금액(현재가 × 수량) 내림차순 정렬. 원본 holdings는 파이차트 렌더에도 그대로
-        // 쓰이므로 복사본만 정렬한다 — 백엔드(kt00018 응답)는 정렬을 안 해준다.
-        const sorted = holdings.slice().sort((a, b) =>
-            (Number(b.cur_price || 0) * Number(b.qty || 0)) - (Number(a.cur_price || 0) * Number(a.qty || 0))
-        );
+        // 원본 holdings는 파이차트 렌더에도 그대로 쓰이므로 복사본만 정렬한다
+        // (백엔드(kt00018 응답)는 정렬을 안 해준다).
+        const sorted = msSortHoldings(holdings);
         tbody.innerHTML = sorted.map(h => {
             const pnl = h.pnl != null ? Number(h.pnl) : (Number(h.cur_price) - Number(h.avg_price)) * Number(h.qty || 0);
             const evltAmt = Number(h.cur_price || 0) * Number(h.qty || 0);
