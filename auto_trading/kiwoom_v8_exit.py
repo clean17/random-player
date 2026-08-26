@@ -44,6 +44,12 @@ V8_EXIT_ENABLED = True         # 소유권 분리(v8_owned_codes)로 기존 트�
 
 ATR_MULT = 3.0
 TRAIL_PCT = 0.05
+# 2026-08-26 사용자 요청: 트레일링 트리거(peak*(1-TRAIL_PCT))에 처음 닿아도 즉시 팔지 않고
+# 이 시간(초)만큼 재확인한다 — 그때도 여전히 트리거 이하일 때만 진짜로 판다(고점에서 살짝
+# 밀렸다가 바로 더 오르는 노이즈를 걸러내려는 목적). ⚠️ 분봉 데이터가 없어(strategy-ab-backtest
+# 도 일봉만 있음, core.py:114) 백테스트로 검증할 수 없는 값이다 — 라이브/모의 관찰로만 판단.
+# 30초로 우선 적용, 관찰 후 1분으로 늘릴지 결정.
+TRAIL_CONFIRM_SECONDS = 30
 TRAIL_FRAC = 0.5
 TP_PCT = 0.20
 TP_FRAC = 0.5
@@ -172,27 +178,44 @@ def run_v8_exit_cycle():
             v8.release_ordered(code)
             continue
 
-        # 2) 트레일링 -5% — 최초수량의 1/2
+        # 2) 트레일링 -5% — 최초수량의 1/2. TRAIL_CONFIRM_SECONDS 재확인(위 상수 설명 참고).
         trail_trigger = peak * (1.0 - TRAIL_PCT)
         if pos.get('trail_armed') and px <= trail_trigger:
-            sell_qty = min(trail_qty, qty)
-            if sell_qty >= 1:
-                res = api.sell_market(code, sell_qty)
-                v8.mark_sold(code)
-                _log.info('v8 트레일링 %s qty=%d px=%.0f peak=%.0f -> %s',
-                          code, sell_qty, px, peak, res)
-                pnl = (px - entry) * sell_qty
-                _record_trade(code, h.get('stk_nm'), 'sell', 'v8_trailing', sell_qty, px, entry, pnl,
-                              holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
-                              peak_rate=peak / entry - 1.0, trigger_level=trail_trigger / entry - 1.0,
-                              tranche='1/2', ord_no=res.get('ord_no'))
-                pos['trail_armed'] = False
-                pos['last_fire_peak'] = peak
-                qty -= sell_qty
-                if qty <= 0:
-                    st.pop(code, None)
-                    v8.release_ordered(code)
-                    continue
+            now = datetime.datetime.now()
+            since_dt = None
+            since_raw = pos.get('trail_watch_since')
+            if since_raw:
+                try:
+                    since_dt = datetime.datetime.fromisoformat(since_raw)
+                except ValueError:
+                    since_dt = None
+            if since_dt is None:
+                pos['trail_watch_since'] = now.isoformat()
+                _log.info('v8 트레일링관찰 %s px=%.0f peak=%.0f trigger=%.0f — %d초 재확인 대기',
+                          code, px, peak, trail_trigger, TRAIL_CONFIRM_SECONDS)
+            elif (now - since_dt).total_seconds() >= TRAIL_CONFIRM_SECONDS:
+                sell_qty = min(trail_qty, qty)
+                if sell_qty >= 1:
+                    res = api.sell_market(code, sell_qty)
+                    v8.mark_sold(code)
+                    _log.info('v8 트레일링 %s qty=%d px=%.0f peak=%.0f -> %s',
+                              code, sell_qty, px, peak, res)
+                    pnl = (px - entry) * sell_qty
+                    _record_trade(code, h.get('stk_nm'), 'sell', 'v8_trailing', sell_qty, px, entry, pnl,
+                                  holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
+                                  peak_rate=peak / entry - 1.0, trigger_level=trail_trigger / entry - 1.0,
+                                  tranche='1/2', ord_no=res.get('ord_no'))
+                    pos['trail_armed'] = False
+                    pos['last_fire_peak'] = peak
+                    pos['trail_watch_since'] = None
+                    qty -= sell_qty
+                    if qty <= 0:
+                        st.pop(code, None)
+                        v8.release_ordered(code)
+                        continue
+        elif pos.get('trail_watch_since') is not None:
+            _log.info('v8 트레일링관찰해제 %s px=%.0f 로 회복', code, px)
+            pos['trail_watch_since'] = None
 
         # 3) 익절 +20% — 최초수량의 1/2, 1회
         tp_trigger = entry * (1.0 + TP_PCT)
