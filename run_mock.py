@@ -43,7 +43,7 @@ def acquire_single_instance():
       작업이 막힌 사고가 있었다. 여기서는 **OS 파일 잠금**을 프로세스 수명 동안 들고 있는다 —
       프로세스가 죽으면 OS 가 잠금을 자동 해제하므로 유령 잠금이 원리적으로 생기지 않는다.
 
-    중복 실행이 위험한 이유: 두 인스턴스가 각각 15:18 fire 잡을 돌려 **같은 종목을 두 번 매수**한다.
+    중복 실행이 위험한 이유: 두 인스턴스가 각각 15:21 fire 잡을 돌려 **같은 종목을 두 번 매수**한다.
     """
     global _lock_fh
     os.makedirs(os.path.dirname(_LOCK_PATH), exist_ok=True)
@@ -84,7 +84,7 @@ def main():
     print(f'   KIWOOM_ENV : {KIWOOM_ENV}')
     print(f'   API host   : {_cfg_for()["base_url"]}')
     print(f'   계좌번호    : {acnt_no}')
-    print(f'   전략        : fire (15:18 시장가 매수 / 손절 -6% + 보유 5영업일)')
+    print(f'   전략        : fire (15:21 동시호가 시장가 매수 / 손절 -6% + 보유 15영업일, 트레일링 없음)')
     print('=' * 68)
 
     scheduler = create_mock_scheduler()
