@@ -1428,10 +1428,13 @@
             let pnlText = '-';
             let pnlClass = '';
             if (ev.side === 'sell') {
+                // net_pnl/net_rate = 수수료·세금 반영(2026-08-26 추가). 없는 옛 기록은 가격差만으로 폴백.
+                const hasNet = ev.net_pnl != null;
+                const pnlVal = hasNet ? Number(ev.net_pnl) : Number(ev.pnl || 0);
                 const cost = Number(ev.avg_price || 0) * Number(ev.qty || 0);
-                const rate = cost > 0 ? Number(ev.pnl || 0) / cost : 0;
-                pnlText = `${msFmtWon(ev.pnl)} (${msFmtPct(rate)})`;
-                pnlClass = msPnlClass(ev.pnl);
+                const rate = hasNet ? Number(ev.net_rate ?? 0) : (cost > 0 ? Number(ev.pnl || 0) / cost : 0);
+                pnlText = `${msFmtWon(pnlVal)} (${msFmtPct(rate)})`;
+                pnlClass = msPnlClass(pnlVal);
             }
             return `
         <tr>

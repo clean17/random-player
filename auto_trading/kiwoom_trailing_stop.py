@@ -135,6 +135,12 @@ if not _log.handlers:
 # 개선과 최근 분기 악화의 균형이 맞는 손절-6%/갭5%p(기하평균 +0.159%, 26Q3 -1.75%)를 택했다.
 # 손절 -7% 이상은 산술평균은 버틸만해도 변동성이 더 커져 기하평균이 오히려 꺾인다.
 STOP_LOSS_RATE = -0.06
+# 2026-08-26 사용자 요청: 손절선에 처음 닿은 순간 즉시 시장가로 팔지 않고, 이 시간(초) 동안
+# 재확인해서 그때도 여전히 손절선 이하면 판다. ⚠️ 백테스트로 검증된 값이 아니다 — 위 표의
+# -6%는 '닿으면 즉시 체결'을 가정해서 나온 수치라, 대기를 넣으면 실제 성과가 달라질 수 있다
+# (장점: 30초 스파이크성 하락에 덜 낚인다 / 단점: 대기 중 추가로 더 빠지면 손절선보다 더
+# 깊은 손실에서 팔린다). 사이클이 30초 간격이라 60초면 최소 2번 연속 확인된다.
+STOP_CONFIRM_SECONDS = 60
 # 고정 목표가 사다리는 비활성화 — 익절을 트레일링에 일임한다.
 # 2026-06~08 데이터(3,045건)로 실제 청산로직을 재현해 검증한 결과, 10/15/20% 사다리는
 # 상승 종목을 너무 일찍 끊어 오히려 성과를 깎았다(목표가 켬 -0.21% vs 끔 +0.08%).
@@ -358,6 +364,24 @@ def order_accepted(result) -> bool:
     return bool(result.get('ord_no'))
 
 
+
+# ── 거래비용(수수료·세금) 추정치 (KIWOOM_AUTO_TRADING.md 근거) ───────────────────
+# 2026-08-26: 손절 트리거는 키움 API의 수익률(prft_rt) 필드를 쓰는데 이 값은 수수료·세금까지
+# 반영된 수치라, 거래이력에 찍히는 순수 가격差 pnl/rate(-5.19%)보다 항상 먼저(-6.0%) 닿는다
+# ("손절 -6%인데 왜 -5.19%로 팔렸나" 문의). 거래이력에도 수수료·세금을 명시적으로 반영한
+# net_pnl/net_rate를 추가해 트리거 기준과 눈으로 봤을 때 맞아떨어지게 한다.
+#   모의투자: 2026-08-11 실측(매수 0.345% 수수료만 / 매도 0.546%=수수료~0.35%+거래세0.18%)
+#   실계좌  : 온라인 수수료 공시 기준 추정(매수 0.015% / 매도 0.015%+거래세0.18%=0.195%)
+FEE_RATES = {
+    'mock': {'buy': 0.00345, 'sell': 0.00546},
+    'real': {'buy': 0.00015, 'sell': 0.00195},
+}
+
+
+def _fee_rate(side: str, env: Optional[str] = None) -> float:
+    return FEE_RATES.get(env or KIWOOM_ENV, FEE_RATES['real'])[side]
+
+
 def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
                    qty: int, price: float, avg_price: float, pnl: float,
                    asset_ratio: Optional[float] = None, holding_ratio: Optional[float] = None,
@@ -377,8 +401,20 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
                    같은 종목·같은 수량을 하루에 두 번 거래할 수 있어(예: 2026-08-11 코칩 매도 2건)
                    종목+수량으로는 매칭이 어긋난다 — 반드시 ord_no로 붙여야 한다.
 
+    ⚠️ pnl/rate는 기존 그대로 수수료·세금 미반영(가격差만)이다 — 일별/월별 집계
+       (get_pnl_summary 등)의 과거 수치와 연속성을 깨지 않기 위해 그대로 둔다.
+       수수료·세금을 반영한 값은 side='sell'일 때만 net_pnl/net_rate로 추가 기록한다.
+
     ⚠️ price/qty는 '주문 시점 조회가'와 '주문 수량'이다. 실제 체결가·체결수량이 아니다.
        reconcile_fills()가 나중에 fill_* 필드를 채워 넣는다(아래 참고)."""
+    net_pnl = net_rate = None
+    if side == 'sell' and avg_price > 0 and qty > 0:
+        cost = avg_price * qty
+        sell_fee = price * qty * _fee_rate('sell', env)
+        buy_fee = cost * _fee_rate('buy', env)
+        net_pnl = round(pnl - sell_fee - buy_fee, 2)
+        net_rate = net_pnl / cost
+
     event = {
         'ts': datetime.datetime.now().isoformat(timespec='seconds'),
         'stk_cd': stk_cd,
@@ -389,6 +425,8 @@ def _record_trade(stk_cd: str, stk_nm: Optional[str], side: str, reason: str,
         'price': price,
         'avg_price': avg_price,
         'pnl': pnl,
+        'net_pnl': net_pnl,     # 수수료·세금 반영 순손익 (side='sell'만)
+        'net_rate': net_rate,   # net_pnl 기준 수익률
         'asset_ratio': asset_ratio,
         'holding_ratio': holding_ratio,
         'rate': rate,
@@ -905,6 +943,25 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     stop_level = ARMED_GIVEBACK_STOP if was_armed else STOP_LOSS_RATE
 
     if rate <= stop_level:
+        # 2026-08-26: 즉시 체결하지 않고 STOP_CONFIRM_SECONDS(60초) 재확인 — 최초 도달 시각을
+        # pos_state에 남겨두고, 그 시간이 지난 뒤에도 여전히 손절선 이하일 때만 실제로 판다.
+        # 도중에 손절선 위로 회복하면(else 분기) 관찰을 취소한다.
+        now = datetime.datetime.now()
+        since_raw = pos_state.get('stop_watch_since')
+        since_dt = None
+        if since_raw:
+            try:
+                since_dt = datetime.datetime.fromisoformat(since_raw)
+            except ValueError:
+                since_dt = None
+        if since_dt is None:
+            pos_state['stop_watch_since'] = now.isoformat()
+            _log.info(f'[손절관찰] {stk_nm}({stk_cd}) rate={rate:.2%} (손절선 {stop_level:.1%}) 최초 도달 — '
+                      f'{STOP_CONFIRM_SECONDS}초 재확인 대기')
+            return pos_state
+        if (now - since_dt).total_seconds() < STOP_CONFIRM_SECONDS:
+            return pos_state
+
         sell_qty = pos_state['remaining_qty']
         pnl = (cur_price - avg_price) * sell_qty
         trade_value = cur_price * sell_qty
@@ -932,6 +989,9 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         pos_state['remaining_qty'] = 0
         pos_state['exited'] = True
         return pos_state
+    elif pos_state.get('stop_watch_since') is not None:
+        _log.info(f'[손절관찰해제] {stk_nm}({stk_cd}) rate={rate:.2%} 로 회복 — 재확인 취소')
+        pos_state['stop_watch_since'] = None
 
     # 1-2) 보유기간 상한 — 손절 다음, 트레일링보다 먼저 본다.
     #      이 신호의 수익은 1~3일에 몰려 있고 그 뒤로 소멸한다(3년 검증: 1일 +0.106% /
