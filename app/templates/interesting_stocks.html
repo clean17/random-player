@@ -116,6 +116,18 @@
         #table-mystocks-holdings th.ms-sorted[data-sort-dir="desc"]::after {
             content: '▼';
         }
+        .ms-pending-badge {
+            font-size: 11px;
+            color: #b8860b;
+            border: 1px solid #b8860b;
+            border-radius: 3px;
+            padding: 0 4px;
+            margin-left: 4px;
+            white-space: nowrap;
+        }
+        #table-mystocks-history tr.ms-pending-row {
+            opacity: 0.65;
+        }
         .mystocks-pnl-line {
             display: flex;
             justify-content: space-between;
@@ -670,7 +682,7 @@
             </div>
         </details>
 
-        <h3 class="mystocks-subtitle">거래 이력</h3>
+        <h3 class="mystocks-subtitle">체결 이력</h3>
         <div class="table-scroller ms-history-scroller">
             <table class="table" id="table-mystocks-history">
                 <colgroup>
@@ -684,7 +696,7 @@
                 </colgroup>
                 <thead>
                 <tr>
-                    <th>시간</th>
+                    <th>주문시각</th>
                     <th>종목명</th>
                     <th>구분</th>
                     <th>사유</th>
@@ -1486,14 +1498,19 @@
         if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
     });
 
-    function renderMyStocksHistory(history) {
+    function renderMyStocksHistory(history, unfilledOrders) {
         const table = document.getElementById('table-mystocks-history');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         if (!history || !history.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">거래 이력이 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">체결 이력이 없어요</td></tr>`;
             return;
         }
+        // _record_trade()는 '체결 확인'이 아니라 '주문 접수' 시점에 기록된다(가격/수량도 주문 시점
+        // 조회가다). 진짜 체결가/체결수량은 reconcile_fills()가 사후(평일 20:10)에 채워 넣는
+        // fill_qty로 확정된다. 그 전까지는 이 주문이 지금도 미체결로 걸려 있는지(=아직 체결 안 됨,
+        // 동시호가 등으로 대기 중) 현재 미체결 주문 목록과 대조해 '체결대기'로 표시한다.
+        const restingOrdNos = new Set((unfilledOrders || []).map(o => o.ord_no).filter(Boolean));
         tbody.innerHTML = history.map(ev => {
             let pnlText = '-';
             let pnlClass = '';
@@ -1506,12 +1523,14 @@
                 pnlText = `${msFmtWon(pnlVal)} (${msFmtPct(rate)})`;
                 pnlClass = msPnlClass(pnlVal);
             }
+            const isPending = ev.fill_qty == null && ev.ord_no && restingOrdNos.has(ev.ord_no);
+            const statusText = isPending ? ' <span class="ms-pending-badge">체결대기</span>' : '';
             return `
-        <tr>
+        <tr class="${isPending ? 'ms-pending-row' : ''}">
           <td>${(ev.ts || '').replace('T', ' ')}</td>
           <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''}(${ev.stk_cd ?? ''})</span></td>
           <td>${ev.side === 'buy' ? '매수' : '매도'}</td>
-          <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}${msReasonDetailText(ev)}</td>
+          <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}${msReasonDetailText(ev)}${statusText}</td>
           <td class="right">${ev.qty ?? 0}주</td>
           <td class="right">${msFmtWon(ev.price)}</td>
           <td class="right ${pnlClass}">${pnlText}</td>
@@ -1604,7 +1623,7 @@
             renderMyStocksHoldings(holdingsData.holdings || []);
             renderMyStocksPieChart(holdingsData.holdings || []);
             renderMyStocksPnl(historyData.pnl_summary || {});
-            renderMyStocksHistory(historyData.history || []);
+            renderMyStocksHistory(historyData.history || [], ordersData.orders || []);
             renderMyStocksOrders(ordersData.orders || []);
         } catch (e) {
             console.error(e);

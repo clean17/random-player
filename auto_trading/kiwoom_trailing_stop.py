@@ -568,6 +568,12 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
         ev['tax'] = fill['tax']
         ev['slippage'] = slip
         ev['fill_src'] = via          # 'ord_no' = 정확 매칭 / 'legacy' = 종목+수량+시각 근접 매칭
+        # 2026-08-26: ka10076의 ord_tm을 '체결시각'으로 쓸 수 있을까 시도했다가 폐기했다 —
+        # 실측해보니(태광 15:21:41 주문 -> 15:30 동시호가 매칭 -> 정산 조회) ord_tm이 15:21:43로
+        # 나왔다. 문서에도 '주문시각'이라고만 되어 있고, 실제로도 접수시각을 그대로 되돌려줄
+        # 뿐 별도의 체결시각이 아니다. Kiwoom API가 체결시각을 따로 안 주므로 ev['ts'](주문
+        # 접수시각)가 이 이력에서 얻을 수 있는 유일한 시각이다 — fill_qty 유무로 체결 확정
+        # 여부만 판단하고, 시각은 굳이 별도 필드를 만들지 않는다.
         if ev.get('side') == 'sell' and ev.get('avg_price'):
             ev['fill_pnl'] = round((fp - float(ev['avg_price'])) * fq, 2)
         if fill['oso_qty']:
