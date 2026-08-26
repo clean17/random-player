@@ -1045,6 +1045,9 @@ async function onReserveButtonClick(e) {
     const current = btn.dataset.reserved === "true";
     const next = !current;
 
+    // 4초 dwell과 별개로, 매수예약 버튼을 눌렀다는 것 자체가 이미 카드를 확인했다는 뜻이다.
+    markStockViewed(code, btn.closest("article.trade-card"));
+
     // optimistic UI
     btn.dataset.reserved = String(next);
     renderReserveButton(btn);
@@ -1075,6 +1078,9 @@ async function onFavoriteButtonClick(e) {
     const code = btn.dataset.stockCode;
     const current = btn.dataset.favorited === "true";
     const next = !current;
+
+    // 4초 dwell과 별개로, 즐겨찾기 버튼을 눌렀다는 것 자체가 이미 카드를 확인했다는 뜻이다.
+    markStockViewed(code, btn.closest("article.trade-card"));
 
     // optimistic UI
     btn.dataset.favorited = String(next);
