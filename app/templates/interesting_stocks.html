@@ -582,6 +582,7 @@
                     <th>종목명</th>
                     <th class="right">매수가</th>
                     <th class="right">현재가</th>
+                    <th class="right">등락률</th>
                     <th class="right">평가금</th>
                     <th class="right">수량</th>
                     {% if current_user.get_id() != config.GUEST_USERNAME %}
@@ -589,7 +590,7 @@
                     {% endif %}
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="6" class="empty">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="7" class="empty">불러오는 중...</td></tr></tbody>
             </table>
         </div>
 
@@ -1305,6 +1306,7 @@
           <td><span class="ms-stock-name" data-stk-cd="${h.stk_cd}">${h.stk_nm ?? ''}<br>(${h.stk_cd ?? ''})</span></td>
           <td class="right">${msFmtWon(h.avg_price)}</td>
           <td class="right ${msPnlClass(h.profit_rate)}">${msFmtWon(h.cur_price)}</td>
+          <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
           <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ${msPnlClass(pnl)}">${pnlSubText}</span></td>
           <td class="right">${h.qty ?? 0}주</td>
           ${isGuestUser ? '' : `<td>

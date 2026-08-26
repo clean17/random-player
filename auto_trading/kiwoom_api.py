@@ -324,6 +324,7 @@ FIELD_AVG_PRICE = 'pur_pric'     # 매입가(평균단가)
 FIELD_CUR_PRICE = 'cur_prc'      # 현재가
 FIELD_PROFIT_RATE = 'prft_rt'    # 수익률(%) — evltv_prft_rt 아님, evltv_prft(손익금액)와 혼동 주의
 FIELD_PROFIT_AMOUNT = 'evltv_prft'  # 평가손익금액(원). (cur_price-avg_price)*qty로 재계산하면 매입가 원단위 반올림 때문에 tot_evlt_pl 합계와 오차가 생겨 반드시 이 필드를 그대로 써야 함
+FIELD_PRED_CLOSE = 'pred_close_pric'  # 전일종가. 매입가 기준 수익률(prft_rt)과 달리 '오늘' 등락만 보려면 이 값 기준이어야 함
 
 
 def dump_holdings_raw(acnt_no: str, acnt_pwd: str) -> dict:
@@ -361,6 +362,7 @@ def _parse_holdings(data: dict) -> List[Dict]:
         cur_price = _to_number(row.get(FIELD_CUR_PRICE))
         profit_rate = _to_number(row.get(FIELD_PROFIT_RATE)) / 100.0
         pnl = _to_number(row.get(FIELD_PROFIT_AMOUNT))
+        pred_close = _to_number(row.get(FIELD_PRED_CLOSE))
         if avg_price <= 0:
             print(f'[WARN] get_holdings: 매입가 파싱 실패 stk_cd={row.get(FIELD_STK_CD)} row={row}')
             continue
@@ -369,6 +371,8 @@ def _parse_holdings(data: dict) -> List[Dict]:
             profit_rate = (cur_price - avg_price) / avg_price
         if pnl == 0.0 and cur_price > 0:
             pnl = (cur_price - avg_price) * qty
+        # 매입가 기준 수익률(profit_rate)과는 별개로, '오늘' 하루치 등락만 보려면 전일종가 기준이어야 함
+        day_change_rate = (cur_price - pred_close) / pred_close if pred_close > 0 else None
 
         raw_stk_cd = row.get(FIELD_STK_CD) or ''
         stk_cd = raw_stk_cd[1:] if raw_stk_cd.startswith('A') else raw_stk_cd
@@ -381,6 +385,7 @@ def _parse_holdings(data: dict) -> List[Dict]:
             'cur_price': cur_price,
             'profit_rate': profit_rate,
             'pnl': pnl,
+            'day_change_rate': day_change_rate,
         })
     return holdings
 
