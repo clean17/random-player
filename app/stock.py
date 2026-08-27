@@ -419,6 +419,9 @@ def get_kiwoom_holdings():
     try:
         holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
         asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
+        # v8 1회 투입금(ALLOC=8%, kiwoom_v8_strategy.py) — 보유현금 카드 아래 작게 표시해서
+        # "새 주문 하나 걸 때 얼마가 필요한지"를 바로 보이게 한다. ALLOC이 바뀌면 여기도 같이 반영된다.
+        summary['order_alloc_amount'] = round(summary['total_asset'] * v8_strategy.ALLOC)
         # 예수금은 kt00018 에 없어서 별도 조회(kt00001). 없으면 화면이 죽지 않게 None 으로 넘긴다.
         try:
             summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)

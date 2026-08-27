@@ -90,6 +90,10 @@
             font-weight: 500;
             color: #888;
         }
+        /* 거래수익 금액(.mystocks-pnl-line .value, 13px)과 글자크기 맞춤 — 색은 회색 유지 */
+        #ms-cash-order-alloc {
+            font-size: 13px;
+        }
         /* 종목 상세 테이블의 평가금 밑 수익률(손익)은 요약 박스보다 조금 크게 */
         #table-mystocks-holdings .value-sub {
             font-size: 13px;
@@ -564,7 +568,7 @@
 
         <div class="mystocks-summary" id="mystocksSummary">
             <div class="mystocks-stat"><span class="label">총자산</span><span class="value" id="ms-total-asset">-</span></div>
-            <div class="mystocks-stat"><span class="label">보유 현금</span><span class="value" id="ms-cash">-</span></div>
+            <div class="mystocks-stat"><span class="label">보유 현금</span><span class="value" id="ms-cash">-</span><span class="value-sub" id="ms-cash-order-alloc"></span></div>
             <div class="mystocks-stat">
                 <span class="label">평가</span>
                 <span class="value" id="ms-evlt-amt">-</span>
@@ -1238,6 +1242,14 @@
             ? `주문가능 ${msFmtWon(dep.ord_alow_amt)} / 예수금 ${msFmtWon(dep.entr)}`
               + ` / 출금가능 ${msFmtWon(dep.pymn_alow_amt)} / D+2 추정예수금 ${msFmtWon(dep.d2_entra)}`
             : '예수금 조회 실패 — 추정예탁자산 − 평가금액으로 근사한 값';
+
+        // v8 1회 투입금(ALLOC=8%, kiwoom_v8_strategy.py) — 지금 새 주문을 걸면 얼마가 묶이는지.
+        // 이게 보유현금보다 크면 그날 새 동시주문은 못 걸린다(2026-08-27 대화 참고).
+        const allocEl = document.getElementById('ms-cash-order-alloc');
+        if (allocEl) {
+            allocEl.textContent = summary.order_alloc_amount != null
+                ? `주문 ${msFmtWon(summary.order_alloc_amount)}` : '';
+        }
 
         document.getElementById('ms-evlt-amt').textContent = msFmtWon(summary.tot_evlt_amt);
 
