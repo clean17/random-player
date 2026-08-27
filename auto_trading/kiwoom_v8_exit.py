@@ -51,6 +51,9 @@ TRAIL_PCT = 0.05
 # 30초로 우선 적용, 관찰 후 1분으로 늘릴지 결정.
 TRAIL_CONFIRM_SECONDS = 30
 TRAIL_FRAC = 0.5
+# 2026-08-27: 개장 후 이 분(分)까지, px가 전일종가와 정확히 같으면 계좌평가 지연으로 보고
+# 매매 판단을 보류한다(위 run_v8_exit_cycle 본문 주석 참고). 라이브 관찰 1건 근거라 보수적으로 3분.
+STALE_OPEN_GUARD_MIN = 3
 TP_PCT = 0.20
 TP_FRAC = 0.5
 MAX_HOLD_DAYS = 10
@@ -143,6 +146,20 @@ def run_v8_exit_cycle():
         px = float(h.get('cur_price') or 0)
         if px <= 0:
             continue
+        # 개장 직후 전일종가 고착 감지 — 2026-08-27 실측: kt00018(보유종목 실시간평가)이
+        # 09:00:20에도 일부 종목은 전일 종가를 그대로 들고 있었다(215790 617=08/26 종가,
+        # 08/27 저가 647보다도 낮은 값). 61초 뒤 재확인해도 안 바뀐 채로 트레일링이 발동됨
+        # (095행 001770/121850/179900/215790 4/6종목이 정확히 전일종가와 일치, 확인함).
+        # ANOMALY_DROP(35%)은 이 정도(9~13%) 괴리는 못 거른다. "개장 후 3분 이내 + 전일종가와
+        # 소수점까지 일치"만 좁게 걸러 스킵 — 값이 다르면(진짜 급락 포함) 정상 평가한다.
+        now_t = datetime.datetime.now()
+        if now_t.hour == 9 and now_t.minute < STALE_OPEN_GUARD_MIN:
+            d_chk = v8._load_daily(code)
+            prev_close = v8.prev_close_of(d_chk) if d_chk is not None else None
+            if prev_close is not None and px == prev_close:
+                _log.warning('v8 개장직후 전일종가 고착 의심 %s px=%.0f(=전일종가) — 이번 사이클 매매판단 보류',
+                             code, px)
+                continue
         # 이상 감지 — 매도하지 않고 스킵 (액면분할/권리락 방어)
         prev = float(pos.get('last_price') or px)
         if prev > 0 and px / prev - 1.0 <= -ANOMALY_DROP:
