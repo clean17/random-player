@@ -1197,7 +1197,12 @@
         const trig = pct(ev.trigger_level);
         const parts = [];
         if (ev.tranche) parts.push(`${ev.tranche}차`);
-        if (peak && trig) parts.push(`고점${peak}→트리거${trig}`);
+        // v8_take_profit 은 trigger_level 이 고점에서 밀린 하한선이 아니라 고정 목표가(+20%)라
+        // "고점→트리거"(하락 이탈) 문구를 그대로 쓰면 오르는 도중 팔린 걸 밀려서 팔린 것처럼 오해한다.
+        if (ev.reason === 'v8_take_profit') {
+            if (trig && peak) parts.push(`목표${trig} 도달(고점${peak})`);
+            else if (trig) parts.push(`목표${trig} 도달`);
+        } else if (peak && trig) parts.push(`고점${peak}→트리거${trig} 이탈`);
         else if (peak) parts.push(`고점${peak}`);
         else if (trig) parts.push(`트리거${trig}`);
         return parts.length ? ` <span class="ms-reason-detail">(${parts.join(', ')})</span>` : '';
