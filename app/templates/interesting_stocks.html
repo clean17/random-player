@@ -820,6 +820,7 @@
         updateTabExtras(target.id);
         if (target.id === 'tab-mystocks') {
             loadMyStocksData();
+            restoreMsLiveGapCache();
             msStartTimer();
         } else if (target.id === 'tab-summary') {
             msStopTimer();
@@ -1477,6 +1478,27 @@
     let msLiveGapLoaded = false;
     let msLiveGapLoading = false;
 
+    // 2026-08-27: 조회 자체가 8~9초·API 60회라 비싸서(위 주석), 브라우저 새로고침(F5)에도
+    // 마지막 결과가 그대로 보이게 sessionStorage에 캐싱한다. 갱신은 여전히 "새로고침" 버튼으로만
+    // — 여기 저장/복원 로직은 재조회를 트리거하지 않는다. env(실전/모의)가 다르면 다른 계좌
+    // 데이터라 복원하지 않는다. 탭 닫으면 사라지는 sessionStorage를 써서 며칠 지난 스냅샷을
+    // 마치 최신인 것처럼 계속 보여주는 일은 없게 한다.
+    const MS_LIVEGAP_CACHE_KEY = 'ms-livegap-cache-v1';
+
+    function saveMsLiveGapCache(env, ranking) {
+        try {
+            sessionStorage.setItem(MS_LIVEGAP_CACHE_KEY,
+                JSON.stringify({ env, ranking, ts: new Date().toISOString() }));
+        } catch (e) { /* 저장 불가(용량/프라이빗모드 등) 무시 — 캐싱은 부가기능일 뿐 */ }
+    }
+
+    function loadMsLiveGapCache() {
+        try {
+            const raw = sessionStorage.getItem(MS_LIVEGAP_CACHE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) { return null; }
+    }
+
     async function loadMyStocksLiveGap() {
         if (msLiveGapLoading) return;   // 8~9초 걸리는 조회라 중복 클릭 방지
         msLiveGapLoading = true;
@@ -1491,6 +1513,7 @@
             const data = await res.json();
             renderMyStocksLiveGap(data.ranking || []);
             msLiveGapLoaded = true;
+            saveMsLiveGapCache(msEnv, data.ranking || []);
             if (statusEl) statusEl.textContent = `${new Date().toLocaleTimeString('ko-KR')} 기준 (수동 새로고침 전까지 갱신 안 됨)`;
         } catch (e) {
             console.error(e);
@@ -1501,9 +1524,27 @@
         }
     }
 
+    // 페이지 새로고침 직후 호출 — 이전 세션에서 조회해둔 결과가 있고(같은 env) 그때 펼쳐져
+    // 있었다면, 재조회 없이 그대로 복원해서 펼친 채로 보여준다.
+    async function restoreMsLiveGapCache() {
+        if (msLiveGapLoaded) return;   // 이미 이번 페이지에서 로드/복원됨 — 탭 재방문마다 강제로 다시 펼치지 않는다
+        await initMsEnv();
+        const cached = loadMsLiveGapCache();
+        if (!cached || cached.env !== msEnv || !Array.isArray(cached.ranking)) return;
+        renderMyStocksLiveGap(cached.ranking);
+        msLiveGapLoaded = true;
+        const details = document.getElementById('ms-livegap-details');
+        if (details) details.open = true;
+        const statusEl = document.getElementById('ms-livegap-status');
+        if (statusEl) {
+            const t = new Date(cached.ts);
+            statusEl.textContent = `${isNaN(t) ? cached.ts : t.toLocaleTimeString('ko-KR')} 기준 (새로고침 전 저장된 결과 — 갱신하려면 새로고침 버튼)`;
+        }
+    }
+
     document.getElementById('ms-livegap-refresh')?.addEventListener('click', loadMyStocksLiveGap);
     // 처음 펼칠 때 1회만 자동 조회 — 접었다 다시 펴는 것으로 재조회하지 않는다(비용 때문에
-    // 새로고침 버튼으로만 다시 조회하게 유도).
+    // 새로고침 버튼으로만 다시 조회하게 유도). 캐시 복원으로 이미 로드된 상태라면 건너뛴다.
     document.getElementById('ms-livegap-details')?.addEventListener('toggle', function () {
         if (this.open && !msLiveGapLoaded) loadMyStocksLiveGap();
     });
