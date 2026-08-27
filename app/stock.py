@@ -423,11 +423,20 @@ def get_kiwoom_holdings():
         # "새 주문 하나 걸 때 얼마가 필요한지"를 바로 보이게 한다. ALLOC이 바뀌면 여기도 같이 반영된다.
         summary['order_alloc_amount'] = round(summary['total_asset'] * v8_strategy.ALLOC)
         # 예수금은 kt00018 에 없어서 별도 조회(kt00001). 없으면 화면이 죽지 않게 None 으로 넘긴다.
+        # 2026-08-27: 실패 시 1회 재시도 — 순간적인 레이트리밋/타임아웃이면 이걸로 대부분
+        # 넘어간다. 재시도까지 실패하면 프론트가 '총자산-평가금액' 근사식으로 대체 표시하던
+        # 시절이 있었는데, 그 근사식은 계좌가 거의 풀 투자 상태일 때 부호가 뒤집혀 없던
+        # 미수금처럼(오늘 모의계좌 -50만원 오표시) 보이는 게 이미 확인된 결함이라 지금은
+        # 프론트에서 그 폴백을 쓰지 않는다(interesting_stocks.html renderMyStocksSummary 참고).
         try:
             summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)
         except Exception as de:
-            print(f'예수금 조회 실패: {de}')
-            summary['deposit'] = None
+            print(f'예수금 조회 실패, 재시도: {de}')
+            try:
+                summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)
+            except Exception as de2:
+                print(f'예수금 조회 재시도도 실패: {de2}')
+                summary['deposit'] = None
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
