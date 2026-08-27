@@ -379,9 +379,12 @@ def create_scheduler():
     #          trades.jsonl에 조회가(px)만 남아 실제 체결가와 다를 때(예: kt00018이 개장 직후
     #          전일 종가를 잠깐 그대로 주는 지연) 하루 종일 잘못된 가격/손익이 노출된다.
     #          20:10 잡을 대체하지 않는다 — NXT 애프터마켓(20:00)까지의 체결은 이 잡으로 못 잡는다.
+    # 2026-08-28: IntervalTrigger는 시간대 제한이 없어 새벽에도 15분마다 돌며 API만 낭비했다
+    # (그 시각엔 오늘자 거래이력이 없으니 매칭 0건으로 항상 헛수행). 정규장 시작(09:00)부터
+    # NXT 애프터마켓 종료(20:00)까지만 돌게 CronTrigger로 바꾼다.
     scheduler.add_job(
         reconcile_kiwoom_fills,
-        trigger=IntervalTrigger(minutes=15),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/15"),
         id="kiwoom_reconcile_fills_15m",
         executor="io",
         replace_existing=True,

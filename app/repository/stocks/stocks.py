@@ -84,6 +84,22 @@ def get_stock_list(nation: str, conn=None):
     return rows
 
 
+# 보유종목 아이콘용 로고 URL 일괄 조회 (2026-08-28, 내계좌 탭 종목 아이콘)
+@db_transaction
+def get_logo_urls_by_codes(codes: Sequence[str], conn=None) -> dict:
+    if not codes:
+        return {}
+    sql = """
+        SELECT stock_code, logo_image_url
+        FROM stocks
+        WHERE stock_code = ANY(%s) AND logo_image_url IS NOT NULL;
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (list(codes),))
+        rows = cur.fetchall()
+    return {r[0]: r[1] for r in rows}
+
+
 # 종목명 부분 일치로 종목코드 조회 (모의투자 매수 입력창에서 한글 종목명 -> 코드 변환용)
 @db_transaction
 def find_stocks_by_name_prefix(name_prefix: str, conn=None) -> List[dict]:

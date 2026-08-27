@@ -94,6 +94,62 @@
         #ms-cash-order-alloc {
             font-size: 13px;
         }
+        /* 2026-08-28: 모든 컬럼의 첫 줄 텍스트가 행 상단에서 같은 높이로 시작하도록
+           top-align + line-height를 표 전체에 강제 통일한다. vertical-align:top만으론
+           부족했다 — 종목명(.ms-stock-info가 line-height:1.35 별도 지정)만 위아래 여백이
+           더 커서, line-height가 상속값 그대로인 등락률 등이 유독 보더라인에 붙어 보였다.
+           .ms-stock-info 쪽 line-height는 아래에서 지운다(이 값을 그대로 상속받게). */
+        #table-mystocks-holdings td {
+            vertical-align: top;
+            line-height: 1.35;
+        }
+        /* 종목코드를 이름 아래 작게 회색으로(2026-08-28) — 보유종목·체결이력 공통 */
+        .ms-stock-code {
+            color: #888;
+            font-size: 12px;
+            font-weight: 400;
+        }
+        /* 종목 아이콘(회사 로고 없이 이름 첫 글자 + 코드 기반 고정 색상, 2026-08-28) —
+           보유종목 테이블만. 다른 테이블(체결이력 등)의 .ms-stock-name은 아이콘 없이
+           기존 한 줄 텍스트 그대로라 flex를 걸지 않는다. */
+        #table-mystocks-holdings .ms-stock-name {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        /* img(실제 로고/토스 아이콘)와 span(이니셜 최종 폴백) 공통 크기 — 2026-08-28 확대(28→40px) */
+        .ms-stock-icon {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #eee;
+        }
+        span.ms-stock-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 17px;
+            font-weight: 700;
+        }
+        .ms-stock-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .ms-stock-nm {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* 보유종목 청산상태 컬럼(D+n · 고점대비 · 트레일링) — 별도 헤더로 분리됨(2026-08-28).
+           독립 컬럼이 됐으니 글자크기는 다른 셀과 같게 상속만 받는다(font-size 지정 안 함). */
+        .ms-holding-v8-state {
+            color: #888;
+            white-space: normal;
+        }
         /* 종목 상세 테이블의 평가금 밑 수익률(손익)은 요약 박스보다 조금 크게 */
         #table-mystocks-holdings .value-sub {
             font-size: 13px;
@@ -219,7 +275,6 @@
         .table td.ms-negative { color: #1565c0; }
         .ms-stock-name { cursor: pointer; }
         .ms-reason-detail { color: #6b7280; font-size: 12px; }
-
         .mystocks-subtitle {
             font-size: 16px;
             font-weight: 700;
@@ -617,18 +672,23 @@
             <table class="table" id="table-mystocks-holdings">
                 <thead>
                 <tr>
+                    <!-- 2026-08-28: 종목명 다음에 평가금(+손익)을 바로 둬서 "지금 이 종목이 내 자산에서
+                         얼마고, 얼마 벌었는지"를 제일 먼저 보게 한다 — 예전엔 평가금이 5번째라 스캔
+                         순서상 늦게 눈에 들어왔다. 등락률은 정렬이 필요해 현재가 옆 별도 컬럼으로,
+                         v8 청산상태(D+n·고점대비·트레일링)도 종목명 밑 배지 대신 별도 컬럼으로 뺐다. -->
                     <th class="ms-sortable" data-sort="stk_nm">종목명</th>
+                    <th class="right ms-sortable" data-sort="evlt_amt">평가금</th>
+                    <th class="right ms-sortable" data-sort="day_change_rate">등락률</th>
+                    <th>청산상태</th>
+                    <th class="right ms-sortable" data-sort="qty">수량</th>
                     <th class="right ms-sortable" data-sort="avg_price">매수가</th>
                     <th class="right ms-sortable" data-sort="cur_price">현재가</th>
-                    <th class="right ms-sortable" data-sort="day_change_rate">등락률</th>
-                    <th class="right ms-sortable" data-sort="evlt_amt">평가금</th>
-                    <th class="right ms-sortable" data-sort="qty">수량</th>
                     {% if current_user.get_id() != config.GUEST_USERNAME %}
                     <th>액션</th>
                     {% endif %}
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="7" class="empty">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="8" class="empty">불러오는 중...</td></tr></tbody>
             </table>
         </div>
 
@@ -1388,6 +1448,70 @@
         renderMyStocksHoldings(msLastHoldings);
     });
 
+    // v8이 관리 중인 종목의 청산상태를 한 줄로 압축 — "왜 팔릴 수 있는지"를 별도 컬럼(청산상태)
+    // 으로 바로 보여준다(2026-08-27~28 대화에서 반복됐던 "고점에서 밀려서 팔린거야?" 류 질문에
+    // 대한 답을 매매 이력이 아니라 지금 보유 화면에서 미리 확인할 수 있게 하려는 목적).
+    // 값은 app/stock.py `_v8_holding_state()`가 kiwoom_v8_positions.json 기준으로 계산해 준다.
+    function msV8StateText(v8) {
+        if (!v8) return '-';
+        // 2026-08-28: 손절까지/익절까지 숫자는 뺐다 — ATR 손절은 이 종목군 특성상 3×ATR이
+        // 고점에서 30%+ 떨어진 곳에 걸려 사실상 발동한 적이 없고(대화에서 로그로 확인),
+        // 익절까지는 대부분 음수로만 나와 오히려 헷갈렸다. 지금 실제로 상태가 바뀌는
+        // 트레일링(무장/해제)과 익절 '완료' 여부만 남긴다.
+        const parts = [`D+${v8.hold_days}/${v8.max_hold_days}`];
+        const armTxt = v8.trail_armed ? '무장' : '해제(재무장 대기)';
+        parts.push(`고점대비 ${msFmtPct(v8.pullback_from_peak)}(트리거 -${(v8.trail_pct * 100).toFixed(0)}%, ${armTxt})`);
+        if (v8.tp_done) parts.push('익절 1차 완료');
+        return parts.join(' · ');
+    }
+
+    // 종목 아이콘의 최종 폴백(이니셜 원, Gmail/Slack 아바타 방식) 색상 — 종목코드로 고정.
+    function msStockIconColor(code) {
+        let hash = 0;
+        const s = code || '';
+        for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+        return `hsl(${hash % 360}, 55%, 42%)`;
+    }
+    // 2026-08-28: 실제 로고 우선(stocks 테이블 logo_image_url, 백엔드가 h.logo_url로 붙여줌).
+    // 없으면 토스 증권 아이콘(종목코드만 바꿔 끼우는 고정 URL 패턴)으로, 그것도 깨지면
+    // (비상장/토스 미보유 종목) 최종적으로 이니셜 원으로 떨어진다 — 3단 폴백.
+    function msTossIconUrl(code) {
+        return `https://static.toss.im/png-icons/securities/icn-sec-fill-${code}.png`;
+    }
+    function msStockIconFallback(img) {
+        if (img.dataset.stage === 'primary') {
+            // DB 로고가 깨졌으면 토스 아이콘으로 한 번 더 시도
+            img.dataset.stage = 'toss';
+            img.src = msTossIconUrl(img.dataset.code);
+            return;
+        }
+        // 토스 아이콘도 없으면(비상장 등) 이니셜 원으로 최종 대체
+        const span = document.createElement('span');
+        span.className = 'ms-stock-icon';
+        span.style.background = msStockIconColor(img.dataset.code);
+        span.textContent = (img.dataset.name || img.dataset.code || '?').trim().charAt(0);
+        img.replaceWith(span);
+    }
+    function msStockIconHtml(name, code, logoUrl) {
+        const src = logoUrl || msTossIconUrl(code);
+        const nameAttr = (name || '').replace(/"/g, '&quot;');
+        return `<img class="ms-stock-icon" src="${src}" alt=""
+                     data-code="${code}" data-name="${nameAttr}" data-stage="${logoUrl ? 'primary' : 'toss'}"
+                     onerror="msStockIconFallback(this)">`;
+    }
+    // 종목명(아이콘 + 이름/코드 2단) — 지금은 보유종목 테이블 전용(체결이력은 기존 한 줄 유지).
+    // 클릭 시 네이버 증권으로 이동하는 기존 핸들러가 .ms-stock-name 을 closest()로 찾으므로,
+    // 이 span을 그대로 클릭 대상 컨테이너로 쓴다.
+    function msStockNameCellHtml(name, code, logoUrl) {
+        return `<span class="ms-stock-name" data-stk-cd="${code}">
+            ${msStockIconHtml(name, code, logoUrl)}
+            <span class="ms-stock-info">
+                <span class="ms-stock-nm">${name ?? ''}</span>
+                <span class="ms-stock-code">${code ?? ''}</span>
+            </span>
+        </span>`;
+    }
+
     function renderMyStocksHoldings(holdings) {
         msLastHoldings = holdings || [];
         const table = document.getElementById('table-mystocks-holdings');
@@ -1407,12 +1531,13 @@
             const pnlSubText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)} (${msFmtPct(h.profit_rate)})`;
             return `
         <tr>
-          <td><span class="ms-stock-name" data-stk-cd="${h.stk_cd}">${h.stk_nm ?? ''}<br>(${h.stk_cd ?? ''})</span></td>
+          <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url)}</td>
+          <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ${msPnlClass(pnl)}">${pnlSubText}</span></td>
+          <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
+          <td class="ms-holding-v8-state">${msV8StateText(h.v8)}</td>
+          <td class="right">${h.qty ?? 0}주</td>
           <td class="right">${msFmtWon(h.avg_price)}</td>
           <td class="right ${msPnlClass(h.profit_rate)}">${msFmtWon(h.cur_price)}</td>
-          <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
-          <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ${msPnlClass(pnl)}">${pnlSubText}</span></td>
-          <td class="right">${h.qty ?? 0}주</td>
           ${isGuestUser ? '' : `<td>
             <button type="button" class="btn btn-secondary ms-add-buy" data-stk-cd="${h.stk_cd}" data-stk-nm="${h.stk_nm ?? ''}">추가매수</button>
             <button type="button" class="btn btn-secondary ms-sell" data-stk-cd="${h.stk_cd}" data-stk-nm="${h.stk_nm ?? ''}" data-qty="${h.qty}">매도</button>
@@ -1592,7 +1717,7 @@
             return `
         <tr class="${isPending ? 'ms-pending-row' : ''}">
           <td>${(ev.ts || '').replace('T', ' ')}</td>
-          <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''}(${ev.stk_cd ?? ''})</span></td>
+          <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''} <span class="ms-stock-code">(${ev.stk_cd ?? ''})</span></span></td>
           <td>${ev.side === 'buy' ? '매수' : '매도'}</td>
           <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}${msReasonDetailText(ev)}${statusText}</td>
           <td class="right">${ev.qty ?? 0}주</td>

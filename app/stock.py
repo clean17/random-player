@@ -1,3 +1,5 @@
+import os
+import json
 from datetime import datetime
 
 from flask import Blueprint, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
@@ -9,7 +11,7 @@ from app.repository.stocks.stocks import merge_daily_interest_stocks, get_intere
     get_favorite_stocks_latest, \
     update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix, \
     upsert_reserved_stocks, get_reserved_stocks, clear_reserved_stocks, \
-    mark_stock_viewed, get_viewed_stocks
+    mark_stock_viewed, get_viewed_stocks, get_logo_urls_by_codes
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
@@ -17,9 +19,11 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
 from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_account_credentials, \
-    get_current_price_and_name, get_deposit, get_unfilled_orders, KIWOOM_ENV, VALID_ENVS
+    get_current_price_and_name, get_deposit, get_unfilled_orders, env_path, KIWOOM_ENV, VALID_ENVS
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order
 from auto_trading import kiwoom_v8_strategy as v8_strategy
+from auto_trading import kiwoom_v8_exit
+from auto_trading.kiwoom_v8_exit import _business_days as _v8_business_days
 
 stock = Blueprint('stocks', __name__)
 
@@ -405,6 +409,71 @@ def get_kiwoom_price():
     return jsonify({"stk_cd": stk_cd, "stk_nm": stk_nm, "price": price})
 
 
+def _load_v8_positions(env):
+    """kiwoom_v8_exit.py 의 포지션 상태(entry/atr/peak/trail_armed/tp_done)를 읽는다.
+
+    kiwoom_v8_exit.STATE_PATH 는 그 모듈이 import될 때의 프로세스 KIWOOM_ENV로 고정돼 있어
+    (v8_strategy._load_state_for_env() 와 같은 이유, kiwoom_v8_strategy.py:736-742 주석 참고)
+    대시보드(Flask)에서 env 파라미터로 실전/모의를 오갈 때 그대로 쓰면 계좌가 섞인다.
+    경로를 env_path()로 매번 다시 계산해서 우회한다. 조회 전용 — 실매매 로직은 안 건드림.
+    """
+    path = env_path(os.path.join(os.path.dirname(kiwoom_v8_exit.__file__),
+                                  'kiwoom_v8_positions.json'), env)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f'v8 포지션 상태 로드 실패: {e}')
+        return {}
+
+
+def _v8_holding_state(pos, cur_price):
+    """보유종목 카드에 붙일 v8 청산상태 요약. pos 는 kiwoom_v8_positions.json 의 종목별 값.
+
+    2026-08-28: 손절/익절까지 남은 폭은 뺐다 — ATR 손절은 이 종목군(급등 후 진입) 특성상
+    3×ATR이 고점에서 30%+ 떨어진 곳에 걸려 실측상 한 번도 발동한 적이 없고(로그 0건 확인),
+    익절까지는 대부분 음수로만 나와 오히려 헷갈렸다. 지금 실제로 값이 바뀌는 트레일링
+    무장상태와 익절 '완료' 여부만 남긴다.
+    """
+    entry = float(pos.get('entry') or 0)
+    peak = float(pos.get('peak') or 0)
+    cur = float(cur_price or 0)
+    if entry <= 0 or peak <= 0 or cur <= 0:
+        return None
+    return {
+        'hold_days': _v8_business_days(pos.get('entry_date', '')),
+        'max_hold_days': kiwoom_v8_exit.MAX_HOLD_DAYS,
+        'pullback_from_peak': cur / peak - 1.0,           # 현재가가 고점 대비 몇 % 아래인지(음수)
+        'trail_pct': kiwoom_v8_exit.TRAIL_PCT,             # 트레일링 트리거 폭(예: 0.05 = -5%)
+        'trail_armed': bool(pos.get('trail_armed', True)),
+        'tp_done': bool(pos.get('tp_done', False)),
+    }
+
+
+def _day_change_rate_from_pkl(stk_cd):
+    """당일 등락률 = pkl 마지막 두 종가의 비율 - 1. kt00018의 pred_close_pric은 실측상
+    cur_prc와 항상 같은 값이 와서(키움 쪽 결함으로 보임, 2026-08-28 확인) 못 쓴다.
+
+    "오늘 날짜" 기준으로 전일종가를 찾는 대신(prev_close_of), pkl의 **마지막 두 행을
+    그대로** 쓴다 — 이러면 장중엔 자동으로 '오늘(진행중) vs 어제'가 되고, 장마감 후부터
+    다음 거래일 pkl이 갱신되기 전까지는 자동으로 '방금 마감된 세션 vs 그 전날'이 유지된다
+    (다른 증권사 앱들이 마감 후에도 그날 등락률을 계속 보여주는 것과 같은 동작 — 시간으로
+    구분선을 긋지 않고 '데이터가 실제로 갱신됐는가'로 자연히 구분된다)."""
+    try:
+        if not stk_cd:
+            return None
+        d = v8_strategy._load_daily(stk_cd)
+        if d is None or len(d) < 2:
+            return None
+        close = d['close']
+        prev_close = float(close.iloc[-2])
+        return float(close.iloc[-1]) / prev_close - 1.0 if prev_close > 0 else None
+    except Exception:
+        return None
+
+
 @stock.route("/kiwoom/holdings", methods=["GET"])
 @login_required
 def get_kiwoom_holdings():
@@ -418,6 +487,21 @@ def get_kiwoom_holdings():
                 "message": f"계좌 정보가 설정되지 않음 (env={env or KIWOOM_ENV})"}, 500
     try:
         holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
+        # v8이 관리 중인 종목이면 청산상태(보유일/고점대비/손절·익절까지 남은 정도)를 붙인다.
+        # v8이 산 게 아니거나(레거시 fire·수동매수) 상태 파일에 없으면 None — 프론트는 배지를 생략한다.
+        v8pos = _load_v8_positions(env)
+        # 종목 아이콘용 로고 — stocks 테이블에 있으면 그걸 쓰고, 없으면 프론트에서
+        # 토스 증권 아이콘(https://static.toss.im/png-icons/securities/icn-sec-fill-{code}.png)으로
+        # 폴백한다(2026-08-28). DB 조회 1건으로 일괄 처리.
+        logo_urls = get_logo_urls_by_codes([h.get('stk_cd') for h in holdings if h.get('stk_cd')])
+        for h in holdings:
+            pos = v8pos.get(h.get('stk_cd'))
+            h['v8'] = _v8_holding_state(pos, h.get('cur_price')) if pos else None
+            h['logo_url'] = logo_urls.get(h.get('stk_cd'))
+            # 2026-08-28: kt00018의 pred_close_pric(전일종가)이 cur_prc와 항상 똑같이 와서
+            # (실측 확인 — 키움 API 쪽 결함으로 보임) day_change_rate가 매번 0%로 나왔다.
+            # pkl 일봉의 실제 전일 종가로 다시 계산해서 덮어쓴다.
+            h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
         asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
         # v8 1회 투입금(ALLOC=8%, kiwoom_v8_strategy.py) — 보유현금 카드 아래 작게 표시해서
         # "새 주문 하나 걸 때 얼마가 필요한지"를 바로 보이게 한다. ALLOC이 바뀌면 여기도 같이 반영된다.
