@@ -375,6 +375,18 @@ def create_scheduler():
         replace_existing=True,
     )
 
+    # 2-0-0-2) 체결 정산 — 장중 15분 간격 (2026-08-27 추가). 20:10 1회만으로는 매도 직후
+    #          trades.jsonl에 조회가(px)만 남아 실제 체결가와 다를 때(예: kt00018이 개장 직후
+    #          전일 종가를 잠깐 그대로 주는 지연) 하루 종일 잘못된 가격/손익이 노출된다.
+    #          20:10 잡을 대체하지 않는다 — NXT 애프터마켓(20:00)까지의 체결은 이 잡으로 못 잡는다.
+    scheduler.add_job(
+        reconcile_kiwoom_fills,
+        trigger=IntervalTrigger(minutes=15),
+        id="kiwoom_reconcile_fills_15m",
+        executor="io",
+        replace_existing=True,
+    )
+
     # 2-0-1) 키움 계좌 총자산 현황 로그 (장중 10분마다)
     scheduler.add_job(
         log_kiwoom_account_summary,
