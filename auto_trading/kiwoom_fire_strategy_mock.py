@@ -137,7 +137,8 @@ import pandas as pd
 
 from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials, \
     env_path, KIWOOM_ENV
-from auto_trading.kiwoom_trailing_stop import _log, _record_trade, order_accepted
+from auto_trading.kiwoom_trailing_stop import _log, _record_trade, order_accepted, \
+    _load_state as _load_trailing_state, _save_state as _save_trailing_state, _fresh_position_state
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
 CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
@@ -243,6 +244,17 @@ POS_CAP_DIVISOR = BUY_SLOTS  # 종목당 상한 = 매수한도 / 20 = 가용현�
 COOLDOWN_DAYS = 2          # 같은 종목 재매수 금지 기간. 1일에 샀으면 3일에 재매수 가능. 3→2
                            # (아래 조건이 "<"라서: diff=(오늘-마지막매수일).days, diff < 2이면 skip.
                            #  1일 매수 → 2일 diff1 skip, 3일 diff2 → 재매수 허용)
+
+REBUY_PROFIT_CAP = 0.05    # 2026-08-29: 이미 보유 중인 종목의 추가매수 차단 상한(평단가 기준
+                           # 수익률 >= 5%면 자동매수예약에 있어도 추가매수 skip). 재매수 시
+                           # entry_date가 리셋돼 MAX_HOLD_DAYS를 무력화하는 문제(kiwoom_trailing_stop.py
+                           # evaluate_and_trade())에 대한 대응 — 실거래 재매수 이벤트(n=3,960)로
+                           # 직접 백테스트해 0~20% 구간을 스윕한 결과 게이트가 있는 쪽이 모든
+                           # 구간에서 강하게·유의하게 우수했고(무차단 평균 -0.35%/승률28.1% vs
+                           # 5% 상한 평균 +4.08%/승률44.7%), 0~5% 구간 내에서는 임계값 차이가
+                           # 통계적으로 무의미해 사용자가 이미 보유 40종목 분산 효과를 해치지
+                           # 않는 보수적인 쪽인 5%로 확정. 문서/추정이 아니라 위 백테스트 수치가
+                           # 근거이니, 바꾸려면 auto_trading/backtest/로 재검증할 것.
 
 PKL_DIR = r'C:\my-project\AutoSales.py\data\pickle'
 _LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'kiwoom_trading')
@@ -456,7 +468,12 @@ def run_fire_buy_cycle():
 
     bd_txt = f'{breadth:.0%}' if breadth is not None else 'n/a'  # 레짐 OFF면 None일 수 있음
 
-    _, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
+    holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
+    # 2026-08-29: entry_date 오프바이원 버그 수정용 — 매수 직전 보유수량을 기억해뒀다가,
+    # 체결 직후 이 총량으로 트레일링 상태를 바로 만든다(아래 buy_market 성공 지점 참고).
+    held_qty_before = {h['stk_cd']: int(h.get('qty') or 0) for h in holdings}
+    # REBUY_PROFIT_CAP 판정용 — 이미 보유 중인 종목의 평단가(추가매수 여부 판단에만 쓴다).
+    held_avg_price = {h['stk_cd']: float(h.get('avg_price') or 0) for h in holdings}
 
     # 사이징 기준은 총자산이 아니라 '가용 현금'. 그중 CASH_DEPLOY_RATIO 까지만 쓰고
     # 나머지는 손대지 않는다(버퍼). deployed 누적으로 총 사용액이 그 한도를 넘지 않도록 막는다.
@@ -519,6 +536,7 @@ def run_fire_buy_cycle():
     from auto_trading.kiwoom_api import get_intraday_range
     ranked = []
     skipped_tail = 0
+    skipped_profit_cap = 0
     for cand in live:
         rng = get_intraday_range(cand['stk_cd'])
         if rng is None:
@@ -528,11 +546,23 @@ def run_fire_buy_cycle():
         if close_pos < CLOSE_POS_MIN:
             skipped_tail += 1
             continue
+        # REBUY_PROFIT_CAP: 이미 보유 중이고 평단가 기준 수익률이 상한 이상이면 자동매수예약에
+        # 있어도 추가매수하지 않는다(근거는 위 REBUY_PROFIT_CAP 정의부 주석 참고).
+        held_qty = held_qty_before.get(cand['stk_cd'], 0)
+        avg_price = held_avg_price.get(cand['stk_cd'], 0)
+        if held_qty > 0 and avg_price > 0:
+            profit_rate = price / avg_price - 1.0
+            if profit_rate >= REBUY_PROFIT_CAP:
+                skipped_profit_cap += 1
+                _log.info(f"[fire] {cand.get('stk_nm', cand['stk_cd'])}({cand['stk_cd']}) "
+                          f"보유중 수익률 {profit_rate:.1%} >= {REBUY_PROFIT_CAP:.0%} 상한 — 추가매수 skip")
+                continue
         ranked.append({**cand, '_price': price, '_close_pos': close_pos})
     ranked.sort(key=lambda c: c['_close_pos'], reverse=True)
 
     _log.info(f'[fire] 후보 {len(candidates)}종목(쿨다운 제외 {len(live)} → '
-              f'종가위치 {CLOSE_POS_MIN} 미달 {skipped_tail}종목 제외 후 {len(ranked)}종목) / '
+              f'종가위치 {CLOSE_POS_MIN} 미달 {skipped_tail}종목, 보유수익률상한 {skipped_profit_cap}종목 '
+              f'제외 후 {len(ranked)}종목) / '
               f'가용현금 {cash:,.0f}원 → 매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}), '
               f'종목당 상한 {pos_cap:,.0f}원(한도/{POS_CAP_DIVISOR}), 최대 {BUY_SLOTS}종목')
 
@@ -583,6 +613,35 @@ def run_fire_buy_cycle():
                   f'누적 {deployed:,.0f}/{deploy_limit:,.0f}원 → {result}')
         _record_trade(stk_cd, cand['stk_nm'], 'buy', 'fire', qty, price, price, 0.0, asset_ratio=asset_ratio,
                       ord_no=result.get('ord_no'))
+
+        # 2026-08-29: entry_date 오프바이원 버그 근본수정. 원래는 이 종목을
+        # kiwoom_trailing_stop.py의 30초 사이클이 '처음 발견'하는 순간(_fresh_position_state)
+        # entry_date=오늘로 찍었는데, 그 사이클은 09:00~15:19에만 돌고 fire 매수는 15:19~15:30
+        # 동시호가라 그날 안에는 절대 발견을 못 해 무조건 다음 거래일에 entry_date가 찍혔다
+        # (실측: 5종목 전부 매수일+1일). 여기서 체결 직후 바로 정확한 오늘 날짜로 트레일링
+        # 상태를 만들어두면, 다음 사이클이 '이미 있는 상태'로 보고 안 덮어쓴다 — 재매수로
+        # 수량이 늘어도 이 총량(held_qty_before + 이번 매수량)으로 새로 잡으므로 evaluate_and_trade()
+        # 의 리셋 분기(qty > remaining_qty)를 그대로 타지 않고 여기서 먼저 정확히 맞춰진다.
+        # 재매수 시 트레일링 진행상태를 새로 시작하는 기존 정책(위 모듈 docstring 17~19행)은
+        # 그대로 유지 — 여기서도 매번 새 _fresh_position_state를 만들어 같은 정책을 따른다.
+        try:
+            tstate = _load_trailing_state()
+            existing = tstate.get(stk_cd)
+            carry_over = {}
+            if existing is not None and not existing.get('exited'):
+                carry_over = {
+                    'last_price': existing.get('last_price'),
+                    'halted': existing.get('halted', False),
+                    'halt_reason': existing.get('halt_reason'),
+                }
+            total_qty = held_qty_before.get(stk_cd, 0) + qty
+            fresh = _fresh_position_state(total_qty)
+            fresh.update({k: v for k, v in carry_over.items() if v})
+            tstate[stk_cd] = fresh
+            _save_trailing_state(tstate)
+        except Exception as e:
+            _log.error(f'[fire매수] entry_date 즉시기록 실패 {stk_cd}: {e} '
+                       f'(치명적이지 않음 — 다음 트레일링 사이클이 예전처럼 +1일로 기록함)')
 
         state[stk_cd] = today.isoformat()
         buys_today += 1
