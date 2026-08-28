@@ -264,7 +264,18 @@ def create_mock_scheduler():
 
 def create_scheduler():
     global scheduler, executors
-    print("🕒 Scheduler start.... ")
+    # 2026-08-28: run_mock.py는 계좌/전략 배너 + 잡 목록을 찍는데 실계좌 쪽엔 없어서 뭐가 뜬
+    # 프로세스인지 콘솔만 보고 확인할 방법이 없었다 — 같은 형식으로 맞춘다.
+    from auto_trading.kiwoom_api import KIWOOM_ENV, get_account_credentials, _cfg_for
+    acnt_no, _ = get_account_credentials()
+    print('=' * 68)
+    print(f' 실계좌 자동매매 프로세스')
+    print(f'   KIWOOM_ENV : {KIWOOM_ENV}')
+    print(f'   API host   : {_cfg_for()["base_url"]}')
+    print(f'   계좌번호    : {acnt_no}')
+    print(f'   전략        : v8 (15:55 스크리닝 + 장중 지정가 대기 / ATR 샹들리에 손절 '
+          f'+ 트레일링 -5%(절반) + 익절 +20%(절반) + 보유 10영업일)')
+    print('=' * 68)
 
     # I/O는 스레드, CPU는 프로세스
     executors = {
@@ -666,6 +677,8 @@ def create_scheduler():
     )
 
     scheduler.start()
+    for j in scheduler.get_jobs():
+        print(f'  · {j.id:<28}{j.trigger}')
     return scheduler
 
 
