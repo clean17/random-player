@@ -185,6 +185,15 @@
             margin-left: 4px;
             white-space: nowrap;
         }
+        /* 실시간gap 순위표: 이미 보유 중인 종목 표시(2026-08-28) */
+        .ms-owned-badge {
+            font-size: 11px;
+            color: #1a7f37;
+            border: 1px solid #1a7f37;
+            border-radius: 3px;
+            padding: 0 4px;
+            white-space: nowrap;
+        }
         #table-mystocks-history tr.ms-pending-row {
             opacity: 0.65;
         }
@@ -739,9 +748,10 @@
                         <th class="right">gap</th>
                         <th class="right">실시간gap</th>
                         <th class="right">score</th>
+                        <th>보유</th>
                     </tr>
                     </thead>
-                    <tbody><tr><td colspan="7" class="empty">펼치면 자동으로 조회합니다</td></tr></tbody>
+                    <tbody><tr><td colspan="8" class="empty">펼치면 자동으로 조회합니다</td></tr></tbody>
                 </table>
             </div>
         </details>
@@ -1249,8 +1259,14 @@
         const soldQty = Number(ev.qty);
         const beforeQty = (ratio > 0 && isFinite(soldQty)) ? Math.round(soldQty / ratio) : null;
         const countTxt = beforeQty ? `${soldQty}/${beforeQty}주, ` : '';
+        // tranche(예: '1/2')가 의도한 분수다. 그 직전 잔량(beforeQty)이 분모로 안 나눠떨어지면
+        // 정수 주식 수로 반올림되면서 %가 의도한 값(정확히 50% 등)과 달라진다 — 2026-08-28,
+        // 3주 중 1/2을 팔아야 하는데 1.5주가 안 돼 2주(67%)로 반올림된 사례에서 오해가 생겨 추가.
+        const denom = ev.tranche ? parseInt(String(ev.tranche).split('/')[1], 10) : null;
+        const isRounded = denom && beforeQty != null && beforeQty % denom !== 0;
+        const roundedTxt = isRounded ? '(반올림)' : '';
         if (pct >= 99.5) return ` (${countTxt}전량)`;
-        return ` (${countTxt}${Math.round(pct)}%)`;
+        return ` (${countTxt}${Math.round(pct)}%${roundedTxt})`;
     }
 
     // "사유" 칸에 tranche/고점/트리거선을 덧붙여, reason 라벨 하나로는 안 보이던
@@ -1260,6 +1276,7 @@
         const pct = (v) => (v != null && isFinite(Number(v))) ? `${(Number(v) * 100).toFixed(1)}%` : null;
         const peak = pct(ev.peak_rate);
         const trig = pct(ev.trigger_level);
+        const actual = pct(ev.rate);
         const parts = [];
         if (ev.tranche) parts.push(`${ev.tranche}차`);
         // v8_take_profit 은 trigger_level 이 고점에서 밀린 하한선이 아니라 고정 목표가(+20%)라
@@ -1268,7 +1285,12 @@
             if (trig && peak) parts.push(`목표${trig} 도달(고점${peak})`);
             else if (trig) parts.push(`목표${trig} 도달`);
         } else if (peak && trig) parts.push(`고점${peak}→트리거${trig} 이탈`);
-        else if (peak) parts.push(`고점${peak}`);
+        else if (ev.reason === 'stop_loss' || ev.reason === 'giveback_stop') {
+            // 2026-08-28: "트리거-6.0%"만 있으면 실제 몇 %에서 팔렸는지 안 보인다 — 재확인
+            // 대기(60/90초) 중 더 떨어져서 트리거보다 깊게 팔릴 수 있어 실제값을 같이 보여준다.
+            if (actual && trig) parts.push(`실제${actual}(트리거${trig})`);
+            else if (trig) parts.push(`트리거${trig}`);
+        } else if (peak) parts.push(`고점${peak}`);
         else if (trig) parts.push(`트리거${trig}`);
         return parts.length ? ` <span class="ms-reason-detail">(${parts.join(', ')})</span>` : '';
     }
@@ -1597,12 +1619,13 @@
         tbody.innerHTML = ranking.map(c => `
         <tr>
           <td class="right">${c.rank}</td>
-          <td><span class="ms-stock-name" data-stk-cd="${c.stk_cd}">${c.stk_nm ?? ''}<br>(${c.stk_cd ?? ''})</span></td>
+          <td><span class="ms-stock-name" data-stk-cd="${c.stk_cd}">${c.stk_nm ?? ''} <span class="ms-stock-code">${c.stk_cd ?? ''}</span></span></td>
           <td class="right">${msFmtWon(c.ord_px)}</td>
           <td class="right">${msFmtWon(c.cur_px)}</td>
           <td class="right">${msFmtPct(c.gap)}</td>
           <td class="right">${msFmtPct(c.live_gap)}</td>
           <td class="right">${c.score != null ? Number(c.score).toFixed(3) : '-'}</td>
+          <td>${c.owned ? `<span class="ms-owned-badge">보유중</span> ${msFmtWon(c.holding_value)}` : '-'}</td>
         </tr>`).join('');
     }
 
@@ -1645,7 +1668,9 @@
             renderMyStocksLiveGap(data.ranking || []);
             msLiveGapLoaded = true;
             saveMsLiveGapCache(msEnv, data.ranking || []);
-            if (statusEl) statusEl.textContent = `${new Date().toLocaleTimeString('ko-KR')} 기준 (수동 새로고침 전까지 갱신 안 됨)`;
+            // 2026-08-28: '~시 기준'만 쓰면 페이지를 나중에 열어봤을 때 "방금 자동으로 갱신됐나?"
+            // 오해가 생긴다 — 이 시각이 정확히 "새로고침 버튼을 마지막으로 누른 시각"이라고 못박는다.
+            if (statusEl) statusEl.textContent = `마지막 새로고침: ${new Date().toLocaleTimeString('ko-KR')} (수동으로 다시 누르기 전까진 안 바뀜)`;
         } catch (e) {
             console.error(e);
             if (statusEl) statusEl.textContent = '조회 실패 — 새로고침을 다시 눌러주세요';
@@ -1655,21 +1680,20 @@
         }
     }
 
-    // 페이지 새로고침 직후 호출 — 이전 세션에서 조회해둔 결과가 있고(같은 env) 그때 펼쳐져
-    // 있었다면, 재조회 없이 그대로 복원해서 펼친 채로 보여준다.
+    // 페이지 새로고침 직후 호출 — 이전 세션에서 조회해둔 결과가 있으면(같은 env) 표 내용만
+    // 미리 채워둔다. 2026-08-28: 섹션 자체는 항상 접힌 채로 시작해야 한다(펼치기 전엔 안 보여야
+    // 함) — 데이터만 준비해두면 사용자가 펼치는 순간 8~9초 재조회 없이 바로 보인다.
     async function restoreMsLiveGapCache() {
-        if (msLiveGapLoaded) return;   // 이미 이번 페이지에서 로드/복원됨 — 탭 재방문마다 강제로 다시 펼치지 않는다
+        if (msLiveGapLoaded) return;   // 이미 이번 페이지에서 로드/복원됨 — 탭 재방문마다 다시 안 함
         await initMsEnv();
         const cached = loadMsLiveGapCache();
         if (!cached || cached.env !== msEnv || !Array.isArray(cached.ranking)) return;
         renderMyStocksLiveGap(cached.ranking);
         msLiveGapLoaded = true;
-        const details = document.getElementById('ms-livegap-details');
-        if (details) details.open = true;
         const statusEl = document.getElementById('ms-livegap-status');
         if (statusEl) {
             const t = new Date(cached.ts);
-            statusEl.textContent = `${isNaN(t) ? cached.ts : t.toLocaleTimeString('ko-KR')} 기준 (새로고침 전 저장된 결과 — 갱신하려면 새로고침 버튼)`;
+            statusEl.textContent = `마지막 새로고침: ${isNaN(t) ? cached.ts : t.toLocaleTimeString('ko-KR')} (페이지 새로고침 전 저장된 결과 — 지금 다시 조회하려면 새로고침 버튼)`;
         }
     }
 

@@ -18,7 +18,7 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
     request_stock_volume_and_amount, request_stock_category
 from job.batch_runner import predict_stock_graph
 from config.config import settings
-from auto_trading.kiwoom_api import get_holdings_and_summary, get_account_credentials, \
+from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
     get_current_price_and_name, get_deposit, get_unfilled_orders, env_path, KIWOOM_ENV, VALID_ENVS
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order
 from auto_trading import kiwoom_v8_strategy as v8_strategy
@@ -607,6 +607,19 @@ def get_kiwoom_live_gap_ranking():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
+
+    # 지금 실제로 보유 중인 종목인지 + 보유금액(평가금액) — 후보 목록만 봐도 바로 알 수 있게
+    # (2026-08-28). evltv_prft가 아니라 cur_price*qty로 계산 — 이 화면 목적상 kt00018의
+    # 원단위 반올림 오차는 무시할 만하고, 보유종목 탭과 같은 계산식을 쓰는 게 더 중요하다.
+    held_value = {}
+    try:
+        acnt_no, acnt_pwd = get_account_credentials(env)
+        if acnt_no and acnt_pwd:
+            held_value = {h.get('stk_cd'): float(h.get('cur_price') or 0) * float(h.get('qty') or 0)
+                          for h in get_holdings(acnt_no, acnt_pwd, env)}
+    except Exception as e:
+        print(f'live_gap_ranking 보유종목 조회 실패: {e}')
+
     out = [{
         'rank': i + 1,
         'stk_cd': c.get('code'),
@@ -616,6 +629,8 @@ def get_kiwoom_live_gap_ranking():
         'gap': c.get('gap'),
         'live_gap': c.get('live_gap'),
         'score': c.get('score'),
+        'owned': c.get('code') in held_value,
+        'holding_value': held_value.get(c.get('code')),
     } for i, c in enumerate(ranking)]
     return jsonify({"ranking": out, "env": env or KIWOOM_ENV})
 
