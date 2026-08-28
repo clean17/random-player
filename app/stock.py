@@ -553,9 +553,19 @@ def get_kiwoom_holdings():
             # pkl 일봉의 실제 전일 종가로 다시 계산해서 덮어쓴다.
             h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
         asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
-        # v8 1회 투입금(ALLOC=8%, kiwoom_v8_strategy.py) — 보유현금 카드 아래 작게 표시해서
-        # "새 주문 하나 걸 때 얼마가 필요한지"를 바로 보이게 한다. ALLOC이 바뀌면 여기도 같이 반영된다.
-        summary['order_alloc_amount'] = round(summary['total_asset'] * v8_strategy.ALLOC)
+        # 2026-08-28: 원래 "1회 투입금(ALLOC=8%) 참고값"으로 넣었었는데, 사용자가 원한 건
+        # 그게 아니라 "지금 실제 미체결 매수 주문에 얼마가 걸려있는지"였다 — 그 돈은 평가금(체결
+        # 전이라 안 잡힘)에도 보유현금(ord_alow_amt는 이미 이만큼 빼고 남은 값)에도 안 보여서
+        # 따로 보여줘야 한다. 매수 주문만 카운트(매도 미체결은 종목을 묶지 현금을 안 묶는다).
+        try:
+            unfilled = get_unfilled_orders(acnt_no, acnt_pwd, env=env)
+            summary['pending_order_amount'] = sum(
+                float(o.get('ord_pric_num') or 0) * int(o.get('oso_qty_num') or 0)
+                for o in unfilled if '매수' in str(o.get('io_tp_nm') or '')
+            )
+        except Exception as e:
+            print(f'미체결 매수주문 금액 계산 실패: {e}')
+            summary['pending_order_amount'] = None
         # 예수금은 kt00018 에 없어서 별도 조회(kt00001). 없으면 화면이 죽지 않게 None 으로 넘긴다.
         # 2026-08-27: 실패 시 1회 재시도 — 순간적인 레이트리밋/타임아웃이면 이걸로 대부분
         # 넘어간다. 재시도까지 실패하면 프론트가 '총자산-평가금액' 근사식으로 대체 표시하던

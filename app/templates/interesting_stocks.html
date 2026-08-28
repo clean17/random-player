@@ -632,7 +632,7 @@
 
         <div class="mystocks-summary" id="mystocksSummary">
             <div class="mystocks-stat"><span class="label">총자산</span><span class="value" id="ms-total-asset">-</span></div>
-            <div class="mystocks-stat"><span class="label">보유 현금</span><span class="value" id="ms-cash">-</span><span class="value-sub" id="ms-cash-order-alloc"></span></div>
+            <div class="mystocks-stat"><span class="label">보유</span><span class="value" id="ms-cash">-</span><span class="value-sub" id="ms-cash-order-alloc"></span></div>
             <div class="mystocks-stat">
                 <span class="label">평가</span>
                 <span class="value" id="ms-evlt-amt">-</span>
@@ -1332,12 +1332,12 @@
             cashEl.title = '예수금 조회(kt00001) 실패 — 재시도 후에도 실패했습니다. 새로고침 시 다시 시도합니다.';
         }
 
-        // v8 1회 투입금(ALLOC=8%, kiwoom_v8_strategy.py) — 지금 새 주문을 걸면 얼마가 묶이는지.
-        // 이게 보유현금보다 크면 그날 새 동시주문은 못 걸린다(2026-08-27 대화 참고).
+        // 2026-08-28: "1회 투입금(ALLOC 8%) 참고값"이 아니라 지금 실제 미체결 매수 주문에
+        // 걸려있는 진짜 금액이다 — 체결 전이라 평가금에도, 이미 차감된 보유현금(ord_alow_amt)
+        // 에도 안 보이는 돈이라 따로 보여준다.
         const allocEl = document.getElementById('ms-cash-order-alloc');
         if (allocEl) {
-            allocEl.textContent = summary.order_alloc_amount != null
-                ? `주문 ${msFmtWon(summary.order_alloc_amount)}` : '';
+            allocEl.textContent = summary.pending_order_amount ? `주문중 ${msFmtWon(summary.pending_order_amount)}` : '';
         }
 
         document.getElementById('ms-evlt-amt').textContent = msFmtWon(summary.tot_evlt_amt);
