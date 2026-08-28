@@ -706,15 +706,19 @@
             <div class="table-scroller">
                 <table class="table" id="table-mystocks-orders">
                     <thead>
+                    <!-- 2026-08-28: 종목명/구분 다음에 "얼마짜리 주문인지"(수량·주문금액)를 먼저
+                         보여주고, 그 다음에 "체결까지 얼마나 남았는지" 비교군(주문가·현재가·gap류)을
+                         묶었다. score는 내부 랭킹값이라 뒤로, 시간/번호는 부가정보라 맨 뒤. -->
                     <tr>
                         <th>종목명</th>
                         <th>구분</th>
+                        <th class="right">수량</th>
+                        <th class="right">주문금액</th>
                         <th class="right">주문가</th>
                         <th class="right">현재가</th>
                         <th class="right">gap</th>
                         <th class="right">실시간gap</th>
                         <th class="right">score</th>
-                        <th class="right">수량</th>
                         <th>주문시간</th>
                         <th>주문번호</th>
                         {% if current_user.get_id() != config.GUEST_USERNAME %}
@@ -722,7 +726,7 @@
                         {% endif %}
                     </tr>
                     </thead>
-                    <tbody><tr><td colspan="11" class="empty">불러오는 중...</td></tr></tbody>
+                    <tbody><tr><td colspan="12" class="empty">불러오는 중...</td></tr></tbody>
                 </table>
             </div>
         </details>
@@ -1480,9 +1484,10 @@
         if (!state) return '-';
         if (state.type === 'legacy') {
             // 2026-08-28: TRAILING_ENABLED=False라 트레일링/목표가는 표시할 게 없다 — 실제로
-            // 동작 중인 손절(-6%, 재확인 대기)과 보유상한만 보여준다.
+            // 동작 중인 손절(-6%, 재확인 대기)과 보유상한만 보여준다. 손절선 자체(-6%)는 고정값이라
+            // 매번 안 보여주고, "그 선 대비 지금이 얼마나 위냐"만 간결하게 표기한다.
             const parts = [`D+${state.hold_days}/${state.max_hold_days}`];
-            parts.push(`손절까지 ${msFmtPct(state.stop_margin)}(선 ${msFmtPct(state.stop_level)})`);
+            parts.push(`손절선 위 ${msFmtPct(state.stop_margin)}`);
             if (state.watching) parts.push('손절 재확인 대기중');
             return parts.join(' · ');
         }
@@ -1597,14 +1602,15 @@
                 ? Number(o.ord_pric) / Number(o.cur_prc) - 1.0 : null;
             return `
         <tr>
-          <td><span class="ms-stock-name" data-stk-cd="${o.stk_cd}">${o.stk_nm ?? ''}<br>(${o.stk_cd ?? ''})</span></td>
+          <td><span class="ms-stock-name" data-stk-cd="${o.stk_cd}">${o.stk_nm ?? ''} <span class="ms-stock-code">${o.stk_cd ?? ''}</span></span></td>
           <td>${o.side === 'buy' ? '매수' : (o.side === 'sell' ? '매도' : (o.side ?? ''))}</td>
+          <td class="right">${qtyText}</td>
+          <td class="right">${msFmtWon(Number(o.ord_pric || 0) * Number(o.ord_qty || 0))}</td>
           <td class="right">${msFmtWon(o.ord_pric)}</td>
           <td class="right">${msFmtWon(o.cur_prc)}</td>
           <td class="right">${msFmtPct(o.gap)}</td>
           <td class="right">${msFmtPct(liveGap)}</td>
           <td class="right">${o.score != null ? Number(o.score).toFixed(3) : '-'}</td>
-          <td class="right">${qtyText}</td>
           <td>${o.ord_tm ?? ''}</td>
           <td>${o.ord_no ?? ''}</td>
           ${isGuestUser ? '' : `<td>
@@ -1751,7 +1757,7 @@
             return `
         <tr class="${isPending ? 'ms-pending-row' : ''}">
           <td>${(ev.ts || '').replace('T', ' ')}</td>
-          <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''} <span class="ms-stock-code">(${ev.stk_cd ?? ''})</span></span></td>
+          <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''} <span class="ms-stock-code">${ev.stk_cd ?? ''}</span></span></td>
           <td>${ev.side === 'buy' ? '매수' : '매도'}</td>
           <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}${msReasonDetailText(ev)}${statusText}</td>
           <td class="right">${ev.qty ?? 0}주</td>

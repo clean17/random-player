@@ -19,7 +19,7 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
 from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
-    get_current_price_and_name, get_deposit, get_unfilled_orders, env_path, KIWOOM_ENV, VALID_ENVS
+    get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
     _held_business_days as _legacy_business_days
 from auto_trading import kiwoom_trailing_stop as legacy_exit
