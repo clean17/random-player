@@ -20,7 +20,9 @@ from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
     get_current_price_and_name, get_deposit, get_unfilled_orders, env_path, KIWOOM_ENV, VALID_ENVS
-from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order
+from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
+    _held_business_days as _legacy_business_days
+from auto_trading import kiwoom_trailing_stop as legacy_exit
 from auto_trading import kiwoom_v8_strategy as v8_strategy
 from auto_trading import kiwoom_v8_exit
 from auto_trading.kiwoom_v8_exit import _business_days as _v8_business_days
@@ -443,12 +445,52 @@ def _v8_holding_state(pos, cur_price):
     if entry <= 0 or peak <= 0 or cur <= 0:
         return None
     return {
+        'type': 'v8',
         'hold_days': _v8_business_days(pos.get('entry_date', '')),
         'max_hold_days': kiwoom_v8_exit.MAX_HOLD_DAYS,
         'pullback_from_peak': cur / peak - 1.0,           # 현재가가 고점 대비 몇 % 아래인지(음수)
         'trail_pct': kiwoom_v8_exit.TRAIL_PCT,             # 트레일링 트리거 폭(예: 0.05 = -5%)
         'trail_armed': bool(pos.get('trail_armed', True)),
         'tp_done': bool(pos.get('tp_done', False)),
+    }
+
+
+def _load_legacy_positions(env):
+    """kiwoom_trailing_stop.py 의 레거시 청산 상태(kiwoom_trailing_state.json) — 모의(fire)
+    전량, 실전은 v8이 안 산 잔존 종목만 여기 해당한다. v8과 같은 이유로 env별 경로 재계산."""
+    path = env_path(os.path.join(os.path.dirname(legacy_exit.__file__),
+                                  'kiwoom_trailing_state.json'), env)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f'레거시 청산 상태 로드 실패: {e}')
+        return {}
+
+
+def _legacy_holding_state(pos, avg_price, cur_price):
+    """보유종목 카드에 붙일 레거시(fire/구 트레일링) 청산상태 요약. 2026-08-28 추가 —
+    모의투자는 v8이 아니라 이 엔진을 쓰므로 v8 배지가 못 뜨던 걸 보완한다.
+    TRAILING_ENABLED=False라 트레일링/목표가는 표시할 게 없다(둘 다 비활성) — 실제로
+    동작 중인 손절(-6%, 60/90초 재확인)과 보유상한만 보여준다."""
+    avg = float(avg_price or 0)
+    cur = float(cur_price or 0)
+    if avg <= 0 or cur <= 0 or pos.get('exited'):
+        return None
+    rate = cur / avg - 1.0
+    peak_rate = pos.get('peak_rate')
+    was_armed = peak_rate is not None and peak_rate >= legacy_exit.TRAIL_ACTIVATE_RATE
+    stop_level = legacy_exit.ARMED_GIVEBACK_STOP if was_armed else legacy_exit.STOP_LOSS_RATE
+    stop_px = avg * (1.0 + stop_level)
+    return {
+        'type': 'legacy',
+        'hold_days': _legacy_business_days(pos.get('entry_date')),
+        'max_hold_days': legacy_exit.MAX_HOLD_DAYS,
+        'stop_margin': (cur / stop_px - 1.0) if stop_px > 0 else None,  # 0 이하면 손절권
+        'stop_level': stop_level,
+        'watching': pos.get('stop_watch_since') is not None,  # 손절선 재확인 대기 중
     }
 
 
@@ -487,17 +529,25 @@ def get_kiwoom_holdings():
                 "message": f"계좌 정보가 설정되지 않음 (env={env or KIWOOM_ENV})"}, 500
     try:
         holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
-        # v8이 관리 중인 종목이면 청산상태(보유일/고점대비/손절·익절까지 남은 정도)를 붙인다.
-        # v8이 산 게 아니거나(레거시 fire·수동매수) 상태 파일에 없으면 None — 프론트는 배지를 생략한다.
+        # 청산상태(보유일/트리거까지 남은 정도) — v8이 산 종목은 v8 규칙, 그 외(모의 fire 전량 +
+        # 실전에서 v8이 안 산 잔존 종목)는 레거시 트레일링 엔진 규칙을 쓴다(2026-08-28, 모의투자엔
+        # 이게 전부라 이걸 안 붙이면 청산상태 칸이 항상 비어 있었다). 둘 다 상태 파일에 없으면 None.
         v8pos = _load_v8_positions(env)
+        legacy_pos = _load_legacy_positions(env)
         # 종목 아이콘용 로고 — stocks 테이블에 있으면 그걸 쓰고, 없으면 프론트에서
         # 토스 증권 아이콘(https://static.toss.im/png-icons/securities/icn-sec-fill-{code}.png)으로
         # 폴백한다(2026-08-28). DB 조회 1건으로 일괄 처리.
         logo_urls = get_logo_urls_by_codes([h.get('stk_cd') for h in holdings if h.get('stk_cd')])
         for h in holdings:
-            pos = v8pos.get(h.get('stk_cd'))
-            h['v8'] = _v8_holding_state(pos, h.get('cur_price')) if pos else None
-            h['logo_url'] = logo_urls.get(h.get('stk_cd'))
+            code = h.get('stk_cd')
+            v8p = v8pos.get(code)
+            exit_state = _v8_holding_state(v8p, h.get('cur_price')) if v8p else None
+            if exit_state is None:
+                lp = legacy_pos.get(code)
+                if lp:
+                    exit_state = _legacy_holding_state(lp, h.get('avg_price'), h.get('cur_price'))
+            h['v8'] = exit_state
+            h['logo_url'] = logo_urls.get(code)
             # 2026-08-28: kt00018의 pred_close_pric(전일종가)이 cur_prc와 항상 똑같이 와서
             # (실측 확인 — 키움 API 쪽 결함으로 보임) day_change_rate가 매번 0%로 나왔다.
             # pkl 일봉의 실제 전일 종가로 다시 계산해서 덮어쓴다.
