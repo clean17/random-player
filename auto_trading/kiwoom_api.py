@@ -207,7 +207,8 @@ def _call_raw(api_id: str, endpoint: str, body: dict,
 
         if resp.status_code == 429 and attempt < _max_429_retries:
             wait_s = 0.5 * (attempt + 1)
-            print(f'[WARN] 429 rate limit ({api_id}), {wait_s:.1f}s 후 재시도 ({attempt + 1}/{_max_429_retries})')
+            ts = time.strftime('%Y-%m-%d %H:%M:%S')
+            print(f'{ts} [WARN] 429 rate limit ({api_id}), {wait_s:.1f}s 후 재시도 ({attempt + 1}/{_max_429_retries})')
             time.sleep(wait_s)
             continue
 

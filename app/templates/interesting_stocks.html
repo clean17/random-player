@@ -931,6 +931,22 @@
     // "매번 요청이 끝난 시점"에 한다 — 그래야 수동 새로고침 직후 곧바로 또 자동 새로고침이
     // 겹쳐 나가지 않는다.
     const MS_REFRESH_SEC = 3;
+    // 2026-08-29: 정규장(09:00~15:30) 밖에서는 계좌/체결이 실질적으로 안 바뀌는데도 3초마다
+    // 돌려 키움 API 호출 예산(_RATE_LIMIT_SLEEP, kiwoom_api.py)을 불필요하게 갉아먹고 있었다
+    // (429 재시도 로그가 새벽에도 찍힘). 장 시간에만 3초, 그 외엔 60초로 늦춘다.
+    const MS_REFRESH_SEC_CLOSED = 60;
+    function msIsWeekend() {
+        const day = new Date().getDay(); // 0=일 6=토
+        return day === 0 || day === 6;
+    }
+    function msIsRegularHours() {
+        if (msIsWeekend()) return false;
+        const hm = new Date().getHours() * 100 + new Date().getMinutes();
+        return hm >= 900 && hm <= 1530;
+    }
+    function msRefreshIntervalMs() {
+        return (msIsRegularHours() ? MS_REFRESH_SEC : MS_REFRESH_SEC_CLOSED) * 1000;
+    }
     let msNextRefreshAt = 0;
     let msIsRefreshing = false;
 
@@ -943,15 +959,25 @@
             return;
         }
         el.classList.remove('is-refreshing');
+        if (msTimer && msIsWeekend()) {
+            el.textContent = '주말: 자동 새로고침 꺼짐';
+            return;
+        }
         const remain = Math.max(0, Math.ceil((msNextRefreshAt - Date.now()) / 1000));
         el.textContent = msTimer ? `${remain}초 후 새로고침` : '';
     }
 
     function msStartTimer() {
         if (msTimer) clearInterval(msTimer);
-        msNextRefreshAt = Date.now() + MS_REFRESH_SEC * 1000;
+        msNextRefreshAt = Date.now() + msRefreshIntervalMs();
         msUpdateRefreshStatus();
         msTimer = setInterval(() => {
+            // 주말엔 계좌/체결이 전혀 안 바뀌므로 자동 새로고침 자체를 안 한다
+            // (수동 새로고침 버튼은 그대로 동작).
+            if (msIsWeekend()) {
+                msUpdateRefreshStatus();
+                return;
+            }
             if (!msIsRefreshing && Date.now() >= msNextRefreshAt) {
                 loadMyStocksData(false);
             } else {
@@ -1860,7 +1886,7 @@
         } finally {
             if (showOverlay) removeLoadingOverlay();
             msIsRefreshing = false;
-            msNextRefreshAt = Date.now() + MS_REFRESH_SEC * 1000;
+            msNextRefreshAt = Date.now() + msRefreshIntervalMs();
             msUpdateRefreshStatus();
         }
     }
