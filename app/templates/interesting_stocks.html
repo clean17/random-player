@@ -162,19 +162,32 @@
         #table-mystocks-holdings th.ms-sortable:hover {
             color: var(--accent, #4a9eff);
         }
-        #table-mystocks-holdings th.ms-sortable::after {
+        #table-mystocks-holdings th.ms-sortable::after,
+        #table-mystocks-holdings .ms-sub-sort::after {
             content: '';
             display: inline-block;
             width: 0.7em;
         }
-        #table-mystocks-holdings th.ms-sorted::after {
+        #table-mystocks-holdings th.ms-sorted::after,
+        #table-mystocks-holdings .ms-sub-sort.ms-sorted::after {
             content: attr(data-sort-dir);
         }
-        #table-mystocks-holdings th.ms-sorted[data-sort-dir="asc"]::after {
+        #table-mystocks-holdings th.ms-sorted[data-sort-dir="asc"]::after,
+        #table-mystocks-holdings .ms-sub-sort.ms-sorted[data-sort-dir="asc"]::after {
             content: '▲';
         }
-        #table-mystocks-holdings th.ms-sorted[data-sort-dir="desc"]::after {
+        #table-mystocks-holdings th.ms-sorted[data-sort-dir="desc"]::after,
+        #table-mystocks-holdings .ms-sub-sort.ms-sorted[data-sort-dir="desc"]::after {
             content: '▼';
+        }
+        /* 2026-08-29: 수익률/손절선위는 전용 헤더 컬럼이 없어 값 자체(손익%, 청산상태)를
+           눌러서 정렬한다 — th가 아니라서 별도 클래스로 hover/커서만 맞춰준다. */
+        #table-mystocks-holdings .ms-sub-sort {
+            cursor: pointer;
+            user-select: none;
+        }
+        #table-mystocks-holdings .ms-sub-sort:hover {
+            text-decoration: underline;
         }
         .ms-pending-badge {
             font-size: 11px;
@@ -688,7 +701,9 @@
                     <th class="ms-sortable" data-sort="stk_nm">종목명</th>
                     <th class="right ms-sortable" data-sort="evlt_amt">평가금</th>
                     <th class="right ms-sortable" data-sort="day_change_rate">등락률</th>
-                    <th>청산상태</th>
+                    <!-- 2026-08-29: 손절선위(레거시 전용 지표) 정렬 추가. v8 보유종목은 stop_margin이
+                         없어 항상 뒤로 밀린다(MS_HOLDINGS_SORT_GETTERS.stop_margin 참고). -->
+                    <th class="ms-sortable" data-sort="stop_margin">청산상태</th>
                     <th class="right ms-sortable" data-sort="qty">수량</th>
                     <th class="right ms-sortable" data-sort="avg_price">매수가</th>
                     <th class="right ms-sortable" data-sort="cur_price">현재가</th>
@@ -1462,6 +1477,10 @@
         day_change_rate: h => Number(h.day_change_rate ?? -Infinity),
         evlt_amt: h => Number(h.cur_price || 0) * Number(h.qty || 0),
         qty: h => Number(h.qty || 0),
+        // 2026-08-29: 수익률(평단가 기준)·손절선위 정렬 추가. stop_margin은 레거시 청산상태에만
+        // 있어(app/stock.py `_v8_holding_state()`는 안 내려줌) v8 보유종목은 -Infinity로 맨 뒤로.
+        profit_rate: h => Number(h.profit_rate ?? -Infinity),
+        stop_margin: h => (h.v8 && h.v8.type === 'legacy' && h.v8.stop_margin != null) ? Number(h.v8.stop_margin) : -Infinity,
     };
     let msHoldingsSort = { key: 'evlt_amt', dir: 'desc' };  // 기존 기본 정렬(평가금 내림차순)과 동일
     let msLastHoldings = [];
@@ -1479,19 +1498,23 @@
     }
 
     function renderMyStocksHoldingsSortIndicators() {
-        document.querySelectorAll('#table-mystocks-holdings th[data-sort]').forEach(th => {
-            const active = th.dataset.sort === msHoldingsSort.key;
-            th.classList.toggle('ms-sorted', active);
-            th.dataset.sortDir = active ? msHoldingsSort.dir : '';
+        // th(헤더)뿐 아니라 수익률/손절선위처럼 전용 헤더가 없어 값 자체를 눌러 정렬하는
+        // .ms-sub-sort도 같이 표시한다 — tbody는 매 새로고침마다 다시 그려지므로 여기서도
+        // 매번 다시 붙여줘야 화살표가 유지된다.
+        document.querySelectorAll('#table-mystocks-holdings [data-sort]').forEach(el => {
+            const active = el.dataset.sort === msHoldingsSort.key;
+            el.classList.toggle('ms-sorted', active);
+            el.dataset.sortDir = active ? msHoldingsSort.dir : '';
         });
     }
 
-    // 같은 헤더를 다시 누르면 방향 반전, 다른 헤더면 새로 선택(문자열은 오름차순부터, 숫자는
-    // 내림차순부터 — 종목명은 가나다순이 자연스럽고 나머지는 '큰 값 먼저'가 자연스럽다).
-    document.querySelector('#table-mystocks-holdings thead')?.addEventListener('click', (e) => {
-        const th = e.target.closest('th[data-sort]');
-        if (!th) return;
-        const key = th.dataset.sort;
+    // 같은 헤더/값을 다시 누르면 방향 반전, 다른 걸 누르면 새로 선택(문자열은 오름차순부터,
+    // 숫자는 내림차순부터 — 종목명은 가나다순이 자연스럽고 나머지는 '큰 값 먼저'가 자연스럽다).
+    // thead(고정)와 tbody(매번 새로 그려짐)를 모두 덮도록 테이블 전체에서 위임 처리한다.
+    document.getElementById('table-mystocks-holdings')?.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-sort]');
+        if (!el) return;
+        const key = el.dataset.sort;
         if (msHoldingsSort.key === key) {
             msHoldingsSort.dir = msHoldingsSort.dir === 'asc' ? 'desc' : 'asc';
         } else {
@@ -1580,9 +1603,9 @@
         const table = document.getElementById('table-mystocks-holdings');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
-        renderMyStocksHoldingsSortIndicators();
         if (!holdings || !holdings.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">보유 종목이 없어요</td></tr>`;
+            renderMyStocksHoldingsSortIndicators();
             return;
         }
         // 원본 holdings는 파이차트 렌더에도 그대로 쓰이므로 복사본만 정렬한다
@@ -1595,7 +1618,7 @@
             return `
         <tr>
           <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url)}</td>
-          <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ${msPnlClass(pnl)}">${pnlSubText}</span></td>
+          <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ms-sub-sort ${msPnlClass(pnl)}" data-sort="profit_rate">${pnlSubText}</span></td>
           <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
           <td class="ms-holding-v8-state">${msV8StateText(h.v8)}</td>
           <td class="right">${h.qty ?? 0}주</td>
@@ -1607,6 +1630,7 @@
           </td>`}
         </tr>`;
         }).join('');
+        renderMyStocksHoldingsSortIndicators();
     }
 
     function renderMyStocksOrders(orders) {
