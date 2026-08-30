@@ -328,6 +328,12 @@ def fetch_stock_data():
     py_script = r"C:\my-project\AutoSales.py\job\0_periodically_fetch_stock_data.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
+def fetch_us_stock_data():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\0-1_periodically_fetch_stock_data_us.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
 
 def generate_fullchain_pem_daily():
     print('    ############################### generate_fullchain_pem_daily ###############################')

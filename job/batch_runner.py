@@ -9,11 +9,12 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_stocks_advanced, find_low_stocks, \
     update_interest_stocks, \
-    renew_kiwoom_token_job, renew_kiwoom_mock_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, update_stock_data_daily, \
+    renew_kiwoom_token_job, renew_kiwoom_mock_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, \
+    update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
     reconcile_kiwoom_fills, \
-    run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod
+    run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -497,6 +498,16 @@ def create_scheduler():
         replace_existing=True,
     )
 
+    # 2-3-1) 미장 데이터 파일 (pkl) 전체 갱신 - 1시간 간격
+    scheduler.add_job(
+        fetch_us_stock_data,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="12-21", minute="10"),
+        id="minutely_60_fetch_us_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+
     # 2-4) 매일 토스증권 product_code 갱신
     scheduler.add_job(
         update_product_code,
@@ -614,13 +625,13 @@ def create_scheduler():
 
 
     # 4) 저점 매수 찾기 >> 10:05 - 19:55 (매 시각의 5분부터 59분까지, 10분 간격으로 실행)
-    scheduler.add_job(
-        find_low_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="5-59/10"),
-        id="hourly_1505_find_low_stocks",
-        executor="io",
-        replace_existing=True,
-    )
+    # scheduler.add_job(
+    #     find_low_stocks,
+    #     trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="5-59/10"),
+    #     id="hourly_1505_find_low_stocks",
+    #     executor="io",
+    #     replace_existing=True,
+    # )
     scheduler.add_job(
         find_low_stocks_v2,
         trigger=CronTrigger(day_of_week="mon-fri", hour="10-19", minute="6-59/10"),
