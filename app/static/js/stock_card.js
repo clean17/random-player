@@ -478,8 +478,10 @@ function renderPredictCardHtml(track, rows) {
         const hasImg = !!r.graph_file;
         const marketDir = r.market === 'us' ? 'us' : 'kr';
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
+        // 캐러셀이라 화면엔 카드 1장만 보이는데, loading="lazy" 없이는 카드 N장분 이미지가
+        // 렌더링 즉시 전부 동시에 요청된다 — waitress 큐 깊이가 매번 튀는 원인이었다(2026-08-31).
         const imgHtml = hasImg
-            ? `<img class="preview" src="https://chickchick.kr/image/lgbm-stocks/${marketDir}/${encoded_url}" alt="미리보기" />`
+            ? `<img class="preview" loading="lazy" src="https://chickchick.kr/image/lgbm-stocks/${marketDir}/${encoded_url}" alt="미리보기" />`
             : `<span class="hint">그래프 없음</span>`;
 
         // 사이드카가 없는(예전에 만들어진) 파일은 signal_price/target_price가 null이라
@@ -500,7 +502,7 @@ function renderPredictCardHtml(track, rows) {
           <div class="kv"><span class="k">상승 확률</span><span class="v">${fmt1(r.proba)}%</span></div>
           <div class="kv"><span class="k">신호 당일</span><span class="v">${fmtPredictPrice(r.signal_price, r.market)}</span></div>
           <div class="kv"><span class="k">목표가 (+${thresholdPct}%)</span><span class="v">${fmtPredictPrice(r.target_price, r.market)}</span></div>
-          <div class="kv"><span class="k">현재가</span><span class="v">${fmtPredictPrice(r.latest_price, r.market)}</span></div>
+          <div class="kv"><span class="k">현재가</span><span class="v">${fmtPredictPrice(r.latest_price, r.market)}${(toFloat(r.latest_price) !== null && toFloat(r.signal_price)) ? ` (${calCloseReturn(toFloat(r.latest_price), toFloat(r.signal_price))})` : ''}</span></div>
         </div>
 
         <div class="trade-detail" style="margin-top:10px;">

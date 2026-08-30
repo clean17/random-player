@@ -222,7 +222,15 @@ def _get_latest_close_price(market, ticker):
         col_c = "종가" if "종가" in df.columns else ("Close" if "Close" in df.columns else None)
         if col_c is None:
             return None
-        return float(df[col_c].iloc[-1])
+        # 최신 행이 데이터 수집 실패로 시가/고가/저가/종가만 전부 0으로 남는 경우가 있다
+        # (2026-08-31 확인: pickle_us 전 종목의 2026-08-28 행이 거래량은 있는데 OHLC가 전부 0 —
+        # AutoSales.py 쪽 수집 이슈로 보이나 원인 조사는 별개 — 여기서는 마지막으로 종가가
+        # 0도 NaN도 아닌 유효한 행을 뒤에서부터 찾아 "0.00" 오표시를 막는다).
+        closes = pd.to_numeric(df[col_c], errors="coerce")
+        valid = closes[(closes.notna()) & (closes != 0)]
+        if valid.empty:
+            return None
+        return float(valid.iloc[-1])
     except Exception as e:
         print(f"[stock] pkl 현재가 조회 실패 ({market}/{ticker}): {e}")
         return None
