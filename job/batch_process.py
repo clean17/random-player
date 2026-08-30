@@ -123,6 +123,100 @@ def kill_all_active_processes():
             print(f"⚠️ 자식 프로세스 종료 실패: PID {process.pid} {e}")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 서버 기동 시 1회 호출. 이전 세대가 남긴 고아 multiprocessing 워커를 정리한다.
+#
+# 왜 필요한가 —
+#   AutoSales.py 쪽 배치(4_find_low_point_v2.py:600, 5_generate_interest_stocks_graph.py:213)는
+#   ProcessPoolExecutor로 워커를 8~10개 띄운다. 서버가 정상 종료 절차를 못 타면
+#   (예: Ctrl+Break — utils.common.register_shutdown_handlers 참고, 콘솔 X, 작업관리자 강제 종료)
+#   kill_all_active_processes()가 안 불리고, 이때 Job Object 안전장치도 이 워커들까진 못 막는다.
+#   venv\Scripts\python.exe 가 Store 파이썬을 자식으로 다시 띄우는 구조라, Job에 등록되는 건
+#   스텁뿐이고 실제 인터프리터와 그 워커는 Job 밖이기 때문이다.
+#   (2026-08-30 실측: IsProcessInJob(실제 인터프리터, 우리Job) = False)
+#
+#   게다가 이 워커들은 스스로 죽지도 않는다. 원래 부모가 죽으면 작업 큐 파이프에서 EOF를 받고
+#   종료해야 하는데, 워커끼리 그 파이프의 쓰기 핸들을 서로 상속받고 있어서 하나라도 살아있는 한
+#   아무도 EOF를 보지 못한다. 실제로 5일간 23개가 쌓여 CPU를 105분 갉아먹었다.
+#
+# 판정 근거 —
+#   Windows는 부모가 죽어도 자식을 재부모화하지 않는다(Unix의 init 인계가 없다).
+#   ParentProcessId 필드는 죽은 PID를 그대로 가리키는 허상이 되고, 그 PID는 나중에 다른
+#   프로세스에 재사용될 수 있다. 그래서 OS의 PPID를 믿지 않고,
+#     (1) 명령줄에 multiprocessing이 직접 박아둔 parent_pid=NNNN 를 1차 근거로 삼고
+#     (2) 그 PID가 없거나, 살아있어도 워커보다 나중에 생성됐으면(=PID 재사용) 고아로 본다
+#     (3) 우리 프로젝트 venv 로 실행된 것만 대상으로 한다 (남의 프로세스를 죽이지 않기 위해)
+#     (4) min_age_sec 보다 어린 워커는 건너뛴다 (지금 막 뜨는 정상 풀과의 경합 방지)
+# ─────────────────────────────────────────────────────────────────────────────
+_MP_WORKER_VENVS = (
+    r"c:\my-project\autosales.py\venv",
+    r"c:\my-project\random-player\venv",
+)
+
+
+def sweep_orphan_mp_workers(min_age_sec=120, dry_run=False):
+    try:
+        import psutil
+    except ImportError:
+        print("⚠️ psutil 없음 — 고아 워커 청소를 건너뛴다")
+        return []
+
+    import re
+    now = time.time()
+    killed = []
+
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
+        try:
+            info = proc.info
+            if not (info['name'] or '').lower().startswith('python'):
+                continue
+
+            cmdline = ' '.join(info['cmdline'] or ())
+            # multiprocessing spawn 워커만
+            if 'spawn_main' not in cmdline or '--multiprocessing-fork' not in cmdline:
+                continue
+            # 우리 프로젝트 venv 로 뜬 것만
+            if not any(v in cmdline.lower() for v in _MP_WORKER_VENVS):
+                continue
+            # 갓 뜬 워커는 건드리지 않는다
+            age = now - info['create_time']
+            if age < min_age_sec:
+                continue
+
+            m = re.search(r'parent_pid=(\d+)', cmdline)
+            if not m:
+                continue
+            parent_pid = int(m.group(1))
+
+            # 부모가 살아있고, 워커보다 먼저 생성됐다면 정상 — 건너뛴다.
+            # (부모가 워커보다 나중에 생성됐다면 PID가 재사용된 것이므로 고아로 본다)
+            try:
+                parent = psutil.Process(parent_pid)
+                if parent.create_time() <= info['create_time']:
+                    continue
+                reason = f"부모 PID {parent_pid} 는 PID 재사용된 다른 프로세스"
+            except psutil.NoSuchProcess:
+                reason = f"부모 PID {parent_pid} 없음"
+
+            hours = age / 3600
+            if dry_run:
+                print(f"   [DRY-RUN] 고아 워커 PID {info['pid']} ({hours:.1f}시간 방치) — {reason}")
+            else:
+                print(f"🧹 고아 워커 정리: PID {info['pid']} ({hours:.1f}시간 방치) — {reason}")
+                proc.kill()
+            killed.append(info['pid'])
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        except Exception as e:
+            print(f"⚠️ 고아 워커 검사 중 예외 (PID {info.get('pid')}): {e}")
+
+    if killed:
+        verb = "발견" if dry_run else "정리"
+        print(f"🧹 고아 multiprocessing 워커 {len(killed)}개 {verb}")
+    return killed
+
+
 def renew_kiwoom_token_job():
     print('    ############################### renew_kiwoom_token ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"

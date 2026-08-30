@@ -6,6 +6,7 @@ import sys
 from config.config import settings
 from utils.common import signal_handler, register_shutdown_handlers, cleanup
 from job.batch_runner import initialize_directories, create_scheduler
+from job.batch_process import sweep_orphan_mp_workers
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
 
@@ -46,6 +47,14 @@ if __name__ == '__main__':
     # signal.signal(signal.SIGINT, signal_handler)
 
     initialize_directories()
+
+    # 이전 세대가 남긴 고아 multiprocessing 워커 정리 (2026-08-30).
+    # 서버가 정상 종료 절차를 못 타고 죽으면(Ctrl+Break, 콘솔 X, 작업관리자 강제 종료)
+    # cleanup() -> kill_all_active_processes() 가 안 불려서, AutoSales.py 배치가 띄운
+    # ProcessPoolExecutor 워커(8~10개)가 고아로 남는다. 이 워커들은 서로 작업 큐 파이프의
+    # 쓰기 핸들을 붙잡고 있어 EOF를 못 보고 스스로 죽지도 않는다(실측: 5일간 23개 누적, CPU 105분).
+    # 부모가 죽었는지 판정하는 근거는 batch_process.sweep_orphan_mp_workers 주석 참고.
+    sweep_orphan_mp_workers()
 
     # 업로드 디렉토리 압축파일 생성, 로또 구매 배치
     # start_periodic_task() # multiprocessing

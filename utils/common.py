@@ -39,6 +39,18 @@ def register_shutdown_handlers(scheduler=None, node_process=None, child_processe
     signal.signal(signal.SIGINT, handler)   # Ctrl+C
     signal.signal(signal.SIGTERM, handler)  # docker stop / 서비스 종료
 
+    # Windows의 Ctrl+Break는 SIGBREAK로 들어오는데, 파이썬 기본 처리가 SIG_DFL —
+    # 즉 "프로세스 즉시 종료"라서 위 handler는 물론 run.py의 finally: cleanup()도
+    # 타지 않는다(Ctrl+C는 default_int_handler가 KeyboardInterrupt를 올려 finally를 탄다).
+    # 배포 때 Ctrl+Break로 서버를 내리면 kill_all_active_processes()가 통째로 스킵되고,
+    # AutoSales.py 자식이 띄운 ProcessPoolExecutor 워커(4_find_low_point_v2:600의 10개,
+    # 5_generate_interest_stocks_graph:213의 8개)가 고아로 남는다.
+    # Job Object 안전장치도 여기선 못 막는다 — venv\Scripts\python.exe가 Store 파이썬을
+    # 자식으로 다시 띄우는 구조라, Job에 등록되는 건 스텁뿐이고 실제 인터프리터와 그
+    # 워커는 Job 밖에 있다(2026-08-30 확인: 5일간 고아 워커 23개 누적).
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, handler)  # Ctrl+Break (Windows 전용)
+
 # Ctrl+C 이벤트 핸들러
 def signal_handler(sig, frame):
     pid = os.getpid()
