@@ -198,6 +198,28 @@
             margin-left: 4px;
             white-space: nowrap;
         }
+        /* 2026-08-29: 보유기간(D+n/max) 배지 — 최대보유일 대비 비율로 색을 바꿔 강제청산이
+           임박한 종목을 스캔만으로 바로 구분한다(70% 미만 회색/70~90% 노랑/90%+ 빨강). */
+        .ms-hold-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 3px;
+            padding: 0 5px;
+            white-space: nowrap;
+        }
+        .ms-hold-badge.ms-hold-normal {
+            color: #666;
+            border: 1px solid #999;
+        }
+        .ms-hold-badge.ms-hold-warn {
+            color: #b8860b;
+            border: 1px solid #b8860b;
+        }
+        .ms-hold-badge.ms-hold-danger {
+            color: #c0392b;
+            border: 1px solid #c0392b;
+        }
         /* 실시간gap 순위표: 이미 보유 중인 종목 표시(2026-08-28) */
         .ms-owned-badge {
             font-size: 11px;
@@ -471,7 +493,7 @@
         <input id="dateInputEnd" class="date" type="date" style="display: none"/>
         <select id="ruleFilter" class="rule-filter" style="display:none">
             <option value="">전체</option>
-            <option value="low_v1">룰 V1</option>
+<!--            <option value="low_v1">룰 V1</option>-->
             <option value="low_v2" selected>룰 V2</option>
         </select>
         <select id="interestVersionFilter" class="rule-filter" style="display:none">
@@ -1529,14 +1551,22 @@
     // v8이 산 종목은 v8 규칙, 그 외(모의 fire 전량 + 실전의 v8 미소유 잔존종목)는 레거시
     // 트레일링 엔진 규칙 — app/stock.py의 `_v8_holding_state()`/`_legacy_holding_state()`가
     // `type` 필드로 구분해서 계산해 준다(2026-08-28, 모의투자엔 청산상태가 아예 안 뜨던 걸 보완).
+    // 2026-08-29: 최대보유일 대비 비율로 D+n/max 배지 색을 정한다(v8/legacy 공통 — max_hold_days가
+    // 서로 달라도 절대일수가 아니라 비율 기준이라 그대로 재사용 가능).
+    function msHoldBadgeHtml(holdDays, maxHoldDays) {
+        const ratio = maxHoldDays > 0 ? holdDays / maxHoldDays : 0;
+        const cls = ratio >= 0.9 ? 'ms-hold-danger' : ratio >= 0.7 ? 'ms-hold-warn' : 'ms-hold-normal';
+        return `<span class="ms-hold-badge ${cls}">D+${holdDays}/${maxHoldDays}</span>`;
+    }
+
     function msV8StateText(state) {
         if (!state) return '-';
+        const holdBadge = msHoldBadgeHtml(state.hold_days, state.max_hold_days);
         if (state.type === 'legacy') {
             // 2026-08-28: TRAILING_ENABLED=False라 트레일링/목표가는 표시할 게 없다 — 실제로
             // 동작 중인 손절(-6%, 재확인 대기)과 보유상한만 보여준다. 손절선 자체(-6%)는 고정값이라
             // 매번 안 보여주고, "그 선 대비 지금이 얼마나 위냐"만 간결하게 표기한다.
-            const parts = [`D+${state.hold_days}/${state.max_hold_days}`];
-            parts.push(`손절선 위 ${msFmtPct(state.stop_margin)}`);
+            const parts = [holdBadge, `손절선 위 ${msFmtPct(state.stop_margin)}`];
             if (state.watching) parts.push('손절 재확인 대기중');
             return parts.join(' · ');
         }
@@ -1544,9 +1574,9 @@
         // 고점에서 30%+ 떨어진 곳에 걸려 사실상 발동한 적이 없고(대화에서 로그로 확인),
         // 익절까지는 대부분 음수로만 나와 오히려 헷갈렸다. 지금 실제로 상태가 바뀌는
         // 트레일링(무장/해제)과 익절 '완료' 여부만 남긴다.
-        const parts = [`D+${state.hold_days}/${state.max_hold_days}`];
         const armTxt = state.trail_armed ? '무장' : '해제(재무장 대기)';
-        parts.push(`고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${(state.trail_pct * 100).toFixed(0)}%, ${armTxt})`);
+        const parts = [holdBadge,
+            `고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${(state.trail_pct * 100).toFixed(0)}%, ${armTxt})`];
         if (state.tp_done) parts.push('익절 1차 완료');
         return parts.join(' · ');
     }
