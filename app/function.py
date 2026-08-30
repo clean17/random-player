@@ -29,7 +29,7 @@ from config.config import settings
 import asyncio
 
 from utils.wsgi_midleware import logger
-from filelock import FileLock, Timeout
+import threading
 import random
 
 func = Blueprint('func', __name__)
@@ -571,60 +571,103 @@ DEFAULT_STATE = {
     "users": {},
     "ai_scheduler_uri": None
 }
-LOCK_PATH = CHAT_STATE_FILE_PATH + ".lock"
 
-# JSON 상태 불러오기
-def load_state():
-    lock = FileLock(LOCK_PATH, timeout=2)
+# 이 상태 파일은 이 프로세스(waitress) 혼자만 읽고 쓴다(app/chat.py의 옛 참조는 전부 주석
+# 처리돼 죽어있음, 확인됨) — 그래서 프로세스 간 잠금(FileLock)이 애초에 필요 없었다.
+# 예전엔 /func/heartbeat(몇 초마다 폴링되는 접속표시)마다 FileLock(파일 기반, timeout=2s)을
+# 잡고 fsync까지 동기로 했는데, 다른 무거운 작업(예: LightGBM 백필)이 CPU/디스크를 바쁘게
+# 만들면 락 획득이 느려져 하트비트 요청 하나하나가 워커 스레드를 최대 2초씩 붙잡았다 —
+# 채팅 중엔 하트비트가 꾸준히 들어오므로 스레드 12개가 금방 바닥나 waitress 대기열이
+# 쌓이고(Task queue depth 80+) 결국 동시연결 한도(100)까지 찬 사고로 이어졌다(2026-08-31).
+# 인메모리 dict + 프로세스 내부 락(threading.Lock)으로 바꾸고, 디스크 저장은 매 호출마다
+# 동기로 하지 않고 짧게 디바운스한다 — 하트비트처럼 잦은 쓰기가 디스크 I/O를 매번 기다리지
+# 않는다. 대가로 서버가 비정상 종료되면 마지막 디바운스 구간(FLUSH_DEBOUNCE_SEC)의 변경이
+# 유실될 수 있는데, 접속시간/마지막 대화 ID 정도라 감수할 만하다.
+_state_lock = threading.Lock()
+_state_cache = None       # 최초 load_state() 호출 때 디스크에서 채워짐
+_state_dirty = False
+_flush_timer = None
+FLUSH_DEBOUNCE_SEC = 2.0
+
+
+def _load_state_from_disk():
+    if not os.path.exists(CHAT_STATE_FILE_PATH):
+        logger.warning("⚠️ 상태 파일 없음. 기본값 반환.")
+        return dict(DEFAULT_STATE)
+
     try:
-        with lock:
-            if not os.path.exists(CHAT_STATE_FILE_PATH):
-                logger.warning("⚠️ 상태 파일 없음. 기본값 반환.")
-                return DEFAULT_STATE
+        if os.path.getsize(CHAT_STATE_FILE_PATH) == 0:
+            logger.warning("⚠️ 상태 파일 비어 있음. 기본값 반환.")
+            return dict(DEFAULT_STATE)
 
-            if os.path.getsize(CHAT_STATE_FILE_PATH) == 0:
-                logger.warning("⚠️ 상태 파일 비어 있음. 기본값 반환.")
-                return DEFAULT_STATE
-
-            with open(CHAT_STATE_FILE_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Timeout:
-        logger.error("❌ 상태 파일 읽기 락 획득 실패 (2초 타임아웃)")
-        return DEFAULT_STATE
+        with open(CHAT_STATE_FILE_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
     except json.JSONDecodeError as e:
         logger.error(f"❌ JSON 파싱 실패: {e}")
-        return DEFAULT_STATE
+        return dict(DEFAULT_STATE)
     except Exception as e:
         logger.error(f"❌ 상태 로드 중 기타 예외: {e}")
-        return DEFAULT_STATE
+        return dict(DEFAULT_STATE)
 
-# JSON 상태 저장하기
-def save_state(state: dict):
-    lock = FileLock(LOCK_PATH, timeout=2)
+
+def _write_state_to_disk(state):
     tmp_path = CHAT_STATE_FILE_PATH + ".tmp"
-
     try:
-        with lock:
-            try:
-                with open(tmp_path, 'w', encoding='utf-8') as f:
-                    json.dump(state, f, ensure_ascii=False, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
-            except Exception as write_err:
-                logger.error(f"❌ 임시 파일 쓰기 실패: {write_err}")
-                return
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, CHAT_STATE_FILE_PATH)
+    except Exception as e:
+        logger.error(f"❌ 상태 파일 쓰기 실패: {e}")
 
-            if os.path.exists(tmp_path):
-                try:
-                    os.replace(tmp_path, CHAT_STATE_FILE_PATH)
-                    # logger.info("✅ 상태 파일 저장 완료")
-                except Exception as replace_err:
-                    logger.error(f"❌ 상태 파일 교체 실패: {replace_err}")
-            else:
-                logger.error(f"❌ 임시 파일 누락: {tmp_path} – 저장 스킵됨")
 
-    except Timeout:
-        logger.warning("🔒 상태 저장 락 획득 실패 (2초 대기 후 포기)")
+def _flush_state_to_disk():
+    global _state_dirty
+    with _state_lock:
+        if not _state_dirty:
+            return
+        snapshot = json.loads(json.dumps(_state_cache))  # 쓰는 동안 다른 스레드가 바꿔도 영향 안 받게 스냅샷
+        _state_dirty = False
+    _write_state_to_disk(snapshot)
+
+
+def _flush_timer_fired():
+    global _flush_timer
+    with _state_lock:
+        _flush_timer = None
+    _flush_state_to_disk()
+
+
+def _schedule_flush():
+    global _flush_timer
+    with _state_lock:
+        if _flush_timer is not None:
+            return  # 이미 예약돼 있으면 그대로 둔다(디바운스)
+        _flush_timer = threading.Timer(FLUSH_DEBOUNCE_SEC, _flush_timer_fired)
+        _flush_timer.daemon = True
+        _flush_timer.start()
+
+
+# JSON 상태 불러오기 — 호출자가 반환값을 변형(mutate)한 뒤 save_state에 다시 넘기는 기존
+# 호출 패턴과 호환되도록, 캐시를 직접 주지 않고 깊은 복사본을 준다.
+def load_state():
+    global _state_cache
+    with _state_lock:
+        if _state_cache is None:
+            _state_cache = _load_state_from_disk()
+        return json.loads(json.dumps(_state_cache))
+
+
+# JSON 상태 저장하기 — 즉시 메모리에 반영되고, 디스크 쓰기는 디바운스돼 최대
+# FLUSH_DEBOUNCE_SEC 만큼 늦게 나간다(그 사이 값을 또 읽으면 load_state()가 이미
+# 메모리 캐시를 보므로 최신값이 정상적으로 보인다).
+def save_state(state: dict):
+    global _state_cache, _state_dirty
+    with _state_lock:
+        _state_cache = state
+        _state_dirty = True
+    _schedule_flush()
 
 def update_last_chat_id_in_state(chat_id):
     if chat_id is None:
