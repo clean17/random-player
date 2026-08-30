@@ -46,6 +46,14 @@ let slideStartTime = 0;
 const SLIDE_DURATION_MS = 10000;
 let slideDurationMs = SLIDE_DURATION_MS;   // 현재 슬라이드의 실효 지속시간 (비디오일 경우 영상 길이)
 let pendingMasonryScrollY = null;
+let slideRotation = 0;   // 0 / 90 / 180 / 270, rotate-modal 버튼으로 -90도씩 누적
+
+function applyRotation() {
+    const rotator = document.getElementById('slideshow-rotator');
+    if (!rotator) return;
+    rotator.style.transform = `rotate(${slideRotation}deg)`;
+    rotator.classList.toggle('rot-swapped', slideRotation === 90 || slideRotation === 270);
+}
 
 function _preventTouchScroll(e) { e.preventDefault(); }
 
@@ -887,17 +895,20 @@ function showSlideshowModal(fileList, startIdx = 0) {
         modal.id = "slideshow-modal";
         modal.style.display = "flex";
         modal.innerHTML = `
-            <button class="close-modal" title="닫기"><i class="fas fa-times" style="color:white"></i></button>
-            <button class="slide-prev" title="이전">&#8249;</button>
-            <img src="" alt="슬라이드" id="slideshow-img" style="display:none;">
-            <video id="slideshow-video" class="slideshow-video" style="display:none;"
-                   muted playsinline controls loop>
-              <source id="slideshow-video-source" src="" type="video/mp4">
-            </video>
-            <button class="slide-next" title="다음">&#8250;</button>
-            <div id="slideshow-countdown"></div>
-            <div id="slideshow-label"></div>
-            <div id="slideshow-index"></div>
+            <div id="slideshow-rotator">
+                <button class="close-modal" title="닫기"><i class="fas fa-times" style="color:white"></i></button>
+                <button class="rotate-modal" title="회전"><i class="fas fa-rotate-left" style="color:white"></i></button>
+                <button class="slide-prev" title="이전">&#8249;</button>
+                <img src="" alt="슬라이드" id="slideshow-img" style="display:none;">
+                <video id="slideshow-video" class="slideshow-video" style="display:none;"
+                       muted playsinline controls loop>
+                  <source id="slideshow-video-source" src="" type="video/mp4">
+                </video>
+                <button class="slide-next" title="다음">&#8250;</button>
+                <div id="slideshow-countdown"></div>
+                <div id="slideshow-label"></div>
+                <div id="slideshow-index"></div>
+            </div>
         `;
         document.body.appendChild(modal);
 
@@ -914,6 +925,11 @@ function showSlideshowModal(fileList, startIdx = 0) {
                 window.scrollTo({ top: pendingMasonryScrollY, behavior: 'instant' });
                 pendingMasonryScrollY = null;
             }
+        };
+
+        modal.querySelector('.rotate-modal').onclick = () => {
+            slideRotation = (slideRotation - 90 + 360) % 360;
+            applyRotation();
         };
 
         modal.querySelector('.slide-prev').onclick = () => {

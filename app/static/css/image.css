@@ -340,11 +340,24 @@ button.delete-button:hover {
     justify-content: center;
     align-items: center;
     flex-direction: column;
+    overflow: hidden;
 }
-#slideshow-modal img,
-#slideshow-modal .slideshow-video {
+#slideshow-rotator {
+    position: relative;
     width: 100vw;
     height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#slideshow-rotator.rot-swapped {
+    width: 100vh;
+    height: 100vw;
+}
+#slideshow-rotator img,
+#slideshow-rotator .slideshow-video {
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     display: block;
 }
@@ -366,6 +379,28 @@ button.delete-button:hover {
     transition: opacity 0.16s;
 }
 #slideshow-modal .close-modal:hover {
+    opacity: 1;
+    box-shadow: none !important;
+    filter: none !important;
+}
+#slideshow-modal .rotate-modal {
+    position: absolute;
+    top: 78px;
+    right: 16px;
+    width: auto;
+    height: auto;
+    padding: 8px 12px;
+    font-size: 1.4em;
+    color: #fff;
+    cursor: pointer;
+    background: none;
+    border: none;
+    box-shadow: none;
+    z-index: 100000;
+    opacity: 0.7;
+    transition: opacity 0.16s;
+}
+#slideshow-modal .rotate-modal:hover {
     opacity: 1;
     box-shadow: none !important;
     filter: none !important;

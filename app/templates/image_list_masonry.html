@@ -1213,7 +1213,6 @@
             const list = buildMediaFileList();
             const startIdx = list.indexOf(filename);
             showSlideshowModal(list, startIdx >= 0 ? startIdx : 0);
-            clearTimeout(slideShowTimer);
         });
 
         // 이미지 클릭 (수정)
@@ -1232,7 +1231,6 @@
                 const list = buildMediaFileList();
                 const startIdx = list.indexOf(filename);
                 showSlideshowModal(list, startIdx >= 0 ? startIdx : 0);
-                clearTimeout(slideShowTimer);
                 return;
             }
 
