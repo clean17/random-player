@@ -42,6 +42,7 @@ const heartButton = document.getElementById('heartButton');
 const likeFilterSelect = document.getElementById('likeFilterSelect');
 let likedVideosSet = new Set(); // 현재 dir에서 하트한 영상 파일명 집합 (서버에서 한 번에 불러와 캐시)
 let likeFilterMode = 'unliked'; // 'unliked' | 'liked' — Next가 어느 목록에서 뽑을지
+let isFetchingVideoList = false; // 목록이 빈 상태에서 PageDown을 연타하면 axios.get이 중복으로 나가는 것을 막는 가드
 
 /************************************************************************/
 /******************************   Common   ******************************/
@@ -206,7 +207,10 @@ function selectVideoFromArr(videos, randomIndex) {
     // console.log('currentVideo', currentVideo)
 
     const previousVideo = previousVideos.slice(-1)[0]
-    if (currentVideo === previousVideo) {
+    if (currentVideo === previousVideo && videos.length > 1) {
+        // videos.length가 1이면 대체할 다른 인덱스가 없다 — videos[1]이 undefined가 되어
+        // currentVideo가 undefined로 빠지고 이후 makeGetUrl(undefined)가 ".../videos/undefined"
+        // 같은 깨진 URL을 만드는 원인이었다(PageDown을 빠르게 연타해 목록이 거의 소진됐을 때 재현).
         currentVideo = videos[randomIndex === 0 ? 1 : 0]
     }
 
@@ -214,7 +218,7 @@ function selectVideoFromArr(videos, randomIndex) {
     updateHeartButton();
     const videoUrl = makeGetUrl(currentVideo);
     // console.log('videoUrl', videoUrl)
-    playVideo(videoUrl)
+    scheduleVideoPlayback(videoUrl)
 }
 
 function updateVideoCountDisplay() {
@@ -225,6 +229,8 @@ function getVideo() {
     document.querySelectorAll('canvas').forEach(elem => elem.remove());
     resetLoop();
     if (fetchVideoArr.length === 0) {
+        if (isFetchingVideoList) return; // 이전 목록 요청이 아직 안 끝났으면 PageDown 연타로 중복 요청을 쏘지 않는다
+        isFetchingVideoList = true;
         const likedParam = likeFilterMode === 'liked' ? 'true' : 'false';
         axios.get(`/video/videos?dir=${dir}&liked=${likedParam}`)
             .then(response => {
@@ -240,7 +246,8 @@ function getVideo() {
                     updateVideoCountDisplay();
                     alert(likeFilterMode === 'liked' ? '하트한 영상이 없습니다' : '안누른 영상이 없습니다');
                 }
-            });
+            })
+            .finally(() => { isFetchingVideoList = false; });
     } else {
         const randomIndex = Math.floor(Math.random() * fetchVideoArr.length);
         selectVideoFromArr(fetchVideoArr, randomIndex);
@@ -259,12 +266,25 @@ function updateHeartButton() {
 // 다운로드를 피하려는 용도다 — 그 중복 다운로드가 초반 네트워크 버스트 구간을 낭비해서, 3초쯤
 // 뒤 버퍼가 바닥나며 2초가량 끊기는 원인이었다. 실패해도(네트워크 에러 등) false로 처리해
 // 기존 fast path의 loadedmetadata 안전장치가 그대로 잡아내도록 한다.
+// PageDown을 빠르게 연타하면 이전 probe가 응답(loadedmetadata/error)을 받기 전에 다음 probe가
+// 또 뜬다 — 브라우저 동시 연결 제한에 걸려 먼저 뜬 probe가 영영 응답을 못 받으면 finish()가
+// 호출되지 않고, 그 press만 콜백 없이 방치돼 화면이 검게 남는 원인이었다(다음 PageDown이 새
+// probe/새 currentVideo로 다시 시도하니 그제서야 나오는 것처럼 보임). 이전 probe를 새 probe가
+// 시작할 때 즉시 취소해 연결을 바로 반납하고, 그래도 응답이 없으면 타임아웃으로 강제 종결한다.
+let activeProbe = null;
+const PROBE_TIMEOUT_MS = 2000;
+
 function probeVideoIsVerticalSplit(videoUrl, callback) {
+    if (activeProbe) activeProbe.abort();
+
     const probe = document.createElement('video');
     let done = false;
+    const timeoutId = setTimeout(function() { finish(false); }, PROBE_TIMEOUT_MS);
     function finish(isVertical) {
         if (done) return;
         done = true;
+        clearTimeout(timeoutId);
+        if (activeProbe === selfHandle) activeProbe = null;
         probe.removeEventListener('loadedmetadata', onMeta);
         probe.removeEventListener('error', onError);
         probe.src = '';
@@ -279,6 +299,9 @@ function probeVideoIsVerticalSplit(videoUrl, callback) {
     function onError() {
         finish(false);
     }
+    const selfHandle = { abort: function() { finish(false); } };
+    activeProbe = selfHandle;
+
     probe.preload = 'metadata';
     probe.muted = true;
     probe.style.display = 'none';
@@ -293,9 +316,52 @@ function probeVideoIsVerticalSplit(videoUrl, callback) {
 // 콜백(loadedmetadata → changeVideo)에서 play()를 차단하므로, 사용자 제스처 컨텍스트 안에서
 // 기존 플레이어를 재활용해 동기적으로 play()를 호출해야 한다 — 그래서 모바일에서는 이 함수를
 // probe 없이 즉시(동기) 호출한다.
+// video.js가 같은 <video> 엘리먼트에 src만 계속 바꿔 끼우는 fast path에서는(특히 PageDown을
+// 짧은 간격으로 연달아 눌러 src를 자주 바꿀 때) 크롬이 하드웨어 오버레이 합성 경로에서 새
+// 프레임을 못 올리고 화면만 까맣게 굳는 경우가 간헐적으로 있다 — 소리와 재생 시간(timeupdate)은
+// 정상이라 timeupdate로는 이 상태를 구분할 수 없다. requestVideoFrameCallback은 실제로 컴포지터에
+// 프레임이 제출됐을 때만 불리므로 이걸로 "화면만 멈춘" 상태를 감지한다(미지원 브라우저는
+// timeupdate로 대체 — 정확도는 떨어지지만 최소한의 안전장치는 된다). 복구는 같은 엘리먼트에
+// src만 다시 끼우지 않는다 — 그게 원인과 같은 동작이라 못 미덥다. 대신 이 파일에서 이미 검증된
+// playNative() 경로(비디오 엘리먼트를 완전히 새로 만듦)로 넘겨 확실하게 복구한다.
+const PLAYBACK_STALL_TIMEOUT_MS = 2500;
+let stallWatchdogTimer = null;
+let stallWatchdogCancel = null;
+
+function armPlaybackStallWatchdog(expectedVideo, videoUrl) {
+    clearTimeout(stallWatchdogTimer);
+    if (stallWatchdogCancel) stallWatchdogCancel();
+
+    const videoEl = player.el().getElementsByTagName('video')[0];
+    let frameSeen = false;
+    const markFrame = function() { frameSeen = true; };
+
+    if (videoEl && typeof videoEl.requestVideoFrameCallback === 'function') {
+        const rvfcHandle = videoEl.requestVideoFrameCallback(markFrame);
+        stallWatchdogCancel = function() {
+            if (videoEl.cancelVideoFrameCallback) videoEl.cancelVideoFrameCallback(rvfcHandle);
+        };
+    } else {
+        player.one('timeupdate', markFrame);
+        stallWatchdogCancel = function() { player.off('timeupdate', markFrame); };
+    }
+
+    stallWatchdogTimer = setTimeout(function() {
+        stallWatchdogCancel();
+        stallWatchdogCancel = null;
+        if (frameSeen) return; // 실제 프레임이 제출됐으면 정상 — 아무 것도 안 함
+        if (currentVideo !== expectedVideo) return; // 그새 다른 영상으로 넘어갔으면 무시
+        if (!player || player.isDisposed()) return;
+        playNative(videoUrl, false); // 이미 startVjsFastPath에서 pushVideoArr 했으니 다시 push하지 않음
+    }, PLAYBACK_STALL_TIMEOUT_MS);
+}
+
 function startVjsFastPath(videoUrl) {
     mimeType = currentVideo.split('.').pop() === 'ts' ? 'video/mp2t' : 'video/mp4';
     pushVideoArr(currentVideo);
+    // player.currentSrc()는 절대 URL로 바뀌어 원본 문자열과 안 맞으므로, 식별자로는
+    // currentVideo를 그대로 스냅샷해 이후 콜백들에서 그 사이 다른 영상으로 넘어갔는지 확인한다.
+    const expectedVideo = currentVideo;
     player.off('loadeddata');
     player.one('loadeddata', function() {
         filenameDisplay.textContent = extractFilename(decodeURIComponent(videoUrl));
@@ -312,11 +378,11 @@ function startVjsFastPath(videoUrl) {
     // 실제로 들리지는 않는다). 이미 켜져 있다면 loadstart/timeupdate가 알아서 따라간다.
     bindSyncVideoElement(player.el().getElementsByTagName('video')[0], true);
 
+    armPlaybackStallWatchdog(expectedVideo, videoUrl);
+
     // PC는 probeVideoIsVerticalSplit()이 미리 걸러주지만, 모바일은 안 거치고(또는 probe가
     // 틀렸을 때) 여전히 여기서 실제 metadata로 다시 한번 확인해 3분할 대상이면 네이티브로
     // 전환한다 — 기존 안전장치를 그대로 둔다.
-    const expectedVideo = currentVideo; // player.currentSrc()는 절대 URL로 바뀌어 원본 문자열과
-                                         // 안 맞으므로, 식별자로는 currentVideo를 그대로 스냅샷
     player.one('loadedmetadata', function() {
         if (currentVideo !== expectedVideo) return; // 그새 다른 영상으로 넘어갔으면 무시
         const vp = player.el().getElementsByTagName('video')[0];
@@ -332,6 +398,38 @@ function startVjsFastPath(videoUrl) {
             }, 0);
         }
     });
+}
+
+// PageDown/PageUp을 아주 빠르게(초당 여러 번) 연타하면 매 press마다 probe+실제 디코드 세션을
+// 새로 여는데, 20~30회 정도 몰아치면 윈도우 하드웨어 비디오 디코더가 못 버티고 화면만 까맣게
+// 굳는 경우가 있었다(소리는 정상 재생 — 다음/이전 영상으로 바꿔도 안 풀림, 즉 특정 영상이 아니라
+// 디코더 세션 자체가 맛이 간 상태). 목록 위치(currentVideo/previousVideos 등)는 매 press마다
+// 그대로 즉시 갱신하되, 실제 재생(디코드 세션 생성)만 최소 간격으로 묶어서 연타 중 나온 디코드
+// 세션 생성 횟수 자체를 줄인다 — 한 번 눌렀을 때는 지연 없이 바로 재생되고, 연타 중에는 마지막
+// 요청만 반영된다(중간 요청들은 어차피 화면에 보일 새도 없이 다음 요청으로 덮였을 것들이다).
+const PLAY_VIDEO_MIN_GAP_MS = 200;
+let playVideoLastRunAt = 0;
+let playVideoPendingTimer = null;
+
+function scheduleVideoPlayback(videoUrl) {
+    // 모바일은 play()를 사용자 제스처 콜스택 안에서 동기 호출해야 하는 제약이 있다(위 startVjsFastPath
+    // 주석 참고) — setTimeout으로 미루면 그 제스처 컨텍스트가 깨져 자동재생이 막힌다. PC의 검은
+    // 화면 문제와 무관하므로 모바일은 이 throttle을 아예 타지 않고 항상 동기 호출한다.
+    if (isMobile) {
+        playVideo(videoUrl);
+        return;
+    }
+    clearTimeout(playVideoPendingTimer);
+    const elapsed = Date.now() - playVideoLastRunAt;
+    if (elapsed >= PLAY_VIDEO_MIN_GAP_MS) {
+        playVideoLastRunAt = Date.now();
+        playVideo(videoUrl);
+    } else {
+        playVideoPendingTimer = setTimeout(function() {
+            playVideoLastRunAt = Date.now();
+            playVideo(videoUrl);
+        }, PLAY_VIDEO_MIN_GAP_MS - elapsed);
+    }
 }
 
 function playVideo(videoUrl) {
@@ -831,7 +929,7 @@ prevButton?.addEventListener('click', function () {
         updateHeartButton();
 
         const videoUrl = makeGetUrl(prevVideo)
-        playVideo(videoUrl)
+        scheduleVideoPlayback(videoUrl)
     }
 });
 

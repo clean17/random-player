@@ -38,6 +38,12 @@ video.controls-idle::-webkit-media-controls {
 }
 
 #videoPlayer_html5_api {
+    /* leftCanvas/rightCanvas와 같은 이유 — PageDown을 짧은 간격으로 연달아 눌러 src를 자주
+       바꾸면 크롬이 이 <video>를 하드웨어 오버레이로 승격시켰다가 새 프레임 제출에 실패해
+       소리는 나오는데 화면만 까맣게 굳는 경우가 있었다. 일반 GPU 컴포지팅 레이어로 강제
+       승격시켜 오버레이 경로를 타지 않게 한다. */
+    transform: translateZ(0);
+    will-change: transform;
     width: 100vw !important;
     /* 모바일에서 100vh는 주소창이 접혔을 때 기준 높이라, 주소창이 다시 나타나면 실제 보이는
        화면보다 영상이 더 길어져 아래쪽 재생바(컨트롤)가 화면 밖으로 밀려난다. dvh(동적

@@ -592,6 +592,40 @@ def get_video_codec(file_path):
     video.release()
     return codec
 
+
+# 바이트 Range를 ffmpeg -ss 탐색 시간으로 정확히 환산하려면 이 파일의 실제 재생시간(초)이
+# 필요하다. ffprobe로 컨테이너의 format duration을 직접 읽는다(cv2의 프레임수/fps 계산보다
+# mkv 등에서 더 신뢰할 수 있다).
+def get_video_duration_seconds(file_path):
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', file_path],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5
+        )
+        duration = float(result.stdout.strip())
+        return duration if duration > 0 else None
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return None
+
+
+# HEVC(H.265)는 mp4 컨테이너 안에서 hvc1/hev1 두 태그 중 하나로 표기되지만, OpenCV의
+# CAP_PROP_FOURCC는 그 박스 태그가 아니라 FFmpeg 내부 코덱 이름을 그대로(소문자 'hevc') 반환한다
+# — ffprobe로 실제 문제 파일들(진지 커플 펠라.SVP.mp4, ktds775 시오리.SVP.mkv)을 열어 codec_tag_string은
+# hev1/[0][0][0][0]으로 제각각이었지만 cv2로 읽으면 항상 b'hevc'였다. hvc1/hev1만 체크하던 이전
+# 버전은 이 때문에 전혀 안 걸렸다. 크롬은 HEVC를 하드웨어 디코드로만 지원해서(소프트웨어 폴백
+# 없음) 이게 간헐적으로 실패하면 에러 없이 소리만 나오고 화면만 까맣게 굳는다 — SVP(프레임 보간)
+# 도구로 인코딩된 파일들에서 특히 자주 나왔다.
+def _is_hevc_codec(codec):
+    hevc_fourccs = (
+        cv2.VideoWriter_fourcc(*'hvc1'),
+        cv2.VideoWriter_fourcc(*'hev1'),
+        cv2.VideoWriter_fourcc(*'hevc'),
+        cv2.VideoWriter_fourcc(*'HEVC'),
+    )
+    return codec in hevc_fourccs
+
+
 def generate_ffmpeg_command(input_path, start_time, output_codec='libx264'):
     command = [
         'ffmpeg',
@@ -608,6 +642,61 @@ def generate_ffmpeg_command(input_path, start_time, output_codec='libx264'):
     return command
 
 
+# 크롬 <video>는 Matroska(.mkv) 컨테이너를 디먹싱하지 못한다 — 코덱 자체는 멀쩡해도 컨테이너를
+# 못 읽어서 화면만 까맣게 나오고(오디오 트랙만 별도 경로로 재생되는 경우가 있어 소리는 남) 콘솔에
+# 에러도 안 남는 증상으로 나타난다(OS/드라이버 상태에 따라 간헐적으로만 재현되기도 한다). 그래서
+# ffmpeg로 mp4 컨테이너로 감싸서(코덱은 그대로 복사 — HEVC만 예외적으로 h264로 재인코딩) 내보낸다.
+def stream_video_transcoded(file_path):
+    codec = get_video_codec(file_path)
+    output_codec = 'libx264' if _is_hevc_codec(codec) else 'copy'
+
+    # Range의 시작 바이트를 실제 탐색 시간(초)으로 바꾼다. 예전엔 /1000로 나눴는데 이건 실제
+    # 비트레이트와 무관한 근사치라 파일 끝부분을 찌르는 probe 요청에서 수만 초짜리 말도 안 되는
+    # 값이 나와 ffmpeg가 거기서 멈췄다(응답 없음의 원인). 그렇다고 Range를 아예 무시하고 항상
+    # 0부터 재생하면(그 다음 시도) 탐색바를 눌러도 항상 처음으로 되돌아가고, 매 요청마다 ffmpeg가
+    # 통째로 재시작되는 문제가 생겼다. 이 파일의 실제 재생시간(ffprobe)과 파일 크기의 비율로
+    # 바이트→초를 정확히 환산하면 두 문제 다 해결된다(대체로 일정한 비트레이트라는 가정 하에).
+    start_time = 0
+    range_header = request.headers.get('Range', None)
+    if range_header:
+        match = re.search(r'bytes=(\d+)-', range_header)
+        if match:
+            start_byte = int(match.group(1))
+            if start_byte > 0:
+                duration = get_video_duration_seconds(file_path)
+                file_size = os.path.getsize(file_path)
+                if duration and file_size:
+                    start_time = start_byte * duration / file_size
+
+    command = generate_ffmpeg_command(file_path, start_time, output_codec)
+
+    # FFmpeg 프로세스 시작 — stderr는 어디서도 안 읽으므로 PIPE로 열면 ffmpeg가 경고/로그를
+    # 충분히 많이 써서 OS 파이프 버퍼가 차는 순간 거기서 멈추고, 그러면 stdout도 같이 막혀
+    # 아래 read()가 영원히 블록된다(응답이 아예 안 오는 원인이었다). 안 읽을 거면 버려야 한다.
+    def generate():
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=-1)
+        try:
+            while True:
+                chunk = process.stdout.read(4096)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            process.kill()
+
+    # 실시간으로 트랜스코딩되는 스트림이라 최종 출력 바이트 크기를 미리 알 수 없다 — 원본
+    # 파일 크기 기준으로 Content-Length/Content-Range를 계산해서 붙이면(예전 코드) 실제 ffmpeg
+    # 출력 크기와 달라, 브라우저가 스트림 도중 "약속한 길이와 다르다"(ERR_CONTENT_LENGTH_MISMATCH)
+    # 며 응답을 통째로 버리고 계속 재요청하는 원인이었다. 길이를 모른다고 정직하게 200 + 청크
+    # 전송(Content-Length 생략)으로 내보낸다.
+    headers = {
+        'Content-Type': 'video/mp4',
+        'Cache-Control': 'no-store',
+    }
+
+    return Response(generate(), status=200, headers=headers)
+
+
 @video.route('/stream/<path:filename>', methods=['GET'])
 def video_stream(filename):
     print('############### stream ###################')
@@ -618,44 +707,4 @@ def video_stream(filename):
     if not os.path.exists(file_path):
         abort(404)
 
-    # 영상 코덱 확인 및 FFmpeg 명령 구성
-    codec = get_video_codec(file_path)
-    output_codec = 'libx264' if codec == cv2.VideoWriter_fourcc(*'hvc1') else 'copy'
-    start_time = 0
-    start_byte = 0  # 시작 바이트 초기화
-
-    # 범위 요청 처리
-    range_header = request.headers.get('Range', None)
-    if range_header:
-        match = re.search(r'bytes=(\d+)-(\d*)', range_header)
-        if match:
-            start_byte = int(match.group(1))
-            start_time = start_byte / 1000  # FFmpeg 시간 설정 (초 단위)
-
-    start_time = start_byte / 1000
-    command = generate_ffmpeg_command(file_path, start_time, output_codec)
-
-    # FFmpeg 프로세스 시작
-    def generate():
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=-1)
-        try:
-            while True:
-                chunk = process.stdout.read(4096)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            process.kill()
-
-    # 파일 크기 및 응답 헤더 설정
-    file_size = os.path.getsize(file_path)
-    content_length = file_size - start_byte
-    headers = {
-        'Content-Type': 'video/mp4',
-        'Content-Length': str(content_length),
-        'Content-Range': f'bytes {start_byte}-{file_size-1}/{file_size}',
-        'Accept-Ranges': 'bytes',
-        'Connection': 'close',
-    }
-
-    return Response(generate(), status=206 if range_header else 200, headers=headers)
+    return stream_video_transcoded(file_path)
