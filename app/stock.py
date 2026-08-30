@@ -1,5 +1,7 @@
 import os
+import re
 import json
+import pandas as pd
 from datetime import datetime
 
 from flask import Blueprint, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
@@ -162,6 +164,100 @@ def get_low_stocks():
     rule = data.get("rule") or None
     stocks = get_interest_stocks(date, endDate, "low", rule=rule)
     return stocks
+
+
+# 예측종목(LightGBM, job/multi_kor_stocks_lgbm.py·multi_us_stocks_lgbm.py 결과) — DB가 아니라
+# app/image.py의 LGBM_DIR_MAP(F:\lgbm_stocks, F:\lgbm_stocks_us)에 쌓인 파일명에서 직접 파싱한다.
+_LGBM_FILENAME_RE = re.compile(r'^(\d{8}) \[\s*([-+]?\d+\.\d+)%\s*\]\s*(.+?)\s*\[([^\[\]]+)\]\.\w+$')
+
+
+def _parse_lgbm_filename(filename):
+    m = _LGBM_FILENAME_RE.match(filename)
+    if not m:
+        return None
+    date_str, proba_str, stock_name, ticker = m.groups()
+    return {
+        "date": f"{date_str[0:4]}-{date_str[4:6]}-{date_str[6:8]}",
+        "date_raw": date_str,
+        "stock_name": stock_name,
+        "stock_code": ticker,
+        "proba": float(proba_str),
+        "graph_file": filename,
+    }
+
+
+# 신호 당일 가격/목표가(10%+ 목표) 등은 파일명에 안 넣고 같은 이름의 .json 사이드카로 둔다
+# (job/multi_kor_stocks_lgbm.py 등 참고). 사이드카가 없는(예전에 만들어진) 파일은 그냥 빠진다.
+def _read_lgbm_sidecar(directory, filename):
+    json_path = os.path.join(directory, os.path.splitext(filename)[0] + ".json")
+    if not os.path.isfile(json_path):
+        return {}
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+# "현재가"는 신호 당일 가격(사이드카, 고정값)과 달리 조회 시점마다 바뀌어야 하므로 사이드카에
+# 저장해두지 않고, AutoSales.py가 매일 갱신하는 종목별 pickle(OHLCV 히스토리)의 마지막 종가를
+# 그때그때 읽는다.
+_LGBM_PICKLE_DIR_MAP = {
+    "kr": r"C:\my-project\AutoSales.py\data\pickle",
+    "us": r"C:\my-project\AutoSales.py\data\pickle_us",
+}
+
+
+def _get_latest_close_price(market, ticker):
+    pickle_dir = _LGBM_PICKLE_DIR_MAP.get(market)
+    if not pickle_dir:
+        return None
+    path = os.path.join(pickle_dir, f"{ticker}.pkl")
+    if not os.path.isfile(path):
+        return None
+    try:
+        df = pd.read_pickle(path)
+        if df.empty:
+            return None
+        col_c = "종가" if "종가" in df.columns else ("Close" if "Close" in df.columns else None)
+        if col_c is None:
+            return None
+        return float(df[col_c].iloc[-1])
+    except Exception as e:
+        print(f"[stock] pkl 현재가 조회 실패 ({market}/{ticker}): {e}")
+        return None
+
+
+@stock.route("/interest/data/predict", methods=["POST"])
+def get_predict_stocks_data():
+    from app.image import LGBM_DIR_MAP  # 순환 import 방지를 위해 함수 안에서 지연 import
+
+    data = request.json or {}
+    market = (data.get("market") or "kr").lower()
+    directory = LGBM_DIR_MAP.get(market)
+    if directory is None or not os.path.isdir(directory):
+        return jsonify([])
+
+    rows = []
+    for filename in os.listdir(directory):
+        if filename.lower().endswith(".json"):
+            continue  # 사이드카 자체는 목록에서 제외
+        if not os.path.isfile(os.path.join(directory, filename)):
+            continue
+        parsed = _parse_lgbm_filename(filename)
+        if not parsed:
+            continue
+        parsed["market"] = market
+        sidecar = _read_lgbm_sidecar(directory, filename)
+        parsed["signal_price"] = sidecar.get("current_price")   # 신호 당일(예측일) 종가 — 고정값
+        parsed["target_price"] = sidecar.get("target_price")    # 신호가 * (1+threshold_pct/100)
+        parsed["threshold_pct"] = sidecar.get("threshold_pct")
+        parsed["latest_price"] = _get_latest_close_price(market, parsed["stock_code"])  # 오늘 실제 종가
+        rows.append(parsed)
+
+    # 날짜 내림차순(최신 먼저), 같은 날짜 안에서는 확률 내림차순
+    rows.sort(key=lambda r: (r["date_raw"], r["proba"]), reverse=True)
+    return jsonify(rows)
 
 @stock.route("/interest/view", methods=["GET"])
 @login_required

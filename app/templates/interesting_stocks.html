@@ -484,6 +484,7 @@
             <option value="#tab-trading" selected>실시간</option>
             <option value="#tab-summary">관심종목</option>
             <option value="#tab-low">저점매수</option>
+            <option value="#tab-predict">예측종목</option>
             <option value="#tab-favorite">★ 즐겨찾기</option>
             <option value="#tab-reserved">✓ 자동매수 대상</option>
             <option value="#tab-mystocks">내 계좌</option>
@@ -499,6 +500,12 @@
         <select id="interestVersionFilter" class="rule-filter" style="display:none">
             <option value="interest" selected>V1</option>
             <option value="interest_v2">V2</option>
+        </select>
+        <!-- 예측종목(LightGBM) 탭 전용: 국장/미장 선택 — 저점매수의 룰 select와 동일하게
+             값이 바뀌면 loadData()로 다시 조회한다(페이지 이동 없음). -->
+        <select id="predictMarketFilter" class="rule-filter" style="display:none">
+            <option value="kr" selected>국장 (KR)</option>
+            <option value="us">미장 (US)</option>
         </select>
         <!-- 내 계좌 탭 전용: 조회할 계좌(실전/모의). 조회와 수동주문이 모두 이 값을 따라간다.
              옵션은 /stocks/kiwoom/envs 응답으로 JS가 채운다(서버가 가진 환경 목록이 곧 진실). -->
@@ -645,6 +652,12 @@
 <!--                <tbody>&lt;!&ndash; JS 렌더링 &ndash;&gt;</tbody>-->
 <!--            </table>-->
         </div>
+    </section>
+
+    <!-- 예측종목(LightGBM, job/multi_kor_stocks_lgbm.py·multi_us_stocks_lgbm.py 결과).
+         저점매수/관심종목과 동일하게 기존 카드 캐러셀로 그린다(renderTradingView, table-predict). -->
+    <section id="tab-predict" class="tab-panel" style="display:none;">
+        <div class="table-scroller"></div>
     </section>
 
     <section id="tab-favorite" class="tab-panel" style="display:none;">
@@ -845,6 +858,7 @@
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
     const interestVersionFilterEl = document.getElementById('interestVersionFilter');
+    const predictMarketFilterEl = document.getElementById('predictMarketFilter');
     const kiwoomEnvFilterEl = document.getElementById('kiwoomEnvFilter');
     const stockSearchInputEl = document.getElementById('stockSearchInput');
     const viewedFilterEl = document.getElementById('viewedFilter');
@@ -889,28 +903,38 @@
         if (tabId === 'tab-summary') interestVersionFilterEl.value = interestVersionFilterEl.value || 'interest';
         else interestVersionFilterEl.value = 'interest';
 
+        // 예측종목 탭: 국장/미장 select — 저점매수의 룰 select와 동일한 방식으로 값이
+        // 바뀌면 loadData()가 다시 조회한다.
+        predictMarketFilterEl.style.display = (tabId === 'tab-predict') ? '' : 'none';
+        if (tabId === 'tab-predict') predictMarketFilterEl.value = predictMarketFilterEl.value || 'kr';
+        else predictMarketFilterEl.value = 'kr';
+
         // 내 계좌 탭에서만 계좌(실전/모의) 선택 노출
         kiwoomEnvFilterEl.style.display = (tabId === 'tab-mystocks') ? '' : 'none';
 
         // 실시간/관심종목 탭에서만 종목명/코드 검색창 + 확인여부 필터 노출.
         // 탭마다 데이터셋이 달라 검색어를 유지할 이유가 없으므로 탭 전환 시 항상 비운다.
-        const showSearch = (tabId === 'tab-trading' || tabId === 'tab-summary');
+        const showSearch = (tabId === 'tab-trading' || tabId === 'tab-summary' || tabId === 'tab-predict');
         stockSearchInputEl.style.display = showSearch ? '' : 'none';
         stockSearchInputEl.value = '';
+        // 확인/미확인 필터는 즐겨찾기 버튼(.fav-btn) 기반 조회 기록에 의존하는데 예측종목
+        // 카드엔 그 버튼이 없어 항상 "미확인"으로만 나온다 — 의미가 없으니 이 탭에선 숨긴다.
+        const showViewedFilter = showSearch && tabId !== 'tab-predict';
         if (viewedFilterEl) {
-            viewedFilterEl.style.display = showSearch ? '' : 'none';
+            viewedFilterEl.style.display = showViewedFilter ? '' : 'none';
             viewedFilterEl.value = '';
         }
 
         const isMyStocks = (tabId === 'tab-mystocks');
-        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved');
+        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved' || tabId === 'tab-predict');
 
-        // '내 종목'/즐겨찾기/자동매수 대상 탭은 날짜 검색 UI를 노출하지 않는다.
+        // '내 종목'/즐겨찾기/자동매수 대상/예측종목 탭은 날짜 검색 UI를 노출하지 않는다.
         // 자동매수 대상은 화면에 달력만 안 보일 뿐, 내부적으로는 관심종목과 같은 기본 기간으로 조회한다.
         startDateInputEl.style.display = (isMyStocks || isFavoriteOrReserved) ? 'none' : '';
         if (isMyStocks || isFavoriteOrReserved) endDateInputEl.style.display = 'none';
 
-        // '내 종목' 탭은 검색 결과 카운트/보기전환 헤더가 의미 없으므로 숨김
+        // '내 종목' 탭만 검색 결과 카운트/보기전환 헤더가 의미 없으므로 숨김.
+        // 예측종목은 검색이 되므로(0건이어도) 카운트가 보여야 한다.
         const searchHeader = document.getElementById('searchResultsHeader');
         if (searchHeader) searchHeader.style.display = isMyStocks ? 'none' : '';
 
@@ -946,6 +970,10 @@
             loadData()
         } else if (target.id === 'tab-favorite') {
             // 즐겨찾기는 날짜 검색을 하지 않으므로 날짜 기본값을 설정하지 않음
+            msStopTimer();
+            loadData()
+        } else if (target.id === 'tab-predict') {
+            // 저점매수와 동일하게 이 페이지 안에서 카드로 그린다 — 날짜 검색 없이 국장/미장만 선택.
             msStopTimer();
             loadData()
         } else {
@@ -1030,6 +1058,8 @@
 
     ruleFilterEl.addEventListener('change', loadData);
     interestVersionFilterEl.addEventListener('change', loadData);
+    // 예측종목: 국장/미장을 고르면(ruleFilterEl과 동일한 방식) 다시 조회
+    predictMarketFilterEl.addEventListener('change', loadData);
     stockSearchInputEl.addEventListener('input', applyStockSearchFilter);
     // 확인/미확인 필터는 카드 전체를 다시 그려서(특히 종목이 많으면) 순간 버벅일 수 있다.
     // setTimeout으로 한 틱 미뤄야 오버레이가 실제로 화면에 그려진 뒤 필터링이 시작된다
@@ -2218,6 +2248,7 @@
         const url3 = 'https://chickchick.kr/stocks/interest/data/low';
         const url4 = 'https://chickchick.kr/stocks/interest/data/favorite';
         const url5 = 'https://chickchick.kr/stocks/interest/data/reserved';
+        const url6 = 'https://chickchick.kr/stocks/interest/data/predict';
         const payload = { date: yyyymmdd, endDate: yyyymmdd2 };
 
         try {
@@ -2304,6 +2335,21 @@
                 const data5 = await res5.json();
                 removeLoadingOverlay();
                 renderTradingView(data5);
+            }
+
+            if (target === 'tab-predict') {
+                // 날짜 검색 없음 — 국장/미장만 선택해서 조회. 서버가 이미 날짜 오름차순으로 정렬해서 준다.
+                // 종목명/코드 검색이 되도록 실시간/관심종목과 동일하게 searchableDataFull에 담는다.
+                const res6 = await fetch(url6, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+                    body: JSON.stringify({ market: predictMarketFilterEl.value || 'kr' }),
+                });
+                if (!res6.ok) throw new Error(`HTTP ${res6.status}`);
+                const data6 = await res6.json();
+                removeLoadingOverlay();
+                searchableDataFull = data6 || [];
+                applyStockSearchFilter();
             }
 
             if (target !== 'tab-summary') {

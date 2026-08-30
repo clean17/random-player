@@ -460,6 +460,61 @@ function renderLowCardHtml(track, rows) {
 }
 
 
+// 예측종목(LightGBM) — /stocks/interest/data/predict 응답을 기존 카드 셸(article.trade-card)
+// 그대로 재사용해서 그린다. 거래대금/시총 같은 필드가 없어(DB 기반이 아니라 파일명 파싱이라)
+// 다른 카드보다 정보가 단순하다 — 즐겨찾기/자동매수 버튼도 이 목록엔 의미가 없어 뺐다.
+// 시장별로 통화가 다르다(KR=원, US=달러) — signal_price/target_price/latest_price는 원본
+// 통화 그대로 내려온다(job/multi_kor_stocks_lgbm.py 등 참고).
+function fmtPredictPrice(v, market) {
+    const num = toFloat(v);
+    if (num === null) return "-";
+    return market === 'us' ? `$${num.toFixed(2)}` : `${Math.round(num).toLocaleString()}원`;
+}
+
+function renderPredictCardHtml(track, rows) {
+    if (!track) return;
+
+    track.innerHTML = rows.map((r, idx) => {
+        const hasImg = !!r.graph_file;
+        const marketDir = r.market === 'us' ? 'us' : 'kr';
+        const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
+        const imgHtml = hasImg
+            ? `<img class="preview" src="https://chickchick.kr/image/lgbm-stocks/${marketDir}/${encoded_url}" alt="미리보기" />`
+            : `<span class="hint">그래프 없음</span>`;
+
+        // 사이드카가 없는(예전에 만들어진) 파일은 signal_price/target_price가 null이라
+        // fmtPredictPrice가 "-"로 표시한다 — 행 자체는 그대로 보여준다.
+        const thresholdPct = r.threshold_pct ?? 10;
+
+        return `
+      <article class="trade-card predict-card" data-index="${idx}">
+        <div class="trade-top">
+          <div class="trade-text">
+            <div class="trade-name">${r.stock_name ?? ""}</div>
+            <div class="trade-sub">${r.stock_code ?? ""} · ${r.date ?? ""}</div>
+          </div>
+        </div>
+
+        <div class="trade-grid">
+          <div class="kv"><span class="k">예측일</span><span class="v">${r.date ?? ""}</span></div>
+          <div class="kv"><span class="k">상승 확률</span><span class="v">${fmt1(r.proba)}%</span></div>
+          <div class="kv"><span class="k">신호 당일</span><span class="v">${fmtPredictPrice(r.signal_price, r.market)}</span></div>
+          <div class="kv"><span class="k">목표가 (+${thresholdPct}%)</span><span class="v">${fmtPredictPrice(r.target_price, r.market)}</span></div>
+          <div class="kv"><span class="k">현재가</span><span class="v">${fmtPredictPrice(r.latest_price, r.market)}</span></div>
+        </div>
+
+        <div class="trade-detail" style="margin-top:10px;">
+          ${imgHtml}
+        </div>
+      </article>
+    `;
+    }).join("");
+
+    const countEl = document.getElementById("count");
+    if (countEl) countEl.textContent = `${rows.length}건`;
+}
+
+
 function renderTradingCards(rows, section, tableName) {
     const root = section.querySelector(".table-scroller");
     if (!root) {
@@ -496,6 +551,7 @@ function renderTradingCards(rows, section, tableName) {
     if (tableName === 'table-favorite') renderTradingCardHtml(track, rows);
     // reserved 탭은 favorite과 동일했던 쿼리(get_interest_stocks_info) 결과라 카드 렌더러를 재사용
     if (tableName === 'table-reserved') renderFavoriteCardHtml(track, rows);
+    if (tableName === 'table-predict') renderPredictCardHtml(track, rows);
     initFavoriteButtons();
     initReserveButtons();
     applyStockFlagState();      // 우선 캐시 값으로 즉시 그리고

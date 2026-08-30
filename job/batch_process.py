@@ -265,6 +265,23 @@ def predict_stock_graph(stock):
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+# 전 종목 공용 LightGBM 예측(job/train_global_lgbm.py로 미리 학습된 모델) — 위 predict_stock_graph
+# (구버전 multi_kor_stocks.py/new_nasdaq_multi.py)와는 별개 트랙. 결과는 F:\lgbm_stocks\<YYYYMMDD>\
+# <kr|us>\ 에 저장되고 /image/lgbm-stocks/<kr|us> 로 조회한다(app/image.py 참고).
+def predict_kr_stocks_lgbm():
+    print('    ############################### predict_kr_stocks_lgbm ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\multi_kor_stocks_lgbm.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
+def predict_us_stocks_lgbm():
+    print('    ############################### predict_us_stocks_lgbm ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\multi_us_stocks_lgbm.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
 def update_interest_stocks():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\1_periodically_update_today_interest_stocks.py"

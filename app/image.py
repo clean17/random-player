@@ -711,3 +711,75 @@ def move_stock_image(market, filename):
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
+
+# ── 예측종목(LightGBM) ──────────────────────────────────────────────────────
+# job/multi_kor_stocks_lgbm.py, job/multi_us_stocks_lgbm.py (AutoSales.py) 결과.
+# 시장당 폴더 1개(F:\lgbm_stocks, F:\lgbm_stocks_us)에 파일이 그대로 쌓인다 — 위 kospi/nasdaq와
+# 같은 방식. 날짜 조회는 폴더가 아니라 파일명 앞의 YYYYMMDD를 파싱해서 한다.
+LGBM_DIR_MAP = {
+    'kr': r'F:\lgbm_stocks',
+    'us': r'F:\lgbm_stocks_us',
+}
+LGBM_FILENAME_DATE_RE = re.compile(r'^(\d{8})')
+
+
+def _lgbm_available_dates(directory):
+    if not os.path.isdir(directory):
+        return []
+    dates = set()
+    for name in os.listdir(directory):
+        m = LGBM_FILENAME_DATE_RE.match(name)
+        if m:
+            dates.add(m.group(1))
+    return sorted(dates, reverse=True)
+
+
+@image_bp.route('/lgbm-stocks/<market>', methods=['GET'], endpoint='lgbm-stock-list')
+@login_required
+def lgbm_stock_list(market):
+    market = market.lower()
+    directory = LGBM_DIR_MAP.get(market)
+    if directory is None:
+        abort(404)
+
+    dates = _lgbm_available_dates(directory)
+    date_str = request.args.get('date') or (dates[0] if dates else datetime.today().strftime('%Y%m%d'))
+    if not re.fullmatch(r'\d{8}', date_str):
+        abort(400)
+
+    page = int(request.args.get('page', 1))
+    start = (page - 1) * LIMIT_PAGE_NUM
+
+    if os.path.isdir(directory):
+        all_names = [f for f in os.listdir(directory) if f.startswith(date_str)
+                     and os.path.isfile(os.path.join(directory, f))]
+        images_length = len(all_names)
+        # get_stock_graphs()는 디렉터리 전체를 대상으로 정렬하므로, 이 날짜 파일만 걸러낸
+        # 리스트는 직접 정렬한다 — 확률(파일명의 %) 내림차순.
+        def _proba_key(filename):
+            m = re.search(r'\[\s*([-+]?\d+\.\d+)%\s*\]', filename)
+            return -float(m.group(1)) if m else 0.0
+        all_names.sort(key=_proba_key)
+        images = all_names[start:start + LIMIT_PAGE_NUM]
+    else:
+        images, images_length = [], 0
+    total_pages = max(1, (images_length + LIMIT_PAGE_NUM - 1) // LIMIT_PAGE_NUM)
+
+    return render_template(
+        'lgbm_stock_list.html',
+        market=market, date=date_str, dates=dates,
+        images=images, page=page, total_pages=total_pages,
+        images_length=images_length,
+        version=int(time.time()),
+    )
+
+
+@image_bp.route('/lgbm-stocks/<market>/<filename>', endpoint='lgbm-stock-graph')
+@login_required
+def get_lgbm_stock_graph(market, filename):
+    market = market.lower()
+    directory = LGBM_DIR_MAP.get(market)
+    if directory is None:
+        abort(404)
+    return send_from_directory(directory, filename)
+

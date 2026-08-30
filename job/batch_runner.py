@@ -14,7 +14,8 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
     reconcile_kiwoom_fills, \
-    run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data
+    run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
+    predict_kr_stocks_lgbm, predict_us_stocks_lgbm
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -214,9 +215,13 @@ def create_mock_scheduler():
     # 모의 토큰 갱신 — 이 프로세스의 os.environ 에 반영되어야 하므로 자기 프로세스에서 돌린다.
     # (메인 프로세스가 갱신해 .env 에 써도 이 프로세스의 메모리에는 반영되지 않는다.
     #  401 자동 재발급 경로가 있어 없어도 동작하지만, 장 시작 전에 미리 받아둔다.)
+    # ⚠️ 메인 프로세스(job/batch_runner.py create_scheduler())도 같은 모의 토큰을 06:55에
+    # 갱신한다 — 두 프로세스가 정확히 같은 분에 동시에 키움 토큰 발급 API(au10001)를 호출해서
+    # 429(요청 빈도 초과)가 뜨던 원인이었다(2026-08-31). 실전/모의 잡을 5분 띄워 배치한 기존
+    # 패턴과 동일하게, 여기만 2분 늦춰 겹치지 않게 한다.
     scheduler.add_job(
         renew_kiwoom_mock_token_job,
-        trigger=CronTrigger(hour=6, minute=55),
+        trigger=CronTrigger(hour=6, minute=57),
         id="mock_renew_token", executor="io", replace_existing=True,
     )
 
@@ -357,6 +362,9 @@ def create_scheduler():
     # 2-0-0-1) 매일 06:55 키움 토큰 갱신 (모의투자) — 실전 잡과 겹치지 않도록 5분 앞에 배치.
     #          모의투자 토큰은 예정된 갱신이 없어 kiwoom_api._call()의 401 재시도로만 반응형
     #          갱신되고 있었다(2026-08-12 확인). 그 반응형 경로는 그대로 두고 선제 갱신을 더한다.
+    # ⚠️ run_mock.py(별도 프로세스)도 같은 함수를 자기 스케줄러(create_mock_scheduler)에서
+    # 도는데, 그쪽은 프로세스가 달라 이 갱신과는 별개로 필요하다(각자 자기 os.environ에
+    # 반영돼야 함) — 대신 여기와 겹치지 않게 06:57로 2분 띄워뒀다(2026-08-31, 429 사고).
     scheduler.add_job(
         renew_kiwoom_mock_token_job,
         trigger=CronTrigger(hour=6, minute=55),
@@ -537,6 +545,25 @@ def create_scheduler():
     #     replace_existing=True,
     #     args=["kospi"],
     # )
+
+    # 4-1) 국장 LightGBM 예측 (전 종목 공용 모델, 위 predict_stock_graph_scheduled와 별개 트랙).
+    #      일~목 17:30 — 각 요일 장마감 후 다음 거래일(월~금)을 예측한다.
+    scheduler.add_job(
+        predict_kr_stocks_lgbm,
+        trigger=CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=17, minute=30),
+        id="predict_kr_stocks_lgbm_1730",
+        executor="cpu",
+        replace_existing=True,
+    )
+
+    # 4-2) 미장 LightGBM 예측 (전 종목 공용 모델). 월~금 12:30.
+    scheduler.add_job(
+        predict_us_stocks_lgbm,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=12, minute=30),
+        id="predict_us_stocks_lgbm_1230",
+        executor="cpu",
+        replace_existing=True,
+    )
 
     # 3) 국장 시작 - 2_finding_stocks_with_increased_volume.py (09:03, 09:20~20:00, 20분마다)
     scheduler.add_job(
