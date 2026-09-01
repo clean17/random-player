@@ -1942,7 +1942,14 @@
         if (document.getElementById('ms-livegap-details')?.open) loadMyStocksLiveGap();
     });
 
+    // 계좌 select를 바꾸는 순간(=msEnv 변경)에도, 그 직전에 이미 날아가 있던 이전 계좌
+    // 조회가 나중에 응답하면 화면을 옛 계좌 데이터로 덮어써버린다(모의 조회 중 실전으로
+    // 바꿨는데 선택은 실전인데 데이터는 모의로 보이는 현상, 2026-09-01). 호출마다 순번을
+    // 매겨서, 자기보다 더 최신 호출이 이미 시작된 응답은 화면에 반영하지 않고 버린다.
+    let msLoadSeq = 0;
+
     async function loadMyStocksData(showOverlay = true) {
+        const seq = ++msLoadSeq;
         if (showOverlay) renderLoadingOverlay();
         msIsRefreshing = true;
         msUpdateRefreshStatus();
@@ -1958,6 +1965,8 @@
             const historyData = await historyRes.json();
             const ordersData = await ordersRes.json();
 
+            if (seq !== msLoadSeq) return;   // 그 사이 더 최신 조회가 시작됨 — 이 응답은 버린다
+
             renderMyStocksSummary(holdingsData.summary || {});
             renderMyStocksHoldings(holdingsData.holdings || []);
             renderMyStocksPieChart(holdingsData.holdings || []);
@@ -1966,12 +1975,14 @@
             renderMyStocksOrders(ordersData.orders || []);
         } catch (e) {
             console.error(e);
-            showDebugToast('내 종목 데이터를 불러오지 못했습니다');
+            if (seq === msLoadSeq) showDebugToast('내 종목 데이터를 불러오지 못했습니다');
         } finally {
-            if (showOverlay) removeLoadingOverlay();
-            msIsRefreshing = false;
-            msNextRefreshAt = Date.now() + msRefreshIntervalMs();
-            msUpdateRefreshStatus();
+            if (seq === msLoadSeq) {
+                if (showOverlay) removeLoadingOverlay();
+                msIsRefreshing = false;
+                msNextRefreshAt = Date.now() + msRefreshIntervalMs();
+                msUpdateRefreshStatus();
+            }
         }
     }
 
