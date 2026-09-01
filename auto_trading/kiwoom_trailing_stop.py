@@ -499,7 +499,7 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
       fill_pnl    체결가 기준 손익 (매도만). 기존 pnl은 조회가 기준이라 값이 다를 수 있다.
     """
     if not (ACNT_NO and ACNT_PWD):
-        _log.error('[정산] 계좌 정보 미설정')
+        _log.error(f'[정산:{KIWOOM_ENV}] 계좌 정보 미설정')
         return {'error': 'no_credentials'}
     if not os.path.exists(TRADES_FILE):
         return {'error': 'no_trades_file'}
@@ -507,7 +507,7 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
     try:
         fills = get_filled_orders(ACNT_NO, ACNT_PWD)
     except Exception as e:
-        _log.error(f'[정산] 체결내역 조회 실패: {e}')
+        _log.error(f'[정산:{KIWOOM_ENV}:{ACNT_NO}] 체결내역 조회 실패: {e}')
         return {'error': str(e)}
 
     by_ord = {f['ord_no']: f for f in fills if f['ord_no']}
@@ -582,7 +582,7 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
             ev['fill_pnl'] = round((fp - float(ev['avg_price'])) * fq, 2)
         if fill['oso_qty']:
             partial += 1
-            _log.error(f"[정산] 부분체결 감지 {ev.get('stk_nm')}({ev.get('stk_cd')}) "
+            _log.error(f"[정산:{KIWOOM_ENV}:{ACNT_NO}] 부분체결 감지 {ev.get('stk_nm')}({ev.get('stk_cd')}) "
                        f"ord_no={ord_no} 주문 {ev.get('qty')}주 → 체결 {fq}주, 미체결 {fill['oso_qty']}주")
         updated += 1
         out.append(json.dumps(ev, ensure_ascii=False))
@@ -591,7 +591,7 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
              '폴백매칭': legacy, '갱신': updated, '이미정산': skipped, 'ord_no없음': no_ord_no,
              '체결내역에없음': not_found, '부분체결': partial}
     if dry_run:
-        _log.info(f'[정산-dry_run] {stats}')
+        _log.info(f'[정산-dry_run:{KIWOOM_ENV}:{ACNT_NO}] {stats}')
         return stats
 
     if updated:
@@ -599,7 +599,7 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write('\n'.join(out) + '\n')
         os.replace(tmp, TRADES_FILE)   # 원자적 교체 — 쓰다가 죽어도 원본이 남는다
-    _log.info(f'[정산] {stats}')
+    _log.info(f'[정산:{KIWOOM_ENV}:{ACNT_NO}] {stats}')
     return stats
 
 
