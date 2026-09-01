@@ -326,6 +326,12 @@ FIELD_CUR_PRICE = 'cur_prc'      # 현재가
 FIELD_PROFIT_RATE = 'prft_rt'    # 수익률(%) — evltv_prft_rt 아님, evltv_prft(손익금액)와 혼동 주의
 FIELD_PROFIT_AMOUNT = 'evltv_prft'  # 평가손익금액(원). (cur_price-avg_price)*qty로 재계산하면 매입가 원단위 반올림 때문에 tot_evlt_pl 합계와 오차가 생겨 반드시 이 필드를 그대로 써야 함
 FIELD_PRED_CLOSE = 'pred_close_pric'  # 전일종가. 매입가 기준 수익률(prft_rt)과 달리 '오늘' 등락만 보려면 이 값 기준이어야 함
+FIELD_SUM_CMSN = 'sum_cmsn'     # 매수+매도(추정) 수수료 합계(원). 지금 전량 매도한다고 가정한 추정치
+FIELD_TAX = 'tax'               # 매도세(추정, 원). sum_cmsn과 마찬가지로 전량 매도 가정
+# 2026-09-01 발견: evltv_prft(=pnl 필드)는 이미 sum_cmsn+tax를 뺀 순손익이고 prft_rt도 그
+# 순손익 기준이라, (cur_price-avg_price)*qty로 직접 재계산한 값과 항상 어긋난다(수수료+세금분,
+# 매입금액 대비 대략 0.8~0.9%). 호출부가 부분 수량만 팔 때 비례 배분할 수 있도록 여기서
+# est_fee(총 보유수량 기준 수수료+세금 추정 합계)를 그대로 노출한다.
 
 
 def dump_holdings_raw(acnt_no: str, acnt_pwd: str) -> dict:
@@ -364,6 +370,7 @@ def _parse_holdings(data: dict) -> List[Dict]:
         profit_rate = _to_number(row.get(FIELD_PROFIT_RATE)) / 100.0
         pnl = _to_number(row.get(FIELD_PROFIT_AMOUNT))
         pred_close = _to_number(row.get(FIELD_PRED_CLOSE))
+        est_fee = _to_number(row.get(FIELD_SUM_CMSN)) + _to_number(row.get(FIELD_TAX))
         if avg_price <= 0:
             print(f'[WARN] get_holdings: 매입가 파싱 실패 stk_cd={row.get(FIELD_STK_CD)} row={row}')
             continue
@@ -387,6 +394,7 @@ def _parse_holdings(data: dict) -> List[Dict]:
             'profit_rate': profit_rate,
             'pnl': pnl,
             'day_change_rate': day_change_rate,
+            'est_fee': est_fee,  # 전량 매도 가정 수수료+세금 추정 합계(원). 부분매도 시 비례 배분해서 쓸 것
         })
     return holdings
 
@@ -576,13 +584,32 @@ def get_order_history(acnt_no: str, acnt_pwd: str, ord_dt: str,
     return out
 
 
+_unfilled_cache_lock = threading.Lock()
+_unfilled_cache: Dict[Optional[str], Tuple[float, List[Dict]]] = {}
+_UNFILLED_CACHE_TTL = 2.0  # 초. 대시보드 자동새로고침(3초)보다 짧게 잡아, 거의 동시에
+                            # 들어오는 /kiwoom/holdings + /kiwoom/orders 두 요청이 같은
+                            # (acnt_no 고정, env만 다른) 조회를 중복 호출하지 않게 한다.
+                            # v8 매매 루프(60초 주기)는 이 TTL보다 훨씬 뜸하게 부르므로
+                            # 사실상 항상 캐시 미스 — 신선도에 영향 없다.
+
+
 def get_unfilled_orders(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> List[Dict]:
     """미체결 주문(ka10075). 응답 리스트 키는 'oso'. 시장가만 쓰는 동안은 보통 빈 리스트다.
 
     원본 키(ord_no/stk_cd/oso_qty/io_tp_nm 등, 값은 전부 문자열)는 v8_strategy가 그대로 쓰므로
     유지하고, 숫자로 바로 쓰기 편하게 *_num 필드만 덧붙인다. cur_prc는 원본에 +/- 부호가
     붙어 있어(전일대비 방향) cur_prc_num은 절대값으로 정규화한다.
+
+    ⚠️ env(계좌 구분)당 최대 _UNFILLED_CACHE_TTL초 캐시된 값을 돌려줄 수 있다 — 호출 직후
+    낸 주문이 바로 안 보일 수 있는 대신 API 호출 폭주를 막는다. acnt_no는 env당 고정이라
+    캐시 키에서 뺐다.
     """
+    now = time.time()
+    with _unfilled_cache_lock:
+        cached = _unfilled_cache.get(env)
+        if cached is not None and now - cached[0] < _UNFILLED_CACHE_TTL:
+            return cached[1]
+
     body = {
         'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd,
         'all_stk_tp': '0', 'trde_tp': '0', 'stk_cd': '', 'stex_tp': '0',
@@ -594,4 +621,7 @@ def get_unfilled_orders(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) 
         r['ord_pric_num'] = abs(_to_number(r.get('ord_pric')))
         r['ord_qty_num'] = int(_to_number(r.get('ord_qty')))
         r['oso_qty_num'] = int(_to_number(r.get('oso_qty')))
+
+    with _unfilled_cache_lock:
+        _unfilled_cache[env] = (now, rows)
     return rows
