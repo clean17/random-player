@@ -244,7 +244,14 @@ def stream_logs():
     """SSE를 사용하여 실시간 로그 스트리밍"""
     def generate():
         log_file = get_log_filename()
-        last_position = os.path.getsize(log_file)  # 시작 시점: 파일 맨 끝
+        try:
+            last_position = os.path.getsize(log_file)  # 시작 시점: 파일 맨 끝
+        except FileNotFoundError:
+            # 월/일 경계에 로그 로테이션으로 새 파일이 아직 안 만들어졌을 때(예: 자정 직후
+            # 첫 로그가 찍히기 전) 여기서 바로 죽으면 아래 while 루프의 재시도 없이 SSE
+            # 연결 자체가 끊긴다. 0부터 시작해두면 파일이 생기는 즉시 while 루프가 처음부터
+            # 읽어 따라잡는다.
+            last_position = 0
 
         # 연결 직후 한 번은 무조건 데이터 전송 (브라우저가 onopen 판단 가능하도록)
         yield "data: 연결됨\n\n"

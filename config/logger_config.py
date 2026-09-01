@@ -231,6 +231,14 @@ def check_logger():
 
     # 날짜가 바뀌었으면 교체
     if new_date_str != current_date_str:
+        # 2026-09-01 사고: 월이 바뀌는 자정엔 새 월 디렉토리(logs/app/YYMM)가 아직 없는데
+        # 여기서 os.makedirs 없이 바로 FileHandler를 열어 [WinError 3]으로 죽었다. 그러면
+        # 아래에서 기존 핸들러는 이미 close()된 채로 새 핸들러 생성이 실패해 파일 로깅이
+        # 통째로 멈추고, log_monitor()에 try/except가 없어 이 스레드 자체가 죽어 이후
+        # 날짜 체크도 영영 안 됐다. setup_logging()과 동일하게 먼저 디렉토리를 만든다.
+        month_str = datetime.now().strftime("%y%m")
+        os.makedirs(f"logs/app/{month_str}", exist_ok=True)
+
         if file_handler:
             file_handler.close()
 
@@ -251,7 +259,12 @@ def check_logger():
 def log_monitor():
     time.sleep(5)
     while True:
-        check_logger()
+        try:
+            check_logger()
+        except Exception as e:
+            # 여기서 한 번이라도 안 잡으면 스레드가 죽어 그 뒤로는 날짜 변경 감지 자체가
+            # 영영 멈춘다(2026-09-01 사고). 이번 체크가 실패해도 다음 60초 체크에서 재시도한다.
+            print(f'[log_monitor] check_logger 실패, 다음 주기에 재시도: {e}')
         time.sleep(60)  # 매 60초마다 체크
 
 # 로그 감시 쓰레드 시작
