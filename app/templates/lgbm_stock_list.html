@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>예측종목 ({{ '국장' if market == 'kr' else '미장' }})</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
+    <script src="/static/js/common.js?v={{ version }}"></script>
+    <style>
+        .lgbm-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 10px 12px;
+        }
+        .lgbm-toolbar select, .lgbm-toolbar input[type="date"] {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .lgbm-count { color: #888; font-size: 13px; }
+        .lgbm-empty { padding: 40px 12px; text-align: center; color: #888; }
+    </style>
+</head>
+
+<body class="page-image app-page">
+<div class="top-bar" data-auto-hide="true">
+    <div class="back app-header__left">
+        <a href="{{ url_for('main.home') }}" class="app-back">Back</a>
+    </div>
+    <div class="app-title">예측종목</div>
+    <div class="logout app-user-menu app-header__right">
+        {% if current_user.is_authenticated %}
+        <button type="button" class="app-menu-button" aria-label="사용자 메뉴" aria-expanded="false">☰</button>
+        <div class="app-menu-panel" role="menu">
+            <span class="app-menu-name">{{ current_user.get_id() }}</span>
+            <a href="{{ url_for('auth.logout') }}" class="danger" role="menuitem">Logout</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="container">
+    <div class="lgbm-toolbar">
+        <label for="lgbm-market-select">시장</label>
+        <select id="lgbm-market-select" onchange="location = this.value;">
+            <option value="{{ url_for('image.lgbm-stock-list', market='kr') }}" {% if market == 'kr' %}selected{% endif %}>국장 (KR)</option>
+            <option value="{{ url_for('image.lgbm-stock-list', market='us') }}" {% if market == 'us' %}selected{% endif %}>미장 (US)</option>
+        </select>
+
+        <label for="lgbm-date-select">날짜</label>
+        <select id="lgbm-date-select" onchange="if (this.value) location = this.value;">
+            {% if not dates %}
+            <option value="" selected>결과 없음</option>
+            {% endif %}
+            {% for d in dates %}
+            <option value="{{ url_for('image.lgbm-stock-list', market=market, date=d) }}" {% if d == date %}selected{% endif %}>
+                {{ d[0:4] }}-{{ d[4:6] }}-{{ d[6:8] }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <span class="lgbm-count">{{ images_length }}건</span>
+    </div>
+
+    {% if images_length == 0 %}
+    <div class="lgbm-empty">이 날짜엔 예측 결과가 없습니다.</div>
+    {% else %}
+    <div class="image-container">
+        {% for image in images %}
+        <div class="image-item" id="image-{{ loop.index }}">
+            <img class="thumbnail"
+                 src="{% if loop.index <= 5 %}{{ url_for('image.lgbm-stock-graph', market=market, filename=image) }}{% else %}{{ url_for('static', filename='svg/image_skeleton.svg') }}{% endif %}"
+                 data-src="{{ url_for('image.lgbm-stock-graph', market=market, filename=image) }}"
+                 alt="{{ image }}"
+                 onerror="this.onerror=null; this.src='/static/no-image.png';"
+                 loading="lazy">
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% for p in range(1, total_pages + 1) %}
+        <a href="{{ url_for('image.lgbm-stock-list', market=market, date=date, page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+
+<script src="/static/js/ui_chrome.js?v={{ version }}"></script>
+<script>
+    // 뷰포트에 들어오는 이미지만 실제 로드 (image_list.html과 동일한 지연 로딩 방식)
+    document.addEventListener('DOMContentLoaded', function () {
+        const lazyImages = document.querySelectorAll('img[data-src]');
+        if (!('IntersectionObserver' in window)) {
+            lazyImages.forEach(img => { img.src = img.dataset.src; });
+            return;
+        }
+        const observer = new IntersectionObserver((entries, obs) => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const img = entry.target;
+                if (img.src !== img.dataset.src) img.src = img.dataset.src;
+                obs.unobserve(img);
+            });
+        }, { rootMargin: '200px' });
+        lazyImages.forEach(img => observer.observe(img));
+    });
+</script>
+</body>
+</html>
