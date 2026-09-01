@@ -141,9 +141,10 @@ STOP_LOSS_RATE = -0.06
 # (장점: 30초 스파이크성 하락에 덜 낚인다 / 단점: 대기 중 추가로 더 빠지면 손절선보다 더
 # 깊은 손실에서 팔린다). 사이클이 30초 간격이라 60초면 최소 2번 연속 확인된다.
 # 2026-08-28: 이 모듈은 실전(v8 미소유 잔존종목)과 모의(fire) 양쪽에서 같이 쓰인다(KIWOOM_ENV로
-# 프로세스가 갈림, kiwoom_api.py와 동일 패턴). 모의에서만 90초로 늘려달라는 요청이라 실전(60초,
+# 프로세스가 갈림, kiwoom_api.py와 동일 패턴). 모의에서만 늘려달라는 요청이라 실전(60초,
 # 실거래 검증 없이 바꾸지 않음)과 분리한다 — 마찬가지로 백테스트 근거는 없는 라이브 전용 값.
-STOP_CONFIRM_SECONDS = 90 if KIWOOM_ENV == 'mock' else 60
+# 2026-08-31: 모의 90초 -> 120초 (사용자 요청, 근거 없음).
+STOP_CONFIRM_SECONDS = 120 if KIWOOM_ENV == 'mock' else 60
 # 고정 목표가 사다리는 비활성화 — 익절을 트레일링에 일임한다.
 # 2026-06~08 데이터(3,045건)로 실제 청산로직을 재현해 검증한 결과, 10/15/20% 사다리는
 # 상승 종목을 너무 일찍 끊어 오히려 성과를 깎았다(목표가 켬 -0.21% vs 끔 +0.08%).
@@ -885,6 +886,11 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     rate = holding['profit_rate']
     avg_price = holding['avg_price']
     cur_price = holding['cur_price']
+    # est_fee는 '지금 보유수량 전량'을 판다고 가정한 수수료+세금 추정 합계다(kt00018 원본
+    # sum_cmsn+tax). 부분수량만 팔 때는 수량 비례로 나눠 뺀다 — 수수료가 정확히 선형은
+    # 아니지만(최소수수료 등) 전혀 안 빼는 것보다 훨씬 실제 순손익에 가깝다.
+    full_qty = qty
+    est_fee_total = holding.get('est_fee') or 0.0
 
     # 신규 종목/완전 청산 후 재진입은 물론, 추가 매수로 수량이 늘어난 경우도 상태를 새로 만든다.
     # rate(수익률)는 Kiwoom이 매번 평단가 기준으로 다시 계산해서 내려주므로, 추가매수로 평단가가
@@ -955,6 +961,11 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         # 2026-08-26: 즉시 체결하지 않고 STOP_CONFIRM_SECONDS(60초) 재확인 — 최초 도달 시각을
         # pos_state에 남겨두고, 그 시간이 지난 뒤에도 여전히 손절선 이하일 때만 실제로 판다.
         # 도중에 손절선 위로 회복하면(else 분기) 관찰을 취소한다.
+        # 2026-08-31 모의 전용 래칫: 확인 시점에 직전 확인가보다 올라 있으면(회복 중) 팔지
+        # 않고 그 가격을 새 기준으로 다시 STOP_CONFIRM_SECONDS만큼 재관찰한다. 직전 확인가보다
+        # 낮거나 같으면(계속 하락/정체) 그때 판다. 327260 사례(90초 확인 동안 -6%→-11.7%로
+        # 계속 밀렸는데 그대로 팔림) 이후 사용자 요청 — 백테스트 근거 없음, 실전은 기존 단발
+        # 확인 그대로 둔다.
         now = datetime.datetime.now()
         since_raw = pos_state.get('stop_watch_since')
         since_dt = None
@@ -963,16 +974,33 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 since_dt = datetime.datetime.fromisoformat(since_raw)
             except ValueError:
                 since_dt = None
+        if since_dt is not None and since_dt.date() != now.date():
+            # 2026-09-01 103140 사고: 어제 장 마감까지 관찰이 안 끝난 채 상태가 남아있으면,
+            # 오늘 첫 사이클에서 (지금 - 어제 시각)이 몇 시간짜리라 재확인 없이 바로 팔려버렸다.
+            # 밤새 장이 닫혀있던 시간은 '기다린 시간'이 아니므로 날짜가 바뀌면 관찰을 새로
+            # 시작한다.
+            since_dt = None
         if since_dt is None:
             pos_state['stop_watch_since'] = now.isoformat()
+            pos_state['stop_watch_price'] = cur_price
             _log.info(f'[손절관찰] {stk_nm}({stk_cd}) rate={rate:.2%} (손절선 {stop_level:.1%}) 최초 도달 — '
                       f'{STOP_CONFIRM_SECONDS}초 재확인 대기')
             return pos_state
         if (now - since_dt).total_seconds() < STOP_CONFIRM_SECONDS:
             return pos_state
 
+        if KIWOOM_ENV == 'mock':
+            watch_price = pos_state.get('stop_watch_price')
+            if watch_price is not None and cur_price > watch_price:
+                pos_state['stop_watch_since'] = now.isoformat()
+                pos_state['stop_watch_price'] = cur_price
+                _log.info(f'[손절관찰연장] {stk_nm}({stk_cd}) rate={rate:.2%} 현재가={cur_price:,.0f}원'
+                          f'(직전확인가={watch_price:,.0f}원보다 회복) — {STOP_CONFIRM_SECONDS}초 재관찰')
+                return pos_state
+
         sell_qty = pos_state['remaining_qty']
-        pnl = (cur_price - avg_price) * sell_qty
+        fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
+        pnl = (cur_price - avg_price) * sell_qty - fee_share
         trade_value = cur_price * sell_qty
         asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
         holding_ratio = 1.0  # 손절은 항상 잔여 전량
@@ -1001,6 +1029,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     elif pos_state.get('stop_watch_since') is not None:
         _log.info(f'[손절관찰해제] {stk_nm}({stk_cd}) rate={rate:.2%} 로 회복 — 재확인 취소')
         pos_state['stop_watch_since'] = None
+        pos_state['stop_watch_price'] = None
 
     # 1-2) 보유기간 상한 — 손절 다음, 트레일링보다 먼저 본다.
     #      이 신호의 수익은 1~3일에 몰려 있고 그 뒤로 소멸한다(3년 검증: 1일 +0.106% /
@@ -1008,7 +1037,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
     held = _held_business_days(pos_state.get('entry_date')) if MAX_HOLD_DAYS > 0 else None
     if held is not None and held >= MAX_HOLD_DAYS:
         sell_qty = pos_state['remaining_qty']
-        pnl = (cur_price - avg_price) * sell_qty
+        fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
+        pnl = (cur_price - avg_price) * sell_qty - fee_share
         trade_value = cur_price * sell_qty
         asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
         res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
@@ -1074,7 +1104,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 else min(pos_state['tranche_qty'], pos_state['remaining_qty'])
 
         if sell_qty > 0:
-            pnl = (cur_price - avg_price) * sell_qty
+            fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
+            pnl = (cur_price - avg_price) * sell_qty - fee_share
             trade_value = cur_price * sell_qty
             asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
             holding_ratio = sell_qty / pos_state['remaining_qty'] if pos_state['remaining_qty'] > 0 else 0.0
@@ -1128,7 +1159,8 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             trig_used = max(pos_state['last_sold_peak'] - TRAIL_GAP, MIN_PROFIT_FLOOR)
             if rate <= trig_used - STALL_GAP:
                 sell_qty = pos_state['remaining_qty']
-                pnl = (cur_price - avg_price) * sell_qty
+                fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
+                pnl = (cur_price - avg_price) * sell_qty - fee_share
                 trade_value = cur_price * sell_qty
                 asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
                 res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())

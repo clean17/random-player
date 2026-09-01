@@ -127,6 +127,12 @@ def run_v8_exit_cycle():
             continue
         if code not in owned:
             continue
+        # est_fee는 '지금 보유수량 전량(qty)'을 판다고 가정한 수수료+세금 추정 합계다
+        # (kt00018 원본 sum_cmsn+tax) — 부분매도(트레일링/익절 1/2씩)엔 수량 비례로 나눠 쓴다.
+        # 2026-09-01: kiwoom의 evltv_prft/prft_rt는 이미 이 비용을 뺀 순손익 기준인데
+        # 여기 pnl은 가격차만 계산해서 손익이 실제보다 낙관적으로 찍혔다(오킨스전자 등).
+        full_qty = qty
+        est_fee_total = h.get('est_fee') or 0.0
         live.add(code)
         pos = st.get(code)
         if pos is None:
@@ -184,10 +190,20 @@ def run_v8_exit_cycle():
         stop_px = peak - ATR_MULT * atr
         if px <= stop_px:
             res = api.sell_market(code, qty)
+            ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
+            if not ok:
+                # 주문이 거부되면(예: 사용자가 직전에 수동으로 이미 전량 매도해 잔량이 없음)
+                # 실제로 판 게 없으니 거래이력에 기록하지도, 포지션 상태를 지우지도 않는다 —
+                # 2026-08-31 121850 사고: 이 체크가 없어 수동매도와 v8손절이 같은 체결을
+                # 중복으로 거래이력에 남겨 당일 수익이 실제의 약 2배로 잡혔다.
+                _log.warning('v8 손절(ATR샹들리에) 주문 거부 %s qty=%d px=%.0f stop=%.0f -> %s',
+                             code, qty, px, stop_px, res)
+                continue
             v8.mark_sold(code)
             _log.info('v8 손절(ATR샹들리에) %s qty=%d px=%.0f stop=%.0f -> %s',
                       code, qty, px, stop_px, res)
-            pnl = (px - entry) * qty
+            fee_share = est_fee_total * (qty / full_qty) if full_qty > 0 else 0.0
+            pnl = (px - entry) * qty - fee_share
             _record_trade(code, h.get('stk_nm'), 'sell', 'v8_atr_stop', qty, px, entry, pnl,
                           holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
                           trigger_level=stop_px / entry - 1.0, ord_no=res.get('ord_no'))
@@ -206,6 +222,11 @@ def run_v8_exit_cycle():
                     since_dt = datetime.datetime.fromisoformat(since_raw)
                 except ValueError:
                     since_dt = None
+            if since_dt is not None and since_dt.date() != now.date():
+                # kiwoom_trailing_stop.py의 stop_watch_since와 동일한 사고(2026-09-01 103140) —
+                # 어제 관찰이 장 마감까지 안 끝나면 밤새 지난 시간이 재확인 시간으로 잡혀
+                # 오늘 첫 사이클에 대기 없이 바로 팔린다. 날짜가 바뀌면 관찰을 새로 시작한다.
+                since_dt = None
             if since_dt is None:
                 pos['trail_watch_since'] = now.isoformat()
                 _log.info('v8 트레일링관찰 %s px=%.0f peak=%.0f trigger=%.0f — %d초 재확인 대기',
@@ -214,22 +235,29 @@ def run_v8_exit_cycle():
                 sell_qty = min(trail_qty, qty)
                 if sell_qty >= 1:
                     res = api.sell_market(code, sell_qty)
-                    v8.mark_sold(code)
-                    _log.info('v8 트레일링 %s qty=%d px=%.0f peak=%.0f -> %s',
-                              code, sell_qty, px, peak, res)
-                    pnl = (px - entry) * sell_qty
-                    _record_trade(code, h.get('stk_nm'), 'sell', 'v8_trailing', sell_qty, px, entry, pnl,
-                                  holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
-                                  peak_rate=peak / entry - 1.0, trigger_level=trail_trigger / entry - 1.0,
-                                  tranche='1/2', ord_no=res.get('ord_no'))
-                    pos['trail_armed'] = False
-                    pos['last_fire_peak'] = peak
-                    pos['trail_watch_since'] = None
-                    qty -= sell_qty
-                    if qty <= 0:
-                        st.pop(code, None)
-                        v8.release_ordered(code)
-                        continue
+                    ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
+                    if not ok:
+                        # 거부 시 trail_watch_since를 건드리지 않아 다음 사이클에 재시도한다.
+                        _log.warning('v8 트레일링 주문 거부 %s qty=%d px=%.0f peak=%.0f -> %s',
+                                     code, sell_qty, px, peak, res)
+                    else:
+                        v8.mark_sold(code)
+                        _log.info('v8 트레일링 %s qty=%d px=%.0f peak=%.0f -> %s',
+                                  code, sell_qty, px, peak, res)
+                        fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
+                        pnl = (px - entry) * sell_qty - fee_share
+                        _record_trade(code, h.get('stk_nm'), 'sell', 'v8_trailing', sell_qty, px, entry, pnl,
+                                      holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
+                                      peak_rate=peak / entry - 1.0, trigger_level=trail_trigger / entry - 1.0,
+                                      tranche='1/2', ord_no=res.get('ord_no'))
+                        pos['trail_armed'] = False
+                        pos['last_fire_peak'] = peak
+                        pos['trail_watch_since'] = None
+                        qty -= sell_qty
+                        if qty <= 0:
+                            st.pop(code, None)
+                            v8.release_ordered(code)
+                            continue
         elif pos.get('trail_watch_since') is not None:
             _log.info('v8 트레일링관찰해제 %s px=%.0f 로 회복', code, px)
             pos['trail_watch_since'] = None
@@ -240,27 +268,39 @@ def run_v8_exit_cycle():
             sell_qty = min(tp_qty, qty)
             if sell_qty >= 1:
                 res = api.sell_market(code, sell_qty)
-                v8.mark_sold(code)
-                _log.info('v8 익절 %s qty=%d px=%.0f (+%.0f%%) -> %s',
-                          code, sell_qty, px, TP_PCT * 100, res)
-                pnl = (px - entry) * sell_qty
-                _record_trade(code, h.get('stk_nm'), 'sell', 'v8_take_profit', sell_qty, px, entry, pnl,
-                              holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
-                              peak_rate=peak / entry - 1.0, trigger_level=tp_trigger / entry - 1.0,
-                              tranche='1/2', ord_no=res.get('ord_no'))
-                pos['tp_done'] = True
-                qty -= sell_qty
-                if qty <= 0:
-                    st.pop(code, None)
-                    v8.release_ordered(code)
-                    continue
+                ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
+                if not ok:
+                    _log.warning('v8 익절 주문 거부 %s qty=%d px=%.0f (+%.0f%%) -> %s',
+                                 code, sell_qty, px, TP_PCT * 100, res)
+                else:
+                    v8.mark_sold(code)
+                    _log.info('v8 익절 %s qty=%d px=%.0f (+%.0f%%) -> %s',
+                              code, sell_qty, px, TP_PCT * 100, res)
+                    fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
+                    pnl = (px - entry) * sell_qty - fee_share
+                    _record_trade(code, h.get('stk_nm'), 'sell', 'v8_take_profit', sell_qty, px, entry, pnl,
+                                  holding_ratio=sell_qty / qty, rate=px / entry - 1.0,
+                                  peak_rate=peak / entry - 1.0, trigger_level=tp_trigger / entry - 1.0,
+                                  tranche='1/2', ord_no=res.get('ord_no'))
+                    pos['tp_done'] = True
+                    qty -= sell_qty
+                    if qty <= 0:
+                        st.pop(code, None)
+                        v8.release_ordered(code)
+                        continue
 
         # 4) 최대 보유일
         if _business_days(pos.get('entry_date', '')) >= MAX_HOLD_DAYS:
             res = api.sell_market(code, qty)
+            ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
+            if not ok:
+                _log.warning('v8 보유상한(%d영업일) 주문 거부 %s qty=%d -> %s',
+                             MAX_HOLD_DAYS, code, qty, res)
+                continue
             v8.mark_sold(code)
             _log.info('v8 보유상한(%d영업일) %s qty=%d -> %s', MAX_HOLD_DAYS, code, qty, res)
-            pnl = (px - entry) * qty
+            fee_share = est_fee_total * (qty / full_qty) if full_qty > 0 else 0.0
+            pnl = (px - entry) * qty - fee_share
             _record_trade(code, h.get('stk_nm'), 'sell', 'v8_max_hold', qty, px, entry, pnl,
                           holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
                           ord_no=res.get('ord_no'))
