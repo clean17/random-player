@@ -33,7 +33,8 @@ db_pool = psycopg_pool.ConnectionPool(
         f"port={db_settings['db']['DB_PORT']}"
     ),
     min_size=1,  # 최소 커넥션
-    max_size=10, # 최대 커넥션
+    max_size=20, # 최대 커넥션 (2026-09-02: waitress 스레드 12->24에 맞춰 10->20. 스레드만
+                 # 늘리고 이걸 안 늘리면 여기서 병목이 나 대기가 최대 timeout(10초)까지 걸림)
     timeout=10   # 커넥션이 모두 사용 중이면 최대 10초 대기 후 에러
 )
 

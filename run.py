@@ -114,6 +114,10 @@ if __name__ == '__main__':
 
             # serve(app, host='0.0.0.0', port=8090, threads=12, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
             # nginx 프록시 서버만 접근 허용
-            serve(app, host='127.0.0.1', port=8090, threads=12, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
+            # 2026-09-02: 12 -> 24. 대부분 DB/파일 I/O 대기라 코어 수(12개)보다 스레드가 많아도
+            # 문제없다 — 로그인 직후 페이지 로드처럼 순간적으로 요청이 몰릴 때의 큐 튐을 줄이려는
+            # 목적. db_pool max_size(config/db_connect.py)도 10->20으로 같이 늘렸다 — 안 늘리면
+            # 병목이 스레드 대신 DB 커넥션 풀로 옮겨갈 뿐이라서.
+            serve(app, host='127.0.0.1', port=8090, threads=24, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
     finally:
         cleanup(scheduler, node_process, [mock_process])
