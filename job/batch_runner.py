@@ -15,7 +15,7 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
     reconcile_kiwoom_fills, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
-    predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters
+    predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -633,6 +633,17 @@ def create_scheduler():
         recalibrate_v2_filters,
         trigger=CronTrigger(month="1,4,7,10", day=1, hour=3, minute=0),
         id="quarterly_recalibrate_v2_filters",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 3-0-2) find_stocks_with_increased_volume(v1)의 변동성 필터(ATR14_norm/오늘 고저폭) 컷
+    # 분기별 재보정 (2026-09-03). v2와 같은 새벽 시간대지만 같은 pkl 전체를 훑는 무거운 작업
+    # 두 개가 동시에 돌지 않도록 분을 15분 띄운다.
+    scheduler.add_job(
+        recalibrate_v1_filters,
+        trigger=CronTrigger(month="1,4,7,10", day=1, hour=3, minute=15),
+        id="quarterly_recalibrate_v1_filters",
         executor="io",
         replace_existing=True,
     )

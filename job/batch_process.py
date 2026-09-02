@@ -311,6 +311,15 @@ def recalibrate_v2_filters():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+# 2_finding_stocks_with_increased_volume(v1)의 변동성 필터(ATR14_norm/오늘 고저폭) 컷을
+# 분기마다 재보정 (config/v1_filter_params.json 갱신). 2026-09-03, recalibrate_v2_filters와
+# 동일한 이유 — 시장 변동성 국면이 바뀌면 중앙값 컷이 낡을 수 있다.
+def recalibrate_v1_filters():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\recalibrate_v1_filters.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
 def find_low_stocks():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\4_find_low_point.py"
