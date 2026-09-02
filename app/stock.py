@@ -22,7 +22,8 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
 from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
-    get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS
+    get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
+    get_stock_audit_info_map
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
     _held_business_days as _legacy_business_days
 from auto_trading import kiwoom_trailing_stop as legacy_exit
@@ -608,6 +609,13 @@ def _legacy_holding_state(pos, avg_price, cur_price):
     }
 
 
+def _audit_badge(stk_cd, audit_map):
+    """투자경고/관리종목 등 배지 표시용 — '정상'이거나 없으면 None(=배지 안 보임).
+    2026-09-02, get_stock_audit_info_map() 참고."""
+    audit = audit_map.get(stk_cd)
+    return audit if audit and audit != '정상' else None
+
+
 def _day_change_rate_from_pkl(stk_cd):
     """당일 등락률 = pkl 마지막 두 종가의 비율 - 1. kt00018의 pred_close_pric은 실측상
     cur_prc와 항상 같은 값이 와서(키움 쪽 결함으로 보임, 2026-08-28 확인) 못 쓴다.
@@ -652,6 +660,9 @@ def get_kiwoom_holdings():
         # 토스 증권 아이콘(https://static.toss.im/png-icons/securities/icn-sec-fill-{code}.png)으로
         # 폴백한다(2026-08-28). DB 조회 1건으로 일괄 처리.
         logo_urls = get_logo_urls_by_codes([h.get('stk_cd') for h in holdings if h.get('stk_cd')])
+        # 투자경고/관리종목/거래정지 등 배지 표시용 (2026-09-02, ka10099 실측 — 실계좌
+        # 011090/057540 관리종목, 모의계좌 417840 투자주의로 확인됨). '정상'이면 표시 안 함.
+        audit_map = get_stock_audit_info_map(env)
         for h in holdings:
             code = h.get('stk_cd')
             v8p = v8pos.get(code)
@@ -662,10 +673,19 @@ def get_kiwoom_holdings():
                     exit_state = _legacy_holding_state(lp, h.get('avg_price'), h.get('cur_price'))
             h['v8'] = exit_state
             h['logo_url'] = logo_urls.get(code)
+            h['audit_info'] = _audit_badge(code, audit_map)
             # 2026-08-28: kt00018의 pred_close_pric(전일종가)이 cur_prc와 항상 똑같이 와서
             # (실측 확인 — 키움 API 쪽 결함으로 보임) day_change_rate가 매번 0%로 나왔다.
-            # pkl 일봉의 실제 전일 종가로 다시 계산해서 덮어쓴다.
-            h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
+            # 2026-09-02 재확인: 지금은 pred_close_pric이 실제 전일종가와 정확히 일치하고
+            # cur_prc와도 정상적으로 다르다 — 그 결함이 지금은 재현 안 됨(개장 직후 특정
+            # 종목의 "전일종가 고착" 현상과 관련됐을 가능성). API 값을 쓰면 3초 새로고침마다
+            # 실시간으로 갱신되는 장점이 있으니, pred_close가 cur_prc와 실제로 다를 때만
+            # (=결함이 없을 때만) API 값을 쓰고, 혹시 둘이 같아지면(결함 재발 의심) pkl
+            # 기반 계산으로 자동 폴백한다.
+            pred_close = h.get('pred_close')
+            cur_price = h.get('cur_price')
+            if not (pred_close and cur_price and pred_close != cur_price):
+                h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
         asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
         # 2026-08-28: 원래 "1회 투입금(ALLOC=8%) 참고값"으로 넣었었는데, 사용자가 원한 건
         # 그게 아니라 "지금 실제 미체결 매수 주문에 얼마가 걸려있는지"였다 — 그 돈은 평가금(체결
@@ -715,6 +735,10 @@ def get_kiwoom_history():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
+    # 투자경고/관리종목 등 배지 표시용 (2026-09-02, /kiwoom/holdings와 동일한 패턴)
+    audit_map = get_stock_audit_info_map(env)
+    for ev in history:
+        ev['audit_info'] = _audit_badge(ev.get('stk_cd'), audit_map)
     return jsonify({"history": history, "pnl_summary": pnl_summary,
                     "env": env or KIWOOM_ENV})
 
@@ -739,6 +763,8 @@ def get_kiwoom_orders():
     # gap/score는 v8 후보 캐시(당일자)에만 있다. v8이 아닌 주문(레거시 fire/manual)은 None.
     cands = v8_strategy.get_today_candidates_by_code(env)
     owned = v8_strategy.get_owned_codes_for_env(env)
+    # 투자경고/관리종목 등 배지 표시용 (2026-09-02, /kiwoom/holdings와 동일한 패턴)
+    audit_map = get_stock_audit_info_map(env)
 
     orders = []
     for r in raw:
@@ -761,6 +787,7 @@ def get_kiwoom_orders():
             'gap': cand.get('gap') if cand else None,
             'score': cand.get('score') if cand else None,
             'v8_owned': code in owned,
+            'audit_info': _audit_badge(code, audit_map),
         })
     orders.sort(key=lambda o: o.get('ord_tm') or '', reverse=True)
     return jsonify({"orders": orders, "env": env or KIWOOM_ENV})
@@ -794,6 +821,9 @@ def get_kiwoom_live_gap_ranking():
     except Exception as e:
         print(f'live_gap_ranking 보유종목 조회 실패: {e}')
 
+    # 투자경고/관리종목 등 배지 표시용 (2026-09-02, /kiwoom/holdings와 동일한 패턴)
+    audit_map = get_stock_audit_info_map(env)
+
     out = [{
         'rank': i + 1,
         'stk_cd': c.get('code'),
@@ -805,6 +835,7 @@ def get_kiwoom_live_gap_ranking():
         'score': c.get('score'),
         'owned': c.get('code') in held_value,
         'holding_value': held_value.get(c.get('code')),
+        'audit_info': _audit_badge(c.get('code'), audit_map),
     } for i, c in enumerate(ranking)]
     return jsonify({"ranking": out, "env": env or KIWOOM_ENV})
 

@@ -248,6 +248,49 @@ def get_current_price(stk_cd: str) -> int:
     return get_current_price_and_name(stk_cd)[0]
 
 
+# ── 종목 상태(투자경고/관리종목/거래정지 등) 조회 (ka10099) ─────────────────────
+# 2026-09-02 실측: ka10001엔 이 정보가 없다. ka10099(mrkt_tp='0' 코스피/'10' 코스닥)의
+# 응답 list[].auditInfo 가 '정상'/'거래정지'/'관리종목'/'투자주의환기종목'/'투자경고'/
+# '단기과열'/'투자주의' 중 하나로 온다(코스피+코스닥 합쳐 4,307종목 기준 실측 분포:
+# 정상 4021, 거래정지 123, 관리종목 92, 투자주의환기종목 36, 투자경고 15, 단기과열 10,
+# 투자주의 10). '정리매매'/'불성실공시'는 이 API에 없다 — 필요하면 별도 KRX 스크래핑이
+# 필요하다(update_kor_stocks_by_xls.py와 같은 패턴).
+_AUDIT_INFO_CACHE_LOCK = threading.Lock()
+_AUDIT_INFO_CACHE: Optional[Tuple[float, Dict[str, str]]] = None
+_AUDIT_INFO_CACHE_TTL = 300.0  # 5분. 계좌별이 아니라 시장 전체 공통 정보라 env 무관하게 캐시.
+
+
+def get_stock_audit_info_map(env: Optional[str] = None, force: bool = False) -> Dict[str, str]:
+    """전 종목 {종목코드: auditInfo} 맵. 5분 캐시(프로세스 전역, env 무관 — 시장 데이터는
+    계좌와 상관없이 동일하다). 실패해도 예외를 던지지 않고 빈 dict를 돌려준다(호출부가
+    보유종목 배지 표시용으로만 쓰므로, 실패해도 화면이 죽지 않는 쪽이 안전하다)."""
+    global _AUDIT_INFO_CACHE
+    now = time.time()
+    with _AUDIT_INFO_CACHE_LOCK:
+        if not force and _AUDIT_INFO_CACHE is not None and now - _AUDIT_INFO_CACHE[0] < _AUDIT_INFO_CACHE_TTL:
+            return _AUDIT_INFO_CACHE[1]
+
+    result: Dict[str, str] = {}
+    try:
+        for mrkt_tp in ('0', '10'):  # 0=코스피, 10=코스닥
+            data = _call('ka10099', '/api/dostk/stkinfo', {'mrkt_tp': mrkt_tp}, env=env)
+            for item in data.get('list') or []:
+                code = item.get('code')
+                audit = item.get('auditInfo')
+                if code and audit:
+                    result[code] = audit
+    except Exception as e:
+        print(f'[ERROR] get_stock_audit_info_map: {e}')
+        with _AUDIT_INFO_CACHE_LOCK:
+            if _AUDIT_INFO_CACHE is not None:
+                return _AUDIT_INFO_CACHE[1]  # 이전 캐시라도 있으면 그걸 반환
+        return {}
+
+    with _AUDIT_INFO_CACHE_LOCK:
+        _AUDIT_INFO_CACHE = (now, result)
+    return result
+
+
 def get_intraday_range(stk_cd: str) -> Optional[Tuple[int, int, int]]:
     """(현재가, 당일 고가, 당일 저가) 반환. 실패하거나 값이 이상하면 None.
 
@@ -394,6 +437,8 @@ def _parse_holdings(data: dict) -> List[Dict]:
             'profit_rate': profit_rate,
             'pnl': pnl,
             'day_change_rate': day_change_rate,
+            'pred_close': pred_close,  # 2026-09-02: kt00018 pred_close_pric 원본. 호출부가
+                                        # cur_price와 같은지(예전 결함 재발 여부) 스스로 검증할 수 있게 노출
             'est_fee': est_fee,  # 전량 매도 가정 수수료+세금 추정 합계(원). 부분매도 시 비례 배분해서 쓸 것
         })
     return holdings

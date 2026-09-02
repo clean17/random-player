@@ -229,6 +229,25 @@
             padding: 0 4px;
             white-space: nowrap;
         }
+        /* 종목 상태 배지(2026-09-02, ka10099 auditInfo) — 투자경고/관리종목/거래정지 등.
+           '단기과열'/'투자주의'류는 경고색, '관리종목'/'거래정지'/'투자경고'는 위험색. */
+        .ms-audit-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 3px;
+            padding: 0 4px;
+            white-space: nowrap;
+            margin-left: 4px;
+        }
+        .ms-audit-badge.ms-audit-warn {
+            color: #b8860b;
+            border: 1px solid #b8860b;
+        }
+        .ms-audit-badge.ms-audit-danger {
+            color: #c0392b;
+            border: 1px solid #c0392b;
+        }
         #table-mystocks-history tr.ms-pending-row {
             opacity: 0.65;
         }
@@ -865,6 +884,14 @@
     // 검색창이 노출되는 탭(실시간/관심종목)에서 서버로부터 받은 원본 데이터.
     // 검색은 서버 재조회 없이 이 배열을 필터링해서 다시 그린다.
     let searchableDataFull = [];
+
+    // 2026-09-02: loadData()가 겹쳐 호출되면(탭을 빠르게 전환하거나 날짜를 연달아 바꿀 때
+    // 'change' 리스너가 여러 번 발화) 먼저 시작된 호출의 target(예: 6일치를 긁는 tab-summary)이
+    // 나중에 응답이 와서 지금 보고 있는 탭(예: 관심종목, 원래 당일 단일 날짜라 33건)의 결과를
+    // 덮어써버린다 — "가끔 300건씩 나왔다가 새로고침하면 33건으로 돌아오는" 증상의 원인.
+    // loadMyStocksData()의 msLoadSeq와 동일한 패턴으로, 자기보다 더 최신 호출이 이미 시작된
+    // 응답은 화면에 반영하지 않고 버린다.
+    let dataLoadSeq = 0;
 
     function applyStockSearchFilter() {
         const q = (stockSearchInputEl.value || '').trim().toLowerCase();
@@ -1648,11 +1675,21 @@
     // 종목명(아이콘 + 이름/코드 2단) — 지금은 보유종목 테이블 전용(체결이력은 기존 한 줄 유지).
     // 클릭 시 네이버 증권으로 이동하는 기존 핸들러가 .ms-stock-name 을 closest()로 찾으므로,
     // 이 span을 그대로 클릭 대상 컨테이너로 쓴다.
-    function msStockNameCellHtml(name, code, logoUrl) {
+    // auditInfo(ka10099): '관리종목'/'거래정지'/'투자경고' -> 위험, '투자주의환기종목'/
+    // '투자주의'/'단기과열' -> 경고. 목록에 없는 값이 새로 오면(신설 카테고리 등) 안전한
+    // 쪽(경고색)으로 표시한다.
+    const MS_AUDIT_DANGER = new Set(['관리종목', '거래정지', '투자경고']);
+    function msAuditBadgeHtml(auditInfo) {
+        if (!auditInfo) return '';
+        const cls = MS_AUDIT_DANGER.has(auditInfo) ? 'ms-audit-danger' : 'ms-audit-warn';
+        return `<span class="ms-audit-badge ${cls}">${auditInfo}</span>`;
+    }
+
+    function msStockNameCellHtml(name, code, logoUrl, auditInfo) {
         return `<span class="ms-stock-name" data-stk-cd="${code}">
             ${msStockIconHtml(name, code, logoUrl)}
             <span class="ms-stock-info">
-                <span class="ms-stock-nm">${name ?? ''}</span>
+                <span class="ms-stock-nm">${name ?? ''}${msAuditBadgeHtml(auditInfo)}</span>
                 <span class="ms-stock-code">${code ?? ''}</span>
             </span>
         </span>`;
@@ -1677,7 +1714,7 @@
             const pnlSubText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)} (${msFmtPct(h.profit_rate)})`;
             return `
         <tr>
-          <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url)}</td>
+          <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url, h.audit_info)}</td>
           <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ms-sub-sort ${msPnlClass(pnl)}" data-sort="profit_rate">${pnlSubText}</span></td>
           <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
           <td class="ms-holding-v8-state">${msV8StateText(h.v8)}</td>
@@ -1712,7 +1749,7 @@
                 ? Number(o.ord_pric) / Number(o.cur_prc) - 1.0 : null;
             return `
         <tr>
-          <td><span class="ms-stock-name" data-stk-cd="${o.stk_cd}">${o.stk_nm ?? ''} <span class="ms-stock-code">${o.stk_cd ?? ''}</span></span></td>
+          <td><span class="ms-stock-name" data-stk-cd="${o.stk_cd}">${o.stk_nm ?? ''}${msAuditBadgeHtml(o.audit_info)} <span class="ms-stock-code">${o.stk_cd ?? ''}</span></span></td>
           <td>${o.side === 'buy' ? '매수' : (o.side === 'sell' ? '매도' : (o.side ?? ''))}</td>
           <td class="right">${qtyText}</td>
           <td class="right">${msFmtWon(Number(o.ord_pric || 0) * Number(o.ord_qty || 0))}</td>
@@ -1745,7 +1782,7 @@
         tbody.innerHTML = ranking.map(c => `
         <tr>
           <td class="right">${c.rank}</td>
-          <td><span class="ms-stock-name" data-stk-cd="${c.stk_cd}">${c.stk_nm ?? ''} <span class="ms-stock-code">${c.stk_cd ?? ''}</span></span></td>
+          <td><span class="ms-stock-name" data-stk-cd="${c.stk_cd}">${c.stk_nm ?? ''}${msAuditBadgeHtml(c.audit_info)} <span class="ms-stock-code">${c.stk_cd ?? ''}</span></span></td>
           <td class="right">${msFmtWon(c.ord_px)}</td>
           <td class="right">${msFmtWon(c.cur_px)}</td>
           <td class="right">${msFmtPct(c.gap)}</td>
@@ -1867,7 +1904,7 @@
             return `
         <tr class="${isPending ? 'ms-pending-row' : ''}">
           <td>${(ev.ts || '').replace('T', ' ')}</td>
-          <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''} <span class="ms-stock-code">${ev.stk_cd ?? ''}</span></span></td>
+          <td><span class="ms-stock-name" data-stk-cd="${ev.stk_cd}">${ev.stk_nm ?? ''}${msAuditBadgeHtml(ev.audit_info)} <span class="ms-stock-code">${ev.stk_cd ?? ''}</span></span></td>
           <td>${ev.side === 'buy' ? '매수' : '매도'}</td>
           <td>${MS_REASON_LABEL[ev.reason] || ev.reason || ''}${msHoldingRatioText(ev)}${msReasonDetailText(ev)}${statusText}</td>
           <td class="right">${ev.qty ?? 0}주</td>
@@ -2249,6 +2286,7 @@
 
     // 데이터 로드 (날짜 변경 시 자동 호출)
     async function loadData() {
+        const seq = ++dataLoadSeq;
         const _activeSel = getActiveTabTarget();
         const target = document.querySelector(_activeSel)?.id;
         const yyyymmdd = startDateInputEl.value?.replace(/-/g, '');
@@ -2283,8 +2321,10 @@
                 // console.log('tradingRows', tradingRows);
                 // renderTradingTable(tradingRows);
                 // renderTradingCards(tradingRows);
-                searchableDataFull = tradingRows;
-                applyStockSearchFilter();
+                if (seq === dataLoadSeq) {   // 그 사이 더 최신 조회가 시작됐으면 이 응답은 버린다
+                    searchableDataFull = tradingRows;
+                    applyStockSearchFilter();
+                }
 
                 // renderTodayTable(todayRows); // 금일변동
             }
@@ -2302,8 +2342,10 @@
                 removeLoadingOverlay();
                 // console.log('summary:', data2);
                 // renderSummaryTable(data2);
-                searchableDataFull = data2 || [];
-                applyStockSearchFilter();
+                if (seq === dataLoadSeq) {
+                    searchableDataFull = data2 || [];
+                    applyStockSearchFilter();
+                }
             }
 
             if (target === 'tab-low') {
@@ -2318,7 +2360,7 @@
                 const data3 = await res3.json();
                 removeLoadingOverlay();
                 // renderLowTable(data3);
-                renderTradingView(data3);
+                if (seq === dataLoadSeq) renderTradingView(data3);
             }
 
             if (target === 'tab-favorite') {
@@ -2332,7 +2374,7 @@
                 const data4 = await res4.json();
                 removeLoadingOverlay();
                 // renderLowTable(data3);
-                renderTradingView(data4);
+                if (seq === dataLoadSeq) renderTradingView(data4);
             }
 
             if (target === 'tab-reserved') {
@@ -2345,7 +2387,7 @@
                 if (!res5.ok) throw new Error(`HTTP ${res5.status}`);
                 const data5 = await res5.json();
                 removeLoadingOverlay();
-                renderTradingView(data5);
+                if (seq === dataLoadSeq) renderTradingView(data5);
             }
 
             if (target === 'tab-predict') {
@@ -2359,8 +2401,10 @@
                 if (!res6.ok) throw new Error(`HTTP ${res6.status}`);
                 const data6 = await res6.json();
                 removeLoadingOverlay();
-                searchableDataFull = data6 || [];
-                applyStockSearchFilter();
+                if (seq === dataLoadSeq) {
+                    searchableDataFull = data6 || [];
+                    applyStockSearchFilter();
+                }
             }
 
             if (target !== 'tab-summary') {
