@@ -302,6 +302,15 @@ def find_stocks_advanced():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+# find_stocks_advanced(v2)의 상대강도 밴드·신고가근접 컷을 분기마다 재보정
+# (config/v2_filter_params.json 갱신). 2026-09-02, 시장 분위기가 바뀌면 값이 낡을 수
+# 있다는 원본 스크립트 경고에 대응 — pkl 재분석이라 몇 분 걸리므로 새벽에 돌린다.
+def recalibrate_v2_filters():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\recalibrate_v2_filters.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
 def find_low_stocks():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\4_find_low_point.py"
