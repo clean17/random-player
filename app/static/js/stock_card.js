@@ -239,7 +239,11 @@ function renderSummaryCardHtml(track, rows) {
         const d1 = new Date(String(r.first_date ?? ""));
         const d2 = new Date(String(r.last_date ?? ""));
         const nClose = toFloat(r.current_close) ?? 0;
-        const pChg = toFloat(r.today_price_change_pct) ?? 0;
+        // today_change_rate_live = pkl 마지막 두 종가로 계산한 진짜 '오늘' 등락률(app/stock.py
+        // _attach_live_change_rate). 없으면(pkl 조회 실패 등) 마지막 신호 시점 값으로 대체하되
+        // 라벨에서 그 사실을 구분해 보여준다(2026-09-03, 457190 표기 오류 수정).
+        const hasLiveChg = r.today_change_rate_live !== null && r.today_change_rate_live !== undefined;
+        const pChg = hasLiveChg ? r.today_change_rate_live * 100 : (toFloat(r.today_price_change_pct) ?? 0);
         const formatted_date1 = fmtDate(d1);
         const formatted_date2 = fmtDate(d2);
 
@@ -281,7 +285,7 @@ function renderSummaryCardHtml(track, rows) {
           <div class="kv"><span class="k">집계 기간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
           <!--<div class="kv"><span class="k">시총</span><span class="v">${trValFmtWon(r.market_value) ?? ""}</span></div>-->
           <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.last_trading_value) ?? ""})</span></div>
-          <div class="kv"><span class="k">종가 추이 (금일 등락률)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmtKrClose(nClose)} (${fmt1(pChg)}%)</span></div>
+          <div class="kv"><span class="k">종가 추이 (${hasLiveChg ? '금일' : '신호일'} 등락률)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmtKrClose(nClose)} (${fmt1(pChg)}%)</span></div>
           <div class="kv"><span class="k">기간 총 상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일 평균 상승</span><span class="v">${r.increase_per_day ?? ""}</span></div>
         </div>
@@ -312,7 +316,11 @@ function renderFavoriteCardHtml(track, rows) {
         const d1 = new Date(String(r.first_date ?? ""));
         const d2 = new Date(String(r.last_date ?? ""));
         const nClose = toFloat(r.current_close) ?? 0;
-        const pChg = toFloat(r.today_price_change_pct) ?? 0;
+        // today_change_rate_live = pkl 마지막 두 종가로 계산한 진짜 '오늘' 등락률(app/stock.py
+        // _attach_live_change_rate). 없으면(pkl 조회 실패 등) 마지막 신호 시점 값으로 대체하되
+        // 라벨에서 그 사실을 구분해 보여준다(2026-09-03, 457190 표기 오류 수정).
+        const hasLiveChg = r.today_change_rate_live !== null && r.today_change_rate_live !== undefined;
+        const pChg = hasLiveChg ? r.today_change_rate_live * 100 : (toFloat(r.today_price_change_pct) ?? 0);
         const formatted_date1 = fmtDate(d1);
         const formatted_date2 = fmtDate(d2);
 
@@ -354,7 +362,7 @@ function renderFavoriteCardHtml(track, rows) {
           <div class="kv"><span class="k">집계 기간</span><span class="v">${formatted_date1} ~ ${formatted_date2}</span></div>
           <!--<div class="kv"><span class="k">시총</span><span class="v">${trValFmtWon(r.market_value) ?? ""}</span></div>-->
           <div class="kv"><span class="k">평균 거래대금 (금일)</span><span class="v">${trValFmtWon(r.avg_trading_value) ?? ""} (${trValFmtWon(r.last_trading_value) ?? ""})</span></div>
-          <div class="kv"><span class="k">종가 추이 (금일 등락률)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmtKrClose(nClose)} (${fmt1(pChg)}%)</span></div>
+          <div class="kv"><span class="k">종가 추이 (${hasLiveChg ? '금일' : '신호일'} 등락률)</span><span class="v">${fmt2(r.min_close)} ➡️ ${fmtKrClose(nClose)} (${fmt1(pChg)}%)</span></div>
           <div class="kv"><span class="k">기간 총 상승</span><span class="v">${r.total_rate_of_increase ?? ""}</span></div>
           <div class="kv"><span class="k">일 평균 상승</span><span class="v">${r.increase_per_day ?? ""}</span></div>
         </div>

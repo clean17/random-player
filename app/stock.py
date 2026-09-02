@@ -165,7 +165,7 @@ def get_interesting_stocks_info():
     endDate = data.get("endDate", datetime.today())
     target_value = data.get("target") or 'interest'
     stocks = get_interest_stocks_info(date, endDate, target_value=target_value)
-    return stocks
+    return _attach_live_change_rate(stocks)
 
 @stock.route("/interest/data/low", methods=["POST"])
 def get_low_stocks():
@@ -379,7 +379,7 @@ def get_favorite_stocks_data():
     user_id = fetch_user.id if fetch_user is not None else None
 
     stocks = get_favorite_stocks_latest(user_id)
-    return stocks
+    return _attach_live_change_rate(stocks)
 
 @stock.route("/interest/data/favorite/heart", methods=["POST"])
 @login_required
@@ -395,7 +395,7 @@ def get_favorite_heart_stocks_data():
         user_id = None
 
     stocks = get_interest_stocks_info(date, endDate, user_id)
-    return stocks
+    return _attach_live_change_rate(stocks)
 
 @stock.route("/reserved", methods=["POST"])
 @login_required
@@ -453,7 +453,7 @@ def get_reserved_stocks_data():
     user_id = fetch_user.id if fetch_user is not None else None
 
     stocks = get_interest_stocks_info(date, endDate, user_id, source='reserved')
-    return stocks
+    return _attach_live_change_rate(stocks)
 
 
 @stock.route("/interest/data/favorite/schedule", methods=["POST"])
@@ -636,6 +636,20 @@ def _day_change_rate_from_pkl(stk_cd):
         return float(close.iloc[-1]) / prev_close - 1.0 if prev_close > 0 else None
     except Exception:
         return None
+
+
+def _attach_live_change_rate(rows):
+    """관심종목류 카드의 '(금일 등락률)' 표시용. today_price_change_pct는 그 종목의 마지막
+    신호 시점 값이라(신호가 며칠 전이면 며칠 전 값), 항상 실시간인 current_close와 나란히
+    보여주면 '오늘도 그만큼 올랐다'는 착각을 준다(2026-09-03, 457190에서 실제로 발견 —
+    8/31 마지막 신호 +5.9%가 9/2 -9.2%인 날에도 그대로 표시됨). _day_change_rate_from_pkl과
+    동일한 방식(pkl 마지막 두 종가)으로 진짜 '오늘' 등락률을 별도 필드로 얹는다."""
+    for r in rows or []:
+        try:
+            r['today_change_rate_live'] = _day_change_rate_from_pkl(r.get('stock_code'))
+        except Exception:
+            r['today_change_rate_live'] = None
+    return rows
 
 
 @stock.route("/kiwoom/holdings", methods=["GET"])
