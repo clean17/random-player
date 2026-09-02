@@ -9,6 +9,7 @@ from flask_login import login_required, current_user
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
     update_stock_list, get_stock_list, delete_delisted_stock, update_interest_stock_graph, \
+    update_interest_stock_graph_bulk, \
     update_interest_stock_list_close, upsert_favorite_stocks, get_favorite_stocks, get_favorite_stocks_info_api, \
     get_favorite_stocks_latest, \
     update_low_stock_graph, update_interest_stock_close_correctly_list, find_stocks_by_name_prefix, \
@@ -132,6 +133,15 @@ def update_interest_stock_close_correct_list():
 def update_interesting_stocks_graph():
     result = update_interest_stock_graph(StockDTO.from_json(request.json))
     return {"status": "success", "result": result}, 200
+
+# 2026-09-01: job/5_generate_interest_stocks_graph.py가 종목마다 이 엔드포인트를 개별로
+# 호출해(10분 스케줄 x 종목 수, 실측 3분간 304회) waitress 큐 깊이가 33까지 치솟았다.
+# 한 번에 여러 건을 받아 트랜잭션 하나로 처리하는 벌크 버전 — 호출부도 같이 고쳤다.
+@stock.route("/interest/graph/bulk", methods=["POST"])
+def update_interesting_stocks_graph_bulk():
+    items = (request.json or {}).get("items") or []
+    updated = update_interest_stock_graph_bulk(items)
+    return {"status": "success", "updated": updated}, 200
 
 @stock.route("/low/graph", methods=["POST"])
 def update_low_stocks_graph():

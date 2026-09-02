@@ -420,6 +420,24 @@ def update_interest_stock_graph(stock: "StockDTO", conn=None) -> None:
         return row[0] if row else None
 
 
+# 상승주 그래프 일괄 갱신 — job/5_generate_interest_stocks_graph.py가 종목마다 개별 POST를
+# 쏴서(10분 스케줄 x 종목 수, 2026-09-01 실측 3분간 304회) waitress 큐가 막히던 걸 한 트랜잭션
+# 안에서 한 번에 처리한다. items: [{"stock_code": ..., "graph_file": ...}, ...]
+@db_transaction
+def update_interest_stock_graph_bulk(items: List[dict], conn=None) -> int:
+    pairs = [(it.get("graph_file"), it.get("stock_code")) for it in items if it.get("stock_code")]
+    if not pairs:
+        return 0
+    sql = """
+        UPDATE stocks
+        SET graph_file = COALESCE(%s, graph_file)
+        WHERE stock_code = %s;
+    """
+    with conn.cursor() as cur:
+        cur.executemany(sql, pairs)
+    return len(pairs)
+
+
 # 저점 그래프만 갱신 (매수 시점으로부터 2주 동안)
 @db_transaction
 def update_low_stock_graph(stock: "StockDTO", conn=None) -> None:
