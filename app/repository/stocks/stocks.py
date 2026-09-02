@@ -717,6 +717,12 @@ def get_interest_stocks_info(date: str, endDate: str, user_id: int = None, sourc
             -- '며칠 더 지켜보고 확인'하는 접근은 이 데이터와 pkl 3년 반등 분석 두 곳에서
             -- 모두 부정됐다 — 확인을 기다리는 사이 수익 구간이 끝난다.
             -- 근거: auto_trading/backtest/entry_timing.py
+            -- 2026-09-03: 위 근거로 활성화했다가 같은 날 재검증 후 다시 비활성화.
+            -- v1에 ATR14_norm/range_pct(변동성) 필터, v2에 상대강도밴드+신고가근접을
+            -- 추가한 뒤로는 signal_days=1이 하던 일(며칠째 반복 신호=추격매수 걸러내기)이
+            -- 이 필터들과 중복된다 — pkl 2년 재현 기준 OFF가 ON보다 fwd10/15/20 전 구간에서
+            -- 오히려 낫고(v1: 3.24%→3.04%, v2: 3.37%→2.91%, fwd20 기준) 표본도 30~40% 더
+            -- 줄어든다. 새 필터들이 없던 시절의 근거(위 주석)라 지금은 적용하지 않는다.
             --AND b.signal_days = 1
             and b.last_trading_value/b.avg_trading_value > 0.5
               /*
