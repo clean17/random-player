@@ -155,15 +155,16 @@ FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트
 # 근거: auto_trading/backtest/first_signal_filter.py (첫 신호일 11,759건, 기간분할 검증)
 _IS_MOCK_ENV = (KIWOOM_ENV == 'mock')
 # 종가위치 필터 = (종가-저가)/(고가-저가). 낮으면 장중 급등이 밀린 윗꼬리다.
-#   mock : 0.6  (켬)  — 검증된 필터를 적용해 후보 품질을 올린다
-#   real : 0.0  (끔)
-# 2026-08-20 요청으로 위와 같이 설정. 검증치는 limitup_recheck.py (상한가 제외, 3년):
-#   종가위치 0.0~0.3 건당 -0.558% / 0.3~0.6 -0.462% / 0.6 이상 +0.070%
-#   → 0.6 미만 구간은 기대값이 확실히 마이너스다. 켜는 쪽이 성능상 유리하다.
-# ⚠️ real 을 0.0 으로 두면 그 마이너스 구간까지 매수한다. 다만 **real 의 fire 매수는 현재
-#    batch_runner 에서 꺼져 있어(kiwoom_fire_buy add_job 주석) 실질 영향이 없다.**
-#    real fire 매수를 되살릴 때는 이 값을 0.6 으로 다시 올릴지 먼저 판단할 것.
-CLOSE_POS_MIN = 0.6 if _IS_MOCK_ENV else 0.0
+#   mock : 0.0  (2026-09-03 끔, 아래 참고) / real : 0.0 (끔)
+# 2026-08-20 요청으로 mock=0.6 켰었다. 검증치는 limitup_recheck.py (상한가 제외, 3년):
+#   종가위치 0.0~0.3 건당 -0.558% / 0.3~0.6 -0.462% / 0.6 이상 +0.070% → 당시엔 켜는 쪽이 유리.
+# 2026-09-03: 지금 v1(40억/4%박스/ATR·range 필터)·지금 청산(손절-6%+5일, mock 슬롯40개
+# 동일비중)으로 다시 재현하니 차이가 거의 없었다(필터 있음 CAGR 17.8%/MDD-17.0% vs
+# 없음 19.4%/-17.4%, 5일 보유 구간의 노이즈 범위 안). 슬롯이 남는 날 0.6 미만도 사는 쪽이
+# 슬롯을 놀리는 것보다 나아서, 사용자 요청으로 껐다. 정렬(종가위치 높은순)은 그대로 유지 —
+# 게이트만 끈 것이라 슬롯이 부족한 날엔 여전히 종가위치 높은 것부터 채워진다.
+# 되돌리려면 mock을 0.6으로. 근거: 세션 스크래치패드 v1_exit_portfolio40*.log / v1_slot_priority_search.log
+CLOSE_POS_MIN = 0.0
 CASH_DEPLOY_RATIO = 0.75 if _IS_MOCK_ENV else 0.65   # 가용 현금 중 자동매수에 쓸 최대 비율.
                            # ⚠️ 2026-08-24: 계좌 환경별로 분리했다. 기존 0.65는 real(슬롯5/divisor5/
                            #    소액) 기준으로 검증된 값인데, 실제로 이 값을 소비하는 건 mock(슬롯20/
@@ -230,6 +231,11 @@ BUY_SLOTS = 20 if _IS_MOCK else 5   # 하루 최대 신규 매수 종목 수. re
                            # 근거: auto_trading/backtest/slot_sizing_test.py
                            # 2026-08-11부터 '1픽 예산의 분모'가 아니라 종목 수 상한으로만 쓴다
                            # (예산은 POS_CAP_DIVISOR가 결정).
+MAX_TOTAL_HOLDINGS = 40 if _IS_MOCK else None   # 2026-09-03: kt00018 조회가 40종목을 넘으면
+                           # 일부 보유가 누락되는 문제(세션 조사로 확인, real엔 없음)가 있어
+                           # 확인 자체가 어렵다. 총 보유종목이 이 값 이상이면 그날은 신규매수를
+                           # 하지 않는다(BUY_SLOTS와 달리 '하루 신규매수 수'가 아니라 '총 보유'
+                           # 상한). real은 fire 매수가 꺼져 있어 None(무제한, 미사용).
 POS_CAP_DIVISOR = BUY_SLOTS  # 종목당 상한 = 매수한도 / 20 = 가용현금의 3.5%.
                            # ⚠️ 2026-08-11: 한때 10으로 내렸다가 되돌렸다. 근거였던
                            # fire_backtest_result.csv가 목표가 +15%가 살아 있던 구버전 규칙이라
@@ -474,6 +480,9 @@ def run_fire_buy_cycle():
     held_qty_before = {h['stk_cd']: int(h.get('qty') or 0) for h in holdings}
     # REBUY_PROFIT_CAP 판정용 — 이미 보유 중인 종목의 평단가(추가매수 여부 판단에만 쓴다).
     held_avg_price = {h['stk_cd']: float(h.get('avg_price') or 0) for h in holdings}
+    # MAX_TOTAL_HOLDINGS 판정용 — 신규(미보유) 종목을 살 때만 늘어난다. 이미 보유 중인
+    # 종목의 추가매수는 종목 수를 안 늘리므로 이 카운트와 무관하게 계속 허용된다.
+    held_count = sum(1 for q in held_qty_before.values() if q > 0)
 
     # 사이징 기준은 총자산이 아니라 '가용 현금'. 그중 CASH_DEPLOY_RATIO 까지만 쓰고
     # 나머지는 손대지 않는다(버퍼). deployed 누적으로 총 사용액이 그 한도를 넘지 않도록 막는다.
@@ -575,6 +584,12 @@ def run_fire_buy_cycle():
         price = cand['_price']
         close_pos = cand['_close_pos']
 
+        is_new_position = held_qty_before.get(stk_cd, 0) <= 0
+        if MAX_TOTAL_HOLDINGS is not None and is_new_position and held_count >= MAX_TOTAL_HOLDINGS:
+            _log.info(f'[fire] {cand["stk_nm"]}({stk_cd}) 총 보유종목 {held_count}개 >= '
+                      f'{MAX_TOTAL_HOLDINGS} 상한 — 신규매수 skip (기존 보유 추가매수는 계속 허용)')
+            continue
+
         # 남은 한도를 '앞으로 실제로 살 수 있는 종목 수'로 재분할 → 비싸서 못 산 종목의
         # 예산이 뒤 후보로 흘러간다. 종목당 상한(pos_cap)과 한도 잔액으로 이중 제한.
         #
@@ -607,6 +622,8 @@ def run_fire_buy_cycle():
                        f'→ {result} (이력 미기록, 슬롯 미소진)')
             continue
         deployed += trade_value
+        if is_new_position:
+            held_count += 1
         _log.info(f'[fire매수 {buys_today + 1}/{BUY_SLOTS}] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
                   f'(종가위치 {close_pos:.2f}, 총상승률 {cand["total_rate"]}, {ref}breadth={bd_txt}) '
                   f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
