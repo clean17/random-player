@@ -353,28 +353,19 @@ def _daily_metrics(stk_cd: str) -> Optional[Tuple[float, float]]:
     return dist, ret1d
 
 
-def _parse_pct(value) -> Optional[float]:
-    """SQL이 '10.5%' 처럼 문자열로 내려주는 퍼센트 값을 float로. 파싱 불가면 None."""
-    if value is None:
-        return None
-    try:
-        return float(str(value).replace('%', '').replace(',', '').strip())
-    except ValueError:
-        return None
-
-
 def get_fire_candidates(limit: Optional[int] = None) -> List[Dict]:
-    """fire 쿼리(SQL 조건 통과) 결과를 총상승률 '오름차순'(낮은 순)으로 반환.
+    """fire 쿼리(SQL 조건 통과) 결과를 반환. 정렬은 SQL의 ORDER BY(총상승률 DESC, 웹 화면과 공유)를
+    그대로 따른다 — 이 함수 자체는 더 이상 매수 순서를 정하지 않는다.
 
-    정렬이 곧 매수 대상 선정이다 — run_fire_buy_cycle()이 이 순서대로 훑다가 BUY_SLOTS(20)를
-    채우면 멈추기 때문. SQL의 ORDER BY는 DESC(높은 순)지만 그건 웹 화면(관심/즐겨찾기/자동매수 탭)이
-    공유하는 표시 순서라 건드리지 않고, 매수용 순서만 여기서 뒤집는다.
-
-    근거(2026-06~08, 3,255건을 실제 청산규칙으로 시뮬레이션, 수수료 차감 후 / 매일 상위 7종목):
-      총상승률 높은 순(기존)  +0.77%   ← 무작위(30회 평균 +0.85%)보다도 낮음
-      무작위 30회 평균        +0.85%
-      총상승률 낮은 순(현재)  +2.35%   ← 30회 무작위 전부를 상회, 6·7·8월 모두 플러스
-    많이 오른 종목을 쫓는 것보다 덜 오른 종목을 담는 쪽이 유리했다.
+    ⚠️ 2026-09-03 제거: 예전엔 여기서 총상승률 오름차순(낮은 순)으로 재정렬해 그 순서가 곧
+    매수 순서라고 문서화돼 있었다(2026-08 결정, 근거는 그 시절 3,255건 시뮬레이션 +2.35%).
+    하지만 08-14 종가위치 정렬 도입 이후 `run_fire_buy_cycle()`이 이 리스트를 받자마자
+    `ranked.sort(key=lambda c: c['_close_pos'], reverse=True)`로 완전히 재정렬해버려서(해당 함수의
+    "종가위치 필터 + 정렬" 절 참고), 여기서 어떤 순서로 반환하든 실제 매수 순서엔 전혀 영향이
+    없는 죽은 코드였다. 게다가 새 v1 필터(40억/4%박스/ATR·range) 적용 후 재검증한 결과 총상승률
+    낮은 순은 종가위치 높은순은 물론 무작위·총상승률 높은순보다도 나빴다(건당 -0.541% vs
+    각각 -0.411%/-0.454%/-0.327%, 3,833건/217일 — 근거·표는 TRADING_RULES.md 2절 "매수 대상
+    정렬" 참고). 이득이 없는 재정렬을 계속 유지할 이유가 없어 제거했다.
 
     limit은 출력용 제한일 뿐, 매수 경로에서는 자르지 않는다 — 자르면 내가 체크한(reserved) 종목이
     순위가 낮다는 이유로 조용히 제외돼 '체크했는데 왜 안 사지?'가 되기 때문.
@@ -394,13 +385,9 @@ def get_fire_candidates(limit: Optional[int] = None) -> List[Dict]:
             'stk_cd': stk_cd,
             'stk_nm': row.get('stock_name'),
             'total_rate': row.get('total_rate_of_increase'),
-            '_total_rate_num': _parse_pct(row.get('total_rate_of_increase')),
             'dist_20d_high': round(metrics[0], 2) if metrics else None,
             'ret_1d': round(metrics[1], 2) if metrics else None,
         })
-
-    # 총상승률 낮은 순. 파싱 실패(None)는 맨 뒤로 보내 우선 매수되지 않게 한다.
-    candidates.sort(key=lambda c: (c['_total_rate_num'] is None, c['_total_rate_num']))
 
     if limit is not None:
         candidates = candidates[:limit]
