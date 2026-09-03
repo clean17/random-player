@@ -4,6 +4,7 @@ import json
 import logging
 import threading
 import requests
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv, find_dotenv
 
@@ -207,7 +208,7 @@ def _call_raw(api_id: str, endpoint: str, body: dict,
 
         if resp.status_code == 429 and attempt < _max_429_retries:
             wait_s = 0.5 * (attempt + 1)
-            ts = time.strftime('%Y-%m-%d %H:%M:%S')
+            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]  # 밀리초 포함 (2026-09-03: time.strftime엔 밀리초가 없어서 누락돼 있었다)
             print(f'{ts} [WARN] 429 rate limit ({api_id}), {wait_s:.1f}s 후 재시도 ({attempt + 1}/{_max_429_retries})')
             time.sleep(wait_s)
             continue
@@ -377,10 +378,15 @@ FIELD_TAX = 'tax'               # 매도세(추정, 원). sum_cmsn과 마찬가�
 # est_fee(총 보유수량 기준 수수료+세금 추정 합계)를 그대로 노출한다.
 
 
-def dump_holdings_raw(acnt_no: str, acnt_pwd: str) -> dict:
-    """모의투자 응답 원본 확인용. 필드명 검증 후에는 get_holdings()만 쓰면 됨."""
+def dump_holdings_raw(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> dict:
+    """모의투자 응답 원본 확인용. 필드명 검증 후에는 get_holdings()만 쓰면 됨.
+
+    2026-09-03: env를 안 받아서 acnt_no/acnt_pwd를 mock으로 넘겨도 프로세스 기본
+    KIWOOM_ENV(대개 real)로 호출되는 버그가 있었다 — 계좌번호와 실제 조회 대상 환경이
+    어긋나 엉뚱한(다른 env의) 계좌 데이터가 반환됐다. env 파라미터를 추가해 명시적으로
+    지정할 수 있게 했다."""
     body = {'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd, 'qry_tp': '1', 'dmst_stex_tp': 'KRX'}
-    data = _call('kt00018', '/api/dostk/acnt', body)
+    data = _call('kt00018', '/api/dostk/acnt', body, env=env)
     print(json.dumps(data, indent=2, ensure_ascii=False))
     return data
 
@@ -559,17 +565,22 @@ def sell_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',
 CNTR_LIST_KEY = 'cntr'
 
 
-def get_filled_orders(acnt_no: str, acnt_pwd: str, stk_cd: str = '') -> List[Dict]:
+def get_filled_orders(acnt_no: str, acnt_pwd: str, stk_cd: str = '', env: Optional[str] = None) -> List[Dict]:
     """당일 체결 내역(ka10076). stk_cd를 주면 그 종목만.
 
     반환: [{'ord_no','stk_cd','stk_nm','side','ord_qty','cntr_qty','oso_qty',
             'cntr_pric','cmsn','tax','ord_stt','ord_tm'}] — 숫자는 float/int로 변환됨.
+
+    2026-09-03: env를 안 받아서 항상 프로세스 기본 KIWOOM_ENV로 조회되는 버그가 있었다 —
+    acnt_no/acnt_pwd를 mock으로 넘겨도 프로세스가 real이면 실계좌 체결내역이 반환됐다
+    (테스트 스크립트에서 발견, 상시 가동 스케줄러는 각자 자기 env로만 호출해 실질 영향은
+    없었음). env 파라미터를 추가해 명시적으로 지정할 수 있게 했다.
     """
     body = {
         'acnt_no': acnt_no, 'acnt_pwd': acnt_pwd,
         'stk_cd': stk_cd, 'qry_tp': '0', 'sell_tp': '0', 'ord_no': '', 'stex_tp': '0',
     }
-    data = _call('ka10076', '/api/dostk/acnt', body)
+    data = _call('ka10076', '/api/dostk/acnt', body, env=env)
     out = []
     for r in (data.get(CNTR_LIST_KEY) or []):
         io = str(r.get('io_tp_nm') or '')
