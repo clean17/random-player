@@ -596,6 +596,15 @@ return_code == 0  AND  ord_no 존재
 
 **`pnl` 필드는 수수료·세금을 반영하지 않는다.** 실질 손익을 보려면 `cmsn`+`tax`를 따로 빼야 한다.
 
+**장중 15분 간격 정산** (실: 2026-08-27 추가, 모의: 2026-09-03 추가) — 20:10 하루 1번만으로는
+매도/매수 직후~20:10 사이 화면에 조회가(잠정가)가 그대로 노출된다. 특히 fire 매수는 동시호가
+시장가라 15:30에 진짜 종가로 체결되는데, `kiwoom_fire_strategy_mock.py`가 기록하는 `avg_price`는
+매수 직전(15:21) 스냅샷 조회가라 실체결가와 다를 수 있다(실측 갭 -0.9%류, `kiwoom_fire_strategy_mock.py`
+116~122행 참고) — 이게 20:10 전까지 표시상의 "-0.9%"로 남는다. `CronTrigger(hour="9-19", minute="*/15")`로
+09:00~19:45에 15분마다 돌려 15:30 마감 직후(늦어도 ~15:45) 실체결가로 보정되게 한다. 20:10 잡을
+대체하지 않는다(NXT 애프터마켓 20:00까지 체결은 이 잡으로 못 잡음). 등록: `job/batch_runner.py`
+`create_scheduler()`(id=`kiwoom_reconcile_fills_15m`) / `create_mock_scheduler()`(id=`mock_reconcile_fills_15m`).
+
 ---
 
 ## 5. 파라미터 한눈에 (fire/trailing — v8 은 0절 참고)

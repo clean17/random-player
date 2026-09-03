@@ -261,6 +261,18 @@ def create_mock_scheduler():
         trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=10),
         id="mock_reconcile_fills", executor="io", replace_existing=True,
     )
+    # 체결 정산 — 장중 15분 간격 (2026-09-03 추가, real 쪽 09-27 잡과 동일 근거).
+    # fire 매수가 동시호가 시장가로 들어가면 실제로는 15:30 확정 종가로 체결되지만,
+    # trades_mock.jsonl에는 kiwoom_fire_strategy_mock.py가 매수 직전(15:21) 스냅샷한
+    # 잠정가가 그대로 avg_price로 남는다 — buy_market() 응답에서 실체결가를 안 받아오기
+    # 때문. 20:10 하루 1번만 정산하면 그 사이(15:30~20:10) 화면에 이 잠정가 vs 진짜 종가
+    # 갭(실측 -0.9%류)이 그대로 노출된다. 15:30 마감 직후 정산되도록 15분 간격을 추가한다
+    # — 20:10 잡을 대체하지 않는다(NXT 애프터마켓 20:00까지 체결은 이 잡으로 못 잡음).
+    scheduler.add_job(
+        reconcile_kiwoom_fills,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/15"),
+        id="mock_reconcile_fills_15m", executor="io", replace_existing=True,
+    )
 
     scheduler.start()
     for j in scheduler.get_jobs():
