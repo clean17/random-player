@@ -1214,10 +1214,34 @@ def run_cycle():
         held_codes.add(stk_cd)
         state[stk_cd] = evaluate_and_trade(holding, state.get(stk_cd), total_asset)
 
-    # 더 이상 보유하지 않는(전량 매도/청산된) 종목은 상태 정리
-    for stk_cd in list(state.keys()):
-        if stk_cd not in held_codes:
-            del state[stk_cd]
+    # 더 이상 보유하지 않는(전량 매도/청산된) 종목은 상태 정리.
+    # 2026-09-03: "이번 조회에 안 보이면 팔린 것"으로 바로 지웠더니, 키움 모의서버 kt00018
+    # 조회가 일시적으로 특정 종목을 누락하는 문제(세션 조사로 확인, 실계좌엔 없음) 때문에
+    # 실제로는 계속 보유 중인 종목의 상태(entry_date·트레일링 진행상황)가 삭제되고, 나중에
+    # 그 종목이 다시 보이면 '신규 매수'로 오인해 entry_date가 오늘로 리셋됐다(425420 사례:
+    # 8/25 매수인데 화면에 0/15로 표시 — MAX_HOLD_DAYS 강제청산 타이머도 같이 리셋되는
+    # 부작용이 있었다). 매도 기록(trades.jsonl)에 이 상태의 entry_date 이후 실제 매도
+    # 이벤트가 있을 때만 지우고, 없으면(단순 조회 누락으로 추정) 상태를 그대로 남겨
+    # 다음 사이클에 다시 확인한다.
+    missing_codes = [c for c in state if c not in held_codes]
+    if missing_codes:
+        sell_dates_by_code: Dict[str, list] = {}
+        for ev in _iter_sell_events():
+            sell_dates_by_code.setdefault(ev['stk_cd'], []).append(ev['_date'])
+        for stk_cd in missing_codes:
+            entry_date_str = state[stk_cd].get('entry_date')
+            try:
+                entry_date = datetime.date.fromisoformat(entry_date_str) if entry_date_str else None
+            except ValueError:
+                entry_date = None
+            confirmed_sold = entry_date is None or any(
+                d >= entry_date for d in sell_dates_by_code.get(stk_cd, [])
+            )
+            if confirmed_sold:
+                del state[stk_cd]
+            else:
+                _log.warning(f'[상태정리보류] {stk_cd} 보유목록에 없지만 매도기록도 없음 '
+                             f'(entry_date={entry_date_str}) — 조회 누락으로 보고 상태 유지')
 
     _save_state(state)
 
