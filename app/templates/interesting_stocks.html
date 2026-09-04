@@ -710,6 +710,7 @@
                 <div class="mystocks-pnl-line"><span class="period">일</span><span class="value" id="ms-pnl-daily">-</span></div>
                 <div class="mystocks-pnl-line"><span class="period">주</span><span class="value" id="ms-pnl-weekly">-</span></div>
                 <div class="mystocks-pnl-line"><span class="period">월</span><span class="value" id="ms-pnl-monthly">-</span></div>
+                <div class="mystocks-pnl-line"><span class="period">총</span><span class="value" id="ms-pnl-all">-</span></div>
             </div>
         </div>
 
@@ -1473,7 +1474,7 @@
     }
 
     function renderMyStocksPnl(pnlSummary) {
-        ['daily', 'weekly', 'monthly'].forEach(key => {
+        ['daily', 'weekly', 'monthly', 'all'].forEach(key => {
             const el = document.getElementById(`ms-pnl-${key}`);
             const b = (pnlSummary && pnlSummary[key]) || { pnl: 0, rate: 0 };
             el.textContent = `${msFmtWon(b.pnl)} (${msFmtPct(b.rate)})`;

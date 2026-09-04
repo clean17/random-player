@@ -192,6 +192,21 @@ _TOSS_INFO_URL = "https://wts-info-api.tossinvest.com/api/v3/search-all/wts-auto
 _TOSS_AMOUNT_URL = "https://wts-info-api.tossinvest.com/api/v1/c-chart/kr-s/{}/day:1"
 
 
+def _toss_request_with_retry(fn, *args, retries=3, backoff=1.0, **kwargs):
+    # Toss가 짧은 간격의 연속 요청을 속도제한/봇차단으로 끊는 경우가 있어
+    # TLS 핸드셰이크 단계에서 SSLError(tlsv1 alert internal error)로 실패한다.
+    # 그런 순간적인 차단은 잠깐 쉬었다 재시도하면 풀리는 경우가 많다.
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            last_exc = e
+            if attempt < retries - 1:
+                time.sleep(backoff * (attempt + 1))
+    raise last_exc
+
+
 def _toss_search_stock_info(stock_name_or_ticker):
     res = requests.post(
         _TOSS_INFO_URL,
@@ -234,12 +249,12 @@ def renew_interest_stocks_close():
     close_list = []
 
     for i, row in enumerate(rows):
-        time.sleep(0.05)  # 50ms 대기
+        time.sleep(0.2)  # 200ms 대기 — 50ms는 Toss 쪽 속도제한(TLS handshake 거부)을 유발했음
         ticker = row['stock_code']
         product_name = None  # 매 루프마다 초기화 — 안 하면 실패 시 이전 종목명이 그대로 로그에 남음
 
         try:
-            json_data = _toss_search_stock_info(str(ticker))
+            json_data = _toss_request_with_retry(_toss_search_stock_info, str(ticker))
             result = json_data["result"]
 
             # 거래정지는 데이터를 주지 않는다
@@ -256,7 +271,7 @@ def renew_interest_stocks_close():
 
         # 현재 종가 가져오기
         try:
-            json_data = _toss_get_amount(product_code)
+            json_data = _toss_request_with_retry(_toss_get_amount, product_code)
             last_close = json_data["result"]["candles"][0]["close"]
         except Exception as e:
             print(f"renew_interest_stocks_close [info 요청 실패4]: {str(ticker)} {str(product_name)} {e}")
