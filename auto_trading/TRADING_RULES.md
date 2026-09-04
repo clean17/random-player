@@ -644,6 +644,34 @@ return_code == 0  AND  ord_no 존재
 > ⚠️ `sell_market`/`buy_market`을 스텁으로 대체하는 재현·검증 스크립트는 이제 성공 형태
 > (`{'return_code': 0, 'ord_no': ...}`)를 반환해야 한다. 그렇지 않으면 매도가 전부 건너뛰어진다.
 
+### 신호·주문 이력 (2026-09-04 추가) — `v8_signals_{real,mock}.jsonl`
+
+`trades.jsonl` 은 **체결된 거래만** 담는다. 체결되지 않은 후보·주문·취소는 텍스트 로그
+(`trading.log`, 자정 로테이션 180일)에만 남아서 "왜 그 종목을 안 샀나 / 랭킹이 몇 위였나 /
+며칠 기다렸나"를 사후에 재구성할 수 없었다(8절 1번의 'reserved 이력 없음'과 같은 문제).
+`kiwoom_api.log_event(stream, payload)` 로 append-only JSONL 을 남긴다.
+
+| `kind` | 기록 시점 | 주요 필드 |
+|---|---|---|
+| `candidate` | 아침 재계산 1회/일 | `rank` `code` `limit` `ord_px` `prev_close` `gap` `drop5` `px_ma20` `atr` `score` `ordered` `cand_total` `pend_total` |
+| `order_placed` / `order_rejected` | 지정가 발주 시 | `code` `qty` `ord_px` `gap` `live_gap` `cur_px` `ord_no` `msg` |
+| `order_cancelled` | 후보 이탈로 취소 | `code` `why` |
+| `order_resized` | 자금 변동으로 수량 조정 | `code` `qty_from` `qty_to` `ord_px` |
+| `order_replaced` | regap 으로 교체 | `code` `replaced_by` `live_gap` |
+| `position_eod` | 마감 후 1회/일/종목 | `entry` `close` `peak` `rate` `peak_rate` `chandelier` `trail_trigger` `trail_armed` `tp_done` `last_fire_peak` |
+
+기록량: 후보는 gap 상위 `SNAPSHOT_TOP`(50) + **주문이 나간 종목 전부**만 남긴다 —
+전량(약 1,000건/일)이면 연 25만건이라 과하고, 슬롯 경쟁에 실제로 참여한 구간은 상위권이다.
+실측 하루 65건 → 연 약 1.6만건(≈3MB).
+
+`position_eod` 는 **청산이 발동하지 않고 흘러간 날**을 남기는 것이 목적이다. 발동한 건은
+`trades.jsonl` 에 `rate`/`peak_rate`/`trigger_level`/`tranche` 로 이미 남지만, 그 결말에
+어떤 경로로 도달했는지는 그동안 알 수 없었다. 30초 사이클마다 남기면 하루 25종목×780회로
+과하므로 마감 후 확정값 1회만 남긴다.
+
+⚠️ `log_event` 는 **어떤 경우에도 예외를 올리지 않는다**(내부 try/except). 로깅 실패가 주문을
+조용히 스킵시키는 사고를 막기 위한 것이므로, 호출부에서 감싸지 말고 이 계약을 깨지 말 것.
+
 ### 체결 정산 (2026-08-12 추가)
 
 주문 시점에 기록되는 `price`/`qty`는 **조회가와 주문수량**이다. 평일 **20:10**에 `reconcile_fills()`가

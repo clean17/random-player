@@ -174,6 +174,11 @@ REGAP_MARGIN = 0.03     # 미주문 후보가 주문중인 것보다 이만큼 �
 # 더 짧게 잡으면 교체가 잦아져 오히려 손해다. 교체는 취소를 수반하고, 취소되는 그 주문이
 # 바로 위 54%를 잡아주는 장치다. REGAP_MARGIN 3%p 문턱도 같은 이유다.
 RESIZE_TOL = 0.20       # 미체결 주문 수량이 '지금 자금 기준 목표'와 이만큼 어긋나면 취소 후 재주문
+SNAPSHOT_TOP = 50       # 분석용 일별 후보 스냅샷에 남길 gap 상위 건수 (2026-09-04 추가)
+                        #  전량(약 1,000건/일)을 남기면 연 25만건이라 과하다. 상위 50 + 주문이
+                        #  나간 종목 전부를 남기면 하루 ~60건(연 1.5만건, 약 3MB)으로,
+                        #  슬롯 경쟁에 실제로 참여한 구간은 온전히 보존된다.
+                        #  기록: logs/kiwoom_trading/v8_signals_{real,mock}.jsonl
 # (POLL_TOP_N 은 LIVE_REGAP 으로 대체됨 — 단순 감지 로그가 아니라 주문 대상 선정에 쓴다)
 
 PKL_DIR = r'C:\my-project\AutoSales.py\data\pickle'
@@ -869,6 +874,26 @@ def daily_candidates(force: bool = False) -> List[Dict]:
     _save_pending(st)
     _log.info('v8 아침 재계산: 대기 %d건 -> 오늘 주문가능 %d건 (drop5/ma20/atr/gap 갱신)',
               len(pend), len(out))
+
+    # ── 분석용 일별 후보 스냅샷 (2026-09-04 추가) ─────────────────────────────
+    # st['day'] 는 **매일 덮어써지므로** 하루 지나면 그날 후보/랭킹/gap 이 사라진다.
+    # 사후에 "왜 그 종목을 안 샀나 / 몇 위였나 / gap 이 얼마였나"를 재구성하려면 누적 기록이
+    # 필요하다. 전량(약 1,000건)을 매일 남기면 연 25만건이라 gap 상위 SNAPSHOT_TOP 개만
+    # 남긴다 — 슬롯 경쟁에 실제로 참여한 구간이 그쪽이고, 멀리 있는 후보는 분석 가치가 낮다.
+    ordered_now = v8_owned_codes()
+    ranked = sorted(out, key=lambda x: -x['gap'])
+    keep = ranked[:SNAPSHOT_TOP]
+    keep_codes = {c['code'] for c in keep}
+    keep += [c for c in ranked[SNAPSHOT_TOP:] if c['code'] in ordered_now]  # 주문 나간 건 전부
+    for rank, c in enumerate(keep, 1):
+        api.log_event('v8_signals', {
+            'kind': 'candidate', 'date': today, 'rank': rank if c['code'] in keep_codes else None,
+            'code': c['code'], 'limit': c.get('limit'), 'ord_px': c.get('ord_px'),
+            'prev_close': c.get('prev_close'), 'gap': round(float(c.get('gap') or 0), 5),
+            'drop5': c.get('drop5'), 'px_ma20': c.get('px_ma20'), 'atr': c.get('atr'),
+            'score': c.get('amount'), 'ordered': c['code'] in ordered_now,
+            'cand_total': len(out), 'pend_total': len(pend),
+        })
     return out
 
 
@@ -968,6 +993,8 @@ def run_v8_buy_cycle():
             open_buy.pop(code, None)
             release_ordered(code)         # 체결 없이 취소됐으니 소유권도 해제
             _log.info('v8 주문취소 %s (후보이탈)', code)
+            api.log_event('v8_signals', {'kind': 'order_cancelled', 'code': code,
+                                         'why': 'candidate_dropped'})
         except Exception as e:
             _log.warning('주문취소 실패 %s: %s', code, e)
 
@@ -1049,6 +1076,9 @@ def run_v8_buy_cycle():
             res = buy_limit(c['code'], tgt_qty, c['ord_px'])
             _log.info('v8 수량조정 %s %d -> %d주 (자금변동) -> %s',
                       c['code'], cur_qty, tgt_qty, res)
+            api.log_event('v8_signals', {'kind': 'order_resized', 'code': c['code'],
+                                         'qty_from': cur_qty, 'qty_to': tgt_qty,
+                                         'ord_px': c['ord_px']})
             _mark_ordered(c['code'])
             # ⚠️ open_buy 에서 빼지 않는다. 취소 후 곧바로 다시 걸었으므로 주문은 여전히
             #    살아 있다. 빼면 placed 가 실제보다 작아져 주문을 하나 더 내고 예수금이 모자란다.
@@ -1099,6 +1129,11 @@ def run_v8_buy_cycle():
             _log.info('v8 주문교체 %s(남은 %.1f%%) -> %s(남은 %.1f%%)',
                       worst['code'], worst['live_gap'] * 100,
                       c['code'], c['live_gap'] * 100)
+            api.log_event('v8_signals', {
+                'kind': 'order_replaced', 'code': worst['code'], 'why': 'regap',
+                'live_gap': round(float(worst.get('live_gap') or 0), 5),
+                'replaced_by': c['code'],
+                'replaced_by_live_gap': round(float(c.get('live_gap') or 0), 5)})
             open_buy.pop(worst['code'], None)
             release_ordered(worst['code'])
             placed -= 1
@@ -1109,6 +1144,15 @@ def run_v8_buy_cycle():
                   c['code'], '접수' if ok else '거부', qty, c['ord_px'],
                   c['gap'] * 100, c['live_gap'] * 100,
                   res.get('return_msg') if isinstance(res, dict) else res)
+        api.log_event('v8_signals', {
+            'kind': 'order_placed' if ok else 'order_rejected',
+            'code': c['code'], 'qty': qty, 'ord_px': c['ord_px'],
+            'gap': round(float(c.get('gap') or 0), 5),
+            'live_gap': round(float(c.get('live_gap') or 0), 5),
+            'cur_px': c.get('cur_px'), 'limit': c.get('limit'),
+            'ord_no': res.get('ord_no') if isinstance(res, dict) else None,
+            'msg': res.get('return_msg') if isinstance(res, dict) else str(res),
+        })
         if ok:
             placed += 1
             newly_placed.add(c['code'])

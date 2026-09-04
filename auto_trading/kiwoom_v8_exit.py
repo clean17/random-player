@@ -331,6 +331,29 @@ def run_v8_eod():
         if (not pos.get('trail_armed')) and lfp is not None and pos['peak'] > float(lfp):
             pos['trail_armed'] = True
             _log.info('v8 트레일링 재무장 %s peak=%.0f > %.0f', code, pos['peak'], lfp)
+
+        # ── 분석용 일별 포지션 스냅샷 (2026-09-04 추가) ───────────────────────
+        # 청산이 발동한 건은 trades.jsonl 에 rate/peak_rate/trigger_level 까지 남지만,
+        # **발동하지 않고 흘러간 날들**은 아무 데도 안 남아서 "어느 경로로 그 결말에
+        # 도달했나"를 재구성할 수 없었다. 30초 사이클마다 남기면 하루 25종목 x 780회로
+        # 과하니, 하루 1회(마감 후) 확정값으로만 남긴다.
+        try:
+            entry = float(pos.get('entry') or 0)
+            close = float(d['close'].iloc[-1])
+            atr = float(pos.get('atr') or 0)
+            api.log_event('v8_signals', {
+                'kind': 'position_eod', 'code': code,
+                'entry': entry, 'close': close, 'peak': pos.get('peak'), 'atr': atr,
+                'rate': (close / entry - 1.0) if entry > 0 else None,
+                'peak_rate': (float(pos['peak']) / entry - 1.0) if entry > 0 and pos.get('peak') else None,
+                'chandelier': (float(pos['peak']) - ATR_MULT * atr) if pos.get('peak') else None,
+                'trail_trigger': (float(pos['peak']) * (1.0 - TRAIL_PCT)) if pos.get('peak') else None,
+                'trail_armed': pos.get('trail_armed'), 'tp_done': pos.get('tp_done'),
+                'last_fire_peak': pos.get('last_fire_peak'), 'shares0': pos.get('shares0'),
+                'entry_date': pos.get('entry_date'),
+            })
+        except Exception:
+            pass
     _save(st)
 
 

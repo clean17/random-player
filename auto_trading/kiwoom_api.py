@@ -82,6 +82,29 @@ _TRADING_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
                                 'logs', 'kiwoom_trading')
 
 
+def log_event(stream: str, payload: Dict, env: Optional[str] = None) -> None:
+    """분석용 이벤트를 JSONL 한 줄로 append 한다 (2026-09-04 추가).
+
+        log_event('v8_signals', {...})  ->  logs/kiwoom_trading/v8_signals_real.jsonl
+
+    왜 trades.jsonl 과 별도인가: trades.jsonl 은 **체결된 거래**만 담는다. 체결되지 않은
+    후보·주문·취소는 그동안 텍스트 로그(trading.log, 180일 로테이션)에만 남아서
+    "왜 그 종목을 안 샀나 / 랭킹이 몇 위였나 / 며칠 기다렸나"를 사후에 재구성할 수 없었다
+    (`TRADING_RULES.md` 8절 1번의 'reserved 이력이 없어 재현 불가'와 같은 문제).
+
+    ⚠️ **이 함수는 절대 예외를 올리지 않는다.** 로깅 실패가 주문을 스킵시키는 일이 있어서는
+       안 된다(과거 매수 조용히 스킵 사고 이력 참고). 호출부에서 try 로 감쌀 필요가 없다.
+    """
+    try:
+        path = env_path(os.path.join(_TRADING_LOG_DIR, stream + '.jsonl'), env)
+        rec = {'ts': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}
+        rec.update(payload or {})
+        with open(path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(rec, ensure_ascii=False, default=str) + '\n')
+    except Exception:
+        pass
+
+
 def get_trading_logger(name: str) -> 'logging.Logger':
     """자동매매 모듈 공용 파일 로거. `trading.log`(real) / `trading_mock.log`(mock)에 쓴다.
 
