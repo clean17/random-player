@@ -212,6 +212,17 @@ def setup_logging():
     active_logger.addFilter(NoLogsFilter(NO_LOGS_URLS))
     # active_logger.addFilter(HideDetailURLFilter(HIDE_DETAIL_URLS))
 
+    # "waitress.queue"(Task queue depth 경고)는 "waitress"의 자식 로거라 이론상 propagate로
+    # 위 handler를 그대로 타야 하지만, waitress.serve()가 내부에서 logging.basicConfig()를
+    # 호출해 이 로거가 타임스탬프 없는 기본 포맷("WARNING:waitress.queue:...")으로 찍히는
+    # 현상이 실측됐다(2026-09-05). propagate에 기대지 않고 같은 handler를 직접 붙이고
+    # propagate=False로 끊어서 중복 출력을 막는다.
+    queue_logger = logging.getLogger("waitress.queue")
+    queue_logger.addHandler(console_handler)
+    queue_logger.addHandler(queue_handler)
+    queue_logger.setLevel(logging.INFO)
+    queue_logger.propagate = False
+
     return active_logger
 
 def get_active_loggers():

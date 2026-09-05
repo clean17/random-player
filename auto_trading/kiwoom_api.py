@@ -164,15 +164,46 @@ def _get_token(env: Optional[str] = None) -> str:
     return os.environ.get(_cfg_for(env)['token_env'], '')
 
 
+# ── 토큰 재발급 동시요청 방지 (2026-09-05) ──────────────────────────────────
+# waitress가 스레드 24개로 돌아서, 대시보드 탭 하나 열 때 여러 스레드가 동시에 kt00018/
+# ka10099/kt00001/ka10075 등을 호출한다. 이 시점에 토큰이 무효하면 각 스레드가 각자
+# _refresh_token()을 불렀는데, 토큰 발급(au10001) 자체가 데이터 조회보다 훨씬 엄격하게
+# 제한돼 있어(실측: "1700 허용된 API 요청 개수를 초과" 연발) 하나만 성공하고 나머지는
+# 429로 실패 — 그 요청들의 조회 자체가 통째로 실패했다(fn_au10001은 실패 시 재시도 없이
+# 바로 예외를 던진다). env별 락 + 쿨다운으로 동시 발급 시도를 한 번으로 합친다.
+_TOKEN_REFRESH_LOCKS: Dict[str, threading.Lock] = {}
+_TOKEN_REFRESH_LOCKS_GUARD = threading.Lock()
+_TOKEN_LAST_REFRESH: Dict[str, float] = {}
+_TOKEN_REFRESH_COOLDOWN = 5.0  # 초. 토큰 유효기간(24시간)에 비해 여러 자릿수 작은 값이라
+                                # 진짜 만료 갱신을 막을 일은 없고, 동시 요청만 걸러낸다.
+
+
+def _token_refresh_lock(key: str) -> threading.Lock:
+    with _TOKEN_REFRESH_LOCKS_GUARD:
+        lock = _TOKEN_REFRESH_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _TOKEN_REFRESH_LOCKS[key] = lock
+        return lock
+
+
 def _refresh_token(env: Optional[str] = None):
-    from auto_trading.renew_kiwoom_token import fn_au10001
-    c = _cfg_for(env)
-    params = {
-        'grant_type': 'client_credentials',
-        'appkey': os.environ.get(c['app_key_env']),
-        'secretkey': os.environ.get(c['secret_key_env']),
-    }
-    fn_au10001(data=params, host=c['base_url'], token_env_key=c['token_env'])
+    key = env or KIWOOM_ENV
+    lock = _token_refresh_lock(key)
+    with lock:
+        # 락을 기다리는 동안 다른 스레드가 이미 갱신했으면(쿨다운 이내) 재요청하지 않고
+        # 그 결과(os.environ에 반영된 새 토큰)를 그대로 재사용한다.
+        if time.time() - _TOKEN_LAST_REFRESH.get(key, 0.0) < _TOKEN_REFRESH_COOLDOWN:
+            return
+        from auto_trading.renew_kiwoom_token import fn_au10001
+        c = _cfg_for(env)
+        params = {
+            'grant_type': 'client_credentials',
+            'appkey': os.environ.get(c['app_key_env']),
+            'secretkey': os.environ.get(c['secret_key_env']),
+        }
+        fn_au10001(data=params, host=c['base_url'], token_env_key=c['token_env'])
+        _TOKEN_LAST_REFRESH[key] = time.time()
 
 
 # 30초 트레일링 스탑 잡, 5분 계좌현황 잡, 대시보드 페이지 로드 등 서로 다른 스레드가
