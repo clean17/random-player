@@ -315,6 +315,44 @@ def get_stock_audit_info_map(env: Optional[str] = None, force: bool = False) -> 
     return result
 
 
+_INDEX_CACHE_LOCK = threading.Lock()
+_INDEX_CACHE: Optional[Tuple[float, Dict[str, Dict]]] = None
+_INDEX_CACHE_TTL = 60.0  # 1분. 계좌별이 아니라 시장 전체 공통 정보라 env 무관하게 캐시.
+_INDEX_CODES = {'kospi': '001', 'kosdaq': '101'}  # ka20001 inds_cd. mrkt_tp는 실측상 결과에 영향 없어 '0' 고정.
+
+
+def get_market_index_rates(env: Optional[str] = None, force: bool = False) -> Dict[str, Dict]:
+    """코스피/코스닥 종합지수 현재가·전일대비·등락률. 1분 캐시(프로세스 전역, env 무관).
+    2026-09-04 mock 실응답으로 endpoint/파라미터 확인: ka20001 /api/dostk/sect,
+    {'mrkt_tp': '0', 'inds_cd': '001'|'101'} → {cur_prc, pred_pre, flu_rt, ...}(부호 포함 문자열).
+    실패해도 예외를 던지지 않고 이전 캐시(또는 빈 dict)를 반환한다(표시용이라 화면이 죽으면 안 됨)."""
+    global _INDEX_CACHE
+    now = time.time()
+    with _INDEX_CACHE_LOCK:
+        if not force and _INDEX_CACHE is not None and now - _INDEX_CACHE[0] < _INDEX_CACHE_TTL:
+            return _INDEX_CACHE[1]
+
+    result: Dict[str, Dict] = {}
+    try:
+        for name, inds_cd in _INDEX_CODES.items():
+            data = _call('ka20001', '/api/dostk/sect', {'mrkt_tp': '0', 'inds_cd': inds_cd}, env=env)
+            result[name] = {
+                'price': _to_number(data.get('cur_prc')),
+                'change': _to_number(data.get('pred_pre')),
+                'rate': _to_number(data.get('flu_rt')) / 100.0,
+            }
+    except Exception as e:
+        print(f'[ERROR] get_market_index_rates: {e}')
+        with _INDEX_CACHE_LOCK:
+            if _INDEX_CACHE is not None:
+                return _INDEX_CACHE[1]
+        return result
+
+    with _INDEX_CACHE_LOCK:
+        _INDEX_CACHE = (now, result)
+    return result
+
+
 def get_intraday_range(stk_cd: str) -> Optional[Tuple[int, int, int]]:
     """(현재가, 당일 고가, 당일 저가) 반환. 실패하거나 값이 이상하면 None.
 

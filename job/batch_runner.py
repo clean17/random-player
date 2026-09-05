@@ -568,10 +568,10 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 4-2) 미장 LightGBM 예측 (전 종목 공용 모델). 월~금 12:30.
+    # 4-2) 미장 LightGBM 예측 (전 종목 공용 모델). 월~금 14:30.
     scheduler.add_job(
         predict_us_stocks_lgbm,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=12, minute=30),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=14, minute=30),
         id="predict_us_stocks_lgbm_1230",
         executor="cpu",
         replace_existing=True,

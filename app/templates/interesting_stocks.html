@@ -46,6 +46,10 @@
         .ms-env-note { font-size: 12px; color: #888; }
         /* 실전을 보고 있을 때만 붉게 — 수동 매수/매도가 실계좌로 나간다는 경고 */
         .ms-env-note.is-live { color: #d93025; font-weight: 600; }
+        .ms-index-bar { display: flex; gap: 12px; font-size: 12px; }
+        .ms-index-item { display: flex; gap: 4px; align-items: baseline; }
+        .ms-index-name { color: #888; }
+        .ms-index-item .value { font-weight: 600; }
         .ms-refresh-status { font-size: 12px; color: #9aa0a6; margin-left: auto; }
         .ms-refresh-status.is-refreshing { color: #1a73e8; }
         #kiwoomEnvFilter.is-real { color: #d93025; font-weight: 700; border-color: #d93025; }
@@ -694,6 +698,10 @@
              알려주는 안내문만 둔다 — 조회·수동주문이 모두 그 select 값을 따라간다. -->
         <div class="ms-env-bar">
             <span class="ms-env-note" id="ms-env-note"></span>
+            <span class="ms-index-bar" id="ms-index-bar">
+                <span class="ms-index-item"><span class="ms-index-name">코스피</span><span class="value" id="ms-index-kospi">-</span></span>
+                <span class="ms-index-item"><span class="ms-index-name">코스닥</span><span class="value" id="ms-index-kosdaq">-</span></span>
+            </span>
             <span class="ms-refresh-status" id="ms-refresh-status"></span>
         </div>
 
@@ -1473,6 +1481,16 @@
         evltPlEl.className = 'value value-sub ' + msPnlClass(pnl);
     }
 
+    function renderMyStocksIndex(index) {
+        [['kospi', 'ms-index-kospi'], ['kosdaq', 'ms-index-kosdaq']].forEach(([key, elId]) => {
+            const el = document.getElementById(elId);
+            const idx = index && index[key];
+            if (!idx) { el.textContent = '-'; el.className = 'value'; return; }
+            el.textContent = `${idx.price.toLocaleString('ko-KR')} (${msFmtPct(idx.rate)})`;
+            el.className = 'value ' + msPnlClass(idx.rate);
+        });
+    }
+
     function renderMyStocksPnl(pnlSummary) {
         ['daily', 'weekly', 'monthly', 'all'].forEach(key => {
             const el = document.getElementById(`ms-pnl-${key}`);
@@ -1934,9 +1952,9 @@
         const note = document.getElementById('ms-env-note');
         if (!note) return;
         const label = MS_ENV_LABEL[msEnv] || msEnv;
-        note.textContent = (msEnv === msEnvDefault)
-            ? `${label} 계좌 — 이 서버에 자동매매가 붙어 있습니다`
-            : `${label} 계좌 — 별도 프로세스에서 자동매매가 돕니다`;
+        // note.textContent = (msEnv === msEnvDefault)
+        //     ? `${label} 계좌 — 이 서버에 자동매매가 붙어 있습니다`
+        //     : `${label} 계좌 — 별도 프로세스에서 자동매매가 돕니다`;
         note.classList.toggle('is-live', msEnv === 'real');
     }
 
@@ -1993,15 +2011,18 @@
         msUpdateRefreshStatus();
         try {
             await initMsEnv();
-            const [holdingsRes, historyRes, ordersRes] = await Promise.all([
+            const [holdingsRes, historyRes, ordersRes, indexRes] = await Promise.all([
                 fetch(`/stocks/kiwoom/holdings${msEnvQuery()}`),
                 fetch(`/stocks/kiwoom/history?limit=100${msEnvQuery('&')}`),
                 fetch(`/stocks/kiwoom/orders${msEnvQuery()}`),
+                fetch(`/stocks/kiwoom/market-index${msEnvQuery()}`).catch(() => null),
             ]);
             if (!holdingsRes.ok || !historyRes.ok || !ordersRes.ok) throw new Error('요청 실패');
             const holdingsData = await holdingsRes.json();
             const historyData = await historyRes.json();
             const ordersData = await ordersRes.json();
+            // 지수는 표시용 부가 정보라 실패해도 나머지 렌더링을 막지 않는다.
+            const indexData = (indexRes && indexRes.ok) ? await indexRes.json().catch(() => ({})) : {};
 
             if (seq !== msLoadSeq) return;   // 그 사이 더 최신 조회가 시작됨 — 이 응답은 버린다
 
@@ -2011,6 +2032,7 @@
             renderMyStocksPnl(historyData.pnl_summary || {});
             renderMyStocksHistory(historyData.history || [], ordersData.orders || []);
             renderMyStocksOrders(ordersData.orders || []);
+            renderMyStocksIndex(indexData.index || {});
         } catch (e) {
             console.error(e);
             if (seq === msLoadSeq) showDebugToast('내 종목 데이터를 불러오지 못했습니다');
