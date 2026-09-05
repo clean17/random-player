@@ -23,7 +23,7 @@ from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
     get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
-    get_stock_audit_info_map
+    get_stock_audit_info_map, get_market_index_rates
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
     _held_business_days as _legacy_business_days
 from auto_trading import kiwoom_trailing_stop as legacy_exit
@@ -585,11 +585,15 @@ def _load_legacy_positions(env):
         return {}
 
 
-def _legacy_holding_state(pos, avg_price, cur_price):
+def _legacy_holding_state(pos, avg_price, cur_price, env=None):
     """보유종목 카드에 붙일 레거시(fire/구 트레일링) 청산상태 요약. 2026-08-28 추가 —
     모의투자는 v8이 아니라 이 엔진을 쓰므로 v8 배지가 못 뜨던 걸 보완한다.
     TRAILING_ENABLED=False라 트레일링/목표가는 표시할 게 없다(둘 다 비활성) — 실제로
-    동작 중인 손절(-6%, 60/90초 재확인)과 보유상한만 보여준다."""
+    동작 중인 손절(-6%, 60/90초 재확인)과 보유상한만 보여준다.
+
+    max_hold_days는 legacy_exit.MAX_HOLD_DAYS(이 Flask 프로세스의 KIWOOM_ENV 기준 고정값)가
+    아니라 max_hold_days_for(env)로 다시 계산한다 — 안 그러면 실전 프로세스에서 모의 계좌를
+    조회할 때도 실전 값(15)이 떠서 실제 청산 기준(모의는 5)과 배지가 어긋난다."""
     avg = float(avg_price or 0)
     cur = float(cur_price or 0)
     if avg <= 0 or cur <= 0 or pos.get('exited'):
@@ -602,7 +606,7 @@ def _legacy_holding_state(pos, avg_price, cur_price):
     return {
         'type': 'legacy',
         'hold_days': _legacy_business_days(pos.get('entry_date')),
-        'max_hold_days': legacy_exit.MAX_HOLD_DAYS,
+        'max_hold_days': legacy_exit.max_hold_days_for(env),
         'stop_margin': (cur / stop_px - 1.0) if stop_px > 0 else None,  # 0 이하면 손절권
         'stop_level': stop_level,
         'watching': pos.get('stop_watch_since') is not None,  # 손절선 재확인 대기 중
@@ -684,7 +688,7 @@ def get_kiwoom_holdings():
             if exit_state is None:
                 lp = legacy_pos.get(code)
                 if lp:
-                    exit_state = _legacy_holding_state(lp, h.get('avg_price'), h.get('cur_price'))
+                    exit_state = _legacy_holding_state(lp, h.get('avg_price'), h.get('cur_price'), env)
             h['v8'] = exit_state
             h['logo_url'] = logo_urls.get(code)
             h['audit_info'] = _audit_badge(code, audit_map)
@@ -755,6 +759,20 @@ def get_kiwoom_history():
         ev['audit_info'] = _audit_badge(ev.get('stk_cd'), audit_map)
     return jsonify({"history": history, "pnl_summary": pnl_summary,
                     "env": env or KIWOOM_ENV})
+
+
+@stock.route("/kiwoom/market-index", methods=["GET"])
+@login_required
+def get_kiwoom_market_index():
+    try:
+        env = _req_env()
+        rates = get_market_index_rates(env)
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"index": rates})
 
 
 @stock.route("/kiwoom/orders", methods=["GET"])

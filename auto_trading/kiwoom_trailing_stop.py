@@ -218,7 +218,18 @@ TRAILING_ENABLED = False
 # real은 이 백테스트가 fire 신호(interest_v2 근사) 기반이라 real의 실제 상황(v8 잔존분,
 # 수동매수 위주)과는 근거가 다르다고 보고 그대로 15 유지 — 새 근거 없이 real을 바꾸지 않는다.
 # 되돌리려면 이 분기를 지우고 15로 고정.
-MAX_HOLD_DAYS = 5 if KIWOOM_ENV == 'mock' else 15  # 이 영업일수를 넘겨 보유 중이면 잔여 전량 시장가 청산
+def max_hold_days_for(env: Optional[str] = None) -> int:
+    """env(mock/real)에 대응하는 MAX_HOLD_DAYS. env가 None이면 이 프로세스의 KIWOOM_ENV를 쓴다.
+
+    ⚠️ 대시보드(Flask)는 실전 프로세스 안에서 env 파라미터로 모의 계좌도 함께 조회한다
+    (kiwoom_trailing_stop이 import될 때 이미 MAX_HOLD_DAYS가 그 프로세스의 KIWOOM_ENV 기준으로
+    고정돼버리므로, 표시용으로는 반드시 이 함수로 요청 env 기준 값을 다시 계산해야 한다 —
+    아니면 모의 계좌를 보고 있어도 실전 프로세스 값(15)이 뜬다. 실제 청산 로직은 이 프로세스가
+    스스로의 KIWOOM_ENV로만 동작하므로 아래 MAX_HOLD_DAYS 상수 그대로 써도 안전하다)."""
+    return 5 if (env or KIWOOM_ENV) == 'mock' else 15
+
+
+MAX_HOLD_DAYS = max_hold_days_for()  # 이 영업일수를 넘겨 보유 중이면 잔여 전량 시장가 청산
 
 # ── v8 전환용 마스터 스위치 (2026-08-19 추가) ────────────────────────────────
 # v8 청산(auto_trading/kiwoom_v8_exit.py)으로 넘어갈 때 이걸 False 로 내린다.
@@ -660,8 +671,14 @@ def _iter_sell_events(env: Optional[str] = None) -> List[Dict]:
     return events
 
 
+def _net_pnl(ev: Dict) -> float:
+    """이벤트의 수수료·세금 반영 손익. net_pnl이 없는 옛 기록(2026-08-26 이전)만 가격差(pnl)로 폴백."""
+    net = ev.get('net_pnl')
+    return net if net is not None else ev.get('pnl', 0.0)
+
+
 def get_pnl_summary(env: Optional[str] = None) -> Dict:
-    """일별/주별/월별/전체 실현손익 합계·수익률 (매도 이벤트 기준)."""
+    """일별/주별/월별/전체 실현손익 합계·수익률 (매도 이벤트 기준, 수수료·세금 반영 순손익)."""
     today = datetime.date.today()
     week_start = today - datetime.timedelta(days=today.weekday())
     month_start = today.replace(day=1)
@@ -674,7 +691,7 @@ def get_pnl_summary(env: Optional[str] = None) -> Dict:
     }
 
     for ev in _iter_sell_events(env):
-        pnl = ev.get('pnl', 0.0)
+        pnl = _net_pnl(ev)
         cost = ev.get('avg_price', 0.0) * ev.get('qty', 0)
         ev_date = ev['_date']
         buckets['all']['pnl'] += pnl
@@ -696,11 +713,11 @@ def get_pnl_summary(env: Optional[str] = None) -> Dict:
 
 
 def get_win_loss_ratio(env: Optional[str] = None) -> Optional[float]:
-    """손익비(Risk-Reward Ratio) = 실현 평균이익 / 실현 평균손실(절대값). 매도 이력 전체 기준.
+    """손익비(Risk-Reward Ratio) = 실현 평균이익 / 실현 평균손실(절대값, 수수료·세금 반영). 매도 이력 전체 기준.
     손실 거래가 하나도 없으면 None(무한대 취급)."""
     sells = _iter_sell_events(env)
-    wins = [ev['pnl'] for ev in sells if ev.get('pnl', 0.0) > 0]
-    losses = [-ev['pnl'] for ev in sells if ev.get('pnl', 0.0) < 0]
+    wins = [_net_pnl(ev) for ev in sells if _net_pnl(ev) > 0]
+    losses = [-_net_pnl(ev) for ev in sells if _net_pnl(ev) < 0]
     if not losses:
         return None
     if not wins:
