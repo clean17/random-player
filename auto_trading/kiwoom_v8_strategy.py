@@ -961,12 +961,14 @@ def run_v8_buy_cycle():
     # 하루 1회 계산된 캐시를 쓴다 (첫 사이클에서만 pkl 을 읽는다)
     #  · 보유 중 종목 제외      = 동일 종목 중복 보유 금지
     #  · 당일 매도 종목 제외    = sequential_filter 의 두 번째 규칙
-    #  · 투자주의환기종목/거래정지 제외 = 2026-09-03, 270520 사례로 요청. ka10099 auditInfo
-    #    기준(5분 캐시). 조회 실패 시엔 빈 dict가 와서 아무것도 안 걸러지므로(안전 쪽으로
-    #    폴백), 이 필터가 매수를 막지는 않되 보호도 안 해줄 수 있다는 점은 감안할 것.
+    #  · 투자주의환기종목/거래정지/관리종목 제외 = 2026-09-03, 270520 사례로 요청.
+    #    2026-09-07, 008290(원풍물산) 사례로 관리종목 추가 — auditInfo='관리종목'인데
+    #    차단 목록엔 없어서 매수가 그대로 나갔다. ka10099 auditInfo 기준(5분 캐시).
+    #    조회 실패 시엔 빈 dict가 와서 아무것도 안 걸러지므로(안전 쪽으로 폴백), 이 필터가
+    #    매수를 막지는 않되 보호도 안 해줄 수 있다는 점은 감안할 것.
     _sold = sold_today_codes()
     _audit_map = api.get_stock_audit_info_map()
-    _AUDIT_BLOCK = {'투자주의환기종목', '거래정지'}
+    _AUDIT_BLOCK = {'투자주의환기종목', '거래정지', '관리종목'}
     cands = [c for c in daily_candidates()
              if c['code'] not in held and c['code'] not in _sold
              and _audit_map.get(c['code']) not in _AUDIT_BLOCK]
