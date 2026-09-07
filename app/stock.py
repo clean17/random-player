@@ -18,7 +18,7 @@ from app.repository.stocks.stocks import merge_daily_interest_stocks, get_intere
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
-    request_stock_volume_and_amount, request_stock_category
+    request_stock_volume_and_amount, request_stock_category, get_trading_amounts
 from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
@@ -681,6 +681,10 @@ def get_kiwoom_holdings():
         # 투자경고/관리종목/거래정지 등 배지 표시용 (2026-09-02, ka10099 실측 — 실계좌
         # 011090/057540 관리종목, 모의계좌 417840 투자주의로 확인됨). '정상'이면 표시 안 함.
         audit_map = get_stock_audit_info_map(env)
+        # 오늘 거래대금 (2026-09-07) — kt00018엔 없는 값이라 토스 캔들 API에서 따로 받아온다.
+        # 60초 캐시라 실패해도(get()이 빈 dict 반환) 화면은 그대로 '-'로 표시될 뿐 안 죽는다.
+        trde_amt_map = get_trading_amounts(
+            [h.get('stk_cd') for h in holdings if h.get('stk_cd')])
         for h in holdings:
             code = h.get('stk_cd')
             v8p = v8pos.get(code)
@@ -692,6 +696,7 @@ def get_kiwoom_holdings():
             h['v8'] = exit_state
             h['logo_url'] = logo_urls.get(code)
             h['audit_info'] = _audit_badge(code, audit_map)
+            h['trde_amt'] = trde_amt_map.get(code)
             # 2026-08-28: kt00018의 pred_close_pric(전일종가)이 cur_prc와 항상 똑같이 와서
             # (실측 확인 — 키움 API 쪽 결함으로 보임) day_change_rate가 매번 0%로 나왔다.
             # 2026-09-02 재확인: 지금은 pred_close_pric이 실제 전일종가와 정확히 일치하고

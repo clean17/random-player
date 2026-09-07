@@ -154,7 +154,7 @@
             color: #888;
             white-space: normal;
         }
-        /* 종목 상세 테이블의 평가금 밑 수익률(손익)은 요약 박스보다 조금 크게 */
+        /* 보유 목록 테이블의 평가금 밑 수익률(손익)은 요약 박스보다 조금 크게 */
         #table-mystocks-holdings .value-sub {
             font-size: 13px;
         }
@@ -752,7 +752,7 @@
         </div>
         {% endif %}
 
-        <h3 class="mystocks-subtitle">종목 상세</h3>
+        <h3 class="mystocks-subtitle">보유 목록</h3>
         <div class="table-scroller ms-history-scroller">
             <table class="table" id="table-mystocks-holdings">
                 <thead>
@@ -764,6 +764,8 @@
                     <th class="ms-sortable" data-sort="stk_nm">종목명</th>
                     <th class="right ms-sortable" data-sort="evlt_amt">평가금</th>
                     <th class="right ms-sortable" data-sort="day_change_rate">등락률</th>
+                    <!-- 2026-09-07: 거래대금은 kt00018에 없어 토스 캔들 API로 별도 조회(60초 캐시). -->
+                    <th class="right ms-sortable" data-sort="trde_amt">거래대금</th>
                     <!-- 2026-08-29: 손절선위(레거시 전용 지표) 정렬 추가. v8 보유종목은 stop_margin이
                          없어 항상 뒤로 밀린다(MS_HOLDINGS_SORT_GETTERS.stop_margin 참고). -->
                     <th class="ms-sortable" data-sort="stop_margin">청산상태</th>
@@ -775,7 +777,7 @@
                     {% endif %}
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="8" class="empty">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="9" class="empty">불러오는 중...</td></tr></tbody>
             </table>
         </div>
 
@@ -1432,6 +1434,16 @@
         if (n == null || !isFinite(Number(n))) return '-';
         return Math.round(Number(n)).toLocaleString('ko-KR') + '원';
     }
+    // 거래대금처럼 자릿수가 큰 금액용 — 조/억 단위로 줄여서 표시(12.2조 / 1249.2억).
+    // 1억 미만은 조/억으로 줄이면 "0.0억"처럼 어색해져서 원 단위 그대로 보여준다.
+    function msFmtEok(n) {
+        if (n == null || !isFinite(Number(n))) return '-';
+        const v = Number(n);
+        const jo = 1_0000_0000_0000, eok = 1_0000_0000;
+        if (Math.abs(v) >= jo) return (v / jo).toFixed(1) + '조';
+        if (Math.abs(v) >= eok) return (v / eok).toFixed(1) + '억';
+        return msFmtWon(v);
+    }
     function msFmtPct(n) {
         if (n == null || !isFinite(Number(n))) return '-';
         const v = Number(n) * 100;
@@ -1567,13 +1579,14 @@
         }).join('');
     }
 
-    // 종목 상세 헤더 클릭 정렬. 평가금은 원본 필드가 아니라 cur_price*qty 계산값이라 getter로 뺐다.
+    // 보유 목록 헤더 클릭 정렬. 평가금은 원본 필드가 아니라 cur_price*qty 계산값이라 getter로 뺐다.
     const MS_HOLDINGS_SORT_GETTERS = {
         stk_nm: h => h.stk_nm ?? '',
         avg_price: h => Number(h.avg_price || 0),
         cur_price: h => Number(h.cur_price || 0),
         day_change_rate: h => Number(h.day_change_rate ?? -Infinity),
         evlt_amt: h => Number(h.cur_price || 0) * Number(h.qty || 0),
+        trde_amt: h => Number(h.trde_amt ?? -Infinity),
         qty: h => Number(h.qty || 0),
         // 2026-08-29: 수익률(평단가 기준)·손절선위 정렬 추가. stop_margin은 레거시 청산상태에만
         // 있어(app/stock.py `_v8_holding_state()`는 안 내려줌) v8 보유종목은 -Infinity로 맨 뒤로.
@@ -1736,6 +1749,7 @@
           <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url, h.audit_info)}</td>
           <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ms-sub-sort ${msPnlClass(pnl)}" data-sort="profit_rate">${pnlSubText}</span></td>
           <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
+          <td class="right">${msFmtEok(h.trde_amt)}</td>
           <td class="ms-holding-v8-state">${msV8StateText(h.v8)}</td>
           <td class="right">${h.qty ?? 0}주</td>
           <td class="right">${msFmtWon(h.avg_price)}</td>

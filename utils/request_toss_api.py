@@ -1,5 +1,8 @@
 import requests
 import json
+import time
+import threading
+from typing import Dict, List
 from flask import current_app, jsonify
 
 INFO_URL = "https://wts-info-api.tossinvest.com/api/v3/search-all/wts-auto-complete"
@@ -96,6 +99,48 @@ def request_stock_volume_and_amount(product_code):
         timeout_code="TOSS_TIMEOUT",
         error_code="TOSS_REQUEST_ERROR",
     )
+
+
+# ── 보유종목 오늘 거래대금 (2026-09-07, 내 계좌 탭 표시용) ──────────────────────
+# kt00018(계좌평가잔고내역)엔 거래대금 필드가 없어 종목당 별도 조회가 필요하다.
+# 키움 쪽엔 거래대금을 직접 주는 필드가 없어(ka10001엔 거래량만 있음, 거래대금은
+# 가격×거래량 근사가 필요) 이미 붙어 있는 토스 캔들 API(amount 필드, 원 단위 그대로 옴)를
+# 그대로 쓴다. 종목코드로 productCode를 바로 만들 수 있어(KRX 보통주는 'A'+6자리코드)
+# 검색 단계 없이 바로 조회한다.
+# 60초 캐시 — 3초 자동새로고침(장중)에 맞춰 매번 부르면 renew_interest_stocks_close에서
+# 겪은 것과 같은 Toss 쪽 속도제한(TLS handshake 거부)을 다시 겪는다.
+_AMOUNT_CACHE_LOCK = threading.Lock()
+_AMOUNT_CACHE: Dict[str, tuple] = {}   # stk_cd -> (timestamp, amount)
+_AMOUNT_CACHE_TTL = 60.0
+
+
+def get_trading_amounts(stk_cds: List[str]) -> Dict[str, float]:
+    """종목코드 리스트 -> {종목코드: 오늘 거래대금(원)}. 조회 실패한 종목은 결과에서 빠진다
+    (표시용 부가 정보라 실패해도 화면이 죽으면 안 됨)."""
+    now = time.time()
+    result: Dict[str, float] = {}
+    to_fetch = []
+    with _AMOUNT_CACHE_LOCK:
+        for code in stk_cds:
+            cached = _AMOUNT_CACHE.get(code)
+            if cached and now - cached[0] < _AMOUNT_CACHE_TTL:
+                result[code] = cached[1]
+            else:
+                to_fetch.append(code)
+
+    for code in to_fetch:
+        try:
+            url = AMOUNT_URL.replace("PRODUCTCODE", f"A{code}")
+            res = requests.get(url, headers=DEFAULT_HEADERS, timeout=5)
+            res.raise_for_status()
+            amount = res.json()["result"]["candles"][0]["amount"]
+            result[code] = amount
+            with _AMOUNT_CACHE_LOCK:
+                _AMOUNT_CACHE[code] = (now, amount)
+        except Exception as e:
+            print(f"[WARN] get_trading_amounts 실패: {code} {e}")
+
+    return result
 
 
 def request_stock_category(company_code):
