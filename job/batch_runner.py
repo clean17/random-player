@@ -296,8 +296,17 @@ def create_scheduler():
     print('=' * 68)
 
     # I/O는 스레드, CPU는 프로세스
+    # "trading" 전용 풀(2026-09-07): v8 매수/청산·레거시 트레일링청산은 실계좌 자금이 걸린
+    # 30~60초 주기 잡인데, 예전엔 다른 배치(스크랩/이미지/관심종목 갱신 등)와 "io" 풀 8개를
+    # 같이 썼다. 그중 하나(AutoSales.py 서브프로세스 호출, update_interest_stocks)가 10분 가까이
+    # 걸린 날 "io" 스레드가 전부 그쪽에 묶여 run_kiwoom_trailing_stop/run_v8_exit/run_v8_buy가
+    # 2분 넘게 스킵됐다(2026-09-07 관측 — apscheduler "maximum number of running instances
+    # reached" 경고 연발). 그 2분 동안은 보유종목 손절/트레일링/익절 체크가 전혀 안 돈 것과
+    # 같아서 실손실로 이어질 수 있는 문제였다. 배치 잡이 아무리 오래 걸려도 매수/청산 잡은
+    # 항상 즉시 실행되도록 전용 풀로 분리한다.
     executors = {
         "io": ThreadPoolExecutor(max_workers=8),
+        "trading": ThreadPoolExecutor(max_workers=4),
         "cpu": ProcessPoolExecutor(max_workers=2),  # CPU 작업 성격/서버 코어에 맞게 조절
     }
     job_defaults = {
@@ -391,7 +400,7 @@ def create_scheduler():
         run_kiwoom_trailing_stop,
         trigger=IntervalTrigger(seconds=30),
         id="kiwoom_trailing_stop_30s",
-        executor="io",
+        executor="trading",
         replace_existing=True,
     )
 
@@ -472,23 +481,23 @@ def create_scheduler():
     scheduler.add_job(
         run_v8_screen,
         trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=55),
-        id="v8_screen", executor="io", replace_existing=True,
+        id="v8_screen", executor="trading", replace_existing=True,
     )
     scheduler.add_job(
         run_v8_buy,
         trigger=IntervalTrigger(seconds=60),
-        id="v8_buy", executor="io", replace_existing=True,
+        id="v8_buy", executor="trading", replace_existing=True,
     )
     scheduler.add_job(
         run_v8_exit,
         trigger=IntervalTrigger(seconds=30),
-        id="v8_exit", executor="io", replace_existing=True,
+        id="v8_exit", executor="trading", replace_existing=True,
     )
     # peak 갱신도 당일 확정 고가가 필요하므로 15:50 갱신분 뒤에 둔다(스크리닝보다 먼저).
     scheduler.add_job(
         run_v8_eod,
         trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=52),
-        id="v8_eod", executor="io", replace_existing=True,
+        id="v8_eod", executor="trading", replace_existing=True,
     )
 
     # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 2시 전체 종목 데이터 fetch)
