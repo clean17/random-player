@@ -497,7 +497,7 @@ function renderPredictCardHtml(track, rows) {
         const thresholdPct = r.threshold_pct ?? 10;
 
         return `
-      <article class="trade-card predict-card" data-index="${idx}">
+      <article class="trade-card predict-card" data-index="${idx}" data-stock-code="${r.stock_code ?? ""}">
         <div class="trade-top">
           <div class="trade-text">
             <div class="trade-name">${r.stock_name ?? ""}</div>
@@ -574,7 +574,9 @@ function renderTradingCards(rows, section, tableName) {
         if (!trigger) return;
         const article = trigger.closest("article.trade-card");
         if (!article) return;
-        const stockCode = article.querySelector(".fav-btn")?.dataset.stockCode;
+        // 예측종목 카드는 즐겨찾기 버튼(.fav-btn)이 없어(즐겨찾기 대상이 아님) 종목코드를
+        // article 자체의 data-stock-code에서 읽는다(2026-09-07).
+        const stockCode = article.querySelector(".fav-btn")?.dataset.stockCode || article.dataset.stockCode;
         if (stockCode) {
             window.open(`https://m.stock.naver.com/domestic/stock/${stockCode}/total`, "_blank");
             markStockViewed(stockCode, article);
