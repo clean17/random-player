@@ -45,6 +45,17 @@ let slideCountdownInterval = null;
 let slideStartTime = 0;
 const SLIDE_DURATION_MS = 10000;
 let slideDurationMs = SLIDE_DURATION_MS;   // 현재 슬라이드의 실효 지속시간 (비디오일 경우 영상 길이)
+
+// 비디오 슬라이드 유지시간: 10초 초과면 영상 길이 그대로, 5초 미만이면 video의 loop 속성으로
+// 반복 재생되는 걸 이용해 10초에 가장 가까워지는 배수로 늘린다. 5~10초는 영상 길이 그대로.
+function computeVideoSlideDurationMs(durationSec) {
+    if (durationSec > 10) return Math.round(durationSec * 1000);
+    if (durationSec < 5) {
+        const n = Math.max(1, Math.round(SLIDE_DURATION_MS / 1000 / durationSec));
+        return Math.round(durationSec * n * 1000);
+    }
+    return Math.round(durationSec * 1000);
+}
 let pendingMasonryScrollY = null;
 let slideRotation = 0;   // 0 / 90 / 180 / 270, rotate-modal 버튼으로 -90도씩 누적
 
@@ -109,7 +120,9 @@ function scheduleNextSlide() {
         const videoEl = document.getElementById('slideshow-video');
         const applyDuration = function() {
             const dur = videoEl ? videoEl.duration : NaN;
-            slideDurationMs = (dur && isFinite(dur) && dur > 0) ? Math.round(dur * 1000) : SLIDE_DURATION_MS;
+            slideDurationMs = (dur && isFinite(dur) && dur > 0)
+                ? computeVideoSlideDurationMs(dur)
+                : SLIDE_DURATION_MS;
             startSlideCountdown();
             slideShowTimer = setTimeout(advance, slideDurationMs);
         };
