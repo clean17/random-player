@@ -585,6 +585,49 @@ def _load_legacy_positions(env):
         return {}
 
 
+def _live_gap_empty_reason():
+    """실시간gap 후보가 비어있는 이유. kiwoom_v8_strategy.run_v8_screen()이 15:55 스크리닝
+    직후 오늘자 후보 캐시(state['day'])를 지우므로(다음 장 시작 때 다시 채움), 장 마감~다음
+    개장 사이엔 항상 비어있다 — '표시할 데이터가 없어요' 같은 무의미한 문구 대신 정확한
+    이유를 보여주기 위해 실제 장 시간 기준으로 판단한다(2026-09-07)."""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return '주말이라 휴장이에요. 다음 거래일 09:00 이후 갱신됩니다.'
+    if now.time() < v8_strategy.KRX_OPEN:
+        return '아직 장 시작 전이에요. 09:00 이후 갱신됩니다.'
+    if not v8_strategy.is_market_open():
+        return '오늘 장이 마감됐어요. 다음 거래일 09:00 이후 갱신됩니다.'
+    return '오늘자 후보가 없어요.'
+
+
+def _live_gap_cache_path(env):
+    """실시간gap 순위 서버 캐시 경로. 조회가 8~9초(종목당 API 1회)라 한 기기에서 새로고침한
+    결과를 다른 기기도 볼 수 있게 서버에 저장한다(2026-09-07, 예전엔 sessionStorage라
+    브라우저별로 갇혀 있었음)."""
+    return env_path(os.path.join(os.path.dirname(kiwoom_v8_exit.__file__),
+                                  'kiwoom_v8_live_gap_cache.json'), env)
+
+
+def _save_live_gap_cache(env, ranking):
+    try:
+        with open(_live_gap_cache_path(env), 'w', encoding='utf-8') as f:
+            json.dump({'ranking': ranking, 'ts': datetime.now().isoformat()}, f, ensure_ascii=False)
+    except Exception as e:
+        print(f'실시간gap 캐시 저장 실패: {e}')
+
+
+def _load_live_gap_cache(env):
+    path = _live_gap_cache_path(env)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f'실시간gap 캐시 로드 실패: {e}')
+        return None
+
+
 def _legacy_holding_state(pos, avg_price, cur_price, env=None):
     """보유종목 카드에 붙일 레거시(fire/구 트레일링) 청산상태 요약. 2026-08-28 추가 —
     모의투자는 v8이 아니라 이 엔진을 쓰므로 v8 배지가 못 뜨던 걸 보완한다.
@@ -874,7 +917,28 @@ def get_kiwoom_live_gap_ranking():
         'holding_value': held_value.get(c.get('code')),
         'audit_info': _audit_badge(c.get('code'), audit_map),
     } for i, c in enumerate(ranking)]
-    return jsonify({"ranking": out, "env": env or KIWOOM_ENV})
+    _save_live_gap_cache(env, out)
+    empty_reason = _live_gap_empty_reason() if not out else None
+    return jsonify({"ranking": out, "env": env or KIWOOM_ENV, "empty_reason": empty_reason})
+
+
+@stock.route("/kiwoom/live_gap_ranking/cached", methods=["GET"])
+@login_required
+def get_kiwoom_live_gap_ranking_cached():
+    """서버에 저장된 마지막 실시간gap 조회 결과를 그대로 반환(키움 API 호출 없음, 즉시 응답).
+    다른 기기/새 세션에서 패널을 열었을 때 8~9초 재조회 없이 바로 마지막 결과를 보여주는 용도."""
+    try:
+        env = _req_env()
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    cached = _load_live_gap_cache(env)
+    if not cached:
+        return jsonify({"ranking": None, "ts": None, "env": env or KIWOOM_ENV,
+                         "empty_reason": _live_gap_empty_reason()})
+    cached_ranking = cached.get('ranking')
+    empty_reason = _live_gap_empty_reason() if not cached_ranking else None
+    return jsonify({"ranking": cached_ranking, "ts": cached.get('ts'), "env": env or KIWOOM_ENV,
+                     "empty_reason": empty_reason})
 
 
 @stock.route("/kiwoom/buy", methods=["POST"])

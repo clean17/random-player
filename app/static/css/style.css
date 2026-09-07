@@ -1094,7 +1094,11 @@ td.empty,
 }
 td.empty::before,
 .table td.empty::before {
-    content: "표시할 데이터가 없어요";
+    /* 2026-09-07: 하드코딩된 문구였다 — td.empty의 실제 텍스트(font-size:0으로 숨겨짐)가
+       뭐든 상관없이 이 문구만 보였다("불러오는 중...", "보유 종목이 없어요",
+       실시간gap의 장마감 안내 등 전부 이걸로 가려짐). data-empty-text 속성값을 쓰도록
+       바꿔서 칸마다 실제 의도한 문구가 보이게 한다. */
+    content: attr(data-empty-text);
     display: inline-flex;
     align-items: center;
     justify-content: center;

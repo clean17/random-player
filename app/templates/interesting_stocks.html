@@ -777,7 +777,7 @@
                     {% endif %}
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="9" class="empty">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="9" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
 
@@ -806,7 +806,7 @@
                         {% endif %}
                     </tr>
                     </thead>
-                    <tbody><tr><td colspan="12" class="empty">불러오는 중...</td></tr></tbody>
+                    <tbody><tr><td colspan="12" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
                 </table>
             </div>
         </details>
@@ -835,7 +835,7 @@
                         <th>보유</th>
                     </tr>
                     </thead>
-                    <tbody><tr><td colspan="8" class="empty">펼치면 자동으로 조회합니다</td></tr></tbody>
+                    <tbody><tr><td colspan="8" class="empty" data-empty-text="펼치면 자동으로 조회합니다">펼치면 자동으로 조회합니다</td></tr></tbody>
                 </table>
             </div>
         </details>
@@ -863,7 +863,7 @@
                     <th class="right">손익</th>
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="7" class="empty">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="7" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
     </section>
@@ -1181,7 +1181,7 @@
         const tbody =    tradingTable.querySelector('tbody');
 
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1233,7 +1233,7 @@
         const thCount = changeTable.querySelectorAll("thead tr th").length;
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1279,7 +1279,7 @@
         const thCount = changeTable.querySelectorAll("thead tr th").length;
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1333,7 +1333,7 @@
         const thCount = lowTable.querySelectorAll("thead tr th").length;
         const tbody =    lowTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1733,7 +1733,7 @@
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         if (!holdings || !holdings.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">보유 종목이 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="보유 종목이 없어요">보유 종목이 없어요</td></tr>`;
             renderMyStocksHoldingsSortIndicators();
             return;
         }
@@ -1770,7 +1770,7 @@
         const countEl = document.getElementById('ms-orders-count');
         if (countEl) countEl.textContent = orders && orders.length ? `(${orders.length}건)` : '';
         if (!orders || !orders.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">미체결 주문이 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="미체결 주문이 없어요">미체결 주문이 없어요</td></tr>`;
             return;
         }
         tbody.innerHTML = orders.map(o => {
@@ -1802,14 +1802,18 @@
         }).join('');
     }
 
-    function renderMyStocksLiveGap(ranking) {
+    function renderMyStocksLiveGap(ranking, emptyReason) {
         const table = document.getElementById('table-mystocks-livegap');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         const countEl = document.getElementById('ms-livegap-count');
         if (countEl) countEl.textContent = ranking && ranking.length ? `(${ranking.length}건)` : '';
         if (!ranking || !ranking.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">오늘자 후보 캐시가 없어요(장 시작 전 등)</td></tr>`;
+            // 2026-09-07: 스크리닝(15:55) 직후 서버가 오늘자 후보 캐시를 지우므로 장 마감~다음
+            // 개장 사이엔 항상 빈다 — 이유를 서버가 실제 장 시간 기준으로 계산해서 보내준다
+            // (empty_reason). 없으면(구버전 응답 등) 예전 안내문으로 폴백.
+            const msg = emptyReason || '오늘자 후보 캐시가 없어요(장 시작 전 등)';
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="${msg}">${msg}</td></tr>`;
             return;
         }
         tbody.innerHTML = ranking.map(c => `
@@ -1833,22 +1837,6 @@
     // — 여기 저장/복원 로직은 재조회를 트리거하지 않는다. env(실전/모의)가 다르면 다른 계좌
     // 데이터라 복원하지 않는다. 탭 닫으면 사라지는 sessionStorage를 써서 며칠 지난 스냅샷을
     // 마치 최신인 것처럼 계속 보여주는 일은 없게 한다.
-    const MS_LIVEGAP_CACHE_KEY = 'ms-livegap-cache-v1';
-
-    function saveMsLiveGapCache(env, ranking) {
-        try {
-            sessionStorage.setItem(MS_LIVEGAP_CACHE_KEY,
-                JSON.stringify({ env, ranking, ts: new Date().toISOString() }));
-        } catch (e) { /* 저장 불가(용량/프라이빗모드 등) 무시 — 캐싱은 부가기능일 뿐 */ }
-    }
-
-    function loadMsLiveGapCache() {
-        try {
-            const raw = sessionStorage.getItem(MS_LIVEGAP_CACHE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        } catch (e) { return null; }
-    }
-
     async function loadMyStocksLiveGap() {
         if (msLiveGapLoading) return;   // 8~9초 걸리는 조회라 중복 클릭 방지
         msLiveGapLoading = true;
@@ -1861,9 +1849,10 @@
             const res = await fetch(`/stocks/kiwoom/live_gap_ranking?top=60${msEnvQuery('&')}`);
             if (!res.ok) throw new Error('요청 실패');
             const data = await res.json();
-            renderMyStocksLiveGap(data.ranking || []);
+            renderMyStocksLiveGap(data.ranking || [], data.empty_reason);
             msLiveGapLoaded = true;
-            saveMsLiveGapCache(msEnv, data.ranking || []);
+            // 2026-09-07: 서버가 이 결과를 저장해두므로(app/stock.py _save_live_gap_cache),
+            // 다른 기기/세션에서도 재조회 없이 이 결과를 바로 볼 수 있다.
             // 2026-08-28: '~시 기준'만 쓰면 페이지를 나중에 열어봤을 때 "방금 자동으로 갱신됐나?"
             // 오해가 생긴다 — 이 시각이 정확히 "새로고침 버튼을 마지막으로 누른 시각"이라고 못박는다.
             if (statusEl) statusEl.textContent = `마지막 새로고침: ${new Date().toLocaleTimeString('ko-KR')} (수동으로 다시 누르기 전까진 안 바뀜)`;
@@ -1876,21 +1865,27 @@
         }
     }
 
-    // 페이지 새로고침 직후 호출 — 이전 세션에서 조회해둔 결과가 있으면(같은 env) 표 내용만
-    // 미리 채워둔다. 2026-08-28: 섹션 자체는 항상 접힌 채로 시작해야 한다(펼치기 전엔 안 보여야
-    // 함) — 데이터만 준비해두면 사용자가 펼치는 순간 8~9초 재조회 없이 바로 보인다.
+    // 페이지 새로고침 직후 호출 — 서버에 저장된 마지막 조회 결과(어느 기기에서 새로고침했든)를
+    // 가져와 표 내용만 미리 채운다(2026-09-07, 예전엔 sessionStorage라 브라우저별로 갇혀 있어서
+    // 다른 기기에서는 항상 빈 상태였다 — 서버 캐시로 바꿔서 기기 간에 공유되게 했다).
+    // 2026-08-28: 섹션 자체는 항상 접힌 채로 시작해야 한다(펼치기 전엔 안 보여야 함) — 데이터만
+    // 준비해두면 사용자가 펼치는 순간 8~9초 재조회 없이 바로 보인다.
     async function restoreMsLiveGapCache() {
         if (msLiveGapLoaded) return;   // 이미 이번 페이지에서 로드/복원됨 — 탭 재방문마다 다시 안 함
         await initMsEnv();
-        const cached = loadMsLiveGapCache();
-        if (!cached || cached.env !== msEnv || !Array.isArray(cached.ranking)) return;
-        renderMyStocksLiveGap(cached.ranking);
-        msLiveGapLoaded = true;
-        const statusEl = document.getElementById('ms-livegap-status');
-        if (statusEl) {
-            const t = new Date(cached.ts);
-            statusEl.textContent = `마지막 새로고침: ${isNaN(t) ? cached.ts : t.toLocaleTimeString('ko-KR')} (페이지 새로고침 전 저장된 결과 — 지금 다시 조회하려면 새로고침 버튼)`;
-        }
+        try {
+            const res = await fetch(`/stocks/kiwoom/live_gap_ranking/cached${msEnvQuery()}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!Array.isArray(data.ranking)) return;
+            renderMyStocksLiveGap(data.ranking, data.empty_reason);
+            msLiveGapLoaded = true;
+            const statusEl = document.getElementById('ms-livegap-status');
+            if (statusEl) {
+                const t = new Date(data.ts);
+                statusEl.textContent = `마지막 새로고침: ${isNaN(t) ? data.ts : t.toLocaleTimeString('ko-KR')} (다른 기기 포함, 저장된 마지막 결과 — 지금 다시 조회하려면 새로고침 버튼)`;
+            }
+        } catch (e) { /* 서버 캐시 복원은 부가기능 — 실패해도 조용히 무시 */ }
     }
 
     document.getElementById('ms-livegap-refresh')?.addEventListener('click', loadMyStocksLiveGap);
@@ -1912,7 +1907,7 @@
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         if (!history || !history.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">체결 이력이 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="체결 이력이 없어요">체결 이력이 없어요</td></tr>`;
             return;
         }
         // _record_trade()는 '체결 확인'이 아니라 '주문 접수' 시점에 기록된다(가격/수량도 주문 시점
