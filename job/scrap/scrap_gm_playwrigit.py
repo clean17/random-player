@@ -346,6 +346,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
     target_url을 주면, 스크롤 도중 해당 게시물을 만나는 순간 더 스크롤하지 않고 즉시 반환한다."""
     links = []
     post_links: Set[str] = set()
+    checked_hrefs: Set[str] = set()  # 스크롤마다 DOM에 남아있는 앵커가 재조회되므로, 이미 처리한 href는 재요청/재카운트하지 않는다
     # stable_rounds = 0
     # last_count = 0
     already_collected_count = 0
@@ -382,6 +383,10 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
             # href = normalize_ig_post_url(href)
 
             if is_post_or_reel(href):
+                if href in checked_hrefs:
+                    continue
+                checked_hrefs.add(href)
+
                 if target_norm and normalize_ig_post_url(href) == target_norm:
                     print(f"[INFO] 목표 URL 도달, 스크롤 중단: {href}")
                     rev_links = links[::-1]   # slicing, 원본 보존
@@ -407,6 +412,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
                 if href not in post_links:
                     post_links.add(href)
                     links.append(href)
+                    already_collected_count = 0  # 새 게시물 발견 → "연속 이미 수집됨" 카운트 리셋
 
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
         await asyncio.sleep(pause)
