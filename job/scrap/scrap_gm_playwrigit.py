@@ -347,8 +347,7 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
     links = []
     post_links: Set[str] = set()
     checked_hrefs: Set[str] = set()  # 스크롤마다 DOM에 남아있는 앵커가 재조회되므로, 이미 처리한 href는 재요청/재카운트하지 않는다
-    # stable_rounds = 0
-    # last_count = 0
+    stable_rounds = 0  # scrollHeight가 연속으로 안 늘어난 횟수 (IG 비동기 로드가 SCROLL_PAUSE 안에 못 끝날 수 있어 1번만 보면 오판함)
     already_collected_count = 0
     target_norm = normalize_ig_post_url(target_url) if target_url else None
     await page.wait_for_selector("main", timeout=20000)
@@ -365,7 +364,10 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
     for _ in range(max_scrolls):
         anchors = await page.locator('a[href*="/p/"], a[href*="/reel/"]').element_handles()
         if len(anchors) == 0:
+            # 앵커가 아예 없는 건 "아직 안 늘어남"(scrollHeight stall)과 다른 신호라
+            # stable_rounds 재시도를 타지 않고 즉시 종료한다 (재시도해도 나아지지 않음)
             print('[ERROR-1] ★★★★★★★★★★★★★★★★★★★★★★★ Account is not valid ★★★★★★★★★★★★★★★★★★★★★★★ ')
+            break
         for a in anchors:
             href = await a.get_attribute("href")
             if not href:
@@ -417,27 +419,16 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
         await asyncio.sleep(pause)
 
-        # 새로운 콘텐츠 로딩됐는지 확인
+        # 새로운 콘텐츠 로딩됐는지 확인 (IG가 SCROLL_PAUSE 안에 다음 배치를 못 그렸을 수 있으니
+        # 한 번 안 늘었다고 바로 끝내지 않고, 연속 3번 안 늘어날 때만 종료)
         new_height = await page.evaluate("document.body.scrollHeight")
         if new_height == last_height:
-            # 더 이상 늘어나지 않으면 종료
-            break
-        last_height = new_height
-
-        # await page.evaluate("window.scrollBy(0, Math.max(400, window.innerHeight*0.9));")
-        # try:
-        #     await page.wait_for_load_state("networkidle", timeout=3000) # 스크롤 후 대기(최대)
-        # except:
-        #     pass
-        # await asyncio.sleep(pause)
-        #
-        # if len(post_links) == last_count:
-        #     stable_rounds += 1
-        #     if stable_rounds >= 3:
-        #         break
-        # else:
-        #     stable_rounds = 0
-        #     last_count = len(post_links)
+            stable_rounds += 1
+            if stable_rounds >= 3:
+                break
+        else:
+            stable_rounds = 0
+            last_height = new_height
 
     # return sorted(post_links)
     # links.reverse() # 역순으로 뒤집기
