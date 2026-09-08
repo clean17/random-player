@@ -369,7 +369,20 @@
         }
         .mystocks-orders-count { font-weight: 400; font-size: 13px; color: #6b7280; }
         .mystocks-livegap-toolbar { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
-        .mystocks-livegap-toolbar .ms-refresh-status { margin-left: 0; }
+        /* 모바일 좁은 화면에서 옆의 상태 문구(#ms-refresh-status)가 길어지면 flex가 버튼을
+           같이 줄여서 "새로고침" 글자가 두 줄로 꺾이는 문제가 있었다(2026-09-08) — 버튼은
+           절대 안 줄어들게 고정하고, 남는 압박은 상태 문구 쪽이 받도록 한다. */
+        .mystocks-livegap-toolbar #ms-livegap-refresh {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .mystocks-livegap-toolbar .ms-refresh-status {
+            margin-left: 0;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
         .mystocks-pie-wrap {
             display: flex;
