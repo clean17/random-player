@@ -961,17 +961,30 @@ def run_v8_buy_cycle():
     # 하루 1회 계산된 캐시를 쓴다 (첫 사이클에서만 pkl 을 읽는다)
     #  · 보유 중 종목 제외      = 동일 종목 중복 보유 금지
     #  · 당일 매도 종목 제외    = sequential_filter 의 두 번째 규칙
-    #  · 투자주의환기종목/거래정지/관리종목 제외 = 2026-09-03, 270520 사례로 요청.
-    #    2026-09-07, 008290(원풍물산) 사례로 관리종목 추가 — auditInfo='관리종목'인데
-    #    차단 목록엔 없어서 매수가 그대로 나갔다. ka10099 auditInfo 기준(5분 캐시).
-    #    조회 실패 시엔 빈 dict가 와서 아무것도 안 걸러지므로(안전 쪽으로 폴백), 이 필터가
-    #    매수를 막지는 않되 보호도 안 해줄 수 있다는 점은 감안할 것.
+    #  · 투자주의환기종목/거래정지 제외(무조건) = 2026-09-03, 270520 사례로 요청.
+    #  · 관리종목은 조건부 제외 = 2026-09-07 008290(원풍물산) 사례로 한 번 무조건 차단을
+    #    추가했으나, 2026-09-08 "관리종목이라도 다 위험한 건 아니다"라는 피드백으로
+    #    가격 조건을 더했다 — **1000원 미만(동전주) + 관리종목**일 때만 제외.
+    #    가격은 API 호출 없이 이미 있는 전일종가(prev_close, _features_now에서 계산)를 쓴다.
+    #    ka10099 auditInfo 기준(5분 캐시). 조회 실패 시엔 빈 dict가 와서 아무것도 안
+    #    걸러지므로(안전 쪽으로 폴백), 이 필터가 매수를 막지는 않되 보호도 안 해줄 수 있다.
     _sold = sold_today_codes()
     _audit_map = api.get_stock_audit_info_map()
-    _AUDIT_BLOCK = {'투자주의환기종목', '거래정지', '관리종목'}
+    _AUDIT_BLOCK_HARD = {'투자주의환기종목', '거래정지'}
+    _ADMIN_ISSUE = '관리종목'
+    _ADMIN_ISSUE_PRICE_CEILING = 1000  # 관리종목은 이 가격 미만일 때만 제외
+
+    def _audit_blocked(c):
+        audit = _audit_map.get(c['code'])
+        if audit in _AUDIT_BLOCK_HARD:
+            return True
+        if audit == _ADMIN_ISSUE and float(c.get('prev_close') or 0) < _ADMIN_ISSUE_PRICE_CEILING:
+            return True
+        return False
+
     cands = [c for c in daily_candidates()
              if c['code'] not in held and c['code'] not in _sold
-             and _audit_map.get(c['code']) not in _AUDIT_BLOCK]
+             and not _audit_blocked(c)]
 
     # ── 후보에서 빠진 종목의 미체결 주문 취소
     #  '후보 이탈'은 세 가지뿐이다.
