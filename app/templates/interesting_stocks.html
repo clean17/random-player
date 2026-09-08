@@ -383,6 +383,35 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        /* 새로고침(8~9초)이 도는 동안 전체 화면(#overlay)이 아니라 이 표 영역만 흐리게 +
+           로딩 표시(2026-09-08) — 조회 중에도 다른 탭/버튼은 그대로 쓸 수 있어야 해서
+           common.js의 전역 오버레이(renderLoadingOverlay, body 전체 pointer-events 차단)는
+           안 쓰고 이 표 전용으로 따로 둔다. */
+        .ms-livegap-scroller { position: relative; }
+        .ms-livegap-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, .72);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 13px;
+            color: #475569;
+            z-index: 2;
+        }
+        .ms-livegap-spinner {
+            width: 26px;
+            height: 26px;
+            border: 3px solid #dbe7fa;
+            border-top-color: #1a73e8;
+            border-radius: 50%;
+            animation: ms-livegap-spin .8s linear infinite;
+        }
+        @keyframes ms-livegap-spin {
+            to { transform: rotate(360deg); }
+        }
 
         .mystocks-pie-wrap {
             display: flex;
@@ -1855,7 +1884,9 @@
         msLiveGapLoading = true;
         const statusEl = document.getElementById('ms-livegap-status');
         const btn = document.getElementById('ms-livegap-refresh');
+        const overlayEl = document.getElementById('ms-livegap-overlay');
         if (btn) btn.disabled = true;
+        if (overlayEl) overlayEl.style.display = 'flex';   // 표 영역만 dim + 로딩 표시(전체화면 오버레이 안 씀)
         if (statusEl) statusEl.textContent = '조회 중... (종목당 하나씩, 8~9초 소요)';
         try {
             await initMsEnv();
@@ -1875,6 +1906,7 @@
         } finally {
             msLiveGapLoading = false;
             if (btn) btn.disabled = false;
+            if (overlayEl) overlayEl.style.display = 'none';
         }
     }
 
