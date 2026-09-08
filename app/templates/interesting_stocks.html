@@ -158,29 +158,31 @@
         #table-mystocks-holdings .value-sub {
             font-size: 13px;
         }
-        #table-mystocks-holdings th.ms-sortable {
+        /* 2026-09-08: 원래 #table-mystocks-holdings에만 있던 정렬 화살표 스타일을 .table 전체로
+           넓혔다 — 주문목록/실시간gap 표에도 정렬을 추가하면서 그대로 재사용. */
+        .table th.ms-sortable {
             cursor: pointer;
             user-select: none;
             white-space: nowrap;
         }
-        #table-mystocks-holdings th.ms-sortable:hover {
+        .table th.ms-sortable:hover {
             color: var(--accent, #4a9eff);
         }
-        #table-mystocks-holdings th.ms-sortable::after,
+        .table th.ms-sortable::after,
         #table-mystocks-holdings .ms-sub-sort::after {
             content: '';
             display: inline-block;
             width: 0.7em;
         }
-        #table-mystocks-holdings th.ms-sorted::after,
+        .table th.ms-sorted::after,
         #table-mystocks-holdings .ms-sub-sort.ms-sorted::after {
             content: attr(data-sort-dir);
         }
-        #table-mystocks-holdings th.ms-sorted[data-sort-dir="asc"]::after,
+        .table th.ms-sorted[data-sort-dir="asc"]::after,
         #table-mystocks-holdings .ms-sub-sort.ms-sorted[data-sort-dir="asc"]::after {
             content: '▲';
         }
-        #table-mystocks-holdings th.ms-sorted[data-sort-dir="desc"]::after,
+        .table th.ms-sorted[data-sort-dir="desc"]::after,
         #table-mystocks-holdings .ms-sub-sort.ms-sorted[data-sort-dir="desc"]::after {
             content: '▼';
         }
@@ -544,11 +546,11 @@
         <select id="tabSelect" class="tab-select" aria-label="탭 선택">
             <option value="#tab-trading" selected>실시간</option>
             <option value="#tab-summary">관심종목</option>
+            <option value="#tab-picks">추천종목</option>
             <option value="#tab-low">저점매수</option>
             <option value="#tab-predict">예측종목</option>
-            <option value="#tab-picks">추천종목</option>
-            <option value="#tab-favorite">★ 즐겨찾기</option>
-            <option value="#tab-reserved">✓ 자동매수 대상</option>
+            <option value="#tab-favorite">즐겨찾기</option>
+            <option value="#tab-reserved">자동매수 대상</option>
             <option value="#tab-mystocks">내 계좌</option>
         </select>
         <span class="tab-bar-break" aria-hidden="true"></span>
@@ -855,16 +857,16 @@
                          보여주고, 그 다음에 "체결까지 얼마나 남았는지" 비교군(주문가·현재가·gap류)을
                          묶었다. score는 내부 랭킹값이라 뒤로, 시간/번호는 부가정보라 맨 뒤. -->
                     <tr>
-                        <th>종목명</th>
-                        <th>구분</th>
-                        <th class="right">수량</th>
-                        <th class="right">주문금액</th>
-                        <th class="right">주문가</th>
-                        <th class="right">현재가</th>
-                        <th class="right">gap</th>
-                        <th class="right">실시간gap</th>
-                        <th class="right">score</th>
-                        <th>주문시간</th>
+                        <th class="ms-sortable" data-sort="stk_nm">종목명</th>
+                        <th class="ms-sortable" data-sort="side">구분</th>
+                        <th class="right ms-sortable" data-sort="qty">수량</th>
+                        <th class="right ms-sortable" data-sort="ord_amt">주문금액</th>
+                        <th class="right ms-sortable" data-sort="ord_pric">주문가</th>
+                        <th class="right ms-sortable" data-sort="cur_prc">현재가</th>
+                        <th class="right ms-sortable" data-sort="gap">gap</th>
+                        <th class="right ms-sortable" data-sort="live_gap">실시간gap</th>
+                        <th class="right ms-sortable" data-sort="score">score</th>
+                        <th class="ms-sortable" data-sort="ord_tm">주문시간</th>
                         <th>주문번호</th>
                         {% if current_user.get_id() != config.GUEST_USERNAME %}
                         <th>액션</th>
@@ -890,14 +892,14 @@
                 <table class="table" id="table-mystocks-livegap">
                     <thead>
                     <tr>
-                        <th class="right">순위</th>
-                        <th>종목명</th>
-                        <th class="right">주문가</th>
-                        <th class="right">현재가</th>
-                        <th class="right">gap</th>
-                        <th class="right">실시간gap</th>
-                        <th class="right">score</th>
-                        <th>보유</th>
+                        <th class="right ms-sortable" data-sort="rank">순위</th>
+                        <th class="ms-sortable" data-sort="stk_nm">종목명</th>
+                        <th class="right ms-sortable" data-sort="ord_px">주문가</th>
+                        <th class="right ms-sortable" data-sort="cur_px">현재가</th>
+                        <th class="right ms-sortable" data-sort="gap">gap</th>
+                        <th class="right ms-sortable" data-sort="live_gap">실시간gap</th>
+                        <th class="right ms-sortable" data-sort="score">score</th>
+                        <th class="ms-sortable" data-sort="owned">보유</th>
                     </tr>
                     </thead>
                     <tbody><tr><td colspan="8" class="empty" data-empty-text="펼치면 자동으로 조회합니다">펼치면 자동으로 조회합니다</td></tr></tbody>
@@ -1662,9 +1664,19 @@
         trde_amt: h => Number(h.trde_amt ?? -Infinity),
         qty: h => Number(h.qty || 0),
         // 2026-08-29: 수익률(평단가 기준)·손절선위 정렬 추가. stop_margin은 레거시 청산상태에만
-        // 있어(app/stock.py `_v8_holding_state()`는 안 내려줌) v8 보유종목은 -Infinity로 맨 뒤로.
+        // 있다(app/stock.py `_v8_holding_state()`는 안 내려줌).
+        // 2026-09-08: v8 보유종목은 전부 -Infinity로 묶여서 "청산상태" 헤더를 눌러도 서로
+        // 순서가 안 바뀌는 문제가 있었다(현재 실계좌 보유가 거의 다 v8이라 눈에 띔) — v8은
+        // 고점대비(pullback_from_peak, 트레일링 트리거까지 남은 정도)로 대신 정렬한다.
+        // 레거시 stop_margin(손절선까지 여유)과 스케일은 다르지만, 둘 다 "0에 가까울수록
+        // 청산 임박"이라는 방향성은 같다.
         profit_rate: h => Number(h.profit_rate ?? -Infinity),
-        stop_margin: h => (h.v8 && h.v8.type === 'legacy' && h.v8.stop_margin != null) ? Number(h.v8.stop_margin) : -Infinity,
+        stop_margin: h => {
+            if (!h.v8) return -Infinity;
+            if (h.v8.type === 'legacy' && h.v8.stop_margin != null) return Number(h.v8.stop_margin);
+            if (h.v8.type === 'v8' && h.v8.pullback_from_peak != null) return Number(h.v8.pullback_from_peak);
+            return -Infinity;
+        },
     };
     let msHoldingsSort = { key: 'evlt_amt', dir: 'desc' };  // 기존 기본 정렬(평가금 내림차순)과 동일
     let msLastHoldings = [];
@@ -1836,7 +1848,57 @@
         renderMyStocksHoldingsSortIndicators();
     }
 
+    // 2026-09-08: 보유종목 표(MS_HOLDINGS_SORT_GETTERS)와 같은 방식으로 주문목록에도 정렬 추가.
+    const MS_ORDERS_SORT_GETTERS = {
+        stk_nm: o => o.stk_nm ?? '',
+        side: o => o.side ?? '',
+        qty: o => Number(o.oso_qty ?? o.ord_qty ?? 0),
+        ord_amt: o => Number(o.ord_pric || 0) * Number(o.ord_qty || 0),
+        ord_pric: o => Number(o.ord_pric ?? -Infinity),
+        cur_prc: o => Number(o.cur_prc ?? -Infinity),
+        gap: o => Number(o.gap ?? -Infinity),
+        live_gap: o => (o.cur_prc != null && Number(o.cur_prc) > 0)
+            ? Number(o.ord_pric) / Number(o.cur_prc) - 1.0 : -Infinity,
+        score: o => Number(o.score ?? -Infinity),
+        ord_tm: o => o.ord_tm ?? '',
+    };
+    let msOrdersSort = { key: 'ord_tm', dir: 'desc' };   // 기존 기본 정렬(주문시간 최신순)과 동일
+    let msLastOrders = [];
+
+    function msSortOrders(orders) {
+        const get = MS_ORDERS_SORT_GETTERS[msOrdersSort.key] || MS_ORDERS_SORT_GETTERS.ord_tm;
+        const sign = msOrdersSort.dir === 'asc' ? 1 : -1;
+        return orders.slice().sort((a, b) => {
+            const va = get(a), vb = get(b);
+            if (typeof va === 'string' || typeof vb === 'string') {
+                return sign * String(va).localeCompare(String(vb), 'ko');
+            }
+            return sign * (va - vb);
+        });
+    }
+
+    function renderMyStocksOrdersSortIndicators() {
+        document.querySelectorAll('#table-mystocks-orders [data-sort]').forEach(el => {
+            const active = el.dataset.sort === msOrdersSort.key;
+            el.classList.toggle('ms-sorted', active);
+            el.dataset.sortDir = active ? msOrdersSort.dir : '';
+        });
+    }
+
+    document.getElementById('table-mystocks-orders')?.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-sort]');
+        if (!el) return;
+        const key = el.dataset.sort;
+        if (msOrdersSort.key === key) {
+            msOrdersSort.dir = msOrdersSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            msOrdersSort = { key, dir: (key === 'stk_nm' || key === 'side' || key === 'ord_tm') ? 'asc' : 'desc' };
+        }
+        renderMyStocksOrders(msLastOrders);
+    });
+
     function renderMyStocksOrders(orders) {
+        msLastOrders = orders || [];
         const table = document.getElementById('table-mystocks-orders');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
@@ -1844,9 +1906,11 @@
         if (countEl) countEl.textContent = orders && orders.length ? `(${orders.length}건)` : '';
         if (!orders || !orders.length) {
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="미체결 주문이 없어요">미체결 주문이 없어요</td></tr>`;
+            renderMyStocksOrdersSortIndicators();
             return;
         }
-        tbody.innerHTML = orders.map(o => {
+        const sorted = msSortOrders(orders);
+        tbody.innerHTML = sorted.map(o => {
             const qtyText = o.oso_qty != null && o.oso_qty !== o.ord_qty
                 ? `${o.oso_qty ?? 0}/${o.ord_qty ?? 0}주` : `${o.ord_qty ?? 0}주`;
             // 실시간gap: v8_strategy.run_v8_buy_cycle()의 live_gap과 같은 식(주문가/현재가 - 1).
@@ -1873,6 +1937,7 @@
           </td>`}
         </tr>`;
         }).join('');
+        renderMyStocksOrdersSortIndicators();
     }
 
     async function loadInterestPicks() {
@@ -1935,7 +2000,57 @@
         if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
     });
 
+    // 2026-09-08: 보유종목/주문목록 표와 같은 방식으로 실시간gap 표에도 정렬 추가.
+    const MS_LIVEGAP_SORT_GETTERS = {
+        rank: c => Number(c.rank ?? Infinity),
+        stk_nm: c => c.stk_nm ?? '',
+        ord_px: c => Number(c.ord_px ?? -Infinity),
+        cur_px: c => Number(c.cur_px ?? -Infinity),
+        gap: c => Number(c.gap ?? -Infinity),
+        live_gap: c => Number(c.live_gap ?? -Infinity),
+        score: c => Number(c.score ?? -Infinity),
+        owned: c => c.owned ? 1 : 0,
+    };
+    let msLiveGapSort = { key: 'rank', dir: 'asc' };   // 기존 기본 정렬(서버가 live_gap 내림차순으로 매긴 순위)과 동일
+    let msLiveGapRows = [];
+
+    function msSortLiveGap(rows) {
+        const get = MS_LIVEGAP_SORT_GETTERS[msLiveGapSort.key] || MS_LIVEGAP_SORT_GETTERS.rank;
+        const sign = msLiveGapSort.dir === 'asc' ? 1 : -1;
+        return rows.slice().sort((a, b) => {
+            const va = get(a), vb = get(b);
+            if (typeof va === 'string' || typeof vb === 'string') {
+                return sign * String(va).localeCompare(String(vb), 'ko');
+            }
+            return sign * (va - vb);
+        });
+    }
+
+    function renderMyStocksLiveGapSortIndicators() {
+        document.querySelectorAll('#table-mystocks-livegap [data-sort]').forEach(el => {
+            const active = el.dataset.sort === msLiveGapSort.key;
+            el.classList.toggle('ms-sorted', active);
+            el.dataset.sortDir = active ? msLiveGapSort.dir : '';
+        });
+    }
+
+    document.getElementById('table-mystocks-livegap')?.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-sort]');
+        if (!el) return;
+        const key = el.dataset.sort;
+        if (msLiveGapSort.key === key) {
+            msLiveGapSort.dir = msLiveGapSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            msLiveGapSort = { key, dir: key === 'stk_nm' ? 'asc' : (key === 'rank' ? 'asc' : 'desc') };
+        }
+        renderMyStocksLiveGap(msLiveGapRows, msLiveGapLastEmptyReason);
+    });
+
+    let msLiveGapLastEmptyReason = null;
+
     function renderMyStocksLiveGap(ranking, emptyReason) {
+        msLiveGapRows = ranking || [];
+        msLiveGapLastEmptyReason = emptyReason;
         const table = document.getElementById('table-mystocks-livegap');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
@@ -1947,9 +2062,11 @@
             // (empty_reason). 없으면(구버전 응답 등) 예전 안내문으로 폴백.
             const msg = emptyReason || '오늘자 후보 캐시가 없어요(장 시작 전 등)';
             tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="${msg}">${msg}</td></tr>`;
+            renderMyStocksLiveGapSortIndicators();
             return;
         }
-        tbody.innerHTML = ranking.map(c => `
+        const sorted = msSortLiveGap(ranking);
+        tbody.innerHTML = sorted.map(c => `
         <tr>
           <td class="right">${c.rank}</td>
           <td><span class="ms-stock-name" data-stk-cd="${c.stk_cd}">${c.stk_nm ?? ''}${msAuditBadgeHtml(c.audit_info)} <span class="ms-stock-code">${c.stk_cd ?? ''}</span></span></td>
@@ -1960,6 +2077,7 @@
           <td class="right">${c.score != null ? Number(c.score).toFixed(3) : '-'}</td>
           <td>${c.owned ? `<span class="ms-owned-badge">보유중</span> ${msFmtWon(c.holding_value)}` : '-'}</td>
         </tr>`).join('');
+        renderMyStocksLiveGapSortIndicators();
     }
 
     let msLiveGapLoaded = false;
