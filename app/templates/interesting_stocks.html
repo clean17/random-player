@@ -386,31 +386,27 @@
         /* 새로고침(8~9초)이 도는 동안 전체 화면(#overlay)이 아니라 이 표 영역만 흐리게 +
            로딩 표시(2026-09-08) — 조회 중에도 다른 탭/버튼은 그대로 쓸 수 있어야 해서
            common.js의 전역 오버레이(renderLoadingOverlay, body 전체 pointer-events 차단)는
-           안 쓰고 이 표 전용으로 따로 둔다. */
+           그대로 재사용하지 않고 이 표 전용으로 따로 둔다. 다만 톤은 기존 #overlay와
+           맞춘다(같은 rgba(0,0,0,.4) 딤 + 같은 로딩 이미지 loading6.svg, style.css:95 참고).
+           2026-09-08: 처음엔 더 짙게(rgba(15,23,42,.72)) 했다가 "너무 어둡다"는 피드백으로
+           기존 값과 동일하게 낮췄다. */
         .ms-livegap-scroller { position: relative; }
         .ms-livegap-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(15, 23, 42, .72);
+            background: rgba(0, 0, 0, .4);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 6px;
             font-size: 13px;
-            color: #f1f5f9;
+            color: #fff;
             z-index: 2;
         }
-        .ms-livegap-spinner {
-            width: 26px;
-            height: 26px;
-            border: 3px solid rgba(255, 255, 255, .25);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: ms-livegap-spin .8s linear infinite;
-        }
-        @keyframes ms-livegap-spin {
-            to { transform: rotate(360deg); }
+        .ms-livegap-overlay img {
+            width: 64px;
+            height: 64px;
         }
 
         .mystocks-pie-wrap {
@@ -907,7 +903,7 @@
                     <tbody><tr><td colspan="8" class="empty" data-empty-text="펼치면 자동으로 조회합니다">펼치면 자동으로 조회합니다</td></tr></tbody>
                 </table>
                 <div class="ms-livegap-overlay" id="ms-livegap-overlay" style="display:none;">
-                    <div class="ms-livegap-spinner"></div>
+                    <img src="/static/svg/loading6.svg" alt="Loading...">
                     <span>조회 중... (8~9초)</span>
                 </div>
             </div>
