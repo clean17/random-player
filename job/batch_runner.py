@@ -20,6 +20,7 @@ from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
 from job.renew_stock_close import renew_interest_stocks_close, verify_low_stock_data, update_product_code
+from job.interest_stock_picks import run_interest_stock_picks
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
 
@@ -740,6 +741,15 @@ def create_scheduler():
         verify_low_stock_data,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/1"),
         id="verify_low_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 18) 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 12:00/14:00
+    scheduler.add_job(
+        run_interest_stock_picks,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="12,14", minute=0),
+        id="interest_stock_picks",
         executor="io",
         replace_existing=True,
     )

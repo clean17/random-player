@@ -278,6 +278,19 @@ def get_predict_stocks_data():
     rows.sort(key=lambda r: (r["date_raw"], r["proba"]), reverse=True)
     return jsonify(rows)
 
+
+@stock.route("/interest/data/picks", methods=["GET", "POST"])
+@login_required
+def get_interest_stock_picks_data():
+    """관심종목 추천 top10 (규칙기반 점수/라벨). 월~금 12:00/14:00에 job/interest_stock_picks.py가
+    생성해둔 결과를 그대로 읽어서 반환 — 이 요청에서 직접 계산하지 않는다(비용 있는 조회라
+    스케줄 잡에서만 생성)."""
+    from job.interest_stock_picks import load_latest_picks  # 순환 import 방지를 위해 함수 안에서 지연 import
+    result = load_latest_picks()
+    if result is None:
+        return jsonify({"generated_at": None, "picks": [], "disclaimer": None})
+    return jsonify(result)
+
 @stock.route("/interest/view", methods=["GET"])
 @login_required
 def get_view_of_interesting_stocks():
@@ -903,6 +916,10 @@ def get_kiwoom_live_gap_ranking():
 
     # 투자경고/관리종목 등 배지 표시용 (2026-09-02, /kiwoom/holdings와 동일한 패턴)
     audit_map = get_stock_audit_info_map(env)
+
+    # 거래정지 종목은 실시간gap 목록에서 아예 제외한다(2026-09-08) — 매수 후보에서도
+    # 항상 빠지는 종목이라 목록에 남아있으면 혼란만 준다.
+    ranking = [c for c in ranking if audit_map.get(c.get('code')) != '거래정지']
 
     out = [{
         'rank': i + 1,

@@ -384,6 +384,36 @@ def get_market_index_rates(env: Optional[str] = None, force: bool = False) -> Di
     return result
 
 
+def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[str, float]]:
+    """종목별 외국인/기관/개인 순매수(원). ka10059(종목별투자자기관별차트요청), 2026-09-08 확인.
+
+    응답의 stk_invsr_orgn[0]이 가장 최근 거래일 값(당일 장중이면 당일 누적치로 보임).
+    필드 단위는 천원 — acc_trde_prica(누적거래대금, 천원)를 acc_trde_qty×현재가로 역산해
+    검증 완료(삼성전자로 실측). 여기선 원 단위로 환산해서 반환한다.
+    실패하면 None(표시용 부가 데이터라 호출부가 조용히 생략할 수 있게)."""
+    try:
+        data = _call('ka10059', '/api/dostk/stkinfo', {
+            'dt': datetime.now().strftime('%Y%m%d'),
+            'stk_cd': stk_cd,
+            'amt_qty_tp': '1',   # 1=금액
+            'trde_tp': '0',      # 0=순매수
+            'unit_tp': '1',      # 1=천주/천원
+        }, env=env)
+        rows = data.get('stk_invsr_orgn') or []
+        if not rows:
+            return None
+        latest = rows[0]
+        return {
+            'date': latest.get('dt'),
+            'foreign': _to_number(latest.get('frgnr_invsr')) * 1000,
+            'institution': _to_number(latest.get('orgn')) * 1000,
+            'individual': _to_number(latest.get('ind_invsr')) * 1000,
+        }
+    except Exception as e:
+        print(f'[WARN] get_investor_trend 실패: {stk_cd} {e}')
+        return None
+
+
 def get_intraday_range(stk_cd: str) -> Optional[Tuple[int, int, int]]:
     """(현재가, 당일 고가, 당일 저가) 반환. 실패하거나 값이 이상하면 None.
 

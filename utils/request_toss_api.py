@@ -143,6 +143,33 @@ def get_trading_amounts(stk_cds: List[str]) -> Dict[str, float]:
     return result
 
 
+# ── 종목 뉴스 (2026-09-08, 관심종목 추천 리포트용) ───────────────────────────
+# request_stock_info_with_toss_api()는 Flask 요청 컨텍스트(current_app.logger)에 의존해서
+# 스케줄러 잡(요청 컨텍스트 밖)에서 그대로 못 쓴다 — get_trading_amounts()와 같은 이유로
+# Flask에 의존하지 않는 별도 함수로 둔다.
+def get_stock_news(stock_name: str, limit: int = 3) -> List[Dict]:
+    """종목명으로 최근 뉴스 최대 limit건을 [{title, source, created_at}, ...]로 반환.
+    실패하면 빈 리스트(표시용 부가 데이터라 화면/리포트가 죽으면 안 됨)."""
+    try:
+        res = requests.post(
+            INFO_URL,
+            json={"query": stock_name, "sections": [{"type": "NEWS"}]},
+            headers=DEFAULT_HEADERS,
+            timeout=10,
+        )
+        res.raise_for_status()
+        result = res.json().get("result") or []
+        items = (result[0].get("data", {}).get("items") or []) if result else []
+        return [{
+            "title": it.get("title"),
+            "source": it.get("source"),
+            "created_at": it.get("createdAt"),
+        } for it in items[:limit]]
+    except Exception as e:
+        print(f"[WARN] get_stock_news 실패: {stock_name} {e}")
+        return []
+
+
 def request_stock_category(company_code):
     url = CATEGORY_URL.replace("COMPANYCODE", company_code)
 

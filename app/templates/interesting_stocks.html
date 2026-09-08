@@ -391,21 +391,21 @@
         .ms-livegap-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(255, 255, 255, .72);
+            background: rgba(15, 23, 42, .72);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 10px;
             font-size: 13px;
-            color: #475569;
+            color: #f1f5f9;
             z-index: 2;
         }
         .ms-livegap-spinner {
             width: 26px;
             height: 26px;
-            border: 3px solid #dbe7fa;
-            border-top-color: #1a73e8;
+            border: 3px solid rgba(255, 255, 255, .25);
+            border-top-color: #fff;
             border-radius: 50%;
             animation: ms-livegap-spin .8s linear infinite;
         }
@@ -550,6 +550,7 @@
             <option value="#tab-summary">관심종목</option>
             <option value="#tab-low">저점매수</option>
             <option value="#tab-predict">예측종목</option>
+            <option value="#tab-picks">추천종목</option>
             <option value="#tab-favorite">★ 즐겨찾기</option>
             <option value="#tab-reserved">✓ 자동매수 대상</option>
             <option value="#tab-mystocks">내 계좌</option>
@@ -725,6 +726,32 @@
         <div class="table-scroller"></div>
     </section>
 
+    <!-- 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가). job/interest_stock_picks.py가
+         월~금 12:00/14:00에 생성해둔 결과를 그대로 읽어서 보여준다 — 이 탭 자체는 계산하지 않는다. -->
+    <section id="tab-picks" class="tab-panel" style="display:none;">
+        <div class="mystocks-livegap-toolbar">
+            <span class="ms-refresh-status" id="ms-picks-status"></span>
+        </div>
+        <p class="ms-picks-disclaimer" id="ms-picks-disclaimer"></p>
+        <div class="table-scroller">
+            <table class="table" id="table-picks">
+                <thead>
+                <tr>
+                    <th>종목명</th>
+                    <th>추천</th>
+                    <th>상승여력</th>
+                    <th class="right">등락률</th>
+                    <th class="right">거래대금 증가율</th>
+                    <th class="right">외국인 순매수</th>
+                    <th class="right">기관 순매수</th>
+                    <th>뉴스</th>
+                </tr>
+                </thead>
+                <tbody><tr><td colspan="8" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
+            </table>
+        </div>
+    </section>
+
     <section id="tab-favorite" class="tab-panel" style="display:none;">
         <div class="table-scroller"></div>
     </section>
@@ -863,7 +890,7 @@
                 <button type="button" class="btn btn-secondary" id="ms-livegap-refresh">새로고침</button>
                 <span class="ms-refresh-status" id="ms-livegap-status">현재가를 종목마다 하나씩 조회해 8~9초 걸립니다 — 자동 새로고침되지 않습니다.</span>
             </div>
-            <div class="table-scroller">
+            <div class="table-scroller ms-livegap-scroller">
                 <table class="table" id="table-mystocks-livegap">
                     <thead>
                     <tr>
@@ -879,6 +906,10 @@
                     </thead>
                     <tbody><tr><td colspan="8" class="empty" data-empty-text="펼치면 자동으로 조회합니다">펼치면 자동으로 조회합니다</td></tr></tbody>
                 </table>
+                <div class="ms-livegap-overlay" id="ms-livegap-overlay" style="display:none;">
+                    <div class="ms-livegap-spinner"></div>
+                    <span>조회 중... (8~9초)</span>
+                </div>
             </div>
         </details>
 
@@ -1006,9 +1037,9 @@
         }
 
         const isMyStocks = (tabId === 'tab-mystocks');
-        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved' || tabId === 'tab-predict');
+        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved' || tabId === 'tab-predict' || tabId === 'tab-picks');
 
-        // '내 종목'/즐겨찾기/자동매수 대상/예측종목 탭은 날짜 검색 UI를 노출하지 않는다.
+        // '내 종목'/즐겨찾기/자동매수 대상/예측종목/추천종목 탭은 날짜 검색 UI를 노출하지 않는다.
         // 자동매수 대상은 화면에 달력만 안 보일 뿐, 내부적으로는 관심종목과 같은 기본 기간으로 조회한다.
         startDateInputEl.style.display = (isMyStocks || isFavoriteOrReserved) ? 'none' : '';
         if (isMyStocks || isFavoriteOrReserved) endDateInputEl.style.display = 'none';
@@ -1056,6 +1087,10 @@
             // 저점매수와 동일하게 이 페이지 안에서 카드로 그린다 — 날짜 검색 없이 국장/미장만 선택.
             msStopTimer();
             loadData()
+        } else if (target.id === 'tab-picks') {
+            // 계산은 스케줄 잡(12:00/14:00)이 미리 해두므로, 여기선 마지막 결과만 가볍게 조회.
+            msStopTimer();
+            loadInterestPicks();
         } else {
             msStopTimer();
             setDefaultDateToday(0, startDateInputEl);
@@ -1843,6 +1878,66 @@
         </tr>`;
         }).join('');
     }
+
+    async function loadInterestPicks() {
+        const statusEl = document.getElementById('ms-picks-status');
+        if (statusEl) statusEl.textContent = '불러오는 중...';
+        try {
+            const res = await fetch('/stocks/interest/data/picks');
+            if (!res.ok) throw new Error('요청 실패');
+            const data = await res.json();
+            renderInterestPicks(data);
+        } catch (e) {
+            console.error(e);
+            if (statusEl) statusEl.textContent = '조회 실패 — 다시 탭을 눌러보세요';
+        }
+    }
+
+    function renderInterestPicks(data) {
+        const table = document.getElementById('table-picks');
+        const tbody = table.querySelector('tbody');
+        const thCount = table.querySelectorAll('thead tr th').length;
+        const statusEl = document.getElementById('ms-picks-status');
+        const discEl = document.getElementById('ms-picks-disclaimer');
+        const picks = data.picks || [];
+
+        if (statusEl) {
+            statusEl.textContent = data.generated_at
+                ? `생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 12:00/14:00 자동 갱신)`
+                : '아직 생성된 추천이 없어요 (평일 12:00/14:00에 자동 생성됩니다)';
+        }
+        if (discEl) discEl.textContent = data.disclaimer || '';
+
+        if (!picks.length) {
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="추천 결과가 없어요">추천 결과가 없어요</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = picks.map(p => {
+            const newsHtml = (p.news || []).slice(0, 2).map(n =>
+                `<div class="ms-pick-news-item">${n.title ?? ''}<span class="ms-pick-news-source">${n.source ?? ''}</span></div>`
+            ).join('') || '-';
+            const labelClass = (p.label === '적극매수' || p.label === '매수') ? 'ms-positive' : '';
+            return `
+        <tr>
+          <td><span class="ms-stock-name" data-stk-cd="${p.stock_code}">${p.stock_name ?? ''} <span class="ms-stock-code">${p.stock_code ?? ''}</span></span></td>
+          <td class="${labelClass}">${p.label ?? ''}</td>
+          <td>${p.upside_tier ?? ''}</td>
+          <td class="right ${msPnlClass(p.today_price_change_pct)}">${msFmtPct((p.today_price_change_pct || 0) / 100)}</td>
+          <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100)}</td>
+          <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
+          <td class="right ${msPnlClass(p.institution_net)}">${p.institution_net != null ? msFmtEok(p.institution_net) : '-'}</td>
+          <td>${newsHtml}</td>
+        </tr>`;
+        }).join('');
+    }
+
+    document.getElementById('table-picks')?.addEventListener('click', (e) => {
+        const nameCell = e.target.closest('.ms-stock-name');
+        if (!nameCell) return;
+        const stkCd = nameCell.dataset.stkCd;
+        if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
+    });
 
     function renderMyStocksLiveGap(ranking, emptyReason) {
         const table = document.getElementById('table-mystocks-livegap');
