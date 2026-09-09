@@ -501,8 +501,51 @@ def _match_legacy(ev: Dict, fills: List[Dict], used: set) -> Optional[Dict]:
     return None
 
 
-def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -> Dict:
+def _reverse_unfilled_buys(events: List[Dict]) -> None:
+    """확정 미체결 매수 건의 보유상태(트레일링 state)를 되돌린다.
+
+    2026-09-08 069540(빛과전자) 사고로 추가 — fire 매수(kiwoom_fire_strategy_mock.py)는
+    주문 '접수'만 확인하고 바로 체결된 것처럼 trades.jsonl 기록 + 보유상태를 만든다.
+    상한가처럼 실제로 체결이 하나도 안 되는 경우, 20:10 최종 정산(reconcile_fills의
+    finalize=True 호출)까지도 ka10076 체결내역에서 못 찾으면 그건 '아직 안 들어온 체결'이
+    아니라 '끝내 체결 안 됨'으로 확정할 수 있다. 이 함수가 그 경우의 보유상태를 정리한다.
+    같은 종목에 다른 진짜 매수가 겹쳐 있을 수 있어(추가매수), 이번 미체결분 수량만큼만
+    빼고 남은 게 있으면 포지션 자체는 유지한다."""
+    if not events:
+        return
+    state = _load_state()
+    changed = False
+    for ev in events:
+        code = ev.get('stk_cd')
+        pos = state.get(code)
+        if not pos or pos.get('exited'):
+            continue
+        qty = int(ev.get('qty') or 0)
+        if qty <= 0:
+            continue
+        remaining = int(pos.get('remaining_qty') or 0)
+        original = int(pos.get('original_qty') or 0)
+        if remaining <= qty and original <= qty:
+            del state[code]   # 이번 미체결분이 사실상 이 포지션의 전부 — 통째로 취소
+        else:
+            pos['remaining_qty'] = max(0, remaining - qty)
+            pos['original_qty'] = max(0, original - qty)
+        changed = True
+        _log.warning(f'[정산-미체결취소:{KIWOOM_ENV}] {ev.get("stk_nm")}({code}) '
+                     f'매수 {qty}주 확정 미체결(ka10076 체결내역에 끝까지 없음) — 보유상태 되돌림')
+    if changed:
+        _save_state(state)
+
+
+def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None,
+                     finalize: bool = False) -> Dict:
     """당일 체결내역(ka10076)을 조회해 trades.jsonl 기록에 실제 체결 데이터를 채워 넣는다.
+
+    finalize=True(그날 마지막 정산, 20:10 잡 전용)면 그래도 ka10076에서 못 찾은 매수
+    기록은 '확정 미체결'로 보고 거래이력에서 제거 + 보유상태도 되돌린다(2026-09-08,
+    069540 상한가 매수-접수-그러나-미체결 사고로 추가 — 자세한 배경은 위 docstring/
+    _reverse_unfilled_buys 참고). ord_no가 없는 옛 기록(레거시 폴백 대상)은 신뢰도가
+    낮아 되돌리지 않는다 — 새로 생기는 사고만 다음날부터 자동 정리된다.
 
     왜 주문 직후가 아니라 사후 정산인가:
       1. 시장가라도 체결까지 지연이 있어 주문 직후 조회하면 미체결로 보일 수 있다.
@@ -548,6 +591,7 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
                 lines.append(line)
 
     updated = matched = skipped = no_ord_no = not_found = partial = legacy = 0
+    reversed_buys = []   # finalize=True일 때 확정 미체결로 되돌릴 매수 이벤트
     out = []
     for line in lines:
         try:
@@ -574,6 +618,12 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
             if fill is None:
                 if ord_no:
                     not_found += 1
+                    # finalize=True(그날 마지막 정산)까지도 못 찾았다면 '아직 안 들어온
+                    # 체결'이 아니라 '끝내 체결 안 됨'으로 확정한다 — ord_no없음(레거시
+                    # 기록)은 신뢰도가 낮아 제외, 매수만 대상(매도는 위험 쪽 영향이 적음).
+                    if finalize and ev.get('side') == 'buy':
+                        reversed_buys.append(ev)
+                        continue   # out에 안 넣음 = 거래이력에서 제거
                 else:
                     no_ord_no += 1
                 out.append(line)
@@ -613,16 +663,17 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None) -
 
     stats = {'대상일': today, '체결내역': len(fills), '이력': len(lines), '매칭': matched,
              '폴백매칭': legacy, '갱신': updated, '이미정산': skipped, 'ord_no없음': no_ord_no,
-             '체결내역에없음': not_found, '부분체결': partial}
+             '체결내역에없음': not_found, '부분체결': partial, '미체결취소': len(reversed_buys)}
     if dry_run:
         _log.info(f'[정산-dry_run:{KIWOOM_ENV}:{ACNT_NO}] {stats}')
         return stats
 
-    if updated:
+    if updated or reversed_buys:
         tmp = TRADES_FILE + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write('\n'.join(out) + '\n')
         os.replace(tmp, TRADES_FILE)   # 원자적 교체 — 쓰다가 죽어도 원본이 남는다
+    _reverse_unfilled_buys(reversed_buys)
     _log.info(f'[정산:{KIWOOM_ENV}:{ACNT_NO}] {stats}')
     return stats
 

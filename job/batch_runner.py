@@ -13,7 +13,7 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     update_stock_data_daily, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
-    reconcile_kiwoom_fills, \
+    reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
     predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters
 from job.buy_lotto import async_buy_lotto
@@ -258,7 +258,7 @@ def create_mock_scheduler():
         id="mock_account_summary", executor="io", replace_existing=True,
     )
     scheduler.add_job(
-        reconcile_kiwoom_fills,
+        reconcile_kiwoom_fills_final,
         trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=10),
         id="mock_reconcile_fills", executor="io", replace_existing=True,
     )
@@ -410,7 +410,7 @@ def create_scheduler():
     #        20:10에 한 번 돌려 그날 모든 체결을 잡는다. 조회 전용이라 장 시간 체크를 하지 않는다.
     #        이미 정산된 건은 건너뛰므로 여러 번 돌아도 안전하다(idempotent).
     scheduler.add_job(
-        reconcile_kiwoom_fills,
+        reconcile_kiwoom_fills_final,
         trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=10),
         id="kiwoom_reconcile_fills",
         executor="io",
