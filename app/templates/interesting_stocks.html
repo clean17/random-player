@@ -114,9 +114,12 @@
             font-weight: 400;
         }
         /* 종목 아이콘(회사 로고 없이 이름 첫 글자 + 코드 기반 고정 색상, 2026-08-28) —
-           보유종목 테이블만. 다른 테이블(체결이력 등)의 .ms-stock-name은 아이콘 없이
-           기존 한 줄 텍스트 그대로라 flex를 걸지 않는다. */
-        #table-mystocks-holdings .ms-stock-name {
+           아이콘 마크업(msStockNameCellHtml)을 쓰는 표에만. 다른 테이블(체결이력 등)의
+           .ms-stock-name은 아이콘 없이 기존 한 줄 텍스트 그대로라 flex를 걸지 않는다.
+           2026-09-08: 추천종목 탭(#table-picks)도 같은 컴포넌트를 쓰면서 이 규칙이
+           #table-mystocks-holdings에만 있어 아이콘 레이아웃이 깨졌었다 — 추가. */
+        #table-mystocks-holdings .ms-stock-name,
+        #table-picks .ms-stock-name {
             display: flex;
             align-items: flex-start;
             gap: 8px;
@@ -407,8 +410,8 @@
             z-index: 2;
         }
         .ms-livegap-overlay img {
-            width: 64px;
-            height: 64px;
+            width: 100px;
+            height: 100px;
         }
 
         .mystocks-pie-wrap {
@@ -736,6 +739,7 @@
                 <thead>
                 <tr>
                     <th>종목명</th>
+                    <th>관리</th>
                     <th>추천</th>
                     <th>상승여력</th>
                     <th class="right">등락률</th>
@@ -745,7 +749,7 @@
                     <th>뉴스</th>
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="8" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="9" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
     </section>
@@ -1509,20 +1513,22 @@
         if (n == null || !isFinite(Number(n))) return '-';
         return Math.round(Number(n)).toLocaleString('ko-KR') + '원';
     }
-    // 거래대금처럼 자릿수가 큰 금액용 — 조/억 단위로 줄여서 표시(12.2조 / 1249.2억).
-    // 1억 미만은 조/억으로 줄이면 "0.0억"처럼 어색해져서 원 단위 그대로 보여준다.
+    // 거래대금·외국인/기관 순매수처럼 자릿수가 큰 금액용 — 조/억/만원 단위로 줄여서 표시
+    // (12.2조 / 1249.2억 / -1,700만원). 2026-09-08: 1억 미만은 원래 원 단위 그대로였는데
+    // "기관 순매수 -17,000,000원"처럼 어색하게 나와서 만원 단위를 추가했다.
     function msFmtEok(n) {
         if (n == null || !isFinite(Number(n))) return '-';
         const v = Number(n);
-        const jo = 1_0000_0000_0000, eok = 1_0000_0000;
+        const jo = 1_0000_0000_0000, eok = 1_0000_0000, man = 1_0000;
         if (Math.abs(v) >= jo) return (v / jo).toFixed(1) + '조';
         if (Math.abs(v) >= eok) return (v / eok).toFixed(1) + '억';
+        if (Math.abs(v) >= man) return Math.round(v / man).toLocaleString('ko-KR') + '만원';
         return msFmtWon(v);
     }
-    function msFmtPct(n) {
+    function msFmtPct(n, decimals = 2) {
         if (n == null || !isFinite(Number(n))) return '-';
         const v = Number(n) * 100;
-        return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+        return (v >= 0 ? '+' : '') + v.toFixed(decimals) + '%';
     }
     function msPnlClass(n) {
         const v = Number(n);
@@ -1960,12 +1966,17 @@
         const thCount = table.querySelectorAll('thead tr th').length;
         const statusEl = document.getElementById('ms-picks-status');
         const discEl = document.getElementById('ms-picks-disclaimer');
+        const countEl = document.getElementById('count');
         const picks = data.picks || [];
+
+        // "검색 결과" 헤더의 건수 배지 — 관심종목/예측종목 등 다른 탭이 마지막으로 남겨둔
+        // 값이 그대로 보이던 문제(2026-09-08) — 이 탭은 항상 top 10이라 픽 개수로 갱신한다.
+        if (countEl) countEl.textContent = `${picks.length}건`;
 
         if (statusEl) {
             statusEl.textContent = data.generated_at
-                ? `생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 12:00/14:00 자동 갱신)`
-                : '아직 생성된 추천이 없어요 (평일 12:00/14:00에 자동 생성됩니다)';
+                ? `생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 12:00~20:00, 5분마다 자동 갱신)`
+                : '아직 생성된 추천이 없어요 (평일 12:00~20:00, 5분마다 자동 생성됩니다)';
         }
         if (discEl) discEl.textContent = data.disclaimer || '';
 
@@ -1975,22 +1986,44 @@
         }
 
         tbody.innerHTML = picks.map(p => {
-            const newsHtml = (p.news || []).slice(0, 2).map(n =>
-                `<div class="ms-pick-news-item">${n.title ?? ''}<span class="ms-pick-news-source">${n.source ?? ''}</span></div>`
-            ).join('') || '-';
+            // 2026-09-08: 토스 뉴스 원문(매체) URL이 없어(title/source/created_at/id만 옴)
+            // "토스 자체 리더 페이지(tossinvest.com/news/{id})"로 보내봤는데 실제로는
+            // 404였다(직접 fetch로 확인 — 리다이렉트만 있고 실제 문서는 없음). 원문에
+            // 직접 갈 방법이 없어 최선책으로 네이버 뉴스 검색(일반 웹검색보다 실제 기사가
+            // 위에 뜰 확률이 높음)으로 보낸다 — 완벽한 원문 링크는 아니라는 한계는 남는다.
+            const newsHtml = (p.news || []).slice(0, 2).map(n => {
+                const title = n.title ?? '';
+                const url = `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(title)}`;
+                const d = n.created_at ? new Date(n.created_at) : null;
+                const dateText = d && !isNaN(d) ? d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                return `<div class="ms-pick-news-item"><a href="${url}" target="_blank" rel="noopener">${title}</a> <span class="ms-pick-news-source">${n.source ?? ''} · ${dateText}</span></div>`;
+            }).join('') || '-';
             const labelClass = (p.label === '적극매수' || p.label === '매수') ? 'ms-positive' : '';
             return `
         <tr>
-          <td><span class="ms-stock-name" data-stk-cd="${p.stock_code}">${p.stock_name ?? ''} <span class="ms-stock-code">${p.stock_code ?? ''}</span></span></td>
+          <td>${msStockNameCellHtml(p.stock_name, p.stock_code, p.logo_url, p.audit_info)}</td>
+          <td>
+            <div class="fav-toggle">
+              <button class="fav-btn" data-stock-code="${p.stock_code ?? ''}" data-favorited="false" data-shape="star"
+                      aria-pressed="false" aria-label="즐겨찾기 추가"></button>
+              <button class="reserve-btn" data-stock-code="${p.stock_code ?? ''}" data-reserved="false"
+                      aria-pressed="false" aria-label="자동매수 대상 추가"></button>
+            </div>
+          </td>
           <td class="${labelClass}">${p.label ?? ''}</td>
           <td>${p.upside_tier ?? ''}</td>
           <td class="right ${msPnlClass(p.today_price_change_pct)}">${msFmtPct((p.today_price_change_pct || 0) / 100)}</td>
-          <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100)}</td>
+          <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100, 0)}</td>
           <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
           <td class="right ${msPnlClass(p.institution_net)}">${p.institution_net != null ? msFmtEok(p.institution_net) : '-'}</td>
           <td>${newsHtml}</td>
         </tr>`;
         }).join('');
+        // 즐겨찾기/자동매수 버튼 바인딩 + 현재 상태 반영(다른 탭의 카드와 동일한 방식, stock_card.js)
+        initFavoriteButtons();
+        initReserveButtons();
+        applyStockFlagState();
+        syncStockFlagsFromServer();
     }
 
     document.getElementById('table-picks')?.addEventListener('click', (e) => {

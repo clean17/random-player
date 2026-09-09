@@ -148,8 +148,14 @@ def get_trading_amounts(stk_cds: List[str]) -> Dict[str, float]:
 # 스케줄러 잡(요청 컨텍스트 밖)에서 그대로 못 쓴다 — get_trading_amounts()와 같은 이유로
 # Flask에 의존하지 않는 별도 함수로 둔다.
 def get_stock_news(stock_name: str, limit: int = 3) -> List[Dict]:
-    """종목명으로 최근 뉴스 최대 limit건을 [{title, source, created_at}, ...]로 반환.
-    실패하면 빈 리스트(표시용 부가 데이터라 화면/리포트가 죽으면 안 됨)."""
+    """종목명으로 최근 뉴스 최대 limit건을 [{id, title, source, created_at}, ...]로 반환.
+    실패하면 빈 리스트(표시용 부가 데이터라 화면/리포트가 죽으면 안 됨).
+
+    2026-09-08: id를 추가했다 — 토스 NEWS 섹션 응답엔 기사 원문 URL이 없어서(title/source/
+    createdAt만 옴), 대신 이 id로 토스 자체 리더 페이지(https://tossinvest.com/news/{id})를
+    만들 수 있다(실측: /api/v1/news/{id}가 200으로 본문 전체를 반환 — 웹 페이지도 같은 id로
+    떠 있는 걸 리다이렉트로 확인). 원문 매체 URL은 여전히 못 얻지만 전체 기사 내용을 보여주는
+    페이지라 검색 링크보다 훨씬 낫다."""
     try:
         res = requests.post(
             INFO_URL,
@@ -161,6 +167,7 @@ def get_stock_news(stock_name: str, limit: int = 3) -> List[Dict]:
         result = res.json().get("result") or []
         items = (result[0].get("data", {}).get("items") or []) if result else []
         return [{
+            "id": it.get("id"),
             "title": it.get("title"),
             "source": it.get("source"),
             "created_at": it.get("createdAt"),

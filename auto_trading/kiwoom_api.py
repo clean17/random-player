@@ -388,8 +388,13 @@ def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[
     """종목별 외국인/기관/개인 순매수(원). ka10059(종목별투자자기관별차트요청), 2026-09-08 확인.
 
     응답의 stk_invsr_orgn[0]이 가장 최근 거래일 값(당일 장중이면 당일 누적치로 보임).
-    필드 단위는 천원 — acc_trde_prica(누적거래대금, 천원)를 acc_trde_qty×현재가로 역산해
-    검증 완료(삼성전자로 실측). 여기선 원 단위로 환산해서 반환한다.
+    ⚠️ 2026-09-08 단위 정정: 처음엔 천원 단위로 보고 ×1000 했는데, 069540 실측(관심종목
+    추천 화면에서 "외국인 순매수 4백만원"으로 나온 게 이상해서 재검증)으로 틀렸다고 확인됨.
+    acc_trde_prica(누적거래대금)를 acc_trde_qty×현재가로 역산하면(삼성전자 기준
+    18,314,016주×270,000원≈4.94조 vs acc_trde_prica=4,900,114) **백만원 단위(×1,000,000)라야
+    맞는다** — 천원 단위(×1,000)로는 1000배 작게 나온다(49억원). unit_tp='1' 파라미터명이
+    "천주/천원"을 암시해서 잘못 짚었던 것으로 보인다. 실제 amt_qty_tp='1'(금액모드) 응답은
+    unit_tp 값과 무관하게 백만원 단위로 보인다. 여기선 원 단위로 환산해서 반환한다.
     실패하면 None(표시용 부가 데이터라 호출부가 조용히 생략할 수 있게)."""
     try:
         data = _call('ka10059', '/api/dostk/stkinfo', {
@@ -397,7 +402,7 @@ def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[
             'stk_cd': stk_cd,
             'amt_qty_tp': '1',   # 1=금액
             'trde_tp': '0',      # 0=순매수
-            'unit_tp': '1',      # 1=천주/천원
+            'unit_tp': '1',      # 1=천주/천원(명목상) — 실측상 금액 필드는 백만원 단위로 옴
         }, env=env)
         rows = data.get('stk_invsr_orgn') or []
         if not rows:
@@ -405,9 +410,9 @@ def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[
         latest = rows[0]
         return {
             'date': latest.get('dt'),
-            'foreign': _to_number(latest.get('frgnr_invsr')) * 1000,
-            'institution': _to_number(latest.get('orgn')) * 1000,
-            'individual': _to_number(latest.get('ind_invsr')) * 1000,
+            'foreign': _to_number(latest.get('frgnr_invsr')) * 1_000_000,
+            'institution': _to_number(latest.get('orgn')) * 1_000_000,
+            'individual': _to_number(latest.get('ind_invsr')) * 1_000_000,
         }
     except Exception as e:
         print(f'[WARN] get_investor_trend 실패: {stk_cd} {e}')
