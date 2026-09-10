@@ -15,7 +15,8 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
     reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
-    predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters
+    predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters, \
+    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -601,6 +602,25 @@ def create_scheduler():
         predict_us_stocks_lgbm,
         trigger=CronTrigger(day_of_week="mon-fri", hour=14, minute=30),
         id="predict_us_stocks_lgbm_1230",
+        executor="cpu",
+        replace_existing=True,
+    )
+
+    # 4-3) LGBM 갤러리 차트 이어 그리기. 신호 당시엔 이후 주가를 알 수 없어 차트가 신호일에서
+    #      끊기므로, 매일 다시 그려 "이어지는 마지막 신호 + 20거래일"까지 채운다. 이미 채워둔
+    #      차트는 사이드카의 chart_end를 보고 건너뛴다. 각 시장 예측 잡 직후에 돈다.
+    scheduler.add_job(
+        refresh_us_lgbm_gallery,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=30),
+        id="refresh_us_lgbm_gallery_1530",
+        executor="cpu",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        refresh_kr_lgbm_gallery,
+        trigger=CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=18, minute=30),
+        id="refresh_kr_lgbm_gallery_1830",
         executor="cpu",
         replace_existing=True,
     )

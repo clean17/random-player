@@ -324,6 +324,24 @@ def predict_us_stocks_lgbm():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+def refresh_kr_lgbm_gallery():
+    """국장 LGBM 갤러리 차트를 신호일 이후까지 이어 그린다(파일 대체)."""
+    print('    ############################### refresh_kr_lgbm_gallery ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\refresh_lgbm_gallery.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--market", "kr"],
+                    cwd=r"C:\my-project\AutoSales.py")
+
+
+def refresh_us_lgbm_gallery():
+    """미장 LGBM 갤러리 차트를 신호일 이후까지 이어 그린다(파일 대체)."""
+    print('    ############################### refresh_us_lgbm_gallery ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\refresh_lgbm_gallery.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--market", "us"],
+                    cwd=r"C:\my-project\AutoSales.py")
+
+
 def update_interest_stocks():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\1_periodically_update_today_interest_stocks.py"
