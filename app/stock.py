@@ -917,9 +917,23 @@ def get_kiwoom_live_gap_ranking():
     # 투자경고/관리종목 등 배지 표시용 (2026-09-02, /kiwoom/holdings와 동일한 패턴)
     audit_map = get_stock_audit_info_map(env)
 
-    # 거래정지 종목은 실시간gap 목록에서 아예 제외한다(2026-09-08) — 매수 후보에서도
-    # 항상 빠지는 종목이라 목록에 남아있으면 혼란만 준다.
-    ranking = [c for c in ranking if audit_map.get(c.get('code')) != '거래정지']
+    # 매수 자체가 안 되는 종목은 실시간gap 목록에서도 제외한다(2026-09-11) — 어차피 안 살
+    # 종목이 목록에 남아있으면 혼란만 준다. kiwoom_v8_strategy.run_v8_buy_cycle()의
+    # _audit_blocked()와 동일한 규칙: 투자주의환기종목/거래정지는 무조건, 관리종목은
+    # 1000원 미만일 때만 제외.
+    _AUDIT_BLOCK_HARD = {'투자주의환기종목', '거래정지'}
+    _ADMIN_ISSUE = '관리종목'
+    _ADMIN_ISSUE_PRICE_CEILING = 1000
+
+    def _livegap_audit_blocked(c):
+        audit = audit_map.get(c.get('code'))
+        if audit in _AUDIT_BLOCK_HARD:
+            return True
+        if audit == _ADMIN_ISSUE and float(c.get('prev_close') or 0) < _ADMIN_ISSUE_PRICE_CEILING:
+            return True
+        return False
+
+    ranking = [c for c in ranking if not _livegap_audit_blocked(c)]
 
     out = [{
         'rank': i + 1,
