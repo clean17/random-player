@@ -2,11 +2,21 @@ import os
 import signal
 import subprocess
 import sys
+import datetime
 # from flask_cors import CORS
 from config.config import settings
 from utils.common import signal_handler, register_shutdown_handlers, cleanup
 from job.batch_runner import initialize_directories, create_scheduler
 from job.batch_process import sweep_orphan_mp_workers
+
+
+print(
+    datetime.datetime.now(),
+    "SCRIPT START",
+    "PID=", os.getpid(),
+    "PPID=", os.getppid(),
+    "EXE=", sys.executable
+)
 
 NODE_SERVER_PATH = settings['NODE_SERVER_PATH']
 
