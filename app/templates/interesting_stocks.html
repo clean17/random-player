@@ -1179,6 +1179,25 @@
     // 예측종목: 국장/미장을 고르면(ruleFilterEl과 동일한 방식) 다시 조회
     predictMarketFilterEl.addEventListener('change', loadData);
     stockSearchInputEl.addEventListener('input', applyStockSearchFilter);
+    // 2026-09-11: stock_card.js의 전역 document keydown 핸들러가 포커스와 무관하게
+    // ArrowLeft/l/o/Enter 등을 캐러셀·즐겨찾기·Toss열기 단축키로 가로챈다(예측종목 탭의
+    // 카드뷰 대상). 검색창에 종목명을 타이핑할 때(예: "lg", "ok금융") 이 글자들이 그대로
+    // 단축키로 먹혀버리는 문제 — msBuyCodeInput과 동일한 패턴으로 전파를 막는다.
+    stockSearchInputEl.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') { e.stopPropagation(); return; }
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    // 검색창이 보이는 탭(관심종목/예측종목 등)에서는 어디서 Enter를 누르든 검색창에
+    // 포커스를 준다 — 이미 검색창에 포커스가 있으면 위 핸들러가 먼저 처리하므로 중복 없음.
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        if (stockSearchInputEl.style.display === 'none') return;
+        if (document.activeElement === stockSearchInputEl) return;
+        e.preventDefault();
+        e.stopPropagation();
+        stockSearchInputEl.focus();
+    }, true);
     // 확인/미확인 필터는 카드 전체를 다시 그려서(특히 종목이 많으면) 순간 버벅일 수 있다.
     // setTimeout으로 한 틱 미뤄야 오버레이가 실제로 화면에 그려진 뒤 필터링이 시작된다
     // (동기 실행이면 오버레이가 페인트되기 전에 다 끝나 안 보일 수 있다).
