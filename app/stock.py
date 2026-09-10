@@ -247,6 +247,37 @@ def _get_latest_close_price(market, ticker):
         return None
 
 
+# 신호 당일 거래대금(종가 × 거래량)은 신호 시점엔 알 수 없어서(그날 장중엔 아직 미확정) 예측
+# 잡이 사이드카에 저장해두지 않는다 — 그래서 현재가와 마찬가지로 pkl에서 그때그때 계산한다.
+# 현재가와 달리 "그날"이 고정값이라 매번 신호일(date_raw)의 그 행을 찾아야 한다.
+def _get_signal_day_trading_value(market, ticker, date_raw):
+    pickle_dir = _LGBM_PICKLE_DIR_MAP.get(market)
+    if not pickle_dir or not date_raw:
+        return None
+    path = os.path.join(pickle_dir, f"{ticker}.pkl")
+    if not os.path.isfile(path):
+        return None
+    try:
+        df = pd.read_pickle(path)
+        if df.empty:
+            return None
+        col_c = "종가" if "종가" in df.columns else ("Close" if "Close" in df.columns else None)
+        col_v = "거래량" if "거래량" in df.columns else ("Volume" if "Volume" in df.columns else None)
+        if col_c is None or col_v is None:
+            return None
+        ts = pd.Timestamp(date_raw)
+        if ts not in df.index:
+            return None
+        close = pd.to_numeric(df.loc[ts, col_c], errors="coerce")
+        volume = pd.to_numeric(df.loc[ts, col_v], errors="coerce")
+        if pd.isna(close) or pd.isna(volume):
+            return None
+        return float(close) * float(volume)
+    except Exception as e:
+        print(f"[stock] pkl 신호일 거래대금 조회 실패 ({market}/{ticker}/{date_raw}): {e}")
+        return None
+
+
 @stock.route("/interest/data/predict", methods=["POST"])
 def get_predict_stocks_data():
     from app.image import LGBM_DIR_MAP  # 순환 import 방지를 위해 함수 안에서 지연 import
@@ -272,6 +303,7 @@ def get_predict_stocks_data():
         parsed["target_price"] = sidecar.get("target_price")    # 신호가 * (1+threshold_pct/100)
         parsed["threshold_pct"] = sidecar.get("threshold_pct")
         parsed["latest_price"] = _get_latest_close_price(market, parsed["stock_code"])  # 오늘 실제 종가
+        parsed["signal_trading_value"] = _get_signal_day_trading_value(market, parsed["stock_code"], parsed["date_raw"])
         rows.append(parsed)
 
     # 날짜 내림차순(최신 먼저), 같은 날짜 안에서는 확률 내림차순

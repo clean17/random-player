@@ -469,14 +469,27 @@ function renderLowCardHtml(track, rows) {
 
 
 // 예측종목(LightGBM) — /stocks/interest/data/predict 응답을 기존 카드 셸(article.trade-card)
-// 그대로 재사용해서 그린다. 거래대금/시총 같은 필드가 없어(DB 기반이 아니라 파일명 파싱이라)
-// 다른 카드보다 정보가 단순하다 — 즐겨찾기/자동매수 버튼도 이 목록엔 의미가 없어 뺐다.
+// 그대로 재사용해서 그린다. 시총 같은 필드는 없어(DB 기반이 아니라 파일명 파싱이라) 다른
+// 카드보다 정보가 단순하다 — 즐겨찾기/자동매수 버튼도 이 목록엔 의미가 없어 뺐다.
 // 시장별로 통화가 다르다(KR=원, US=달러) — signal_price/target_price/latest_price는 원본
 // 통화 그대로 내려온다(job/multi_kor_stocks_lgbm.py 등 참고).
 function fmtPredictPrice(v, market) {
     const num = toFloat(v);
     if (num === null) return "-";
     return market === 'us' ? `$${num.toFixed(2)}` : `${Math.round(num).toLocaleString()}원`;
+}
+
+// 신호 당일 거래대금(종가×거래량, app/stock.py의 _get_signal_day_trading_value). KR은
+// trValFmtWon(조/억/만원)을 그대로 쓰고, US는 원화 단위가 안 맞으므로 달러 B/M/K로 축약한다.
+function fmtPredictTradingValue(v, market) {
+    const num = toFloat(v);
+    if (num === null) return "-";
+    if (market !== 'us') return trValFmtWon(num);
+    const abs = Math.abs(num);
+    if (abs >= 1e9) return `$${(num / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
+    if (abs >= 1e6) return `$${(num / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+    if (abs >= 1e3) return `$${(num / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+    return `$${Math.round(num).toLocaleString()}`;
 }
 
 function renderPredictCardHtml(track, rows) {
@@ -509,6 +522,7 @@ function renderPredictCardHtml(track, rows) {
           <div class="kv"><span class="k">예측일</span><span class="v">${r.date ?? ""}</span></div>
           <div class="kv"><span class="k">상승 확률</span><span class="v">${fmt1(r.proba)}%</span></div>
           <div class="kv"><span class="k">신호 당일</span><span class="v">${fmtPredictPrice(r.signal_price, r.market)}</span></div>
+          <div class="kv"><span class="k">신호일 거래대금</span><span class="v">${fmtPredictTradingValue(r.signal_trading_value, r.market)}</span></div>
           <div class="kv"><span class="k">목표가 (+${thresholdPct}%)</span><span class="v">${fmtPredictPrice(r.target_price, r.market)}</span></div>
           <div class="kv"><span class="k">현재가</span><span class="v">${fmtPredictPrice(r.latest_price, r.market)}${(toFloat(r.latest_price) !== null && toFloat(r.signal_price)) ? ` (${calCloseReturn(toFloat(r.latest_price), toFloat(r.signal_price))})` : ''}</span></div>
         </div>
