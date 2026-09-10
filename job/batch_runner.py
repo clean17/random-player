@@ -10,7 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_stocks_advanced, find_low_stocks, \
     update_interest_stocks, \
     renew_kiwoom_token_job, renew_kiwoom_mock_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, \
-    update_stock_data_daily, \
+    update_stock_data_daily, update_stock_data_us_weekly, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
     reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
@@ -501,11 +501,26 @@ def create_scheduler():
         id="v8_eod", executor="trading", replace_existing=True,
     )
 
-    # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 2시 전체 종목 데이터 fetch)
+    # 2-1) 국장 pkl 전체 갱신 (토요일 새벽 2시, 1500일치 전 종목)
+    # [2026-09-09] 매일(월~금) -> 주 1회로 변경. 전 종목 1500일치를 통째로 다시 받는 무거운
+    # 작업이라 장 없는 주말에 돌린다. 분할/역분할로 어긋난 가격 기준이 여기서 정리되고,
+    # 평일에는 0_periodically_fetch_stock_data.py의 불일치 감지가 그날그날 잡는다.
     scheduler.add_job(
         update_stock_data_daily,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=2, minute=0),
+        trigger=CronTrigger(day_of_week="sat", hour=2, minute=0),
         id="update_stock_data_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-1-1) 미장 pkl 전체 갱신 (일요일 새벽 2시, 1500일치 전 종목)
+    # [2026-09-09] 신설. 그동안 미장엔 전체 갱신이 없어 최근 5일 병합만 반복됐고, 가격 오염이
+    # 미장 65% vs 국장 1.9%로 벌어졌다. 국장과 하루 띄워 배치해 부하가 겹치지 않게 한다
+    # (미장은 5,100종목 x yfinance라 2~3시간 걸린다).
+    scheduler.add_job(
+        update_stock_data_us_weekly,
+        trigger=CronTrigger(day_of_week="sun", hour=2, minute=0),
+        id="update_stock_data_us_weekly",
         executor="io",
         replace_existing=True,
     )
@@ -528,10 +543,13 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-3-1) 미장 데이터 파일 (pkl) 전체 갱신 - 1시간 간격
+    # 2-3-1) 미장 데이터 파일 (pkl) 갱신 - 하루 1회 11:00
+    # [2026-09-09] 장중 매시간(12~21시) -> 하루 1회로 변경. 최근 5일치만 받아 병합하되,
+    # 겹치는 날짜의 종가가 어긋나면(분할/역분할) 그 종목만 전 구간을 다시 받는다
+    # (job/0-1_periodically_fetch_stock_data_us.py의 detect_scale_shift).
     scheduler.add_job(
         fetch_us_stock_data,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="12-21", minute="10"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=11, minute=0),
         id="minutely_60_fetch_us_stock_data",
         executor="io",
         replace_existing=True,
@@ -659,6 +677,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
+    # 3-0-2) find_stocks_with_increased_volume(v1)의 변동성 필터(ATR14_norm/오늘 고저폭) 컷
     # 3-0-2) find_stocks_with_increased_volume(v1)의 변동성 필터(ATR14_norm/오늘 고저폭) 컷
     # 분기별 재보정 (2026-09-03). v2와 같은 새벽 시간대지만 같은 pkl 전체를 훑는 무거운 작업
     # 두 개가 동시에 돌지 않도록 분을 15분 띄운다.

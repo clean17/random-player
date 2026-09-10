@@ -3,6 +3,8 @@ import subprocess
 import signal
 import threading
 import time
+import logging
+from collections import deque
 
 try:
     import win32api
@@ -17,6 +19,34 @@ _active_processes_lock = threading.Lock()
 
 _job = None
 _job_lock = threading.Lock()
+
+_BATCH_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'job')
+
+
+def _get_batch_logger() -> 'logging.Logger':
+    """_run_subprocess 로 도는 배치 잡(엑셀 갱신 등)의 시작/성공/실패를 파일로 남긴다.
+
+    2026-09-09: 이 헬퍼가 생기기 전엔 print()만 해서 서버 콘솔이 안 보이면(백그라운드
+    실행) 어떤 잡이 언제 성공/실패했는지 사후에 확인할 방법이 없었다 — 187660(현대ADM->
+    페니트리움바이오) 종목명이 몇 달째 안 바뀌었는데도 주간 엑셀 갱신(update_stocks_daily)
+    잡이 실제로 도는지 로그로 확인이 안 됐던 사고 참고. kiwoom_api.get_trading_logger()와
+    동일한 idempotent 파일 로거 패턴(logger.handlers 비었을 때만 부착)을 따른다.
+    """
+    os.makedirs(_BATCH_LOG_DIR, exist_ok=True)
+    log = logging.getLogger('batch_subprocess')
+    if log.handlers:
+        return log
+    log.setLevel(logging.INFO)
+    log.propagate = False  # 앱 root/waitress 로거로 전파 안 함(logs/app 쪽 중복 기록 방지)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
+    file_handler = ConcurrentTimedRotatingFileHandler(
+        os.path.join(_BATCH_LOG_DIR, 'batch_subprocess.log'),
+        when='midnight', backupCount=90, encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+    log.addHandler(file_handler)
+    return log
 
 
 def _get_job():
@@ -56,6 +86,12 @@ def _assign_to_job(pid):
 # _active_processes에 등록해두면 kill_all_active_processes()가 서버 종료 시 이걸 정리하고,
 # Job Object에도 등록해 서버가 비정상 종료돼도 OS가 정리한다(이중 안전장치).
 def _run_subprocess(argv, cwd=None):
+    log = _get_batch_logger()
+    script_label = argv[-1] if argv else str(argv)
+    log.info(f'시작: {script_label}')
+    tail = deque(maxlen=50)
+    line_count = 0
+
     process = subprocess.Popen(
         argv,
         cwd=cwd,                               # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
@@ -78,6 +114,8 @@ def _run_subprocess(argv, cwd=None):
             line = process.stdout.readline()
             if line:
                 print(line, end="")
+                tail.append(line)
+                line_count += 1
             elif process.poll() is not None:
                 break
             else:
@@ -99,6 +137,10 @@ def _run_subprocess(argv, cwd=None):
 
     if process.returncode != 0:
         print("returncode =", process.returncode)
+        log.error(f'실패: {script_label} returncode={process.returncode} '
+                  f'(총 {line_count}줄, 마지막 {len(tail)}줄)\n' + ''.join(tail))
+    else:
+        log.info(f'완료: {script_label} returncode=0 (총 {line_count}줄 출력)')
 
     return process
 
@@ -366,6 +408,15 @@ def fetch_stock_data():
 def fetch_us_stock_data():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\0-1_periodically_fetch_stock_data_us.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
+# 미장 pkl 주 1회 전체 갱신(1500일). 국장 update_stock_data_daily에 대응하는 미국판 —
+# 지금까지 미장엔 전체 갱신이 없어 최근 5일 병합만 반복됐고, 그 결과 가격 오염이
+# 미장 65% vs 국장 1.9%로 벌어졌다(2026-09-09 점검).
+def update_stock_data_us_weekly():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\10-1_update_stock_data_us.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
