@@ -576,6 +576,7 @@ def _v8_holding_state(pos, cur_price):
         'type': 'v8',
         'hold_days': _v8_business_days(pos.get('entry_date', '')),
         'max_hold_days': kiwoom_v8_exit.MAX_HOLD_DAYS,
+        'peak': peak,                                      # 고점 가격(원) — 2026-09-10 UI에 값 노출 요청
         'pullback_from_peak': cur / peak - 1.0,           # 현재가가 고점 대비 몇 % 아래인지(음수)
         'trail_pct': kiwoom_v8_exit.TRAIL_PCT,             # 트레일링 트리거 폭(예: 0.05 = -5%)
         'trail_armed': bool(pos.get('trail_armed', True)),

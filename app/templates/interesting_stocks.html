@@ -742,6 +742,7 @@
                     <th>관리</th>
                     <th>추천</th>
                     <th>상승여력</th>
+                    <th class="right">현재가</th>
                     <th class="right">등락률</th>
                     <th class="right">거래대금 증가율</th>
                     <th class="right">외국인 순매수</th>
@@ -749,7 +750,7 @@
                     <th>뉴스</th>
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="9" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="10" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
     </section>
@@ -1755,8 +1756,9 @@
         // 익절까지는 대부분 음수로만 나와 오히려 헷갈렸다. 지금 실제로 상태가 바뀌는
         // 트레일링(무장/해제)과 익절 '완료' 여부만 남긴다.
         const armTxt = state.trail_armed ? '무장' : '해제(재무장 대기)';
+        const peakTxt = state.peak ? `고점${msFmtWon(state.peak)} · ` : '';
         const parts = [holdBadge,
-            `고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${(state.trail_pct * 100).toFixed(0)}%, ${armTxt})`];
+            `${peakTxt}고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${(state.trail_pct * 100).toFixed(0)}%, ${armTxt})`];
         if (state.tp_done) parts.push('익절 1차 완료');
         return parts.join(' · ');
     }
@@ -2012,6 +2014,7 @@
           </td>
           <td class="${labelClass}">${p.label ?? ''}</td>
           <td>${p.upside_tier ?? ''}</td>
+          <td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>
           <td class="right ${msPnlClass(p.today_price_change_pct)}">${msFmtPct((p.today_price_change_pct || 0) / 100)}</td>
           <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100, 0)}</td>
           <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
