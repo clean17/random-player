@@ -1,14 +1,21 @@
 # -*- coding: utf-8 -*-
-"""v8 청산 — ATR 샹들리에 + 트레일링 절반 재무장 + 익절 절반 + 최대보유. (Python 3.8)
+"""v8 청산 — ATR 샹들리에 + 트레일링 절반 재무장 + 익절 절반 + 최대보유 + 하한선. (Python 3.8)
 
 근거: C:\\my-project\\strategy-ab-backtest\\ANALYSIS_V8.md §1
+      2026-09-10 v10 파라미터 전환 근거: 같은 리포의 trail_pct_sweep.py / alloc_sweep_fresh.py /
+      hard_floor 그리드서치(당시 대화, 최신 pkl 기준 25슬롯 고정) — 트레일-1.5%/최대보유5일/
+      hard_floor-11%/투입10% 조합이 현행(트레일-5%/최대보유10일/hard_floor없음/투입4%) 대비
+      CAGR +56.2%→+163.8%, MDD -19.0%→-15.8%, Sharpe 2.27→3.27 (3-fold 전부 양수).
+      ⚠️ 5개 파라미터를 동시에 그리드서치로 찾은 값이라 과최적화 위험이 있다는 점을 감안했다
+      (인접값들도 비슷하게 좋아 완전한 우연은 아닌 것으로 판단, 근거는 위 스크립트 출력 참고).
 
   매 주기(30초) 평가 순서
+    0) 하한선(hard_floor) -11%    : 현재가 <= 진입가 x 0.89            -> 잔량 전량 (재무장 상태 무관)
     1) ATR(14) x 3.0 샹들리에 손절 : 현재가 <= 진입후최고가 - 3.0*ATR  -> 잔량 전량
-    2) 트레일링 -5%                : 현재가 <= 최고가 x 0.95           -> 최초수량의 1/2
+    2) 트레일링 -1.5%              : 현재가 <= 최고가 x 0.985          -> 최초수량의 1/2
                                      발동 후 해제, 고점 갱신 시 재무장
     3) 익절 +20%                   : 현재가 >= 진입가 x 1.20           -> 최초수량의 1/2 (1회)
-    4) 최대보유 10 거래일           -> 잔량 전량
+    4) 최대보유 5 거래일            -> 잔량 전량
 
   장 마감 후 1회 `run_v8_eod()` 로 peak 갱신 + 재무장 판정.
 
@@ -43,7 +50,11 @@ _log = get_trading_logger('kiwoom_v8_exit')
 V8_EXIT_ENABLED = True         # 소유권 분리(v8_owned_codes)로 기존 트레일링과 공존한다
 
 ATR_MULT = 3.0
-TRAIL_PCT = 0.05
+# 2026-09-10 v10: -5% -> -1.5%. HARD_FLOOR_PCT 라는 절대 안전망이 새로 생겨서, 트레일링을
+# 훨씬 타이트하게 잡아 자주·빨리 절반씩 이익실현하고 슬롯 회전을 빠르게 돌리는 쪽이 백테스트상
+# 더 낫다(위 모듈 docstring 근거 참고). 단독으로 5%->1.5%만 바꾸면(하한선 없이) 오히려
+# 백테스트가 나빠지므로 HARD_FLOOR_PCT 와 반드시 같이 움직여야 한다.
+TRAIL_PCT = 0.015
 # 2026-08-26 사용자 요청: 트레일링 트리거(peak*(1-TRAIL_PCT))에 처음 닿아도 즉시 팔지 않고
 # 이 시간(초)만큼 재확인한다 — 그때도 여전히 트리거 이하일 때만 진짜로 판다(고점에서 살짝
 # 밀렸다가 바로 더 오르는 노이즈를 걸러내려는 목적). ⚠️ 분봉 데이터가 없어(strategy-ab-backtest
@@ -56,7 +67,23 @@ TRAIL_FRAC = 0.5
 STALE_OPEN_GUARD_MIN = 3
 TP_PCT = 0.20
 TP_FRAC = 0.5
-MAX_HOLD_DAYS = 10
+# 2026-09-10 v10: 10 -> 5 거래일. 슬롯 회전(체결건수) 증가가 CAGR 개선의 핵심 메커니즘 —
+# 위 모듈 docstring 근거 참고.
+MAX_HOLD_DAYS = 5
+# 2026-09-10 v10 신설 -> 2026-09-11 비활성화(None).
+#   도입 근거였던 "하한선이 CAGR/MDD/Sharpe를 모두 개선한다"는 스윕은 **K(동시 대기주문 수)
+#   제약을 모델링하지 않은 백테스트**였다. backtest.run_portfolio()는 체결 당일에만 현금을
+#   차감하는데, 실계좌는 지정가가 체결될 때까지 최대 10거래일 예수금을 묶는다. 그래서 하한선의
+#   이점으로 계산됐던 "포지션 슬롯을 빨리 비워 체결이 는다"가 실제로는 성립하지 않는다 —
+#   체결 병목은 포지션 슬롯이 아니라 주문 슬롯(현금)이기 때문이다.
+#   alloc_k.py 방식으로 주문잔존을 시뮬레이션해 다시 재면(2026-09-11, 최신 pkl, ALLOC 3~5%)
+#   하한선은 모든 조합에서 CAGR을 4~5%p 깎았다:
+#     트레일1.5%/보유5일  하한없음 +23.0%  vs  하한-11% +19.1%  (ALLOC 4%)
+#     트레일1.5%/보유10일 하한없음 +20.2%  vs  하한-11% +15.2%  (ALLOC 4%)
+#   -25% 급락을 받아내는 전략이라 -11%에서 강제 손절하면 되돌림 구간을 잘라먹고, 상방은 이미
+#   트레일링 1.5%가 절반을 확보하고 있어 하한선은 비용만 남는다.
+#   되살리려면 값을 다시 넣으면 되지만, 반드시 K 제약을 건 백테스트로 재검증할 것.
+HARD_FLOOR_PCT = None
 ANOMALY_DROP = 0.35            # 직전 관측가 대비 -35% 이상 급락이면 매도하지 않고 정지
 
 # ⚠️ env_path 필수 (kiwoom_api.env_path docstring 의 2026-08-14 사고 참고).
@@ -186,6 +213,30 @@ def run_v8_exit_cycle():
         trail_qty = max(1, int(round(shares0 * TRAIL_FRAC)))
         tp_qty = max(1, int(round(shares0 * TP_FRAC)))
 
+        # 0) 하한선(hard_floor) — 진입가 대비 절대 하한. 재무장 상태·ATR 폭과 무관하게 전량 정리.
+        #    ATR 샹들리에보다 먼저 평가한다 — ATR이 넓은 종목은 샹들리에(peak-3*ATR)가 이 하한선
+        #    보다 한참 아래에 있어 하한선이 더 먼저(=덜 손해 보고) 걸러줘야 의미가 있다.
+        #    ⚠️ HARD_FLOOR_PCT=None 이면 이 규칙 자체를 건너뛴다(2026-09-11 비활성화, 위 상수 주석 참고).
+        floor_px = entry * (1.0 + HARD_FLOOR_PCT) if HARD_FLOOR_PCT is not None else None
+        if floor_px is not None and px <= floor_px:
+            res = api.sell_market(code, qty)
+            ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
+            if not ok:
+                _log.warning('v8 하한선(hard_floor) 주문 거부 %s qty=%d px=%.0f floor=%.0f -> %s',
+                             code, qty, px, floor_px, res)
+                continue
+            v8.mark_sold(code)
+            _log.info('v8 하한선(hard_floor) %s qty=%d px=%.0f floor=%.0f(entry%.0f%%) -> %s',
+                      code, qty, px, floor_px, HARD_FLOOR_PCT * 100, res)
+            fee_share = est_fee_total * (qty / full_qty) if full_qty > 0 else 0.0
+            pnl = (px - entry) * qty - fee_share
+            _record_trade(code, h.get('stk_nm'), 'sell', 'v8_hard_floor', qty, px, entry, pnl,
+                          holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
+                          trigger_level=floor_px / entry - 1.0, ord_no=res.get('ord_no'))
+            st.pop(code, None)
+            v8.release_ordered(code)
+            continue
+
         # 1) ATR 샹들리에 손절 — 전량
         stop_px = peak - ATR_MULT * atr
         if px <= stop_px:
@@ -211,7 +262,7 @@ def run_v8_exit_cycle():
             v8.release_ordered(code)
             continue
 
-        # 2) 트레일링 -5% — 최초수량의 1/2. TRAIL_CONFIRM_SECONDS 재확인(위 상수 설명 참고).
+        # 2) 트레일링(TRAIL_PCT) — 최초수량의 1/2. TRAIL_CONFIRM_SECONDS 재확인(위 상수 설명 참고).
         trail_trigger = peak * (1.0 - TRAIL_PCT)
         if pos.get('trail_armed') and px <= trail_trigger:
             now = datetime.datetime.now()
