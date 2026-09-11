@@ -124,7 +124,10 @@ def get_trading_logger(name: str) -> 'logging.Logger':
         return log
     log.setLevel(logging.INFO)
     log.propagate = False   # 앱 root/waitress 로거로 전파 안 함 (logs/app 쪽에 중복 기록 방지)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    # 2026-09-11: 파일이 real/mock으로 나뉘어도 로그 한 줄만 떼어보면(복사/공유 시) 어느
+    # 계좌인지 알 수 없다는 지적 — kiwoom_trailing_stop.py의 수동 로거와 동일하게 포맷 자체에
+    # 환경 태그를 박는다.
+    formatter = logging.Formatter(f'%(asctime)s [%(levelname)s][{KIWOOM_ENV.upper()}] %(message)s')
 
     # real -> trading.log (기존 파일 그대로, 180일 백업 이력 연속성 유지) / mock -> trading_mock.log
     log_name = 'trading.log' if KIWOOM_ENV == 'real' else f'trading_{KIWOOM_ENV}.log'
