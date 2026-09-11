@@ -1183,21 +1183,15 @@
     // ArrowLeft/l/o/Enter 등을 캐러셀·즐겨찾기·Toss열기 단축키로 가로챈다(예측종목 탭의
     // 카드뷰 대상). 검색창에 종목명을 타이핑할 때(예: "lg", "ok금융") 이 글자들이 그대로
     // 단축키로 먹혀버리는 문제 — msBuyCodeInput과 동일한 패턴으로 전파를 막는다.
+    // 2026-09-11 정정: Enter는 검색창에 포커스가 없는 한 stock_card.js의 기존 동작(현재
+    // 카드를 Toss에서 열기)이 그대로 나가야 한다 — "어디서든 Enter -> 검색창 포커스"는
+    // 오히려 그 동작을 가로채는 버그였다(제거함). 검색창에 이미 포커스가 있는 동안 타이핑할
+    // 때만 stock_card.js 단축키가 안 끼어들게 막는다.
     stockSearchInputEl.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') { e.stopPropagation(); return; }
         e.preventDefault();
         e.stopPropagation();
     });
-    // 검색창이 보이는 탭(관심종목/예측종목 등)에서는 어디서 Enter를 누르든 검색창에
-    // 포커스를 준다 — 이미 검색창에 포커스가 있으면 위 핸들러가 먼저 처리하므로 중복 없음.
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        if (stockSearchInputEl.style.display === 'none') return;
-        if (document.activeElement === stockSearchInputEl) return;
-        e.preventDefault();
-        e.stopPropagation();
-        stockSearchInputEl.focus();
-    }, true);
     // 확인/미확인 필터는 카드 전체를 다시 그려서(특히 종목이 많으면) 순간 버벅일 수 있다.
     // setTimeout으로 한 틱 미뤄야 오버레이가 실제로 화면에 그려진 뒤 필터링이 시작된다
     // (동기 실행이면 오버레이가 페인트되기 전에 다 끝나 안 보일 수 있다).
@@ -1777,7 +1771,10 @@
         const armTxt = state.trail_armed ? '무장' : '해제(재무장 대기)';
         const peakTxt = state.peak ? `고점${msFmtWon(state.peak)} · ` : '';
         const parts = [holdBadge,
-            `${peakTxt}고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${(state.trail_pct * 100).toFixed(0)}%, ${armTxt})`];
+            // 2026-09-11: toFixed(0)이 1.5%를 "2%"로 반올림해버리는 버그 — TRAIL_PCT가
+            // 5%처럼 정수였을 땐 안 드러났다가 1.5%로 바뀌면서 노출됨. 소수점 1자리로 두되
+            // 정수면(5.0 등) ".0"을 떼서 자연스럽게 보이도록 Number()로 다시 파싱한다.
+            `${peakTxt}고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${Number((state.trail_pct * 100).toFixed(1))}%, ${armTxt})`];
         if (state.tp_done) parts.push('익절 1차 완료');
         return parts.join(' · ');
     }
