@@ -89,7 +89,9 @@ _log = logging.getLogger('kiwoom_trailing_stop')
 if not _log.handlers:
     _log.setLevel(logging.INFO)
     _log.propagate = False  # 앱 root/waitress 로거로 전파 안 함 (logs/app 쪽에 중복 기록 방지)
-    _formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    # 2026-09-11: 파일을 real/mock으로 나눠도(아래) "[손절관찰] ..." 한 줄만 복사해서 보면
+    # 어느 계좌인지 구분이 안 된다는 지적 — 포맷 자체에 환경 태그를 박아 모든 줄에 강제로 붙인다.
+    _formatter = logging.Formatter(f'%(asctime)s [%(levelname)s][{KIWOOM_ENV.upper()}] %(message)s')
 
     # 서버(run.py)와 CLI(-m auto_trading.kiwoom_*)가 같은 파일에 동시에 쓰므로,
     # Windows에서 다중 프로세스 로테이션이 안전한 concurrent_log_handler 사용
@@ -535,6 +537,47 @@ def _reverse_unfilled_buys(events: List[Dict]) -> None:
                      f'매수 {qty}주 확정 미체결(ka10076 체결내역에 끝까지 없음) — 보유상태 되돌림')
     if changed:
         _save_state(state)
+
+
+def _reverse_stale_unconfirmed_buy(stk_cd: str, entry_date_str: Optional[str]) -> bool:
+    """'상태정리보류'로 하루 이상 방치된 종목이 사실 확정 미체결이었는지 확인하고, 맞으면
+    trades.jsonl 매수기록을 지운다. 되돌리면(=지우면) True, 아니면 False.
+
+    2026-09-11 187660/012210(모의) 사고로 추가 — reconcile_fills(finalize=True)는 ka10076이
+    '당일분만' 주므로 진입일 당일(20:10)에만 확정 미체결을 판정할 수 있다. 그런데 그 진입일에
+    finalize 로직 자체가 아직 배포 전이었거나 실패했다면(이번 사고가 정확히 이 경우 — 069540
+    사고 수정이 09-08 저녁, 이 두 종목 진입은 09-09), 다음날부턴 그 매수기록이 영원히 '오늘'이
+    아니게 되어 reconcile_fills가 다시는 못 본다 — '상태정리보류' 경고만 무기한 반복된다.
+    entry_date가 오늘이 아닌데(=이미 하루 이상 지남, 당일 finalize 창을 확실히 지났다)
+    trades.jsonl에 fill_qty 없는 매수기록이 그대로 남아 있으면 확정 미체결로 간주한다.
+    """
+    if not entry_date_str or entry_date_str >= datetime.date.today().isoformat():
+        return False   # 오늘 진입분은 아직 당일 finalize 대상 — 여기서 손대지 않는다
+    if not os.path.exists(TRADES_FILE):
+        return False
+    with open(TRADES_FILE, 'r', encoding='utf-8') as f:
+        lines = [l.rstrip('\n') for l in f if l.strip()]
+    kept = []
+    found = False
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            kept.append(line)
+            continue
+        if (not found and ev.get('side') == 'buy' and ev.get('stk_cd') == stk_cd
+                and ev.get('fill_qty') is None
+                and str(ev.get('ts', '')).startswith(entry_date_str)):
+            found = True
+            _log.warning(f'[정산-미체결취소(지연확인):{KIWOOM_ENV}] {ev.get("stk_nm")}({stk_cd}) '
+                         f'{entry_date_str} 매수 {ev.get("qty")}주 — 진입일 당일 정산을 놓쳐 '
+                         f'상태정리보류로 남아있던 확정 미체결 건. 거래이력에서 제거')
+            continue
+        kept.append(line)
+    if found:
+        with open(TRADES_FILE, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(kept) + ('\n' if kept else ''))
+    return found
 
 
 def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None,
@@ -1319,6 +1362,10 @@ def run_cycle():
                 d >= entry_date for d in sell_dates_by_code.get(stk_cd, [])
             )
             if confirmed_sold:
+                del state[stk_cd]
+            elif _reverse_stale_unconfirmed_buy(stk_cd, entry_date_str):
+                # 진입일 당일 finalize를 놓쳐 무기한 '상태정리보류'로 남을 뻔한 확정 미체결 —
+                # trades.jsonl 정리는 위 함수가 이미 했으니 보유상태만 지운다.
                 del state[stk_cd]
             else:
                 _log.warning(f'[상태정리보류] {stk_cd} 보유목록에 없지만 매도기록도 없음 '
