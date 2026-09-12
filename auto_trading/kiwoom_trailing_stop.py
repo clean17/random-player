@@ -63,6 +63,20 @@
 NXT(넥스트트레이드) 프리 08:00~08:50 / 애프터 15:30~20:00은 2026-08-18에 제외했다 —
 시장가 주문을 받지 않아 실계좌에서도 전량 거부됐다(407022). 상세는 is_market_open() 위 주석.
 따라서 프리마켓 갭 하락은 09:00까지 방치된다. 실전 투자 전 KIWOOM_ENV=mock으로 먼저 검증할 것.
+
+⚠️ 2026-09-14부터 KRX 시장구조 변경(사용자 제공, openapi.kiwoom.com 공지 seqid=60 — 페이지가
+JS 렌더링이라 본문을 직접 확인은 못 했음, 아래는 전달받은 내용 그대로):
+    09:00~15:20  정규장 (변경 없음)
+    15:20~15:30  종가 단일가 (변경 없음)
+    15:30~16:00  휴장 30분 (신설)
+    16:00~20:00  KRX 자체 애프터마켓 (신설 — 기존 '시간외단일가' 폐지하고 대체.
+                 NXT 애프터마켓 15:30~20:00과는 별개의 KRX 소속 세션)
+정규장 미체결 주문은 이 애프터마켓으로 자동 이전되지 않는다(취소 후 신규 주문 필요) — 단,
+이 프로젝트는 애프터마켓에 주문을 넣지 않으므로 현재는 해당 없다. is_market_open()이 여전히
+09:00~15:20만 True라 이 신설 세션엔 자동으로 관여하지 않는다 — **의도적으로 그렇게 뒀다.**
+NXT 애프터마켓과 마찬가지로 이 세션에서 시장가 주문이 실제로 체결되는지 확인된 바 없고
+(NXT는 거부됐었다), 참여하는 순간 청산 시장가 주문(sell_market)이 전부 거부될 위험이 있다.
+확장하려면 반드시 모의계좌로 먼저 시장가 주문 체결 여부를 실측한 뒤 결정할 것.
 """
 import os
 import json
@@ -74,7 +88,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
     dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path, \
-    cancel_order, KIWOOM_ENV, VALID_ENVS
+    cancel_order, KIWOOM_ENV, VALID_ENVS, is_krx_aftermarket_open
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -307,19 +321,29 @@ def is_market_open() -> bool:
     return KRX_REGULAR_START <= now.time() < KRX_REGULAR_END
 
 
-# run_kiwoom_trailing_stop() 전용 종료 시각. 2026-08-24: fire 자동매수를 15:19에 시작하도록
-# 옮기면서, KRX_REGULAR_END(15:20)를 그대로 같이 낮추면 is_market_open()을 공유하는
-# run_kiwoom_fire_buy도 같이 막혀버린다(잡이 트리거되는 순간 이미 15:19를 넘겨 있어
-# 사실상 실행이 안 됨) — 그래서 trailing_stop만 별도 상수/함수로 분리했다.
-TRAILING_STOP_END = datetime.time(15, 19)
+# run_kiwoom_trailing_stop() 전용 종료 시각.
+# 2026-08-24: fire 자동매수가 연속거래 시장가로 is_market_open()을 같이 쓰던 시절엔, 이걸
+# KRX_REGULAR_END(15:20)와 맞추면 fire 매수 잡이 트리거되는 순간 이미 넘어가 있어 실행이
+# 안 됐다 — 그래서 1분 일찍(15:19) 끊도록 trailing_stop만 별도 상수로 분리했었다.
+# 2026-09-12: 그 이유가 없어졌다(2026-08-25에 fire 매수가 동시호가 전용 게이트
+# is_closing_auction_open()으로 완전히 분리 이전 — is_market_open()을 더 이상 안 씀).
+# 정규장 종료 시각(KRX_REGULAR_END)과 그대로 맞춘다(사용자 요청).
+TRAILING_STOP_END = datetime.time(15, 20)
 
 
 def is_trailing_window_open() -> bool:
-    """run_kiwoom_trailing_stop() 전용 — is_market_open()과 시작은 같고 종료만 1분 이르다."""
+    """run_kiwoom_trailing_stop() 전용 — 2026-09-12부터 is_market_open()과 정규장 구간이 완전히
+    동일하다(TRAILING_STOP_END를 KRX_REGULAR_END와 맞춤, 위 상수 주석 참고).
+
+    2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)도 허용한다(사용자 요청, 검증 전
+    상태로 우선 반영 — 안 되면 sell_market()/buy_market() 거부 로그로 드러난다는 전제).
+    실/모의 둘 다 이 함수를 쓰므로(트레일링 매도는 real/mock 공통) 한 번에 반영된다."""
     now = datetime.datetime.now()
     if now.weekday() >= 5:
         return False
-    return KRX_REGULAR_START <= now.time() < TRAILING_STOP_END
+    if KRX_REGULAR_START <= now.time() < TRAILING_STOP_END:
+        return True
+    return is_krx_aftermarket_open()
 
 
 # fire 자동매수 전용 — 2026-08-25: 15:18/19 시장가(연속거래) 매수를 15:20~15:30 동시호가
@@ -335,11 +359,20 @@ CLOSING_AUCTION_END = datetime.time(15, 30)
 
 
 def is_closing_auction_open() -> bool:
-    """run_kiwoom_fire_buy() 전용 — 15:20~15:30 동시호가(단일가매매) 구간."""
+    """run_kiwoom_fire_buy() 전용 — 15:20~15:30 동시호가(단일가매매) 구간.
+
+    2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)도 이 게이트로 허용한다(모의
+    매수예약, 사용자 요청 — 검증 전 상태로 우선 반영). ⚠️ 애프터마켓은 동시호가(단일가)가
+    아니라 정규장과 같은 접속매매(실시간 체결)라 '종가 매수' 가정이 깨진다 — 원래 15:20~15:30을
+    고른 이유(백테스트가 신호일 종가를 매수가로 가정)가 이 확장 구간엔 그대로 적용되지 않는다.
+    job/batch_runner.py에 이 시간대용 반복 호출 잡을 별도로 추가해야 실제로 걸린다(이름
+    자체는 '동시호가'지만 이 함수는 두 구간을 OR로 판정만 한다)."""
     now = datetime.datetime.now()
     if now.weekday() >= 5:
         return False
-    return CLOSING_AUCTION_START <= now.time() < CLOSING_AUCTION_END
+    if CLOSING_AUCTION_START <= now.time() < CLOSING_AUCTION_END:
+        return True
+    return is_krx_aftermarket_open()
 
 
 def current_exchange() -> str:

@@ -243,6 +243,17 @@ def create_mock_scheduler():
         trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=21),
         id="mock_fire_buy", executor="io", replace_existing=True,
     )
+    # 2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)에서도 매수예약을 시도한다
+    # (사용자 요청, 검증 전 상태로 우선 반영 — 안 되면 주문 거부 로그로 드러난다는 전제).
+    # ⚠️ 위 15:21 1회와 달리 이건 반복 호출이다 — 애프터마켓은 동시호가(단일가)가 아니라
+    # 접속매매(실시간 체결)라서, 15:21 방식(구간 내 아무 때나 들어가도 종가로 체결)의
+    # 전제가 이 구간엔 안 맞는다. v8 매수 주기(60초)에 맞춰 반복 시도한다 — 체결가가
+    # '종가'가 아니라 '그 순간 가격'이 된다는 뜻이므로 결과를 보고 재판단할 것.
+    scheduler.add_job(
+        run_kiwoom_fire_buy,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="16-19", minute="*"),
+        id="mock_fire_buy_aftermarket", executor="io", replace_existing=True,
+    )
 
     # fire 청산 (손절 -6% / 보유 5영업일) — 30초. v8 소유권 집합이 모의에서는 비어 있으므로
     # 모의 보유 종목 전부를 이 잡이 담당한다.
@@ -269,7 +280,7 @@ def create_mock_scheduler():
     # 잠정가가 그대로 avg_price로 남는다 — buy_market() 응답에서 실체결가를 안 받아오기
     # 때문. 20:10 하루 1번만 정산하면 그 사이(15:30~20:10) 화면에 이 잠정가 vs 진짜 종가
     # 갭(실측 -0.9%류)이 그대로 노출된다. 15:30 마감 직후 정산되도록 15분 간격을 추가한다
-    # — 20:10 잡을 대체하지 않는다(NXT 애프터마켓 20:00까지 체결은 이 잡으로 못 잡음).
+    # — 20:10 잡을 대체하지 않는다(NXT/KRX 애프터마켓 20:00까지 체결은 이 잡으로 못 잡음).
     scheduler.add_job(
         reconcile_kiwoom_fills,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/15"),
@@ -407,8 +418,10 @@ def create_scheduler():
     )
 
     # 2-0-0) 체결 정산 — 거래이력에 실제 체결가/체결수량/수수료/세금/슬리피지를 채워넣는다.
-    #        ka10076이 '당일분'만 주므로 같은 날 안에 돌려야 한다. NXT 애프터마켓(20:00) 종료 후
-    #        20:10에 한 번 돌려 그날 모든 체결을 잡는다. 조회 전용이라 장 시간 체크를 하지 않는다.
+    #        ka10076이 '당일분'만 주므로 같은 날 안에 돌려야 한다. NXT 애프터마켓(20:00)과
+    #        2026-09-14 신설된 KRX 자체 애프터마켓(16:00~20:00, 기존 시간외단일가 폐지하고 대체)
+    #        둘 다 우리가 주문을 넣진 않지만, 조회는 20:00까지의 체결을 전부 잡아야 하므로
+    #        종료 후 20:10에 한 번 돌려 그날 모든 체결을 잡는다. 조회 전용이라 장 시간 체크를 하지 않는다.
     #        이미 정산된 건은 건너뛰므로 여러 번 돌아도 안전하다(idempotent).
     scheduler.add_job(
         reconcile_kiwoom_fills_final,
@@ -421,10 +434,10 @@ def create_scheduler():
     # 2-0-0-2) 체결 정산 — 장중 15분 간격 (2026-08-27 추가). 20:10 1회만으로는 매도 직후
     #          trades.jsonl에 조회가(px)만 남아 실제 체결가와 다를 때(예: kt00018이 개장 직후
     #          전일 종가를 잠깐 그대로 주는 지연) 하루 종일 잘못된 가격/손익이 노출된다.
-    #          20:10 잡을 대체하지 않는다 — NXT 애프터마켓(20:00)까지의 체결은 이 잡으로 못 잡는다.
+    #          20:10 잡을 대체하지 않는다 — NXT/KRX 애프터마켓(20:00)까지의 체결은 이 잡으로 못 잡는다.
     # 2026-08-28: IntervalTrigger는 시간대 제한이 없어 새벽에도 15분마다 돌며 API만 낭비했다
     # (그 시각엔 오늘자 거래이력이 없으니 매칭 0건으로 항상 헛수행). 정규장 시작(09:00)부터
-    # NXT 애프터마켓 종료(20:00)까지만 돌게 CronTrigger로 바꾼다.
+    # 애프터마켓 종료(20:00, NXT/KRX 공통)까지만 돌게 CronTrigger로 바꾼다.
     scheduler.add_job(
         reconcile_kiwoom_fills,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/15"),

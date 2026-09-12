@@ -42,7 +42,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from auto_trading import kiwoom_api as api  # noqa: E402
-from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
+from auto_trading.kiwoom_api import env_path, get_trading_logger, is_krx_aftermarket_open  # noqa: E402
 from auto_trading.kiwoom_trailing_stop import _record_trade  # noqa: E402
 
 # 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
@@ -221,6 +221,10 @@ def universe_codes() -> Optional[set]:
 # KRX 정규장만 주문한다. 15:20~15:30 은 종가 단일가라 지정가가 그대로 체결되지 않고,
 # NXT 시간대(08:00~08:50, 15:30~20:00)는 kiwoom_trailing_stop 주석대로 거부된다
 # (real: 407022). 가드가 없으면 60초마다 거부 로그만 쌓인다.
+# 2026-09-14~: KRX 자체 애프터마켓(16:00~20:00, 기존 시간외단일가 폐지 대체, 15:30~16:00
+# 휴장 신설)도 이제 여기서 허용한다(2026-09-12 사용자 요청 — 검증 전 상태로 우선 반영,
+# 안 되면 주문 거부 로그로 드러난다는 전제). 상세는 kiwoom_api.is_krx_aftermarket_open
+# docstring / kiwoom_trailing_stop.py 모듈 docstring 참고.
 KRX_OPEN = datetime.time(9, 0)
 KRX_CLOSE = datetime.time(15, 20)
 
@@ -229,7 +233,9 @@ def is_market_open() -> bool:
     now = datetime.datetime.now()
     if now.weekday() >= 5:
         return False
-    return KRX_OPEN <= now.time() < KRX_CLOSE
+    if KRX_OPEN <= now.time() < KRX_CLOSE:
+        return True
+    return is_krx_aftermarket_open()
 
 
 # ── 상태 ─────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import requests
-from datetime import datetime
+from datetime import datetime, time as _dtime
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv, find_dotenv
 
@@ -59,6 +59,23 @@ def get_account_credentials(env: Optional[str] = None) -> tuple:
     호출부에서 acnt_no를 직접 .env 키로 읽지 말고 반드시 이 함수를 통해서만 가져올 것."""
     c = _cfg_for(env)
     return os.environ.get(c['acnt_no_env']), os.environ.get(c['acnt_pwd_env'])
+
+
+def is_krx_aftermarket_open() -> bool:
+    """2026-09-14 신설 KRX 애프터마켓(16:00~20:00) — 기존 시간외단일가 폐지하고 대체,
+    15:30~16:00 휴장 신설. NXT 애프터마켓(15:30~20:00)과는 별개의 KRX 소속 세션.
+
+    ⚠️ 이 시간대에 지정가/시장가 주문이 실제로 정상 처리되는지 검증 전이다(문서를 확인할
+    방법이 없어 실측 전 — auto_trading/aftermarket_order_test.py 참고). 2026-09-12 사용자
+    요청으로 "안 되면 거부 로그로 드러날 것"을 감안하고 v8 매수/청산, 레거시 트레일링 매도,
+    fire 매수 게이트에 우선 반영한다. 거부가 관측되면 이 함수가 아니라 각 게이트의 호출부
+    (kiwoom_v8_strategy.is_market_open / kiwoom_trailing_stop.is_trailing_window_open,
+    is_closing_auction_open)에서 이 시간대만 제외하도록 되돌릴 것.
+    """
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    return _dtime(16, 0) <= now.time() < _dtime(20, 0)
 
 
 def env_path(path: str, env: Optional[str] = None) -> str:
