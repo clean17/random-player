@@ -9,18 +9,16 @@ from config.config import settings
 from job.scrap.scrap_gm_playwrigit import ensure_login
 
 # ======== 설정 ========
-# USER_DATA_DIR = str(Path("./data/ig_profile-2").resolve())  # fx015
 USER_DATA_DIR = str(Path("./data/ig_profile-15").resolve())
 HEADLESS = False
 
 USERNAME = settings['SCRAP_USERNAME']
 PASSWORD = settings['SCRAP_PASSWORD']
 
-ACCOUNT = "lalababy.amy"
+ACCOUNT = ""
 
 POST_URLS = [
-    "https://www.instagram.com/p/DbSpNayxlSW/",   # 테스트할 포스트 URI
-    # "",
+    "",   # 테스트할 포스트 URI
 ]
 
 
