@@ -88,7 +88,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
     dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path, \
-    cancel_order, KIWOOM_ENV, VALID_ENVS, is_krx_aftermarket_open
+    cancel_order, KIWOOM_ENV, VALID_ENVS, is_krx_aftermarket_open, get_unfilled_orders
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -159,8 +159,8 @@ STOP_LOSS_RATE = -0.06
 # 2026-08-28: 이 모듈은 실전(v8 미소유 잔존종목)과 모의(fire) 양쪽에서 같이 쓰인다(KIWOOM_ENV로
 # 프로세스가 갈림, kiwoom_api.py와 동일 패턴). 모의에서만 늘려달라는 요청이라 실전(60초,
 # 실거래 검증 없이 바꾸지 않음)과 분리한다 — 마찬가지로 백테스트 근거는 없는 라이브 전용 값.
-# 2026-08-31: 모의 90초 -> 120초 (사용자 요청, 근거 없음).
-STOP_CONFIRM_SECONDS = 120 if KIWOOM_ENV == 'mock' else 60
+# 2026-08-31: 모의 90초 -> 150초 (사용자 요청, 근거 없음).
+STOP_CONFIRM_SECONDS = 150 if KIWOOM_ENV == 'mock' else 60
 # 고정 목표가 사다리는 비활성화 — 익절을 트레일링에 일임한다.
 # 2026-06~08 데이터(3,045건)로 실제 청산로직을 재현해 검증한 결과, 10/15/20% 사다리는
 # 상승 종목을 너무 일찍 끊어 오히려 성과를 깎았다(목표가 켬 -0.21% vs 끔 +0.08%).
@@ -509,7 +509,7 @@ def _match_legacy(ev: Dict, fills: List[Dict], used: set) -> Optional[Dict]:
     """ord_no가 없는 과거 기록용 폴백 매칭 — (종목, 매수/매도, 체결수량, 시각 근접) 으로 붙인다.
 
     수량만으로는 어긋난다(2026-08-11 코칩 매도 2건이 둘 다 9주). 주문시각(ord_tm, HHMMSS)과
-    기록 시각의 차이가 가장 작은 것을 택하고, 120초를 넘으면 포기한다.
+    기록 시각의 차이가 가장 작은 것을 택하고, 150초를 넘으면 포기한다.
     이미 다른 기록에 붙은 체결(used)은 재사용하지 않는다.
     """
     try:
