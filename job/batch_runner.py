@@ -797,14 +797,13 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 18) 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 12:00~20:00, 5분마다.
-    #     ⚠️ 원래 하루 2회(12:00/14:00)였다가 사용자 요청으로 5분마다로 늘렸다(하루 ~97회).
+    # 18) 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 10:00~20:00, 5분마다.
     #     회당 예선 20종목 외국인/기관 조회(키움 ka10059, 실계좌 자동매매와 같은 API 예산 공유)
     #     + 최종 10종목 뉴스 조회(토스)가 들어간다 — 트레이딩 쪽에서 429가 잦아지면 이 주기부터
     #     의심할 것.
     scheduler.add_job(
         run_interest_stock_picks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="12-20", minute="*/5"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute="*/5"),
         id="interest_stock_picks",
         executor="io",
         replace_existing=True,
