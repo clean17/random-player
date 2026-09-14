@@ -141,7 +141,7 @@ auto_trading/
 
 - 평일 **20:10** 스케줄(`kiwoom_reconcile_fills`, NXT 애프터마켓 20:00 종료 후). 조회 전용이라
   `is_market_open()` 체크를 하지 않는다.
-- `ord_no` 매칭이 1순위. 없으면 (종목+구분+체결수량+시각 120초 내) 폴백 —
+- `ord_no` 매칭이 1순위. 없으면 (종목+구분+체결수량+시각 150초 내) 폴백 —
   **수량만으로는 안 된다**(2026-08-11 코칩 매도 2건이 둘 다 9주였고, 수량만 보면 어긋난다).
   그래서 `_record_trade()`가 `ord_no`를 반드시 기록한다.
 - 채우는 필드: `fill_qty` `fill_price` `unfilled` `cmsn` `tax` `slippage` `fill_pnl` `fill_src`
@@ -201,6 +201,19 @@ auto_trading/
 | `kiwoom_v8_exit.py` | **필요.** 30초 청산 잡이 캐시하고 있다 |
 | 파일 이동·이름 변경 | **반드시 필요.** 캐시된 `batch_process`가 구 경로를 참조해 `ImportError`가 나고, 매수가 조용히 스킵된다 |
 | `batch_runner.py` / `batch_process.py` | **필요** |
+| `kiwoom_autobuy_{real,mock}.json` (자동 재주문 스위치) | **불필요.** 매 주기마다 파일을 다시 읽는다 — 대시보드에서 끄면 다음 주기(v8 60초 / fire 1분)부터 바로 먹는다 |
+
+> **자동 재주문 스위치 (2026-09-14 신설)**
+> 대시보드 '주문 목록' 툴바의 [자동 재주문] 버튼이 `auto_trading/kiwoom_autobuy_{real,mock}.json`
+> 을 쓰고, `kiwoom_v8_strategy.run_v8_buy_cycle()`(real)과
+> `kiwoom_fire_strategy_mock.run_fire_buy_cycle()`(mock)이 매 주기 시작에서 읽는다.
+> 파일 기반인 이유: 모의 자동매매는 **별도 프로세스**(`run_mock.py`)라 메모리 플래그로는 안 닿고,
+> 서버를 재시작해도 유지되어야 하기 때문이다. 파일이 없으면 ON(기존 동작), 읽기 실패도 ON 폴백
+> — 스위치가 깨졌다고 자동매매가 조용히 멈추는 쪽이 더 위험하다.
+> **막는 것은 신규 매수 주문뿐이다.** 청산(`kiwoom_v8_exit` / `kiwoom_trailing_stop`)과
+> 대시보드 수동 매수/매도는 영향을 받지 않는다. v8은 체결 감지까지는 정상 수행한 뒤 멈춘다
+> (스위치를 끄기 전에 걸려 있던 주문이 체결되면 이력·소유권이 정상 기록돼야 하므로).
+> ⚠️ **코드 자체(위 두 모듈 + `kiwoom_api.py`)를 처음 반영할 때는 재시작이 필요하다.**
 
 확인 방법: `logs/kiwoom_trading/trading.log`에서 프로세스 시작 이후 해당 잡의 로그가 찍혔는지 본다.
 찍혀 있으면 이미 캐시된 상태다.
