@@ -374,6 +374,19 @@
         }
         .mystocks-orders-count { font-weight: 400; font-size: 13px; color: #6b7280; }
         .mystocks-livegap-toolbar { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+        /* 주문 목록 툴바(전체 취소 / 자동 재주문). 실시간gap 툴바와 레이아웃은 같고
+           버튼만 두 개라 flex-wrap 만 더 준다(모바일에서 두 번째 버튼이 밀려 잘리는 것 방지). */
+        .ms-orders-toolbar { flex-wrap: wrap; }
+        .ms-orders-toolbar .btn { flex-shrink: 0; white-space: nowrap; }
+        .ms-orders-toolbar .ms-refresh-status { margin-left: 0; }
+        /* 되돌릴 수 없는 동작이라 붉게 — 단건 취소 버튼(표 안의 .ms-cancel-order)과 구분한다 */
+        .ms-orders-danger { background: #fdecea; color: #b3261e; border-color: #f0a9a3; }
+        .ms-orders-danger:hover { background: #fbd9d5; border-color: #d93025; }
+        /* ON = 평소 상태(파랑), OFF = 자동매수가 멈춰 있다는 경고(주황). 색만으로 구분하지
+           않도록 버튼 글자에 ON/OFF 를 같이 적는다. */
+        .ms-autobuy-toggle.is-off { background: #fff4e5; color: #8a4b00; border-color: #f0c38e; }
+        .ms-autobuy-toggle.is-off:hover { background: #ffe8cc; border-color: #e8940c; }
+        .ms-autobuy-toggle.is-pending { opacity: .6; pointer-events: none; }
         /* 모바일 좁은 화면에서 옆의 상태 문구(#ms-refresh-status)가 길어지면 flex가 버튼을
            같이 줄여서 "새로고침" 글자가 두 줄로 꺾이는 문제가 있었다(2026-09-08) — 버튼은
            절대 안 줄어들게 고정하고, 남는 압박은 상태 문구 쪽이 받도록 한다. */
@@ -855,6 +868,20 @@
 
         <details class="mystocks-orders-details" id="ms-orders-details">
             <summary class="mystocks-subtitle mystocks-orders-summary">주문 목록 <span class="mystocks-orders-count" id="ms-orders-count"></span></summary>
+            {% if current_user.get_id() != config.GUEST_USERNAME %}
+            <!-- 2026-09-14: 미체결을 하나씩 취소하는 건 후보가 20건 넘어가면 사실상 불가능해서
+                 일괄 취소를 추가했다. 다만 취소만으로는 소용이 없다 — v8은 60초마다 같은
+                 후보에 다시 주문을 건다(kiwoom_trailing_stop.manual_cancel_order docstring).
+                 그래서 '자동 재주문' 스위치를 나란히 둔다. OFF면 신규 매수 주문 자체가
+                 멈추므로 취소해 둔 상태가 그대로 유지된다(청산·수동주문은 계속 동작). -->
+            <div class="mystocks-livegap-toolbar ms-orders-toolbar">
+                <button type="button" class="btn btn-secondary ms-orders-danger" id="ms-cancel-all-orders">전체 주문 취소</button>
+                <button type="button" class="btn btn-secondary ms-autobuy-toggle" id="ms-autobuy-toggle" aria-pressed="true">
+                    자동 재주문 <span id="ms-autobuy-state">확인 중</span>
+                </button>
+                <span class="ms-refresh-status" id="ms-autobuy-status"></span>
+            </div>
+            {% endif %}
             <div class="table-scroller">
                 <table class="table" id="table-mystocks-orders">
                     <thead>
@@ -2294,6 +2321,7 @@
                 kiwoomEnvFilterEl.value = msEnv;
             }
             renderMsEnvNote();
+            loadMsAutobuy();            // 자동 재주문 스위치 현재 상태 (await 하지 않음 — 조회를 막지 않는다)
         } catch (e) {
             console.error(e);
         }
@@ -2305,6 +2333,10 @@
         msEnv = next;
         try { localStorage.setItem(MS_ENV_KEY, msEnv); } catch (e) { /* 저장 불가 무시 */ }
         renderMsEnvNote();
+        // 스위치는 계좌별(real/mock)로 따로 저장된다 — 계좌를 바꾸면 그쪽 상태를 다시 읽는다.
+        msAutobuyEnabled = null;
+        renderMsAutobuy();
+        loadMsAutobuy();
         loadMyStocksData(true);      // 계좌가 바뀌었으니 즉시 다시 조회
         // 실시간gap 순위는 자동 재조회 대상이 아니므로(비용), 계좌가 바뀌면 캐시만 무효화해
         // 다음에 열거나 새로고침을 누를 때 새 계좌 기준으로 다시 받게 한다. 이미 펼쳐져 있으면
@@ -2601,6 +2633,100 @@
             msRefreshAfterOrder();
         } catch (err) {
             alert('취소 실패: ' + (err.response?.data?.message || err.message));
+        }
+    });
+
+    // ── 전체 주문 취소 / 자동 재주문 스위치 (2026-09-14) ─────────────────────
+    // 두 버튼은 한 쌍이다. 전체 취소만 하면 v8이 다음 60초 주기에 같은 후보에 다시 주문을
+    // 걸어 "취소가 안 먹는다"처럼 보인다(서버: kiwoom_trailing_stop.manual_cancel_all_orders
+    // docstring). 스위치를 OFF로 두면 그 재주문이 멈춘다 — 청산과 수동 주문은 그대로다.
+    //
+    // 스위치 상태는 서버 파일(auto_trading/kiwoom_autobuy_{real,mock}.json)에 있다.
+    // localStorage에 두지 않는 이유: 실제로 주문을 내는 건 브라우저가 아니라 스케줄러
+    // 프로세스이고(모의는 아예 다른 프로세스다), 브라우저를 닫아도 유지되어야 한다.
+    let msAutobuyEnabled = null;   // null = 아직 모름
+
+    function renderMsAutobuy() {
+        const btn = document.getElementById('ms-autobuy-toggle');
+        const stateEl = document.getElementById('ms-autobuy-state');
+        const statusEl = document.getElementById('ms-autobuy-status');
+        if (!btn || !stateEl) return;
+        if (msAutobuyEnabled === null) {
+            stateEl.textContent = '확인 중';
+            btn.classList.remove('is-off');
+            if (statusEl) statusEl.textContent = '';
+            return;
+        }
+        stateEl.textContent = msAutobuyEnabled ? 'ON' : 'OFF';
+        btn.classList.toggle('is-off', !msAutobuyEnabled);
+        btn.setAttribute('aria-pressed', msAutobuyEnabled ? 'true' : 'false');
+        if (statusEl) {
+            statusEl.textContent = msAutobuyEnabled
+                ? '자동매매가 조건에 맞으면 계속 새 주문을 냅니다 (취소해도 다시 걸릴 수 있음)'
+                : '자동 매수 주문이 멈춰 있습니다 — 취소한 주문은 다시 걸리지 않습니다 (청산·수동주문은 정상)';
+        }
+    }
+
+    async function loadMsAutobuy() {
+        if (isGuestUser) return;          // 게스트에겐 툴바 자체가 렌더되지 않는다
+        try {
+            const res = await fetch(`/stocks/kiwoom/autobuy${msEnvQuery()}`);
+            const d = await res.json();
+            msAutobuyEnabled = !!d.enabled;
+        } catch (e) {
+            console.error(e);
+            msAutobuyEnabled = null;
+        }
+        renderMsAutobuy();
+    }
+
+    document.getElementById('ms-autobuy-toggle')?.addEventListener('click', async () => {
+        const btn = document.getElementById('ms-autobuy-toggle');
+        const next = !(msAutobuyEnabled === true);   // 상태를 모르면(null) 일단 켜는 쪽으로
+        const envLabel = MS_ENV_LABEL[msEnv] || msEnv || '';
+        const msg = next
+            ? `[${envLabel}] 자동 재주문을 다시 켤까요?\n\n다음 주기부터 자동매매가 조건에 맞는 종목에 새로 주문을 냅니다.`
+            : `[${envLabel}] 자동 재주문을 끌까요?\n\n· 새 매수 주문이 나가지 않습니다 (취소한 주문이 되살아나지 않음)\n· 이미 걸려 있는 주문은 그대로 남습니다 — 필요하면 '전체 주문 취소'를 같이 쓰세요\n· 청산(손절/트레일링/익절)과 수동 매수/매도는 계속 동작합니다`;
+        if (!confirm(msg)) return;
+        btn?.classList.add('is-pending');
+        try {
+            const res = await axios.post('/stocks/kiwoom/autobuy', { enabled: next, env: msEnv });
+            msAutobuyEnabled = !!res.data.enabled;
+            showDebugToast(`자동 재주문 ${msAutobuyEnabled ? 'ON' : 'OFF'}`);
+        } catch (e) {
+            alert('자동 재주문 설정 실패: ' + (e.response?.data?.message || e.message));
+        } finally {
+            btn?.classList.remove('is-pending');
+            renderMsAutobuy();
+        }
+    });
+
+    document.getElementById('ms-cancel-all-orders')?.addEventListener('click', async () => {
+        const orders = msLastOrders || [];
+        if (!orders.length) { alert('취소할 미체결 주문이 없습니다.'); return; }
+        const buys = orders.filter(o => o.side === 'buy').length;
+        const sells = orders.length - buys;
+        const envLabel = MS_ENV_LABEL[msEnv] || msEnv || '';
+        // 자동 재주문이 켜져 있으면 취소가 무의미해질 수 있다 — 확인 창에서 먼저 알린다.
+        const warn = msAutobuyEnabled === false ? ''
+            : '\n\n⚠️ 자동 재주문이 켜져 있습니다 — 자동매매가 다음 주기에 같은 종목에 다시 주문을 걸 수 있습니다.\n   유지하려면 옆의 [자동 재주문] 버튼을 먼저 OFF로 두세요.';
+        if (!confirm(`[${envLabel}] 미체결 주문 ${orders.length}건(매수 ${buys} / 매도 ${sells})을 전부 취소할까요?${warn}`)) return;
+        const btn = document.getElementById('ms-cancel-all-orders');
+        if (btn) btn.disabled = true;
+        try {
+            const res = await axios.post('/stocks/kiwoom/cancel_all_orders', { env: msEnv });
+            const r = res.data.result || {};
+            showDebugToast(`전체 취소 — 성공 ${r.cancelled ?? 0} / 실패 ${r.failed ?? 0}`);
+            if (r.failed) {
+                const lines = (r.results || []).filter(x => !x.ok)
+                    .map(x => `· ${x.stk_nm || x.stk_cd}: ${x.msg || '실패'}`).join('\n');
+                alert(`취소 실패 ${r.failed}건\n${lines}`);
+            }
+            msRefreshAfterOrder();
+        } catch (e) {
+            alert('전체 취소 실패: ' + (e.response?.data?.message || e.message));
+        } finally {
+            if (btn) btn.disabled = false;
         }
     });
 

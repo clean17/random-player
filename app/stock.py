@@ -23,9 +23,9 @@ from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
     get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
-    get_stock_audit_info_map, get_market_index_rates
+    get_stock_audit_info_map, get_market_index_rates, is_autobuy_enabled, set_autobuy_enabled
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
-    _held_business_days as _legacy_business_days
+    manual_cancel_all_orders, _held_business_days as _legacy_business_days
 from auto_trading import kiwoom_trailing_stop as legacy_exit
 from auto_trading import kiwoom_v8_strategy as v8_strategy
 from auto_trading import kiwoom_v8_exit
@@ -1074,5 +1074,70 @@ def post_kiwoom_cancel_order():
         print(e)
         return {"status": "error", "message": str(e)}, 500
     return jsonify({"status": "success", "result": result})
+
+
+@stock.route("/kiwoom/cancel_all_orders", methods=["POST"])
+@login_required
+def post_kiwoom_cancel_all_orders():
+    """미체결 주문 일괄 취소 (2026-09-14).
+
+    ⚠️ 자동 재주문(/kiwoom/autobuy)이 켜져 있으면 v8 이 다음 60초 주기에 같은 후보에
+       다시 주문을 건다. 화면에서 먼저 경고하지만, 여기서도 현재 스위치 상태를 응답에
+       실어 보내 "껐는데 또 생겼다"는 오해를 줄인다.
+    """
+    if _is_guest():
+        return {"status": "error", "message": "게스트는 주문을 취소할 수 없습니다"}, 403
+
+    data = request.get_json() or {}
+    side = data.get("side")            # None=전체 / 'buy' / 'sell'
+    if side not in (None, "", "buy", "sell"):
+        return {"status": "error", "message": "side는 buy/sell 또는 생략입니다"}, 400
+
+    try:
+        env = _req_env(from_json=True)
+        result = manual_cancel_all_orders(env=env, side=side or None)
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"status": "success", "result": result,
+                    "autobuy": is_autobuy_enabled(env), "env": env or KIWOOM_ENV})
+
+
+@stock.route("/kiwoom/autobuy", methods=["GET", "POST"])
+@login_required
+def kiwoom_autobuy():
+    """자동 재주문(자동매수) 스위치 조회/변경 (2026-09-14).
+
+    OFF 로 두면 v8(실전 지정가 매수)과 fire(모의 매수예약)가 신규 주문을 내지 않는다 —
+    전체 취소해 둔 주문이 자동으로 되살아나지 않게 하는 용도. 청산과 수동 주문은 그대로다.
+    상태는 auto_trading/kiwoom_autobuy_{real,mock}.json 에 저장되어 **서버를 재시작해도
+    유지된다** (모의 자동매매가 별도 프로세스라서 메모리 플래그로는 전달이 안 된다).
+    """
+    try:
+        env = _req_env(from_json=(request.method == "POST"))
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+
+    if request.method == "GET":
+        return jsonify({"enabled": is_autobuy_enabled(env), "env": env or KIWOOM_ENV})
+
+    if _is_guest():
+        return {"status": "error", "message": "게스트는 설정을 바꿀 수 없습니다"}, 403
+    data = request.get_json() or {}
+    if "enabled" not in data:
+        return {"status": "error", "message": "enabled(true/false)는 필수입니다"}, 400
+    try:
+        state = set_autobuy_enabled(bool(data.get("enabled")), env=env,
+                                    who=str(current_user.get_id() or 'dashboard'))
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    legacy_exit._log.info(
+        f'[자동재주문:{env or KIWOOM_ENV}] {"ON" if state["enabled"] else "OFF"} '
+        f'(by {state["who"]})')
+    return jsonify({"status": "success", "enabled": state["enabled"],
+                    "env": env or KIWOOM_ENV})
 
 

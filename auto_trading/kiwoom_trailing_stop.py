@@ -1543,6 +1543,64 @@ def manual_cancel_order(stk_cd: str, ord_no: str, side: str, qty: int = 0,
     return result
 
 
+def manual_cancel_all_orders(env: Optional[str] = None, side: Optional[str] = None):
+    """미체결 주문 일괄 취소(대시보드 '주문 목록'의 전체 취소 버튼, 2026-09-14).
+
+    side=None 이면 매수/매도 전부, 'buy'/'sell' 이면 그쪽만 취소한다.
+
+    ⚠️ manual_cancel_order 와 같은 한계가 그대로 적용된다 — **v8 자신의 상태
+    (kiwoom_v8_pending_*.json)는 건드리지 않는다.** 전부 취소해도 자동 재주문이 켜져
+    있으면 v8 이 다음 60초 주기에 같은 자리에 다시 건다. 취소 상태를 유지하려면
+    `kiwoom_api.set_autobuy_enabled(False)`(대시보드의 '자동 재주문' 스위치)를 먼저 꺼야 한다.
+    화면에서도 스위치가 켜져 있으면 경고한 뒤 확인을 받는다.
+
+    반환: {'requested': n, 'cancelled': n, 'failed': n, 'results': [...]}
+    """
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if not (acnt_no and acnt_pwd):
+        _log.error(f'[전체취소] 계좌 정보 미설정 (env={env or KIWOOM_ENV})')
+        raise ValueError(f'계좌 정보가 설정되지 않음 (env={env or KIWOOM_ENV})')
+
+    rows = get_unfilled_orders(acnt_no, acnt_pwd, env=env)
+    targets = []
+    for r in rows:
+        io = str(r.get('io_tp_nm') or '')
+        r_side = 'buy' if '매수' in io else ('sell' if '매도' in io else '')
+        if side and r_side != side:
+            continue
+        if int(r.get('oso_qty_num') or 0) <= 0:
+            continue
+        targets.append((r, r_side))
+
+    results = []
+    cancelled = failed = 0
+    for r, r_side in targets:
+        stk_cd = str(r.get('stk_cd') or '')
+        ord_no = str(r.get('ord_no') or '')
+        qty = int(r.get('oso_qty_num') or 0)
+        api_side = '1' if r_side == 'buy' else '2'
+        try:
+            res = cancel_order(ord_no, stk_cd, qty, side=api_side,
+                               dmst_stex_tp=current_exchange(), env=env)
+            ok = order_accepted(res)
+        except Exception as e:
+            res, ok = {'return_msg': str(e)}, False
+        if ok:
+            cancelled += 1
+        else:
+            failed += 1
+            _log.error(f'[전체취소-실패] {r.get("stk_nm")}({stk_cd}) ord_no={ord_no} '
+                       f'{r_side} {qty}주 -> {res}')
+        results.append({'stk_cd': stk_cd, 'stk_nm': r.get('stk_nm'), 'side': r_side,
+                        'qty': qty, 'ord_no': ord_no, 'ok': ok,
+                        'msg': res.get('return_msg') if isinstance(res, dict) else str(res)})
+
+    _log.info(f'[전체취소:{env or KIWOOM_ENV}] 대상 {len(targets)}건 '
+              f'(side={side or "전체"}) -> 성공 {cancelled} / 실패 {failed}')
+    return {'requested': len(targets), 'cancelled': cancelled, 'failed': failed,
+            'results': results}
+
+
 if __name__ == '__main__':
     import sys
     if '--token' in sys.argv:

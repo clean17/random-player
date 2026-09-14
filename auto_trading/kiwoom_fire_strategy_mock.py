@@ -136,13 +136,14 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
 from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials, \
-    env_path, KIWOOM_ENV
+    env_path, KIWOOM_ENV, is_autobuy_enabled
 from auto_trading.kiwoom_trailing_stop import _log, _record_trade, order_accepted, \
     _load_state as _load_trailing_state, _save_state as _save_trailing_state, _fresh_position_state
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
 CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
 BREADTH_MIN = 0.0          # 시장폭 레짐 게이트. 0 이하면 게이트를 아예 끈다(현재 OFF).
+_autobuy_off_logged = False   # '자동 재주문 OFF' 로그 반복 방지 래치 (run_fire_buy_cycle)
                            # breadth 값은 참고/로그용으로 계속 계산된다.
                            # 켤 때 참고한 검증치(2026-06~08 데이터, 3,045건):
                            #   0.40 → 2026-07에 135건 통과시켜 -3.06%, 2026-03도 못 막음(-2.73%)
@@ -416,6 +417,18 @@ def run_fire_buy_cycle():
     if not (ACNT_NO and ACNT_PWD):
         _log.error('[fire] 계좌 정보 미설정')
         return
+
+    # 2026-09-14: 대시보드 '자동 재주문' 스위치(kiwoom_api.is_autobuy_enabled). 모의 계좌의
+    # 자동매수는 이 함수뿐이라 여기 한 곳만 막으면 된다. 청산(trailing_stop)은 그대로 돈다.
+    # 이 프로세스는 KIWOOM_ENV=mock 고정이므로 env 인수 없이 자기 환경 파일을 읽는다.
+    # 애프터마켓 잡이 1분마다 돌아(16:00~19:59 = 240회) 매번 찍으면 로그가 묻힌다 — 래치로 1회만.
+    global _autobuy_off_logged
+    if not is_autobuy_enabled():
+        if not _autobuy_off_logged:
+            _autobuy_off_logged = True
+            _log.info('[fire] 매수 스킵 — 자동 재주문 OFF (대시보드 스위치)')
+        return
+    _autobuy_off_logged = False
 
     # BREADTH_MIN <= 0 이면 레짐 게이트 자체를 끈다. 이때 breadth 계산 실패(None)로도 매수를
     # 막지 않는다 — 게이트를 껐는데 계산 실패 때문에 조용히 안 사는 상황을 피하기 위함.

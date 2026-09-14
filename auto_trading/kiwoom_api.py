@@ -122,6 +122,54 @@ def log_event(stream: str, payload: Dict, env: Optional[str] = None) -> None:
         pass
 
 
+# ── 자동 재주문 스위치 (2026-09-14) ──────────────────────────────────────────
+# 대시보드 '주문 목록'의 [전체 주문 취소] 버튼으로 미체결을 싹 지워도, 자동매매는 다음
+# 주기(v8 60초 / fire 애프터마켓 1분)에 같은 후보에 다시 주문을 걸어버린다
+# (manual_cancel_order docstring 참고 — 취소는 '지금 이 주문' 하나만 없앤다).
+# 그래서 "취소해 둔 상태를 유지하고 싶다"는 요구를 만족시키려면 재주문 자체를 끄는
+# 스위치가 필요하다.
+#
+# 왜 파일인가: 자동매매가 두 프로세스로 갈려 있다(메인=real v8, run_mock.py=mock fire).
+# Flask가 메모리 플래그를 켜도 모의 프로세스에는 닿지 않고, 재시작하면 사라진다.
+# env_path()로 real/mock을 분리해 각 계좌의 스위치가 서로를 건드리지 않게 한다.
+#
+# ⚠️ 이 스위치는 **매수(신규 주문)만** 막는다. 청산(kiwoom_v8_exit / trailing_stop)과
+#    대시보드 수동 매수/매도는 영향을 받지 않는다 — 보유 종목 보호가 꺼지면 안 된다.
+_AUTOBUY_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kiwoom_autobuy.json')
+
+
+def autobuy_flag_path(env: Optional[str] = None) -> str:
+    return env_path(_AUTOBUY_FLAG, env)
+
+
+def is_autobuy_enabled(env: Optional[str] = None) -> bool:
+    """자동 재주문(자동매수)이 켜져 있는가. 파일이 없으면 True = 기존 동작.
+
+    읽기 실패도 True 로 폴백한다. 스위치 파일이 깨졌다는 이유로 자동매매가 조용히
+    멈추는 쪽이 더 위험하다(반대로 꺼진 걸 못 읽어 한 주기 더 주문이 나가는 건
+    사용자가 화면에서 바로 알아챌 수 있다).
+    """
+    try:
+        with open(autobuy_flag_path(env), 'r', encoding='utf-8') as f:
+            return bool(json.load(f).get('enabled', True))
+    except FileNotFoundError:
+        return True
+    except Exception:
+        return True
+
+
+def set_autobuy_enabled(enabled: bool, env: Optional[str] = None,
+                        who: str = 'dashboard') -> Dict:
+    state = {'enabled': bool(enabled), 'who': who,
+             'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    path = autobuy_flag_path(env)
+    tmp = '%s.tmp.%d' % (path, os.getpid())
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False)
+    os.replace(tmp, path)
+    return state
+
+
 def get_trading_logger(name: str) -> 'logging.Logger':
     """자동매매 모듈 공용 파일 로거. `trading.log`(real) / `trading_mock.log`(mock)에 쓴다.
 
