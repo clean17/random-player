@@ -919,6 +919,19 @@ def get_kiwoom_orders():
     return jsonify({"orders": orders, "env": env or KIWOOM_ENV})
 
 
+@stock.route("/kiwoom/owned_codes", methods=["GET"])
+@login_required
+def get_kiwoom_owned_codes():
+    """실전/모의 계좌에 지금 보유 중인 종목코드 (2026-09-14, 카드뷰·추천종목 '보유중' 배지용).
+
+    화면에 선택된 env(msEnv)와 무관하게 **항상 둘 다** 반환한다 — 관심종목/추천종목
+    카드에는 계좌 선택 개념이 없고, "실전이든 모의든 이미 들고 있다"만 알면 되기 때문.
+    계좌 정보가 없는 환경은 kiwoom_api.get_owned_codes()가 빈 집합으로 폴백한다.
+    """
+    from auto_trading.kiwoom_api import get_owned_codes
+    return jsonify({env: sorted(get_owned_codes(env)) for env in VALID_ENVS})
+
+
 @stock.route("/kiwoom/live_gap_ranking", methods=["GET"])
 @login_required
 def get_kiwoom_live_gap_ranking():

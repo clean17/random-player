@@ -1095,10 +1095,29 @@ function applyStockFlagState() {
     });
     // '확인함' 배지 — 버튼이 아니라 카드(article) 자체에 클래스로 표시한다.
     // fav-btn의 data-stock-code를 그대로 재사용해 카드마다 코드를 다시 마크업에 넣지 않는다.
+    // predict-card는 fav-btn이 없어(즐겨찾기 의미가 없음) article 자체의 data-stock-code로 폴백한다.
     document.querySelectorAll("article.trade-card").forEach((card) => {
-        const code = card.querySelector(".fav-btn")?.dataset.stockCode;
+        const code = card.querySelector(".fav-btn")?.dataset.stockCode || card.dataset.stockCode;
         if (!code) return;
         card.classList.toggle("is-viewed", flagCacheHas(typeof viewedStocks !== "undefined" ? viewedStocks : null, code));
+
+        // 2026-09-14: 실전/모의 계좌 보유중 배지. 종목명 오른쪽에 실제 span을 붙여서 채운다
+        // (색/문구가 3가지 상태라 CSS 생성 콘텐츠만으로는 번거로움 — carousel.css 참고).
+        // 카드는 데이터가 새로 로드될 때마다 innerHTML로 통째로 다시 그려지므로, 배지 span도
+        // 매번 없어졌다 새로 붙는다 — querySelector로 있으면 재사용, 없으면 새로 만든다.
+        const nameEl = card.querySelector(".trade-name");
+        if (nameEl) {
+            let badge = nameEl.querySelector(".card-owned-badge");
+            if (!badge) {
+                badge = document.createElement("span");
+                badge.className = "card-owned-badge";
+                nameEl.appendChild(badge);
+            }
+            const real = flagCacheHas(typeof ownedRealCodes !== "undefined" ? ownedRealCodes : null, code);
+            const mock = flagCacheHas(typeof ownedMockCodes !== "undefined" ? ownedMockCodes : null, code);
+            badge.className = "card-owned-badge" + (real && mock ? " is-both" : real ? " is-real" : mock ? " is-mock" : "");
+            badge.textContent = real && mock ? "보유(실전+모의)" : real ? "보유(실전)" : mock ? "보유(모의)" : "";
+        }
     });
 }
 

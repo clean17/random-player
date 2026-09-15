@@ -232,12 +232,19 @@
         /* 실시간gap 순위표: 이미 보유 중인 종목 표시(2026-08-28) */
         .ms-owned-badge {
             font-size: 11px;
+            font-weight: 600;
             color: #1a7f37;
             border: 1px solid #1a7f37;
             border-radius: 3px;
             padding: 0 4px;
             white-space: nowrap;
+            margin-left: 4px;
         }
+        /* 2026-09-14: 종목명 옆 보유중 배지 확장 — 실전은 붉게(#kiwoomEnvFilter.is-real과
+           같은 톤, 실계좌라는 경고성 강조), 모의는 기존 초록, 둘 다면 별도 색으로 구분. */
+        .ms-owned-badge.ms-owned-real { color: #d93025; border-color: #d93025; }
+        .ms-owned-badge.ms-owned-mock { color: #1a7f37; border-color: #1a7f37; }
+        .ms-owned-badge.ms-owned-both { color: #b8860b; border-color: #b8860b; }
         /* 종목 상태 배지(2026-09-02, ka10099 auditInfo) — 투자경고/관리종목/거래정지 등.
            '단기과열'/'투자주의'류는 경고색, '관리종목'/'거래정지'/'투자경고'는 위험색. */
         .ms-audit-badge {
@@ -987,6 +994,11 @@
     const favoriteStocks = [];
     const reservedStocks = [];   // 자동매수 대상으로 체크한 종목코드 (stock_card.js의 reserve-btn이 참조)
     const viewedStocks = [];     // 카드를 한 번이라도 눌러서 확인한 종목코드 (stock_card.js의 is-viewed 배지가 참조)
+    // 2026-09-14: 지금 실전/모의 계좌에 보유 중인 종목코드 — 카드뷰(stock_card.js의
+    // is-owned-real/is-owned-mock 배지)와 추천종목 표(msStockNameCellHtml)가 함께 참조한다.
+    // msEnv(화면에 선택된 계좌)와 무관하게 항상 둘 다 채운다.
+    const ownedRealCodes = [];
+    const ownedMockCodes = [];
     const startDateInputEl = document.getElementById('dateInputStart');
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
@@ -1853,11 +1865,25 @@
         return `<span class="ms-audit-badge ${cls}">${auditInfo}</span>`;
     }
 
-    function msStockNameCellHtml(name, code, logoUrl, auditInfo) {
+    // 2026-09-14: 실전/모의 계좌 보유중 배지. ownedRealCodes/ownedMockCodes는 위쪽에서
+    // getOwnedCodes()가 채운다 — 카드뷰(stock_card.js)의 종목명 배지와 같은 데이터를 쓴다.
+    // suppressEnv: '내 계좌' 탭처럼 이미 그 계좌 보유종목만 나열하는 표에서는 지금 보고
+    // 있는 계좌의 배지가 매 행마다 뜨는 게 당연하고 불필요하다 — 그 env만 숨긴다(다른
+    // 계좌에도 있으면 그쪽 배지는 그대로 보여준다. 예: 모의 탭인데 실전에도 있으면 표시).
+    function msOwnedBadgeHtml(code, suppressEnv) {
+        const real = ownedRealCodes.indexOf(code) !== -1 && suppressEnv !== 'real';
+        const mock = ownedMockCodes.indexOf(code) !== -1 && suppressEnv !== 'mock';
+        if (!real && !mock) return '';
+        const cls = real && mock ? 'ms-owned-both' : real ? 'ms-owned-real' : 'ms-owned-mock';
+        const label = real && mock ? '보유(실전+모의)' : real ? '보유(실전)' : '보유(모의)';
+        return `<span class="ms-owned-badge ${cls}">${label}</span>`;
+    }
+
+    function msStockNameCellHtml(name, code, logoUrl, auditInfo, suppressOwnedEnv) {
         return `<span class="ms-stock-name" data-stk-cd="${code}">
             ${msStockIconHtml(name, code, logoUrl)}
             <span class="ms-stock-info">
-                <span class="ms-stock-nm">${name ?? ''}${msAuditBadgeHtml(auditInfo)}</span>
+                <span class="ms-stock-nm">${name ?? ''}${msAuditBadgeHtml(auditInfo)}${msOwnedBadgeHtml(code, suppressOwnedEnv)}</span>
                 <span class="ms-stock-code">${code ?? ''}</span>
             </span>
         </span>`;
@@ -1882,7 +1908,7 @@
             const pnlSubText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)} (${msFmtPct(h.profit_rate)})`;
             return `
         <tr>
-          <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url, h.audit_info)}</td>
+          <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url, h.audit_info, msEnv || msEnvDefault)}</td>
           <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ms-sub-sort ${msPnlClass(pnl)}" data-sort="profit_rate">${pnlSubText}</span></td>
           <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
           <td class="right">${msFmtEok(h.trde_amt)}</td>

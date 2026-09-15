@@ -682,6 +682,40 @@ def get_holdings_and_summary(acnt_no: str, acnt_pwd: str,
     return _parse_holdings(data), _parse_summary(data)
 
 
+# ── 보유중 배지용 종목코드 조회 (2026-09-14) ────────────────────────────────
+# 관심종목/추천종목 화면(카드뷰·표)에 "지금 실전/모의 계좌에 보유 중"을 표시하기 위한
+# 가벼운 조회. 계좌 조회(kt00018)는 API 호출이라 관심종목 화면에서 60초마다(즐겨찾기/
+# 자동매수 동기화 주기와 같이 묶임) 두 계좌씩 부르면 낭비다 — 짧게 캐시해서 같은
+# 주기 안의 중복 호출(여러 브라우저 탭 등)을 흡수한다. 실시간성이 중요한 값이 아니다
+# (실제 보유 화면인 '내 계좌' 탭은 이 함수를 쓰지 않고 3초 주기로 직접 조회한다).
+_owned_codes_cache_lock = threading.Lock()
+_owned_codes_cache: Dict[str, Tuple[float, set]] = {}
+_OWNED_CODES_CACHE_TTL = 5.0
+
+
+def get_owned_codes(env: Optional[str] = None) -> set:
+    """현재 보유 중인 종목코드 집합. 계좌 정보가 없거나 조회 실패하면 빈 집합(안전 폴백)."""
+    key = env or KIWOOM_ENV
+    now = time.time()
+    with _owned_codes_cache_lock:
+        cached = _owned_codes_cache.get(key)
+        if cached is not None and now - cached[0] < _OWNED_CODES_CACHE_TTL:
+            return cached[1]
+
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if acnt_no and acnt_pwd:
+        try:
+            codes = {h['stk_cd'] for h in get_holdings(acnt_no, acnt_pwd, env)}
+        except Exception:
+            codes = set()
+    else:
+        codes = set()
+
+    with _owned_codes_cache_lock:
+        _owned_codes_cache[key] = (now, codes)
+    return codes
+
+
 # ── 주문 ─────────────────────────────────────────────────────────────────────
 # ⚠️ 매수(kt10000)/매도(kt10001) 별도 api-id, 필드명(ord_qty/ord_uv/trde_tp/dmst_stex_tp),
 #    acnt_no/acnt_pwd 불필요(계좌는 토큰에 귀속) — 실제 매수 성공 예제(블로그)를 근거로 수정함.
