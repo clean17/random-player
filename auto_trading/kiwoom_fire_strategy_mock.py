@@ -131,6 +131,7 @@ fire(급상승 관심종목) 자동 매수 전략.
 import os
 import json
 import datetime
+import time
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -138,12 +139,21 @@ import pandas as pd
 from auto_trading.kiwoom_api import buy_market, get_holdings_and_summary, get_account_credentials, \
     env_path, KIWOOM_ENV, is_autobuy_enabled
 from auto_trading.kiwoom_trailing_stop import _log, _record_trade, order_accepted, \
-    _load_state as _load_trailing_state, _save_state as _save_trailing_state, _fresh_position_state
+    _load_state as _load_trailing_state, _save_state as _save_trailing_state, _fresh_position_state, \
+    manual_owned_codes
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
 CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
 BREADTH_MIN = 0.0          # 시장폭 레짐 게이트. 0 이하면 게이트를 아예 끈다(현재 OFF).
 _autobuy_off_logged = False   # '자동 재주문 OFF' 로그 반복 방지 래치 (run_fire_buy_cycle)
+# 2026-09-14: 애프터마켓 잡은 1분마다 반복 호출된다(16:00~19:59, batch_runner.py
+# mock_fire_buy_aftermarket). reserved 종목을 그날 이미 다 사서 쿨다운(COOLDOWN_DAYS)에
+# 걸리면 나머지 시간 내내 매 분 "후보 X종목 ... 제외 후 0종목" / "집행 완료 — 0원"을
+# 반복 출력한다 — 실측(2026-09-14 071200 사례) 4시간 동안 240회 동일한 줄. 살 게 없는
+# 사이클(ranked 비어있음)은 이 주기로만 상세 로그를 남긴다("교집합 N종목" 첫 줄은 시세가
+# 바뀌며 매 분 값이 달라 계속 남긴다 — 스크리너가 살아있다는 신호이기도 하다).
+_FIRE_NOOP_LOG_INTERVAL_SEC = 900   # 15분 — reconcile_fills 15분 주기와 같은 리듬
+_last_fire_noop_log_ts = 0.0
                            # breadth 값은 참고/로그용으로 계속 계산된다.
                            # 켤 때 참고한 검증치(2026-06~08 데이터, 3,045건):
                            #   0.40 → 2026-07에 135건 통과시켜 -3.06%, 2026-03도 못 막음(-2.73%)
@@ -412,6 +422,18 @@ def _save_fire_state(state: Dict):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
+def log_config():
+    """서버(스케줄러) 시작 시 1회 호출 — 지금 이 프로세스(모의 전용)에 실제로 로드된 fire
+    매수 상수를 로그에 남긴다 (2026-09-15 사용자 요청, kiwoom_v8_strategy.log_config()와
+    같은 목적). ⚠️ 상수를 하나라도 추가/변경하면 이 함수도 같이 갱신할 것."""
+    _log.info(
+        'fire 매수 설정: BREADTH_MIN=%.0f%% CLOSE_POS_MIN=%.2f CASH_DEPLOY_RATIO=%.0f%% '
+        'BUY_SLOTS=%d POS_CAP_DIVISOR=%d COOLDOWN_DAYS=%d일 REBUY_PROFIT_CAP=%.0f%% '
+        'MAX_TOTAL_HOLDINGS=%s FIRE_WINDOW_DAYS=%d일',
+        BREADTH_MIN * 100, CLOSE_POS_MIN, CASH_DEPLOY_RATIO * 100, BUY_SLOTS, POS_CAP_DIVISOR,
+        COOLDOWN_DAYS, REBUY_PROFIT_CAP * 100, MAX_TOTAL_HOLDINGS, FIRE_WINDOW_DAYS)
+
+
 def run_fire_buy_cycle():
     """장중 주기 실행: 레짐 확인 → fire+H2 후보 → 쿨다운/보유중/일일한도 거르고 시장가 매수."""
     if not (ACNT_NO and ACNT_PWD):
@@ -422,7 +444,7 @@ def run_fire_buy_cycle():
     # 자동매수는 이 함수뿐이라 여기 한 곳만 막으면 된다. 청산(trailing_stop)은 그대로 돈다.
     # 이 프로세스는 KIWOOM_ENV=mock 고정이므로 env 인수 없이 자기 환경 파일을 읽는다.
     # 애프터마켓 잡이 1분마다 돌아(16:00~19:59 = 240회) 매번 찍으면 로그가 묻힌다 — 래치로 1회만.
-    global _autobuy_off_logged
+    global _autobuy_off_logged, _last_fire_noop_log_ts
     if not is_autobuy_enabled():
         if not _autobuy_off_logged:
             _autobuy_off_logged = True
@@ -460,6 +482,16 @@ def run_fire_buy_cycle():
 
     passed = len(candidates)
     candidates = [c for c in candidates if c['stk_cd'] in reserved]
+    # 2026-09-16: 수동매수 보호 종목 제외 — reserved 교집합이어도 사용자가 대시보드에서
+    # 직접 산 종목이면 fire가 "이미 보유 중이니 추가매수"로 취급해 더 사들이면 안 된다
+    # (kiwoom_trailing_stop.manual_owned_codes, 같은 날 052710 손절 사고의 매수판 버전).
+    # 신규 진입 여부와 무관하게 아예 후보에서 뺀다 — 이 종목은 자동매매가 손대지 않는다.
+    _manual = manual_owned_codes()
+    if _manual:
+        excluded = sorted({c['stk_cd'] for c in candidates} & _manual)
+        if excluded:
+            candidates = [c for c in candidates if c['stk_cd'] not in _manual]
+            _log.info(f'[fire] 수동매수 보호 종목 {len(excluded)}건 후보에서 제외 {excluded}')
     _log.info(f'[fire] fire 조건 통과 {passed}종목 / reserved {len(reserved)}종목 '
               f'→ 교집합 {len(candidates)}종목')
     if not candidates:
@@ -469,6 +501,7 @@ def run_fire_buy_cycle():
     today = datetime.date.today()
     daily = state.get('_daily', {})
     buys_today = daily.get('count', 0) if daily.get('date') == today.isoformat() else 0
+    buys_at_cycle_start = buys_today   # '집행 완료' 로그에서 오늘 누적 vs 이번 사이클 신규를 구분하는 데 쓴다
     if buys_today >= BUY_SLOTS:
         return
 
@@ -569,11 +602,21 @@ def run_fire_buy_cycle():
         ranked.append({**cand, '_price': price, '_close_pos': close_pos})
     ranked.sort(key=lambda c: c['_close_pos'], reverse=True)
 
-    _log.info(f'[fire] 후보 {len(candidates)}종목(쿨다운 제외 {len(live)} → '
-              f'종가위치 {CLOSE_POS_MIN} 미달 {skipped_tail}종목, 보유수익률상한 {skipped_profit_cap}종목 '
-              f'제외 후 {len(ranked)}종목) / '
-              f'가용현금 {cash:,.0f}원 → 매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}), '
-              f'종목당 상한 {pos_cap:,.0f}원(한도/{POS_CAP_DIVISOR}), 최대 {BUY_SLOTS}종목')
+    # ranked가 비면(오늘 이미 다 사서 쿨다운에 전부 걸림 등) 이번 사이클엔 확실히 0건
+    # 매수한다 — 아래 for 루프가 그냥 안 돈다. 그런 '살 게 없는' 사이클의 상세 로그는
+    # 15분에 한 번만 남긴다(위 _FIRE_NOOP_LOG_INTERVAL_SEC 주석 참고). ranked가 있으면
+    # (뭔가 매수를 시도할 수 있으면) 매번 남긴다 — 그게 진짜 새 정보다.
+    actionable = bool(ranked)
+    now_ts = time.time()
+    should_log_detail = actionable or (now_ts - _last_fire_noop_log_ts) >= _FIRE_NOOP_LOG_INTERVAL_SEC
+    if should_log_detail:
+        if not actionable:
+            _last_fire_noop_log_ts = now_ts
+        _log.info(f'[fire] 후보 {len(candidates)}종목(쿨다운 제외 {len(live)} → '
+                  f'종가위치 {CLOSE_POS_MIN} 미달 {skipped_tail}종목, 보유수익률상한 {skipped_profit_cap}종목 '
+                  f'제외 후 {len(ranked)}종목) / '
+                  f'가용현금 {cash:,.0f}원 → 매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}), '
+                  f'종목당 상한 {pos_cap:,.0f}원(한도/{POS_CAP_DIVISOR}), 최대 {BUY_SLOTS}종목')
 
     skipped_price = 0   # 배정 예산으로 1주도 못 사 건너뛴 종목 수 (사후 진단용)
 
@@ -678,11 +721,17 @@ def run_fire_buy_cycle():
         reasons.append(f'후보 부족({len(ranked)} < 슬롯 {BUY_SLOTS})')
     held = summary['tot_evlt_amt'] + deployed
     hold_ratio = (held / summary['total_asset']) if summary['total_asset'] > 0 else 0.0
-    _log.info(f'[fire] 집행 완료 — {buys_today}종목 {deployed:,.0f}원 '
-              f'(한도 {deploy_limit:,.0f}원의 {deployed / deploy_limit:.0%}), '
-              f'미사용 {unspent:,.0f}원'
-              f'{" — " + ", ".join(reasons) if reasons else ""} / '
-              f'매수 후 보유비율 약 {hold_ratio:.0%} (현금 약 {1 - hold_ratio:.0%})')
+    # 2026-09-14: {buys_today}는 '오늘 누적' 체결 수(daily state)라 이번 사이클에 새로
+    # 산 게 0건이어도 "11종목 0원"처럼 마치 이번에 11개를 사고 0원 쓴 것처럼 읽혔다
+    # (071200 사례 — 애프터마켓 1분 반복 잡이 쿨다운으로 막힌 채 계속 이렇게 찍음).
+    # 누적/신규를 분리해서 헷갈리지 않게 한다.
+    bought_this_cycle = buys_today - buys_at_cycle_start
+    if should_log_detail:
+        _log.info(f'[fire] 집행 완료 — 이번 사이클 신규 {bought_this_cycle}종목 {deployed:,.0f}원 '
+                  f'(한도 {deploy_limit:,.0f}원의 {deployed / deploy_limit:.0%}), '
+                  f'오늘 누적 {buys_today}종목, 미사용 {unspent:,.0f}원'
+                  f'{" — " + ", ".join(reasons) if reasons else ""} / '
+                  f'매수 후 보유비율 약 {hold_ratio:.0%} (현금 약 {1 - hold_ratio:.0%})')
 
 
 if __name__ == '__main__':

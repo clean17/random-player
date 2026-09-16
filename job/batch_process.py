@@ -519,8 +519,17 @@ def run_v8_screen():
 
 
 def run_v8_buy():
-    from auto_trading.kiwoom_v8_strategy import run_v8_buy_cycle as _f
-    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
+    # ⚠️ kiwoom_trailing_stop.is_market_open()이 아니라 kiwoom_v8_strategy.is_market_open()을
+    # 쓴다. 두 함수는 이름이 같지만 다른 것이다 — trailing_stop 쪽은 "시장가 주문이 체결될
+    # 수 있는 구간"만 의도적으로 좁게(09:00~15:20) 잡아놓은 함수고(레거시 fire 손절용),
+    # v8_strategy 쪽은 2026-09-12부터 KRX 애프터마켓(16:00~20:00)도 포함하도록 넓어졌다.
+    # 2026-09-14 사고: 여기서 좁은 쪽을 그대로 썼더니 run_v8_buy_cycle() 자체는 이미
+    # 애프터마켓을 지원하는데(내부에서 v8_strategy.is_market_open() 재확인) 이 바깥 게이트가
+    # 먼저 막아서 애프터마켓엔 호출조차 안 됐다 — daily_candidates()가 재계산되지 않아
+    # 15:55 스크리닝이 비운 state['day'] 캐시가 그대로 남고, 그 결과 대시보드 실시간gap/
+    # 주문목록의 gap·score가 애프터마켓 내내 빈 채로 보였다.
+    from auto_trading.kiwoom_v8_strategy import run_v8_buy_cycle as _f, is_market_open
+    from auto_trading.kiwoom_trailing_stop import _log
     try:
         if is_market_open():
             _f()
@@ -529,8 +538,12 @@ def run_v8_buy():
 
 
 def run_v8_exit():
+    # 위 run_v8_buy()와 같은 이유로 kiwoom_v8_strategy.is_market_open()을 쓴다.
+    # kiwoom_v8_exit.run_v8_exit_cycle() 내부도 이미 v8.is_market_open()으로 재확인하므로
+    # (kiwoom_v8_exit.py 참고) 이 바깥 게이트만 좁은 쪽이면 청산도 애프터마켓엔 전혀 안 돌았다.
     from auto_trading.kiwoom_v8_exit import run_v8_exit_cycle as _f
-    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
+    from auto_trading.kiwoom_v8_strategy import is_market_open
+    from auto_trading.kiwoom_trailing_stop import _log
     try:
         if is_market_open():
             _f()

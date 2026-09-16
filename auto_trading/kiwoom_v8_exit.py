@@ -96,8 +96,35 @@ MAX_HOLD_DAYS = 7
 HARD_FLOOR_PCT = None
 ANOMALY_DROP = 0.35            # 직전 관측가 대비 -35% 이상 급락이면 매도하지 않고 정지
 
+# 2026-09-14: 애프터마켓(16:00~20:00) 시장가 매도 거부 대응.
+# 실측 로그: 085620/094170/124500/354200 트레일링 매도가 전부
+# "[2000](521790:해당 호가유형은 주문 불가능한 시간입니다.)" (return_code 20)로 거부됐다 —
+# 이 시간대는 trde_tp='3'(시장가) 자체를 안 받는다(NXT의 옛 제약과 달리 이번엔 KRX 자체
+# 애프터마켓인데도 마찬가지). 지정가(trde_tp='0')만 받으므로, 청산 4곳(하한선/ATR샹들리에/
+# 트레일링/익절/보유상한 — 아래 _sell() 하나로 통일) 전부 애프터마켓엔 현재가에서
+# AFTERMARKET_SELL_SLIPPAGE 만큼 낮춘 공격적 지정가를 쓴다. 완전한 시장가 체감을 흉내내되
+# (즉시 체결을 노림) 진짜 시장가처럼 무제한으로 밀리지는 않게 하한을 둔 것 — 정규장에서는
+# 지금까지처럼 그대로 시장가를 쓴다(바뀌는 게 없다).
+# ⚠️ 값은 추정치다. 분봉 데이터가 없어 애프터마켓 호가창 두께를 백테스트로 검증할 수
+# 없다 — 라이브 로그(주문거부 여부, 실제 체결가와의 괴리)로 관찰 후 조정할 것.
+AFTERMARKET_SELL_SLIPPAGE = 0.01   # 현재가 대비 -1%
+
 # ⚠️ env_path 필수 (kiwoom_api.env_path docstring 의 2026-08-14 사고 참고).
 STATE_PATH = env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_v8_positions.json'))
+
+
+def log_config():
+    """서버(스케줄러) 시작 시 1회 호출 — 지금 이 프로세스에 실제로 로드된 v8 청산 상수를
+    로그에 남긴다 (2026-09-15 사용자 요청, kiwoom_v8_strategy.log_config()와 같은 목적).
+    ⚠️ 상수를 하나라도 추가/변경하면 이 함수도 같이 갱신할 것."""
+    _log.info(
+        'v8 청산 설정: V8_EXIT_ENABLED=%s ATR_MULT=%.1f TRAIL_PCT=%.1f%% TRAIL_FRAC=%.0f%% '
+        'TRAIL_CONFIRM_SECONDS=%d초 TP_PCT=%.0f%% TP_FRAC=%.0f%% MAX_HOLD_DAYS=%d영업일 '
+        'HARD_FLOOR_PCT=%s ANOMALY_DROP=%.0f%% AFTERMARKET_SELL_SLIPPAGE=%.0f%%',
+        V8_EXIT_ENABLED, ATR_MULT, TRAIL_PCT * 100, TRAIL_FRAC * 100, TRAIL_CONFIRM_SECONDS,
+        TP_PCT * 100, TP_FRAC * 100, MAX_HOLD_DAYS,
+        ('%.0f%%' % (HARD_FLOOR_PCT * 100)) if HARD_FLOOR_PCT is not None else 'None(비활성)',
+        ANOMALY_DROP * 100, AFTERMARKET_SELL_SLIPPAGE * 100)
 
 
 def _load() -> Dict:
@@ -137,20 +164,44 @@ def _init_pos(stk_cd: str, entry: float, qty: int) -> Dict:
             'last_price': float(entry)}
 
 
+def _sell(stk_cd: str, qty: int, px: float) -> dict:
+    """청산 4곳(하한선/ATR샹들리에/트레일링/익절/보유상한)이 공유하는 매도 진입점.
+
+    정규장은 지금까지와 동일하게 시장가. 애프터마켓(16:00~20:00)은 시장가 주문 자체가
+    거부되므로(위 AFTERMARKET_SELL_SLIPPAGE 주석의 2026-09-14 실측 참고) 현재가보다
+    AFTERMARKET_SELL_SLIPPAGE 만큼 낮춘 지정가로 대신 낸다 — 즉시 체결을 노리는 '공격적
+    지정가'다. 호가단위는 kiwoom_v8_strategy의 틱 라운딩을 그대로 쓴다(매수/매도 공용
+    로직이라 이름은 '_round_tick'이지만 내림 방향이 매도에도 유리하게 작동한다 — 더 낮은
+    지정가일수록 매수 호가와 더 빨리 만난다).
+    """
+    if not api.is_krx_aftermarket_open():
+        return api.sell_market(stk_cd, qty)
+    limit_px = v8._round_tick(px * (1.0 - AFTERMARKET_SELL_SLIPPAGE))
+    res = api.sell_limit(stk_cd, qty, limit_px)
+    _log.info('v8 애프터마켓 지정가매도 %s qty=%d 현재가=%.0f -> 지정가=%d -> %s',
+              stk_cd, qty, px, limit_px, res)
+    return res
+
+
 def run_v8_exit_cycle():
     """30초 주기. 보유 종목을 v8 규칙으로 청산."""
     if not V8_EXIT_ENABLED:
         return
-    if not v8.is_market_open():      # 시장가 매도 — KRX 정규장에서만
+    if not v8.is_market_open():      # 시장가 매도 — KRX 정규장 + 2026-09-14 애프터마켓(16:00~20:00)
         return
     acnt_no, acnt_pwd = api.get_account_credentials()
     if not acnt_no or not acnt_pwd:
         return
     holdings = api.get_holdings(acnt_no, acnt_pwd)
     st = _load()
-    if not holdings and st:
+    if not holdings and st and not all(p.get('pending_exit') for p in st.values()):
         # ⚠️ 조회 실패와 '진짜 전량 청산'을 구분할 수 없다. 아래 정리 루프가 상태를 전부
         #    지워버리면 peak / tp_done / trail_armed 기준선이 사라져 재진입 시 오판한다.
+        # 단, 남은 포지션 전부가 pending_exit(=이미 매도 주문을 내고 체결 확인만 기다리는
+        # 중)이면 얘기가 다르다 — 그건 '마지막 남은 포지션까지 진짜로 다 팔렸다'는 정상
+        # 신호일 가능성이 높다(2026-09-14 pending_exit 도입 전엔 소유권을 매도 접수 즉시
+        # 놓아서 이 케이스 자체가 안 보였다). 그래서 이때는 스킵하지 않고 계속 진행해
+        # 아래 '계좌에서 사라진 종목 정리'가 소유권을 정상적으로 해제하게 한다.
         _log.warning('v8 청산: 보유 목록이 비었는데 상태 %d건이 남아 있다 — '
                      '조회 실패 가능성이 있어 이번 사이클은 건너뛴다', len(st))
         return
@@ -159,6 +210,7 @@ def run_v8_exit_cycle():
 
     for h in holdings:
         code = h.get('stk_cd')
+        stk_nm = h.get('stk_nm') or ''   # 2026-09-14: 로그에 코드만 찍혀 종목을 못 알아보기 쉬워 이어붙인다
         qty = int(h.get('qty') or 0)
         if not code or qty <= 0:
             continue
@@ -172,19 +224,33 @@ def run_v8_exit_cycle():
         est_fee_total = h.get('est_fee') or 0.0
         live.add(code)
         pos = st.get(code)
+        if pos is not None and pos.get('pending_exit'):
+            # 2026-09-14: 청산 주문을 냈지만 아직 체결 확인 전이다. 예전엔 주문이 '접수'만
+            # 되면 바로 release_ordered() 로 소유권을 놓아버렸는데, 애프터마켓 지정가는
+            # 정규장 시장가와 달리 체결까지 몇 분~그 이상 걸릴 수 있다(실사고: 354200,
+            # 2026-09-14 19:12 접수 후 10분 넘게 미체결). 그 사이 소유권이 이미 없어져
+            # 레거시 트레일링(kiwoom_trailing_stop.py)이 같은 종목을 중복으로 팔려다
+            # "매도가능수량 부족"으로 30초마다 계속 거부당하는 레이스가 실제로 발생했다.
+            # 그래서 이 종목이 holdings 에서 실제로 사라질 때까지(=체결 확인, 아래 '계좌에서
+            # 사라진 종목 정리' 참고) 규칙 재평가를 건너뛰고 소유권도 계속 쥐고 있는다.
+            # ⚠️ 한계: 부분체결로 수량만 줄고 잔량이 남아 계속 holdings 에 보이면, 이 종목은
+            # 그 잔량에 대해 새 규칙을 평가하지 않고 계속 대기 상태로 남는다 — 중복 주문을
+            # 막는 안전한 기본값이지만, 자동으로 재주문/재평가하지는 않는다.
+            continue
         if pos is None:
             pos = _init_pos(code, float(h.get('avg_price') or 0) or float(h.get('cur_price') or 0), qty)
             st[code] = pos
-            _log.info('v8 포지션 등록 %s entry=%.0f atr=%.0f qty=%d',
-                      code, pos['entry'], pos['atr'], qty)
+            _log.info('v8 포지션 등록 %s(%s) entry=%.0f atr=%.0f qty=%d',
+                      code, stk_nm, pos['entry'], pos['atr'], qty)
         elif qty > int(pos.get('shares0') or 0) and not pos.get('tp_done') \
                 and pos.get('trail_armed', True):
             # 부분 체결 잔량이 추가로 체결되면 보유수량이 등록 시점보다 늘어난다.
             # shares0 을 갱신하지 않으면 '최초수량의 1/2' 매도가 실제 절반보다 작아진다.
             # 단, 이미 분할 매도가 시작된 뒤에는 갱신하지 않는다(기준이 흔들린다).
-            _log.info('v8 추가체결 반영 %s shares0 %d -> %d', code, pos['shares0'], qty)
+            _log.info('v8 추가체결 반영 %s(%s) shares0 %d -> %d', code, stk_nm, pos['shares0'], qty)
             pos['shares0'] = qty
             pos['entry'] = float(h.get('avg_price') or 0) or pos['entry']
+        pos['stk_nm'] = stk_nm   # '계좌에서 사라진 종목 정리'(체결확인) 로그가 이름을 쓸 수 있게 매 사이클 갱신
 
         px = float(h.get('cur_price') or 0)
         if px <= 0:
@@ -200,14 +266,14 @@ def run_v8_exit_cycle():
             d_chk = v8._load_daily(code)
             prev_close = v8.prev_close_of(d_chk) if d_chk is not None else None
             if prev_close is not None and px == prev_close:
-                _log.warning('v8 개장직후 전일종가 고착 의심 %s px=%.0f(=전일종가) — 이번 사이클 매매판단 보류',
-                             code, px)
+                _log.warning('v8 개장직후 전일종가 고착 의심 %s(%s) px=%.0f(=전일종가) — 이번 사이클 매매판단 보류',
+                             code, stk_nm, px)
                 continue
         # 이상 감지 — 매도하지 않고 스킵 (액면분할/권리락 방어)
         prev = float(pos.get('last_price') or px)
         if prev > 0 and px / prev - 1.0 <= -ANOMALY_DROP:
-            _log.error('v8 이상감지 %s: %.0f -> %.0f (%.1f%%) 매도 보류',
-                       code, prev, px, (px / prev - 1) * 100)
+            _log.error('v8 이상감지 %s(%s): %.0f -> %.0f (%.1f%%) 매도 보류',
+                       code, stk_nm, prev, px, (px / prev - 1) * 100)
             continue
         pos['last_price'] = px
 
@@ -229,47 +295,47 @@ def run_v8_exit_cycle():
         #    ⚠️ HARD_FLOOR_PCT=None 이면 이 규칙 자체를 건너뛴다(2026-09-11 비활성화, 위 상수 주석 참고).
         floor_px = entry * (1.0 + HARD_FLOOR_PCT) if HARD_FLOOR_PCT is not None else None
         if floor_px is not None and px <= floor_px:
-            res = api.sell_market(code, qty)
+            res = _sell(code, qty, px)
             ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
             if not ok:
-                _log.warning('v8 하한선(hard_floor) 주문 거부 %s qty=%d px=%.0f floor=%.0f -> %s',
-                             code, qty, px, floor_px, res)
+                _log.warning('v8 하한선(hard_floor) 주문 거부 %s(%s) qty=%d px=%.0f floor=%.0f -> %s',
+                             code, stk_nm, qty, px, floor_px, res)
                 continue
             v8.mark_sold(code)
-            _log.info('v8 하한선(hard_floor) %s qty=%d px=%.0f floor=%.0f(entry%.0f%%) -> %s',
-                      code, qty, px, floor_px, HARD_FLOOR_PCT * 100, res)
+            _log.info('v8 하한선(hard_floor) %s(%s) qty=%d px=%.0f floor=%.0f(entry%.0f%%) -> %s',
+                      code, stk_nm, qty, px, floor_px, HARD_FLOOR_PCT * 100, res)
             fee_share = est_fee_total * (qty / full_qty) if full_qty > 0 else 0.0
             pnl = (px - entry) * qty - fee_share
             _record_trade(code, h.get('stk_nm'), 'sell', 'v8_hard_floor', qty, px, entry, pnl,
                           holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
                           trigger_level=floor_px / entry - 1.0, ord_no=res.get('ord_no'))
-            st.pop(code, None)
-            v8.release_ordered(code)
+            # 소유권 해제는 체결 확인 후로 미룬다(위 pending_exit 주석 참고) — 여기서 바로
+            # release_ordered 하지 않는다.
+            pos['pending_exit'] = True
             continue
 
         # 1) ATR 샹들리에 손절 — 전량
         stop_px = peak - ATR_MULT * atr
         if px <= stop_px:
-            res = api.sell_market(code, qty)
+            res = _sell(code, qty, px)
             ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
             if not ok:
                 # 주문이 거부되면(예: 사용자가 직전에 수동으로 이미 전량 매도해 잔량이 없음)
                 # 실제로 판 게 없으니 거래이력에 기록하지도, 포지션 상태를 지우지도 않는다 —
                 # 2026-08-31 121850 사고: 이 체크가 없어 수동매도와 v8손절이 같은 체결을
                 # 중복으로 거래이력에 남겨 당일 수익이 실제의 약 2배로 잡혔다.
-                _log.warning('v8 손절(ATR샹들리에) 주문 거부 %s qty=%d px=%.0f stop=%.0f -> %s',
-                             code, qty, px, stop_px, res)
+                _log.warning('v8 손절(ATR샹들리에) 주문 거부 %s(%s) qty=%d px=%.0f stop=%.0f -> %s',
+                             code, stk_nm, qty, px, stop_px, res)
                 continue
             v8.mark_sold(code)
-            _log.info('v8 손절(ATR샹들리에) %s qty=%d px=%.0f stop=%.0f -> %s',
-                      code, qty, px, stop_px, res)
+            _log.info('v8 손절(ATR샹들리에) %s(%s) qty=%d px=%.0f stop=%.0f -> %s',
+                      code, stk_nm, qty, px, stop_px, res)
             fee_share = est_fee_total * (qty / full_qty) if full_qty > 0 else 0.0
             pnl = (px - entry) * qty - fee_share
             _record_trade(code, h.get('stk_nm'), 'sell', 'v8_atr_stop', qty, px, entry, pnl,
                           holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
                           trigger_level=stop_px / entry - 1.0, ord_no=res.get('ord_no'))
-            st.pop(code, None)
-            v8.release_ordered(code)
+            pos['pending_exit'] = True   # 소유권 해제는 체결 확인 후로 미룬다(위 pending_exit 주석 참고)
             continue
 
         # 2) 트레일링(TRAIL_PCT) — 최초수량의 1/2. TRAIL_CONFIRM_SECONDS 재확인(위 상수 설명 참고).
@@ -290,21 +356,21 @@ def run_v8_exit_cycle():
                 since_dt = None
             if since_dt is None:
                 pos['trail_watch_since'] = now.isoformat()
-                _log.info('v8 트레일링관찰 %s px=%.0f peak=%.0f trigger=%.0f — %d초 재확인 대기',
-                          code, px, peak, trail_trigger, TRAIL_CONFIRM_SECONDS)
+                _log.info('v8 트레일링관찰 %s(%s) px=%.0f peak=%.0f trigger=%.0f — %d초 재확인 대기',
+                          code, stk_nm, px, peak, trail_trigger, TRAIL_CONFIRM_SECONDS)
             elif (now - since_dt).total_seconds() >= TRAIL_CONFIRM_SECONDS:
                 sell_qty = min(trail_qty, qty)
                 if sell_qty >= 1:
-                    res = api.sell_market(code, sell_qty)
+                    res = _sell(code, sell_qty, px)
                     ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
                     if not ok:
                         # 거부 시 trail_watch_since를 건드리지 않아 다음 사이클에 재시도한다.
-                        _log.warning('v8 트레일링 주문 거부 %s qty=%d px=%.0f peak=%.0f -> %s',
-                                     code, sell_qty, px, peak, res)
+                        _log.warning('v8 트레일링 주문 거부 %s(%s) qty=%d px=%.0f peak=%.0f -> %s',
+                                     code, stk_nm, sell_qty, px, peak, res)
                     else:
                         v8.mark_sold(code)
-                        _log.info('v8 트레일링 %s qty=%d px=%.0f peak=%.0f -> %s',
-                                  code, sell_qty, px, peak, res)
+                        _log.info('v8 트레일링 %s(%s) qty=%d px=%.0f peak=%.0f -> %s',
+                                  code, stk_nm, sell_qty, px, peak, res)
                         fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
                         pnl = (px - entry) * sell_qty - fee_share
                         _record_trade(code, h.get('stk_nm'), 'sell', 'v8_trailing', sell_qty, px, entry, pnl,
@@ -316,11 +382,10 @@ def run_v8_exit_cycle():
                         pos['trail_watch_since'] = None
                         qty -= sell_qty
                         if qty <= 0:
-                            st.pop(code, None)
-                            v8.release_ordered(code)
+                            pos['pending_exit'] = True   # 소유권 해제는 체결 확인 후로 미룬다
                             continue
         elif pos.get('trail_watch_since') is not None:
-            _log.info('v8 트레일링관찰해제 %s px=%.0f 로 회복', code, px)
+            _log.info('v8 트레일링관찰해제 %s(%s) px=%.0f 로 회복', code, stk_nm, px)
             pos['trail_watch_since'] = None
 
         # 3) 익절 +20% — 최초수량의 1/2, 1회
@@ -328,15 +393,15 @@ def run_v8_exit_cycle():
         if (not pos.get('tp_done')) and px >= tp_trigger:
             sell_qty = min(tp_qty, qty)
             if sell_qty >= 1:
-                res = api.sell_market(code, sell_qty)
+                res = _sell(code, sell_qty, px)
                 ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
                 if not ok:
-                    _log.warning('v8 익절 주문 거부 %s qty=%d px=%.0f (+%.0f%%) -> %s',
-                                 code, sell_qty, px, TP_PCT * 100, res)
+                    _log.warning('v8 익절 주문 거부 %s(%s) qty=%d px=%.0f (+%.0f%%) -> %s',
+                                 code, stk_nm, sell_qty, px, TP_PCT * 100, res)
                 else:
                     v8.mark_sold(code)
-                    _log.info('v8 익절 %s qty=%d px=%.0f (+%.0f%%) -> %s',
-                              code, sell_qty, px, TP_PCT * 100, res)
+                    _log.info('v8 익절 %s(%s) qty=%d px=%.0f (+%.0f%%) -> %s',
+                              code, stk_nm, sell_qty, px, TP_PCT * 100, res)
                     fee_share = est_fee_total * (sell_qty / full_qty) if full_qty > 0 else 0.0
                     pnl = (px - entry) * sell_qty - fee_share
                     _record_trade(code, h.get('stk_nm'), 'sell', 'v8_take_profit', sell_qty, px, entry, pnl,
@@ -346,33 +411,40 @@ def run_v8_exit_cycle():
                     pos['tp_done'] = True
                     qty -= sell_qty
                     if qty <= 0:
-                        st.pop(code, None)
-                        v8.release_ordered(code)
+                        pos['pending_exit'] = True   # 소유권 해제는 체결 확인 후로 미룬다
                         continue
 
         # 4) 최대 보유일
         if _business_days(pos.get('entry_date', '')) >= MAX_HOLD_DAYS:
-            res = api.sell_market(code, qty)
+            res = _sell(code, qty, px)
             ok = isinstance(res, dict) and str(res.get('return_code', '')) == '0'
             if not ok:
-                _log.warning('v8 보유상한(%d영업일) 주문 거부 %s qty=%d -> %s',
-                             MAX_HOLD_DAYS, code, qty, res)
+                _log.warning('v8 보유상한(%d영업일) 주문 거부 %s(%s) qty=%d -> %s',
+                             MAX_HOLD_DAYS, code, stk_nm, qty, res)
                 continue
             v8.mark_sold(code)
-            _log.info('v8 보유상한(%d영업일) %s qty=%d -> %s', MAX_HOLD_DAYS, code, qty, res)
+            _log.info('v8 보유상한(%d영업일) %s(%s) qty=%d -> %s', MAX_HOLD_DAYS, code, stk_nm, qty, res)
             fee_share = est_fee_total * (qty / full_qty) if full_qty > 0 else 0.0
             pnl = (px - entry) * qty - fee_share
             _record_trade(code, h.get('stk_nm'), 'sell', 'v8_max_hold', qty, px, entry, pnl,
                           holding_ratio=1.0, rate=px / entry - 1.0, peak_rate=peak / entry - 1.0,
                           ord_no=res.get('ord_no'))
-            st.pop(code, None)
-            v8.release_ordered(code)
+            pos['pending_exit'] = True   # 소유권 해제는 체결 확인 후로 미룬다(위 pending_exit 주석 참고)
             continue
 
     # 계좌에서 사라진 종목 정리
+    # 2026-09-14: pending_exit(위 주석) 종목은 여기서 실제 체결을 확인한다 — holdings 에서
+    # 사라졌다는 것 자체가 '이제 진짜로 다 팔렸다'는 확인이다. 그때 비로소 소유권을 놓는다.
+    # pending_exit 이 아닌데도 holdings 에서 사라진 경우(조회 이상 등)는 예전처럼 그냥 지운다
+    # — release_ordered 를 안 불렀다는 건 애초에 소유권을 쥔 적이 없다는 뜻이라 안전하다.
     for code in list(st):
-        if code not in live:
-            st.pop(code, None)
+        if code in live:
+            continue
+        pos = st[code]
+        if pos.get('pending_exit'):
+            _log.info('v8 청산 체결확인 %s(%s) — 소유권 해제', code, pos.get('stk_nm') or '')
+            v8.release_ordered(code, quiet=True)   # 위에서 이미 로그를 남겼으니 중복 방지
+        st.pop(code, None)
     _save(st)
 
 

@@ -72,21 +72,32 @@ JS 렌더링이라 본문을 직접 확인은 못 했음, 아래는 전달받은
     16:00~20:00  KRX 자체 애프터마켓 (신설 — 기존 '시간외단일가' 폐지하고 대체.
                  NXT 애프터마켓 15:30~20:00과는 별개의 KRX 소속 세션)
 정규장 미체결 주문은 이 애프터마켓으로 자동 이전되지 않는다(취소 후 신규 주문 필요) — 단,
-이 프로젝트는 애프터마켓에 주문을 넣지 않으므로 현재는 해당 없다. is_market_open()이 여전히
-09:00~15:20만 True라 이 신설 세션엔 자동으로 관여하지 않는다 — **의도적으로 그렇게 뒀다.**
-NXT 애프터마켓과 마찬가지로 이 세션에서 시장가 주문이 실제로 체결되는지 확인된 바 없고
-(NXT는 거부됐었다), 참여하는 순간 청산 시장가 주문(sell_market)이 전부 거부될 위험이 있다.
-확장하려면 반드시 모의계좌로 먼저 시장가 주문 체결 여부를 실측한 뒤 결정할 것.
+이 프로젝트는 애프터마켓에 신규 지정가를 다시 걸지 않으므로 현재는 해당 없다.
+
+is_market_open()은 여전히 09:00~15:20만 True다 — 이 신설 세션은 별도 게이트
+(is_trailing_window_open / is_closing_auction_open, kiwoom_api.is_krx_aftermarket_open)로
+2026-09-12부터 옵트인했다. 실측 결과(auto_trading/aftermarket_order_test.py):
+  · **실전(real)** — 2026-09-14 18:55~19:12 실계좌 v8 트레일링 청산 3건으로 확인.
+    시장가는 거부(return_code 20, "521790:해당 호가유형은 주문 불가능한 시간입니다")되지만
+    **지정가는 정상 접수·체결**된다. 그래서 이 시간대의 매도(_sell(), 아래 참고)는 지정가로
+    자동 전환한다. NXT(407022로 전량 거부)와는 다른 결과다 — 같은 '장외' 취급이 아니라
+    KRX 자체 신규 세션이라 그렇다.
+  · **모의(mock)** — 2026-09-15 19:04 `aftermarket_order_test.py`로 재확인: 지정가/시장가
+    **가리지 않고 전부 거부**된다(`RC4058:모의투자 장종료`). 시세 조회는 되지만 주문 자체를
+    안 받는다 — NXT 때(RC9000)와 같은 패턴. 그래서 `kiwoom_api.is_krx_aftermarket_open()`이
+    **KIWOOM_ENV != 'real'이면 무조건 False**를 반환하도록 막아뒀다 — mock 프로세스(fire
+    매수/레거시 청산)는 이 시간대에 애초에 시도하지 않는다.
 """
 import os
 import json
 import logging
 import logging.handlers
 import datetime
+import time
 from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
-from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, buy_market, get_current_price, get_current_price_and_name, \
+from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, sell_limit, buy_market, get_current_price, get_current_price_and_name, \
     dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path, \
     cancel_order, KIWOOM_ENV, VALID_ENVS, is_krx_aftermarket_open, get_unfilled_orders
 from typing import List
@@ -271,6 +282,57 @@ STATE_FILE = env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_trailing_s
 TRADES_FILE = env_path(os.path.join(_LOG_DIR, 'trades.jsonl'))  # 실현손익 이력(승률/손익비 계산용) — 기록 누락 가능성 있음
 BASELINE_FILE = env_path(os.path.join(_LOG_DIR, 'asset_baseline.json'))  # 일/주/월 시작 시점 총자산 스냅샷
 
+# ── 수동매수 보호 (2026-09-16) ───────────────────────────────────────────────
+# 사고: 2026-09-15 대시보드에서 수동으로 아모텍(052710)을 매수했는데, v8이 산 종목이
+# 아니라서(v8_owned_codes에 없음) run_cycle()이 "그 외 전부"로 보고 기존 트레일링(손절
+# -6%)을 그대로 적용했다 — 2026-09-16 09:10 -6.11%에서 230주 전량이 자동으로 손절
+# 청산됐다(손익 -230,367원). 사용자가 직접 산 종목까지 자동매매가 건드리면 안 된다는
+# 요청으로, "v8 소유"와 별개로 "수동매수" 종목도 자동청산 대상에서 뺀다.
+# manual_buy() 가 성공할 때(그 시점에 v8 소유가 아니었다면) 이 목록에 등록하고,
+# run_cycle()이 v8_owned와 같은 방식으로 건너뛴다. 종목이 실제로 보유목록에서 사라지면
+# (확인된 전량 청산) 자동으로 등록 해제한다 — 그 뒤 같은 종목을 v8/fire가 다시 사면
+# 정상적으로 자동관리 대상이 된다.
+def _manual_owned_path(env: Optional[str] = None) -> str:
+    return env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_manual_owned.json'), env)
+
+
+def manual_owned_codes(env: Optional[str] = None) -> set:
+    """수동매수로 등록되어 자동매매(v8/레거시 트레일링) 관리에서 제외된 종목코드."""
+    path = _manual_owned_path(env)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except Exception:
+            return set()
+    return set()
+
+
+def _save_manual_owned(codes: set, env: Optional[str] = None):
+    path = _manual_owned_path(env)
+    tmp = f'{path}.tmp.{os.getpid()}'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(sorted(codes), f, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def mark_manual_owned(stk_cd: str, env: Optional[str] = None):
+    """수동매수 성공 시 호출 — 이미 v8이 관리 중인 종목이면 손대지 않는다(호출부에서
+    v8_owned_codes()로 먼저 걸러야 한다, manual_buy() 참고)."""
+    codes = manual_owned_codes(env)
+    if stk_cd not in codes:
+        codes.add(stk_cd)
+        _save_manual_owned(codes, env)
+        _log.info(f'[수동매수 보호등록:{env or KIWOOM_ENV}] {stk_cd} — 자동청산(v8/레거시) 대상에서 제외')
+
+
+def release_manual_owned(stk_cd: str, env: Optional[str] = None):
+    codes = manual_owned_codes(env)
+    if stk_cd in codes:
+        codes.discard(stk_cd)
+        _save_manual_owned(codes, env)
+        _log.info(f'[수동매수 보호해제:{env or KIWOOM_ENV}] {stk_cd}')
+
 
 # ── 대시보드용 환경별 경로 ────────────────────────────────────────────────────
 # 2026-08-20: '내 계좌' 탭에서 모의/실전을 골라 볼 수 있게 하면서 추가했다.
@@ -335,9 +397,11 @@ def is_trailing_window_open() -> bool:
     """run_kiwoom_trailing_stop() 전용 — 2026-09-12부터 is_market_open()과 정규장 구간이 완전히
     동일하다(TRAILING_STOP_END를 KRX_REGULAR_END와 맞춤, 위 상수 주석 참고).
 
-    2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)도 허용한다(사용자 요청, 검증 전
-    상태로 우선 반영 — 안 되면 sell_market()/buy_market() 거부 로그로 드러난다는 전제).
-    실/모의 둘 다 이 함수를 쓰므로(트레일링 매도는 real/mock 공통) 한 번에 반영된다."""
+    2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)도 허용한다(사용자 요청). 실측
+    결과(2026-09-14/15, 모듈 docstring 참고): 실전은 지정가로 되고(_sell()이 자동 전환),
+    모의는 지정가/시장가 다 거부된다(RC4058) — is_krx_aftermarket_open()이 mock이면 이미
+    False를 반환하므로, 이 함수는 실전에서만 실질적으로 애프터마켓을 열어준다(모의는 이
+    구간에서 그냥 원래대로 정규장 09:00~15:20만 True)."""
     now = datetime.datetime.now()
     if now.weekday() >= 5:
         return False
@@ -361,12 +425,14 @@ CLOSING_AUCTION_END = datetime.time(15, 30)
 def is_closing_auction_open() -> bool:
     """run_kiwoom_fire_buy() 전용 — 15:20~15:30 동시호가(단일가매매) 구간.
 
-    2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)도 이 게이트로 허용한다(모의
-    매수예약, 사용자 요청 — 검증 전 상태로 우선 반영). ⚠️ 애프터마켓은 동시호가(단일가)가
-    아니라 정규장과 같은 접속매매(실시간 체결)라 '종가 매수' 가정이 깨진다 — 원래 15:20~15:30을
-    고른 이유(백테스트가 신호일 종가를 매수가로 가정)가 이 확장 구간엔 그대로 적용되지 않는다.
-    job/batch_runner.py에 이 시간대용 반복 호출 잡을 별도로 추가해야 실제로 걸린다(이름
-    자체는 '동시호가'지만 이 함수는 두 구간을 OR로 판정만 한다)."""
+    2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)도 이 게이트로 허용하려 했다(모의
+    매수예약, 사용자 요청). ⚠️ 2026-09-15 실측(모듈 docstring 참고): 모의투자 서버는 이
+    시간대 주문을 지정가/시장가 가리지 않고 전부 거부한다(RC4058:모의투자 장종료). 그래서
+    kiwoom_api.is_krx_aftermarket_open()이 mock이면 이미 False를 반환하도록 막아뒀다 — 이
+    함수(및 그걸로 도는 job/batch_runner.py의 mock_fire_buy_aftermarket 잡)는 실질적으로
+    다시 15:20~15:30 한 구간짜리 게이트가 됐다. 참고로 애프터마켓 자체는 동시호가(단일가)가
+    아니라 정규장과 같은 접속매매(실시간 체결)라 '종가 매수' 가정도 어차피 깨졌을 구간이었다
+    — 열렸어도 fire의 '신호일 종가 매수' 전제와는 안 맞았을 것."""
     now = datetime.datetime.now()
     if now.weekday() >= 5:
         return False
@@ -383,6 +449,39 @@ def current_exchange() -> str:
     그때 'NXT'를 보내면 407022로 거부된다. 어차피 거부될 주문이면 'KRX'로 보내
     '장종료'라는 이유가 정확히 찍히게 한다."""
     return 'KRX'
+
+
+# 2026-09-14: 애프터마켓(16:00~20:00) 시장가 매도 거부 대응. kiwoom_v8_exit.py의
+# AFTERMARKET_SELL_SLIPPAGE/_sell()과 같은 근거·같은 값이다(실측: 085620 등 4종목이
+# '[2000](521790:해당 호가유형은 주문 불가능한 시간입니다.)', return_code 20 으로 거부).
+# 이 모듈은 kiwoom_v8_strategy를 import 할 수 없다(반대 방향 import로 순환참조 — 위
+# _record_trade를 v8_strategy가 이 모듈에서 가져간다) — 틱 라운딩을 독립적으로 둔다.
+AFTERMARKET_SELL_SLIPPAGE = 0.01   # 현재가 대비 -1%
+
+
+def _round_tick_down(price: float) -> int:
+    """호가단위 아래로 정렬(KRX 일반주식). 매도 지정가를 낮출수록 매수 호가와 더 빨리
+    만나 체결이 빨라진다 — kiwoom_v8_strategy._round_tick과 같은 규칙, 독립 구현."""
+    for bound, t in ((2000, 1), (5000, 5), (20000, 10), (50000, 50),
+                     (200000, 100), (500000, 500)):
+        if price < bound:
+            return int(price // t * t)
+    return int(price // 1000 * 1000)
+
+
+def _sell(stk_cd: str, qty: int, cur_price: float, env: Optional[str] = None) -> dict:
+    """자동 청산(손절/보유상한/트레일링/정체보호) 전용 매도 진입점.
+
+    정규장은 지금까지처럼 시장가. 애프터마켓은 시장가가 거부되므로(위 주석) 현재가보다
+    AFTERMARKET_SELL_SLIPPAGE만큼 낮춘 공격적 지정가로 대신 낸다 — 즉시 체결을 노린 것이지
+    무제한으로 밀리는 진짜 시장가는 아니다. 수동 매도(manual_sell)는 건드리지 않는다 —
+    거부되면 사용자가 화면에서 바로 보고 판단할 수 있어 자동 재시도 루프만큼 급하지 않다."""
+    if not is_krx_aftermarket_open():
+        return sell_market(stk_cd, qty, dmst_stex_tp=current_exchange(), env=env)
+    limit_px = _round_tick_down(cur_price * (1.0 - AFTERMARKET_SELL_SLIPPAGE))
+    res = sell_limit(stk_cd, qty, limit_px, dmst_stex_tp=current_exchange(), env=env)
+    _log.info(f'[애프터마켓 지정가매도] {stk_cd} qty={qty} 현재가={cur_price:,.0f} -> 지정가={limit_px:,} -> {res}')
+    return res
 
 
 def _load_state() -> Dict:
@@ -570,6 +669,15 @@ def _reverse_unfilled_buys(events: List[Dict]) -> None:
                      f'매수 {qty}주 확정 미체결(ka10076 체결내역에 끝까지 없음) — 보유상태 되돌림')
     if changed:
         _save_state(state)
+
+
+# 2026-09-14: '상태정리보류' 경고 쓰로틀 — run_cycle()이 30초마다 돌면서 entry_date가
+# 오늘인(=finalize 전이라 손댈 수 없는) 종목을 매 사이클 그대로 다시 경고했다. 실측
+# 사례(071200, 이 절 위 주석 187660/012210과 같은 계열): 15:21 매수, 15:30 정산부터
+# '체결내역에없음'으로 잡혀 20:10 finalize까지 4시간 넘게 30초마다(480회) 같은 줄이 찍혔다.
+# 원인 규명은 안 바뀐다(finalize 전엔 여전히 손대지 않는다) — 로그 빈도만 줄인다.
+_STALE_WARN_INTERVAL_SEC = 600   # 10분에 한 번만 재출력
+_last_stale_warn_ts: Dict[str, float] = {}
 
 
 def _reverse_stale_unconfirmed_buy(stk_cd: str, entry_date_str: Optional[str]) -> bool:
@@ -1163,7 +1271,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         holding_ratio = 1.0  # 손절은 항상 잔여 전량
         label = '되돌림손절' if was_armed else '손절'
         peak_txt = f' 고점={pos_state["peak_rate"]:.2%}' if was_armed else ''
-        res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+        res = _sell(stk_cd, sell_qty, cur_price)
         if not order_accepted(res):
             # 주문이 거부됐으면 이력도 남기지 않고 상태도 건드리지 않는다 —
             # exited로 바꿔버리면 이 종목이 다음 사이클부터 관리 대상에서 빠져 무방비가 된다.
@@ -1198,7 +1306,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
         pnl = (cur_price - avg_price) * sell_qty - fee_share
         trade_value = cur_price * sell_qty
         asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
-        res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+        res = _sell(stk_cd, sell_qty, cur_price)
         if not order_accepted(res):
             _log.error(f'[보유상한-주문거부] {stk_nm}({stk_cd}) rate={rate:.2%} {sell_qty}주 → {res} '
                        f'(이력 미기록, 상태 유지, 다음 사이클에 재시도)')
@@ -1266,7 +1374,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
             trade_value = cur_price * sell_qty
             asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
             holding_ratio = sell_qty / pos_state['remaining_qty'] if pos_state['remaining_qty'] > 0 else 0.0
-            res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+            res = _sell(stk_cd, sell_qty, cur_price)
             if not order_accepted(res):
                 _log.error(f'[트레일링/목표가-주문거부] {stk_nm}({stk_cd}) rate={rate:.2%} '
                            f'{sell_qty}주 → {res} (이력 미기록, 상태 유지, 다음 사이클에 재시도)')
@@ -1320,7 +1428,7 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 pnl = (cur_price - avg_price) * sell_qty - fee_share
                 trade_value = cur_price * sell_qty
                 asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
-                res = sell_market(stk_cd, sell_qty, dmst_stex_tp=current_exchange())
+                res = _sell(stk_cd, sell_qty, cur_price)
                 if not order_accepted(res):
                     _log.error(f'[정체보호-주문거부] {stk_nm}({stk_cd}) rate={rate:.2%} {sell_qty}주 → {res} '
                                f'(이력 미기록, 상태 유지, 다음 사이클에 재시도)')
@@ -1337,6 +1445,23 @@ def evaluate_and_trade(holding: Dict, pos_state: Optional[Dict], total_asset: fl
                 pos_state['exited'] = True
 
     return pos_state
+
+
+def log_config():
+    """서버(스케줄러) 시작 시 1회 호출 — 지금 이 프로세스(실/모의)에 실제로 로드된 레거시
+    청산 상수를 로그에 남긴다 (2026-09-15 사용자 요청, kiwoom_v8_strategy.log_config()와
+    같은 목적 — 레거시는 real/mock 공용이라 어느 프로세스에서 찍혔는지는 로그 포맷의
+    [REAL]/[MOCK] 태그로 구분한다). ⚠️ 상수를 하나라도 추가/변경하면 이 함수도 같이 갱신할 것."""
+    _log.info(
+        'legacy 청산 설정: LEGACY_EXIT_ENABLED=%s TRAILING_ENABLED=%s STOP_LOSS_RATE=%.0f%% '
+        'STOP_CONFIRM_SECONDS=%d초 TRAIL_ACTIVATE_RATE=%.0f%% TRAIL_GAP=%.0f%% '
+        'MIN_PROFIT_FLOOR=%.0f%% ARMED_GIVEBACK_STOP=%.0f%% STALL_GAP=%.0f%% '
+        'MAX_HOLD_DAYS=%d영업일 ANOMALY_DROP=%.0f%% ANOMALY_RATE=%.0f%% '
+        'AFTERMARKET_SELL_SLIPPAGE=%.0f%%',
+        LEGACY_EXIT_ENABLED, TRAILING_ENABLED, STOP_LOSS_RATE * 100, STOP_CONFIRM_SECONDS,
+        TRAIL_ACTIVATE_RATE * 100, TRAIL_GAP * 100, MIN_PROFIT_FLOOR * 100,
+        ARMED_GIVEBACK_STOP * 100, STALL_GAP * 100, MAX_HOLD_DAYS, ANOMALY_DROP * 100,
+        ANOMALY_RATE * 100, AFTERMARKET_SELL_SLIPPAGE * 100)
 
 
 def run_cycle():
@@ -1363,13 +1488,24 @@ def run_cycle():
     except Exception as e:
         _log.error(f'v8 소유권 조회 실패 — 중복 매도를 막기 위해 기존 청산을 건너뜀: {e}')
         return
+    manual_owned = manual_owned_codes()   # 위 '수동매수 보호' 주석 참고 — 이것도 v8_owned처럼 건너뛴다
 
     for holding in holdings:
         stk_cd = holding['stk_cd']
-        if stk_cd in v8_owned:
+        if stk_cd in v8_owned or stk_cd in manual_owned:
             continue
         held_codes.add(stk_cd)
         state[stk_cd] = evaluate_and_trade(holding, state.get(stk_cd), total_asset)
+
+    # 수동매수 보호 등록 해제 — 그 종목이 실제로 보유목록에서 사라지면(확인된 전량 청산)
+    # 더 이상 보호할 포지션이 없으므로 등록을 지운다. missing_codes(아래 legacy state 정리)와
+    # 달리 여긴 '조회 누락 vs 진짜 청산'을 가리지 않는다 — 어차피 여기 있는 동안은 자동매매가
+    # 손을 안 대므로, 오판해서 등록을 지워도 실제 매도가 나가는 게 아니라 다음 사이클에
+    # v8/레거시 관리 대상으로 넘어갈 뿐이다(최악의 경우도 안전한 방향).
+    held_codes_all = {h['stk_cd'] for h in holdings}
+    for stk_cd in list(manual_owned):
+        if stk_cd not in held_codes_all:
+            release_manual_owned(stk_cd)
 
     # 더 이상 보유하지 않는(전량 매도/청산된) 종목은 상태 정리.
     # 2026-09-03: "이번 조회에 안 보이면 팔린 것"으로 바로 지웠더니, 키움 모의서버 kt00018
@@ -1396,13 +1532,21 @@ def run_cycle():
             )
             if confirmed_sold:
                 del state[stk_cd]
+                _last_stale_warn_ts.pop(stk_cd, None)
             elif _reverse_stale_unconfirmed_buy(stk_cd, entry_date_str):
                 # 진입일 당일 finalize를 놓쳐 무기한 '상태정리보류'로 남을 뻔한 확정 미체결 —
                 # trades.jsonl 정리는 위 함수가 이미 했으니 보유상태만 지운다.
                 del state[stk_cd]
+                _last_stale_warn_ts.pop(stk_cd, None)
             else:
-                _log.warning(f'[상태정리보류] {stk_cd} 보유목록에 없지만 매도기록도 없음 '
-                             f'(entry_date={entry_date_str}) — 조회 누락으로 보고 상태 유지')
+                # 원인·처리(=finalize 전엔 안 건드림)는 그대로다. 종목당 10분에 한 번만
+                # 재출력한다 — 30초 주기로 그대로 찍으면 finalize(20:10) 전까지 같은 줄이
+                # 수백 번 반복된다(위 _STALE_WARN_INTERVAL_SEC 주석 참고).
+                now_ts = time.time()
+                if now_ts - _last_stale_warn_ts.get(stk_cd, 0.0) >= _STALE_WARN_INTERVAL_SEC:
+                    _last_stale_warn_ts[stk_cd] = now_ts
+                    _log.warning(f'[상태정리보류] {stk_cd} 보유목록에 없지만 매도기록도 없음 '
+                                 f'(entry_date={entry_date_str}) — 조회 누락으로 보고 상태 유지')
 
     _save_state(state)
 
@@ -1473,6 +1617,15 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None, env: Optional[str] = None
               f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%})')
     _record_trade(stk_cd, stk_nm, 'buy', 'manual', qty, price, price, 0.0, asset_ratio=asset_ratio,
                   ord_no=result.get('ord_no'), env=env)
+    # 2026-09-16 사고 대응(위 '수동매수 보호' 주석 참고): v8이 이미 관리 중인 종목에 그냥
+    # 더 사는 거라면 그대로 v8이 계속 관리하게 둔다 — v8 소유가 아닐 때만(신규 진입이든,
+    # 레거시가 관리하던 종목에 추가매수하는 것이든) 자동청산 대상에서 뺀다.
+    try:
+        from auto_trading import kiwoom_v8_strategy as _v8
+        if stk_cd not in _v8.v8_owned_codes():
+            mark_manual_owned(stk_cd, env)
+    except Exception as e:
+        _log.error(f'[수동매수] 보호등록 확인 실패 {stk_cd}: {e} (자동청산에서 안 빠질 수 있음 — 수동으로 확인할 것)')
     return result
 
 
@@ -1515,6 +1668,10 @@ def manual_sell(stk_cd: str, qty: int, env: Optional[str] = None):
     _record_trade(stk_cd, match['stk_nm'], 'sell', 'manual', sell_qty, match['cur_price'], match['avg_price'], pnl,
                   asset_ratio=asset_ratio, holding_ratio=holding_ratio,
                   ord_no=result.get('ord_no'), env=env)
+    if sell_qty >= match['qty']:
+        # 전량 매도 — 더 보호할 포지션이 없으니 즉시 등록 해제한다(run_cycle()의 30초 주기를
+        # 기다리지 않아도 됨). release_manual_owned는 등록 안 돼 있어도 안전하게 무시한다.
+        release_manual_owned(stk_cd, env)
     return result
 
 
