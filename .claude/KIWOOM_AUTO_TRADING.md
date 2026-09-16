@@ -215,6 +215,23 @@ auto_trading/
 > (스위치를 끄기 전에 걸려 있던 주문이 체결되면 이력·소유권이 정상 기록돼야 하므로).
 > ⚠️ **코드 자체(위 두 모듈 + `kiwoom_api.py`)를 처음 반영할 때는 재시작이 필요하다.**
 
+> **상수 반영 확인은 `log_config()` 로그로 한다 (2026-09-15 도입)**
+> 위 표에서 "재시작 필요"라고 나와도, 재시작한 뒤 정말 새 값이 들어갔는지는 지금까지 로그만
+> 봐서는 알 방법이 없었다 — 실제로 `create_scheduler()`의 계좌 배너가 한동안 v9 이전 하드코딩
+> 문구(트레일링 -5%/익절 +20%/보유 10영업일)를 그대로 띄우고 있었는데, 실제 상수는 그 뒤
+> 여러 번 바뀐 채였다. 이제 스케줄러 시작 직후 아래 4개가 각자 실제 로드된 상수를 로그에
+> 한 줄씩 찍는다 — 재시작 후 **반드시 이 로그로 확인할 것**:
+>
+> | 모듈 | 함수 | 찍는 값 |
+> |---|---|---|
+> | `kiwoom_v8_strategy` | `log_config()` | DEPTH/ALLOC/SLOTS/MAX_OPEN_ORDERS/VALID_DAYS/RUN_MIN 등 (real, `create_scheduler()`에서 호출) |
+> | `kiwoom_v8_exit` | `log_config()` | ATR_MULT/TRAIL_PCT/TP_PCT/MAX_HOLD_DAYS/HARD_FLOOR_PCT 등 (real) |
+> | `kiwoom_trailing_stop` | `log_config()` | STOP_LOSS_RATE/TRAIL_GAP/MAX_HOLD_DAYS 등 — real/mock 공용이라 양쪽 스케줄러 모두 호출 |
+> | `kiwoom_fire_strategy_mock` | `log_config()` | BUY_SLOTS/COOLDOWN_DAYS/CASH_DEPLOY_RATIO 등 (mock, `create_mock_scheduler()`에서 호출) |
+>
+> ⚠️ **상수를 하나라도 추가·변경하면 해당 모듈의 `log_config()`도 같이 고칠 것.** 안 고치면
+> 이 로그가 낡은 값을 계속 보여줘서, 방금 겪었던 것과 똑같은 방식으로 다시 오판하게 된다.
+
 확인 방법: `logs/kiwoom_trading/trading.log`에서 프로세스 시작 이후 해당 잡의 로그가 찍혔는지 본다.
 찍혀 있으면 이미 캐시된 상태다.
 

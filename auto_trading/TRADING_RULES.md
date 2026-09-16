@@ -38,6 +38,14 @@
 - **청산은 소유권으로 분리**한다. v8이 주문을 낸 종목(`kiwoom_v8_strategy.v8_owned_codes()`)만
   v8 청산이 담당하고, 그 전부터 보유한 종목은 기존 트레일링이 그대로 담당한다.
   그래서 **아래 3·5절의 fire 청산 규칙은 기존 보유 종목에 대해 여전히 유효하다.**
+  ⚠️ **수동으로 매수한 종목도 기본적으로 여기(기존 트레일링) 담당이었다** — v8이 안 산
+  종목은 전부 "그 외"로 묶였기 때문이다. 2026-09-16 사고: 대시보드에서 수동 매수한
+  아모텍(052710)이 다음 날 -6% 손절선에 걸려 자동으로 전량 청산됐다(-230,367원). 그래서
+  `manual_buy()`가 성공하면(그 시점에 v8 소유가 아니었을 때만) 종목코드를
+  `kiwoom_trailing_stop.mark_manual_owned()`로 등록해 v8·레거시 양쪽 자동청산에서 제외한다
+  (`kiwoom_manual_owned_{real,mock}.json`). 전량 매도(수동이든 확인된 자동 감지든)되면
+  자동으로 등록이 풀리고, 그 뒤 v8/fire가 같은 종목을 다시 사면 정상적으로 자동관리 대상이
+  된다. 상세: `kiwoom_trailing_stop.py`의 '수동매수 보호' 주석.
 - v8 상세는 [V8_SWITCHOVER.md](V8_SWITCHOVER.md), 근거는
   `C:\my-project\strategy-ab-backtest\ANALYSIS_V8.md`.
 

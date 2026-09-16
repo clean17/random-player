@@ -263,6 +263,28 @@ COLMAP = {'시가': 'open', '고가': 'high', '저가': 'low', '종가': 'close'
 _UNIVERSE = None
 
 
+def log_config():
+    """서버(스케줄러) 시작 시 1회 호출 — 지금 이 프로세스에 실제로 로드된 v8 매수 상수를
+    로그에 남긴다 (2026-09-15 사용자 요청).
+
+    ⚠️ 파일을 고쳐도 재시작 전까지는 반영 안 될 수 있다는 게 이 프로젝트에서 반복된 사고
+    원인이었다(.claude/CLAUDE.md, .claude/KIWOOM_AUTO_TRADING.md 5절). "재시작했으니 새
+    값이 들어갔겠지"를 눈으로 직접 확인할 수 있게, 재시작 직후 로그 맨 앞에 실제 값을
+    찍어준다 — job/batch_runner.py의 create_scheduler()가 이 함수를 스케줄러 시작 직후
+    호출한다.
+
+    ⚠️ 상수를 하나라도 추가/변경하면 이 함수도 같이 갱신할 것 — 안 그러면 로그가 낡은 값을
+    보여주는 채로 계속 남아 오히려 오판의 원인이 된다(.claude/KIWOOM_AUTO_TRADING.md
+    '상수 변경 시 체크리스트' 참고)."""
+    _log.info(
+        'v8 매수 설정: V8_ENABLED=%s DEPTH=%.0f%% ALLOC=%.0f%% SLOTS=%d MAX_OPEN_ORDERS=%d '
+        'VALID_DAYS=%d거래일 RUN_MIN=%.0f%% AMOUNT_MIN=%.0f억 PRICE_MIN=%d원 '
+        'WATCH_PRIORITY=%s RESIZE_TOL=%.0f%% LIVE_REGAP=%s',
+        V8_ENABLED, DEPTH * 100, ALLOC * 100, SLOTS, MAX_OPEN_ORDERS, VALID_DAYS,
+        RUN_MIN * 100, AMOUNT_MIN / 1e8, PRICE_MIN, WATCH_PRIORITY, RESIZE_TOL * 100,
+        LIVE_REGAP)
+
+
 def universe_codes() -> Optional[set]:
     """백테스트와 동일한 종목 집합. 파일이 없으면 None (코드 패턴으로 폴백)."""
     global _UNIVERSE
@@ -449,8 +471,12 @@ def _mark_ordered(code: str):
         _log.info('v8 소유권 등록 %s', code)
 
 
-def release_ordered(code: str):
-    """v8 이 해당 종목을 완전히 청산했을 때 호출 — 소유권 해제."""
+def release_ordered(code: str, quiet: bool = False):
+    """v8 이 해당 종목을 완전히 청산했을 때 호출 — 소유권 해제.
+
+    quiet=True 면 이 함수 자신의 로그를 남기지 않는다 — 호출부가 이미 더 자세한 메시지를
+    남긴 경우(예: kiwoom_v8_exit.run_v8_exit_cycle()의 '청산 체결확인' 로그) 같은 사건이
+    두 줄로 중복 찍히는 걸 막기 위함(2026-09-16 사용자 지적)."""
     st = _load_pending()
     od = st.setdefault('ordered', {})
     fq = st.setdefault('filled_qty', {})
@@ -459,7 +485,8 @@ def release_ordered(code: str):
         changed = True
     if changed:
         _save_pending(st)
-        _log.info('v8 소유권 해제 %s', code)
+        if not quiet:
+            _log.info('v8 소유권 해제 %s', code)
 
 
 def _take_fill_delta(code: str, cur_qty: int) -> int:
