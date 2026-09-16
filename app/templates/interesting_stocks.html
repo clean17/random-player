@@ -46,6 +46,8 @@
         .ms-env-note { font-size: 12px; color: #888; }
         /* 실전을 보고 있을 때만 붉게 — 수동 매수/매도가 실계좌로 나간다는 경고 */
         .ms-env-note.is-live { color: #d93025; font-weight: 600; }
+        /* 2026-09-15: 모의투자 애프터마켓 가격 미갱신 안내 — 경고보다는 약한 톤(주황) */
+        .ms-env-note.is-stale-hint { color: #b8860b; font-weight: 600; }
         .ms-index-bar { display: flex; gap: 12px; font-size: 12px; }
         .ms-index-item { display: flex; gap: 4px; align-items: baseline; }
         .ms-index-name { color: #888; }
@@ -799,7 +801,7 @@
 
         <div class="mystocks-summary" id="mystocksSummary">
             <div class="mystocks-stat"><span class="label">총자산</span><span class="value" id="ms-total-asset">-</span></div>
-            <div class="mystocks-stat"><span class="label">보유</span><span class="value" id="ms-cash">-</span><span class="value-sub" id="ms-cash-order-alloc"></span></div>
+            <div class="mystocks-stat"><span class="label">보유</span><span class="value" id="ms-cash">-</span><span class="value-sub" id="ms-cash-order-alloc"></span><span class="value-sub" id="ms-cash-margin"></span></div>
             <div class="mystocks-stat">
                 <span class="label">평가</span>
                 <span class="value" id="ms-evlt-amt">-</span>
@@ -1153,9 +1155,14 @@
     // "매번 요청이 끝난 시점"에 한다 — 그래야 수동 새로고침 직후 곧바로 또 자동 새로고침이
     // 겹쳐 나가지 않는다.
     const MS_REFRESH_SEC = 3;
-    // 2026-08-29: 정규장(09:00~15:30) 밖에서는 계좌/체결이 실질적으로 안 바뀌는데도 3초마다
-    // 돌려 키움 API 호출 예산(_RATE_LIMIT_SLEEP, kiwoom_api.py)을 불필요하게 갉아먹고 있었다
-    // (429 재시도 로그가 새벽에도 찍힘). 장 시간에만 3초, 그 외엔 60초로 늦춘다.
+    // 2026-08-29: 정규장 밖에서는 계좌/체결이 실질적으로 안 바뀌는데도 3초마다 돌려 키움 API
+    // 호출 예산(_RATE_LIMIT_SLEEP, kiwoom_api.py)을 불필요하게 갉아먹고 있었다(429 재시도
+    // 로그가 새벽에도 찍힘). 장 시간에만 3초, 그 외엔 60초로 늦춘다.
+    // 2026-09-14: 경계를 09:00~15:30에서 09:00~20:00으로 넓혔다 — 그 사이 KRX 애프터마켓
+    // (16:00~20:00, 정규장 폐장 15:20 이후 신설)이 열렸고 실전 v8 트레일링청산/모의 fire
+    // 매수예약이 이미 그 시간대까지 동작하도록 바뀌었다(kiwoom_trailing_stop.py
+    // is_krx_aftermarket_open). 15:30~16:00 휴장 구간도 넓은 쪽에 같이 묶여 3초로 도는데,
+    // 그 30분은 어차피 계좌가 안 바뀌니 API 호출이 약간 아깝지만 로직을 단순하게 유지한다.
     const MS_REFRESH_SEC_CLOSED = 60;
     function msIsWeekend() {
         const day = new Date().getDay(); // 0=일 6=토
@@ -1164,7 +1171,17 @@
     function msIsRegularHours() {
         if (msIsWeekend()) return false;
         const hm = new Date().getHours() * 100 + new Date().getMinutes();
-        return hm >= 900 && hm <= 1530;
+        return hm >= 900 && hm <= 2000;
+    }
+    // 2026-09-15: 모의투자는 애프터마켓(16:00~20:00) 동안 계좌 조회(kt00018)가 안 갱신된다
+    // (실측: 같은 시각 모의 25종목 중 22종목이 실시간 시세와 어긋났고 그 갭이 30초+ 그대로
+    // 였다 — 반면 실전은 전 종목 일치. kiwoom_trailing_stop.py 모듈 docstring 실측 기록
+    // 참고). 새로고침을 더 자주 해도 소용없다(서버가 그 값 자체를 안 준다) — renderMsEnvNote()
+    // 가 이 시간대엔 안내 문구를 띄운다.
+    function msIsAftermarketHours() {
+        if (msIsWeekend()) return false;
+        const hm = new Date().getHours() * 100 + new Date().getMinutes();
+        return hm >= 1600 && hm < 2000;
     }
     function msRefreshIntervalMs() {
         return (msIsRegularHours() ? MS_REFRESH_SEC : MS_REFRESH_SEC_CLOSED) * 1000;
@@ -1590,33 +1607,50 @@
 
     function renderMyStocksSummary(summary) {
         document.getElementById('ms-total-asset').textContent = msFmtWon(summary.total_asset);
-        // 보유 현금 = 주문가능금액(kt00001 의 ord_alow_amt) 그대로만 쓴다.
-        // 2026-08-27 이전엔 조회 실패 시 `추정예탁자산 - 총평가금액`으로 근사했는데, 추정예탁
-        // 자산은 '예수금+평가금액'이 아니라 결제·비용을 반영한 추정치라서 계좌가 거의 full
-        // 투자 상태가 되면 부호까지 뒤집혀 음수로 표시됐다(2026-08-20 모의계좌, 2026-08-27
-        // 재발 — 실제로는 미수금이 아니었다). 백엔드가 이미 1회 재시도하므로(app/stock.py),
-        // 그래도 실패하면 틀린 숫자 대신 '조회 실패'를 그대로 보여준다.
-        const dep = summary.deposit;
+
+        // 2026-09-16: "보유"는 이제 주문가능금액(kt00001 ord_alow_amt)이 아니라
+        // **총자산 - 평가금액**으로 계산한다 — "총자산 = 보유 + 평가"가 항상 정확히 맞아
+        // 떨어지게 하기 위해서다(사용자 요청). 예전엔 ord_alow_amt를 그대로 썼는데, 그러면
+        // 남는 차액(미체결 주문에 걸린 증거금 + 오늘 거래의 미정산분 등, kt00018의
+        // '추정예탁자산' 계산식이 kt00001의 개별 필드와 딱 안 맞음 — 실측으로 확인, 어느
+        // 필드 하나와도 정확히 일치하지 않았다)이 화면 어디에도 안 보였다. "보유"를
+        // 총자산-평가로 정의하면 그 차액이 자동으로 다 포함된다 — 대신 "지금 실제로 주문에
+        // 쓸 수 있는 돈이 얼마인지"는 아래 서브텍스트(주문가능/증거금/주문중)로 따로 보여준다.
+        // ⚠️ 2026-08-27 이전엔 조회 실패 시에만 이 근사식(추정예탁자산-평가금액)을 썼는데,
+        // 그때는 **주문가능금액이 메인 값**이라 이 근사식이 그 값과 달라 계좌가 거의 full
+        // 투자 상태일 때 부호가 뒤집혀 보였다(음수 미수금 오표시). 지금은 이 근사식 자체가
+        // 메인 값의 정의라 그 문제가 없다 — "음수=미수금" 표시는 아래에서 ord_alow_amt로
+        // 따로 판정한다.
         const cashEl = document.getElementById('ms-cash');
+        const cash = (summary.total_asset != null && summary.tot_evlt_amt != null)
+            ? summary.total_asset - summary.tot_evlt_amt : null;
+        cashEl.textContent = (cash != null) ? msFmtWon(cash) : '조회 실패';
+
+        const dep = summary.deposit;
         if (dep) {
-            const cash = dep.ord_alow_amt;
-            cashEl.textContent = msFmtWon(cash);
-            // 주문가능금액이 음수면 예수금 초과 주문(미수금)이다 — 눈에 띄게 표시한다
-            cashEl.classList.toggle('is-negative', cash < 0);
-            cashEl.title = `주문가능 ${msFmtWon(dep.ord_alow_amt)} / 예수금 ${msFmtWon(dep.entr)}`
-                + ` / 출금가능 ${msFmtWon(dep.pymn_alow_amt)} / D+2 추정예수금 ${msFmtWon(dep.d2_entra)}`;
+            // 미수금(예수금 초과 주문)은 "보유"가 아니라 실제 주문가능금액(ord_alow_amt)이
+            // 음수일 때만 표시한다 — 지금 더 살 수 있는지를 나타내는 진짜 신호이기 때문.
+            cashEl.classList.toggle('is-negative', dep.ord_alow_amt < 0);
+            cashEl.title = `보유 = 총자산 - 평가금액 (실제 현금 구성은 아래 참고)\n`
+                + `주문가능 ${msFmtWon(dep.ord_alow_amt)} / 예수금 ${msFmtWon(dep.entr)}`
+                + ` / 증거금(매수증거금) ${msFmtWon(dep.profa_ch)} / 출금가능 ${msFmtWon(dep.pymn_alow_amt)}`
+                + ` / D+2 추정예수금 ${msFmtWon(dep.d2_entra)}`;
         } else {
-            cashEl.textContent = '조회 실패';
             cashEl.classList.remove('is-negative');
-            cashEl.title = '예수금 조회(kt00001) 실패 — 재시도 후에도 실패했습니다. 새로고침 시 다시 시도합니다.';
+            cashEl.title = '예수금 조회(kt00001) 실패 — 아래 참고 항목이 비어 보일 수 있습니다.';
         }
 
-        // 2026-08-28: "1회 투입금(ALLOC 8%) 참고값"이 아니라 지금 실제 미체결 매수 주문에
-        // 걸려있는 진짜 금액이다 — 체결 전이라 평가금에도, 이미 차감된 보유현금(ord_alow_amt)
-        // 에도 안 보이는 돈이라 따로 보여준다.
+        // 서브텍스트 — "보유" 안에 실제로 뭐가 섞여 있는지 (작은 글씨로 여러 줄).
+        // 2026-09-16: 그동안 메인 값이었던 주문가능금액과, 어제 추가한 매수증거금(profa_ch,
+        // 예수금 중 지금 당장 못 쓰는 부분 — entr-profa_ch==ord_alow_amt로 실측 확인)을
+        // 한 줄로 합쳐서 보여준다. "주문중"(미체결 매수주문 금액, 2026-08-28 추가)은 별도 줄.
         const allocEl = document.getElementById('ms-cash-order-alloc');
         if (allocEl) {
             allocEl.textContent = summary.pending_order_amount ? `주문중 ${msFmtWon(summary.pending_order_amount)}` : '';
+        }
+        const marginEl = document.getElementById('ms-cash-margin');
+        if (marginEl) {
+            marginEl.textContent = dep ? `주문가능 ${msFmtWon(dep.ord_alow_amt)} · 증거금 ${msFmtWon(dep.profa_ch)}` : '';
         }
 
         document.getElementById('ms-evlt-amt').textContent = msFmtWon(summary.tot_evlt_amt);
@@ -2324,6 +2358,11 @@
         //     ? `${label} 계좌 — 이 서버에 자동매매가 붙어 있습니다`
         //     : `${label} 계좌 — 별도 프로세스에서 자동매매가 돕니다`;
         note.classList.toggle('is-live', msEnv === 'real');
+        // 2026-09-15: 모의투자 애프터마켓 가격 미갱신 안내(위 msIsAftermarketHours 주석 참고).
+        note.classList.toggle('is-stale-hint', msEnv === 'mock' && msIsAftermarketHours());
+        note.textContent = (msEnv === 'mock' && msIsAftermarketHours())
+            ? '모의투자는 애프터마켓(16:00~20:00) 동안 계좌 현재가가 갱신되지 않아요 — 정규장 마감 시점 가격 그대로예요'
+            : '';
     }
 
     async function initMsEnv() {
@@ -2399,6 +2438,7 @@
 
             if (seq !== msLoadSeq) return;   // 그 사이 더 최신 조회가 시작됨 — 이 응답은 버린다
 
+            renderMsEnvNote();   // 시간대가 바뀌었을 수 있으므로(애프터마켓 진입/이탈) 매 갱신마다 다시 판정
             renderMyStocksSummary(holdingsData.summary || {});
             renderMyStocksHoldings(holdingsData.holdings || []);
             renderMyStocksPieChart(holdingsData.holdings || []);

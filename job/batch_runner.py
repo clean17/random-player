@@ -206,6 +206,12 @@ def create_mock_scheduler():
             f'create_mock_scheduler()는 KIWOOM_ENV=mock 에서만 실행해야 한다 (현재 {KIWOOM_ENV!r}). '
             'run_mock.py 로 띄우거나 프로세스 환경변수에 KIWOOM_ENV=mock 을 주고 실행할 것.')
     print('🕒 Mock scheduler start.... (KIWOOM_ENV=mock, fire 전략)')
+    # 2026-09-15: 실계좌 배너와 같은 이유로 — 파일을 고쳐도 재시작 전까진 반영 안 될 수 있다는
+    # 게 반복된 사고 원인이었다. 재시작 직후 실제 로드된 상수를 로그에 남겨서 눈으로 바로
+    # 확인할 수 있게 한다(kiwoom_fire_strategy_mock.log_config / kiwoom_trailing_stop.log_config).
+    from auto_trading import kiwoom_fire_strategy_mock, kiwoom_trailing_stop
+    kiwoom_fire_strategy_mock.log_config()
+    kiwoom_trailing_stop.log_config()
 
     executors = {"io": ThreadPoolExecutor(max_workers=4)}
     scheduler = BackgroundScheduler(
@@ -243,12 +249,14 @@ def create_mock_scheduler():
         trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=21),
         id="mock_fire_buy", executor="io", replace_existing=True,
     )
-    # 2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)에서도 매수예약을 시도한다
-    # (사용자 요청, 검증 전 상태로 우선 반영 — 안 되면 주문 거부 로그로 드러난다는 전제).
-    # ⚠️ 위 15:21 1회와 달리 이건 반복 호출이다 — 애프터마켓은 동시호가(단일가)가 아니라
-    # 접속매매(실시간 체결)라서, 15:21 방식(구간 내 아무 때나 들어가도 종가로 체결)의
-    # 전제가 이 구간엔 안 맞는다. v8 매수 주기(60초)에 맞춰 반복 시도한다 — 체결가가
-    # '종가'가 아니라 '그 순간 가격'이 된다는 뜻이므로 결과를 보고 재판단할 것.
+    # 2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)에서도 매수예약을 시도해보려던
+    # 잡. ⚠️ 2026-09-15 실측: 모의투자 서버는 이 시간대 주문을 지정가/시장가 가리지 않고
+    # 전부 거부한다(RC4058:모의투자 장종료, auto_trading/aftermarket_order_test.py로 확인 —
+    # 상세는 kiwoom_trailing_stop.py 모듈 docstring). kiwoom_api.is_krx_aftermarket_open()이
+    # mock이면 False를 반환하도록 막아둬서, 이 잡은 이제 매분 호출되긴 해도
+    # run_kiwoom_fire_buy() 내부의 is_closing_auction_open() 게이트에서 즉시 반환된다(API
+    # 호출 없음) — 지우진 않았지만 사실상 무동작이다. 실전에만 있는 v8은 지정가로 정상
+    # 동작하므로 이 잡을 건드릴 필요는 없다.
     scheduler.add_job(
         run_kiwoom_fire_buy,
         trigger=CronTrigger(day_of_week="mon-fri", hour="16-19", minute="*"),
@@ -297,16 +305,24 @@ def create_scheduler():
     global scheduler, executors
     # 2026-08-28: run_mock.py는 계좌/전략 배너 + 잡 목록을 찍는데 실계좌 쪽엔 없어서 뭐가 뜬
     # 프로세스인지 콘솔만 보고 확인할 방법이 없었다 — 같은 형식으로 맞춘다.
+    # 2026-09-15: 이 배너의 '전략' 줄이 한동안 하드코딩된 문구(트레일링 -5%/익절 +20%/보유
+    # 10영업일 — v9 이전 값)였는데, 실제 상수는 v10/v11을 거치며 여러 번 바뀌었지만 이 문구는
+    # 안 바뀌어서 "재시작했는데 새 값이 들어갔나?"를 콘솔만 보고는 확인할 수 없었다(사용자
+    # 지적). 하드코딩 문구 대신 각 모듈이 자기 상수를 직접 읽어 찍는 log_config()로 바꿨다 —
+    # 값을 또 바꿔도 이 배너가 저절로 최신을 따라간다.
     from auto_trading.kiwoom_api import KIWOOM_ENV, get_account_credentials, _cfg_for
+    from auto_trading import kiwoom_v8_strategy, kiwoom_v8_exit, kiwoom_trailing_stop
     acnt_no, _ = get_account_credentials()
     print('=' * 68)
     print(f' 실계좌 자동매매 프로세스')
     print(f'   KIWOOM_ENV : {KIWOOM_ENV}')
     print(f'   API host   : {_cfg_for()["base_url"]}')
     print(f'   계좌번호    : {acnt_no}')
-    print(f'   전략        : v8 (15:55 스크리닝 + 장중 지정가 대기 / ATR 샹들리에 손절 '
-          f'+ 트레일링 -5%(절반) + 익절 +20%(절반) + 보유 10영업일)')
+    print(f'   전략        : v8 (15:55 스크리닝 + 장중 지정가 대기) — 실제 상수는 아래 로그 참고')
     print('=' * 68)
+    kiwoom_v8_strategy.log_config()
+    kiwoom_v8_exit.log_config()
+    kiwoom_trailing_stop.log_config()   # v8 미소유 잔존 종목의 청산 상수(실계좌에도 여전히 쓰인다)
 
     # I/O는 스레드, CPU는 프로세스
     # "trading" 전용 풀(2026-09-07): v8 매수/청산·레거시 트레일링청산은 실계좌 자금이 걸린

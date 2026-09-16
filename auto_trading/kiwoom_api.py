@@ -65,13 +65,20 @@ def is_krx_aftermarket_open() -> bool:
     """2026-09-14 신설 KRX 애프터마켓(16:00~20:00) — 기존 시간외단일가 폐지하고 대체,
     15:30~16:00 휴장 신설. NXT 애프터마켓(15:30~20:00)과는 별개의 KRX 소속 세션.
 
-    ⚠️ 이 시간대에 지정가/시장가 주문이 실제로 정상 처리되는지 검증 전이다(문서를 확인할
-    방법이 없어 실측 전 — auto_trading/aftermarket_order_test.py 참고). 2026-09-12 사용자
-    요청으로 "안 되면 거부 로그로 드러날 것"을 감안하고 v8 매수/청산, 레거시 트레일링 매도,
-    fire 매수 게이트에 우선 반영한다. 거부가 관측되면 이 함수가 아니라 각 게이트의 호출부
-    (kiwoom_v8_strategy.is_market_open / kiwoom_trailing_stop.is_trailing_window_open,
-    is_closing_auction_open)에서 이 시간대만 제외하도록 되돌릴 것.
+    실측 결과(auto_trading/aftermarket_order_test.py):
+      · 실전(real) — 시장가는 거부(return_code 20, "[2000](521790:해당 호가유형은 주문
+        불가능한 시간입니다.)")되지만 **지정가는 정상 접수·체결**된다(2026-09-14 18:55~19:12,
+        v8 트레일링 청산이 지정가로 실제 3건 체결 확인). kiwoom_v8_exit._sell /
+        kiwoom_trailing_stop._sell 이 이 시간대엔 지정가로 자동 전환해 대응한다.
+      · **모의(mock) — 지정가/시장가 가리지 않고 전부 거부된다**(2026-09-15 19:04 실측,
+        `RC4058:모의투자 장종료`). 시세 조회(get_current_price)는 정상 동작하지만 주문
+        자체를 아예 안 받는다 — NXT 때(RC9000, "해당업무가 제공되지 않습니다")와 같은
+        패턴이다. 그래서 이 함수는 **mock이면 무조건 False**를 반환한다 — mock 프로세스에서
+        기다려봐야 되는 주문이 아니므로, 여기서 걸러 fire 매수/레거시 청산이 매 사이클
+        RC4058 거부만 반복 기록하지 않게 한다.
     """
+    if KIWOOM_ENV != 'real':
+        return False
     now = datetime.now()
     if now.weekday() >= 5:
         return False
@@ -534,6 +541,12 @@ def get_deposit(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> Dict:
     """예수금/주문가능금액. 한국 주식은 매수대금이 T+2 에 결제되므로 세 값이 다 다르다.
 
       entr          예수금        — 결제 전 기준. 오늘 매수한 대금이 아직 안 빠져 있다
+      profa_ch      증거금현금(매수증거금) — 예수금 중 지금 당장 추가 매수엔 못 쓰는 부분.
+                    실측(2026-09-16): entr - profa_ch == ord_alow_amt 로 정확히 맞아떨어짐
+                    (932,902 - 569,674 = 363,228) — 미체결 매수 주문이 하나도 없을 때도
+                    0이 아니었다(569,674원). 즉 미체결 주문 증거금뿐 아니라 **오늘 체결된
+                    매매의 결제 전(T+2) 대금**도 여기 잡히는 것으로 보인다(2026-09-16
+                    사용자 요청으로 추가 — kt00001 원본에는 있었는데 그동안 파싱을 안 했다).
       ord_alow_amt  주문가능금액   — **지금 더 살 수 있는 돈.** 사이징·표시에 쓸 값
       pymn_alow_amt 출금가능금액   — 실제로 뺄 수 있는 돈
       d2_entra      D+2 추정예수금 — 결제 완료 후 예수금. 음수면 미수금이다
@@ -547,6 +560,7 @@ def get_deposit(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> Dict:
                            f'(return_code={data.get("return_code")})')
     return {
         'entr': _to_number(data.get('entr')),
+        'profa_ch': _to_number(data.get('profa_ch')),
         'ord_alow_amt': _to_number(data.get('ord_alow_amt')),
         'pymn_alow_amt': _to_number(data.get('pymn_alow_amt')),
         'd1_entra': _to_number(data.get('d1_entra')),
@@ -768,6 +782,18 @@ def buy_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',
 def sell_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',
                 env: Optional[str] = None) -> dict:
     return place_order(stk_cd, qty, 0, side='2', trde_tp='3', dmst_stex_tp=dmst_stex_tp, env=env)
+
+
+def sell_limit(stk_cd: str, qty: int, price: int, dmst_stex_tp: str = 'KRX',
+               env: Optional[str] = None) -> dict:
+    """지정가 매도. 2026-09-14 애프터마켓(16:00~20:00) 대응으로 추가.
+
+    ⚠️ 이 시간대는 시장가(trde_tp='3')를 거부한다(실측: return_code 20,
+    '[2000](521790:해당 호가유형은 주문 불가능한 시간입니다.)' — kiwoom_v8_exit.py의
+    트레일링/샹들리에/익절/보유상한 청산이 전부 이 코드로 거부됐다). 지정가만 받는다.
+    청산 로직은 즉시 체결을 원하므로 호출부(kiwoom_v8_exit._sell)가 현재가보다 살짝
+    낮은 공격적 지정가를 계산해서 넘긴다 — 이 함수 자체는 가격을 보정하지 않는다."""
+    return place_order(stk_cd, qty, price, side='2', trde_tp='0', dmst_stex_tp=dmst_stex_tp, env=env)
 
 
 # ── 체결 조회 (ka10076) ──────────────────────────────────────────────────────
