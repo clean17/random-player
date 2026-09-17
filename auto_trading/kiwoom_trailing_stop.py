@@ -1620,9 +1620,18 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None, env: Optional[str] = None
     # 2026-09-16 사고 대응(위 '수동매수 보호' 주석 참고): v8이 이미 관리 중인 종목에 그냥
     # 더 사는 거라면 그대로 v8이 계속 관리하게 둔다 — v8 소유가 아닐 때만(신규 진입이든,
     # 레거시가 관리하던 종목에 추가매수하는 것이든) 자동청산 대상에서 뺀다.
+    # 2026-09-17 사고(452280): 여기서 처음엔 kiwoom_v8_strategy.v8_owned_codes()('한 번이라도
+    # v8이 주문한 적 있다', 무기한 유지)로 판단했었다. 그런데 v8이 당일 미체결로 끝난 주문은
+    # release_ordered가 불릴 기회 자체가 없어 그 코드가 유령처럼 영원히 owned로 남는다
+    # (거래소가 당일가 지정가를 장마감에 자동취소 → 다음날 아침엔 이미 미체결 목록에 없어서
+    # kiwoom_v8_strategy.py의 '후보이탈 시 미체결 주문 취소+해제' 경로가 그 코드를 아예 보지
+    # 못한다). 452280이 8/31 v8 주문 이후 실제 포지션 없이 17일간 owned로 남아 있다가, 오늘
+    # 그 코드를 수동매수하자 이 분기가 '이미 v8 소유'로 오판해 보호 등록을 건너뛰었고, v8_exit이
+    # 이 수동매수를 새 포지션으로 등록해 트레일링으로 팔아버렸다. 그래서 '한 번이라도 주문'이
+    # 아니라 '지금 실제로 포지션을 추적 중인지'(kiwoom_v8_exit.v8_position_codes())로 바꿨다.
     try:
-        from auto_trading import kiwoom_v8_strategy as _v8
-        if stk_cd not in _v8.v8_owned_codes():
+        from auto_trading import kiwoom_v8_exit as _v8x
+        if stk_cd not in _v8x.v8_position_codes():
             mark_manual_owned(stk_cd, env)
     except Exception as e:
         _log.error(f'[수동매수] 보호등록 확인 실패 {stk_cd}: {e} (자동청산에서 안 빠질 수 있음 — 수동으로 확인할 것)')

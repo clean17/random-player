@@ -23,6 +23,11 @@
    v8 이 매수 주문을 낸 종목(kiwoom_v8_strategy.v8_owned_codes())만 이 모듈이 청산하고,
    그 외(v8 전환 전부터 보유했거나 fire 전략이 산 종목)는 기존 트레일링이 담당한다.
    두 모듈이 같은 종목을 서로 다른 규칙으로 파는 사고를 이 분리로 막는다.
+   단, 수동매수 보호 등록(kiwoom_trailing_stop.manual_owned_codes())이 걸린 종목은 v8_owned_codes()
+   여부와 무관하게 항상 건너뛴다 — 2026-09-17 사고(452280): v8이 예전에 한 번 매수 시도했다가
+   당일 미체결로 소멸한 종목코드가 v8_owned_codes()에 유령처럼 남아 있었고, 그 코드를 사용자가
+   나중에 수동매수하자 수동매수 보호를 건너뛴 채 이 모듈이 새 포지션으로 등록해 트레일링으로
+   팔아버렸다.
 """
 import os
 import sys
@@ -41,7 +46,7 @@ if ROOT not in sys.path:
 from auto_trading import kiwoom_api as api          # noqa: E402
 from auto_trading import kiwoom_v8_strategy as v8   # noqa: E402
 from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
-from auto_trading.kiwoom_trailing_stop import _record_trade  # noqa: E402
+from auto_trading.kiwoom_trailing_stop import _record_trade, manual_owned_codes  # noqa: E402
 
 # 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
 # INFO 로그가 전부 사라졌다. 상세는 kiwoom_api.get_trading_logger() docstring 참고.
@@ -144,6 +149,15 @@ def _save(st: Dict):
     os.replace(tmp, STATE_PATH)
 
 
+def v8_position_codes() -> set:
+    """v8이 지금 실제로 peak/진입가를 추적 중인 종목코드(=진짜 보유·관리 중).
+
+    v8_owned_codes()('한 번이라도 주문한 적 있다', 무기한 유지)와 달리 이건 실제 포지션
+    상태 파일 기준이라 유령 소유권이 없다. 2026-09-17 사고 이후 kiwoom_trailing_stop.
+    manual_buy()가 '이미 v8이 관리 중이니 그대로 두자' 판단에 이걸 쓴다."""
+    return set(_load().keys())
+
+
 def _business_days(d0: str) -> int:
     try:
         a = datetime.date.fromisoformat(d0)
@@ -207,12 +221,23 @@ def run_v8_exit_cycle():
         return
     live = set()
     owned = v8.v8_owned_codes()      # v8 이 산 종목만 담당. 나머지는 기존 트레일링 소관.
+    # 2026-09-17 사고(452280): owned는 'v8이 한 번이라도 매수 주문을 넣은 적 있는 코드'라
+    # 실제로는 이미 오래전에 미체결로 당일 소멸한 주문의 흔적까지 무기한 남아 있을 수 있다
+    # (release_ordered는 실제 청산 완료 시 또는 '오늘 후보에서 빠졌는데 아직 미체결 주문이
+    # 남아있을 때'만 불린다 — 당일가 지정가가 장마감에 거래소에서 자동취소되면 다음날 아침엔
+    # 이미 미체결 목록에 없어서 이 해제 경로 자체가 발동하지 않는다). 그 유령 소유권 상태에서
+    # 사용자가 그 종목코드를 수동매수하면 아래 신규 포지션 등록으로 이어져 v8 트레일링이
+    # 수동매수 보호(kiwoom_trailing_stop.manual_owned_codes)를 무시하고 팔아버렸다. owned
+    # 여부와 무관하게 수동매수 보호 등록은 항상 우선한다.
+    manual_owned = manual_owned_codes()
 
     for h in holdings:
         code = h.get('stk_cd')
         stk_nm = h.get('stk_nm') or ''   # 2026-09-14: 로그에 코드만 찍혀 종목을 못 알아보기 쉬워 이어붙인다
         qty = int(h.get('qty') or 0)
         if not code or qty <= 0:
+            continue
+        if code in manual_owned:
             continue
         if code not in owned:
             continue
