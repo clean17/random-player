@@ -12,6 +12,7 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     renew_kiwoom_token_job, renew_kiwoom_mock_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, \
     update_stock_data_daily, update_stock_data_us_weekly, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
+    fetch_held_stock_data_priority, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
     reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
@@ -569,6 +570,18 @@ def create_scheduler():
         fetch_stock_data,
         trigger=CronTrigger(day_of_week="mon-fri", hour="09-15", minute="10,30,50"),
         id="minutely_20_fetch_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-3-0) 보유 종목(실계좌+모의계좌) 우선 pkl 갱신 — 장 시작 직후 09:01, 위 09:10 정기
+    # 갱신보다 먼저 돈다. 2026-09-18 033640 사고(09:00~09:10 사이 pkl에 '오늘' 행이 없어
+    # kt00018 pred_close_pric 결함 폴백이 전날치 등락률을 노출) 대응 — 자세한 내용은
+    # fetch_held_stock_data_priority() docstring 참고.
+    scheduler.add_job(
+        fetch_held_stock_data_priority,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=1),
+        id="priority_fetch_held_stock_data",
         executor="io",
         replace_existing=True,
     )

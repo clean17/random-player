@@ -429,6 +429,34 @@ def fetch_us_stock_data():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+def fetch_held_stock_data_priority():
+    """실계좌+모의계좌 보유 종목만 09:01에 우선 pkl 갱신 (2026-09-18 033640 사고 대응).
+
+    정기 전체 갱신(fetch_stock_data, 09~15시 :10/:30/:50)이 돌기 전인 09:00~09:10 구간엔
+    보유 종목 pkl에 아직 '오늘' 행이 없다 — 이 틈에 kt00018의 pred_close_pric 결함으로
+    app/stock.py의 등락률 계산이 pkl 폴백(_day_change_rate_from_pkl)을 타면, 마지막 두 행이
+    '어제 vs 그제'가 되어 실제로는 0%인데 전날치 등락률이 그대로 노출된다. 보유 종목만
+    먼저 갱신해서 그 틈을 없앤다. 보유 종목이 없으면(계좌 조회 실패 포함) 아무것도 안 한다."""
+    from auto_trading.kiwoom_api import get_account_credentials, get_holdings
+
+    codes = set()
+    for env in ('real', 'mock'):
+        try:
+            acnt_no, acnt_pwd = get_account_credentials(env)
+            if acnt_no and acnt_pwd:
+                codes.update(h['stk_cd'] for h in get_holdings(acnt_no, acnt_pwd, env))
+        except Exception as e:
+            _get_batch_logger().error(f'fetch_held_stock_data_priority: {env} 계좌 조회 실패: {e}')
+
+    if not codes:
+        return
+
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\0-2_priority_fetch_held_stock_data.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, *sorted(codes)],
+                     cwd=r"C:\my-project\AutoSales.py")
+
+
 # 미장 pkl 주 1회 전체 갱신(1500일). 국장 update_stock_data_daily에 대응하는 미국판 —
 # 지금까지 미장엔 전체 갱신이 없어 최근 5일 병합만 반복됐고, 그 결과 가격 오염이
 # 미장 65% vs 국장 1.9%로 벌어졌다(2026-09-09 점검).
