@@ -324,6 +324,30 @@ def predict_us_stocks_lgbm():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+def collect_investor_flow():
+    """국장 투자자별 수급(외국인/기관/개인 순매수)을 매일 이어붙인다.
+
+    왜 매일 돌려야 하나 — 과거 백필이 불가능하다(2026-09-19 확인).
+      * KRX(pykrx) 투자자별 거래실적 API: HTTP 400 "LOGOUT"으로 죽었다(펀더멘털 API와 동일).
+      * 네이버 데스크톱 frgn 페이지: JS 렌더링으로 바뀌어 HTML 파싱 불가.
+      * 네이버 모바일 API: 살아있으나 page=1·pageSize<=50 — 최근 50거래일만 받을 수 있다.
+    즉 오늘 안 모으면 그날 데이터는 영구히 사라진다. 자세한 내용은 AutoSales.py 쪽
+    job/12_collect_investor_flow.py docstring과 KR_SELECTION_ROADMAP.md 참고.
+
+    --page-size 20: 매일 돌리므로 4주치면 충분하다(네트워크 부담 감소).
+    --overwrite: 같은 날짜를 다시 받으면 새 값으로 갱신한다. 장 마감 직후 값이 잠정치일
+    수 있어 다음 날 확정치로 정정되게 하려는 것이다. 소스가 날짜별 실측값이라 2026-09-05
+    PER/PBR 사고(현재 스냅샷을 과거 전체에 방송)와는 성격이 다르고, API가 최근 50일만
+    돌려주므로 덮어쓰기 범위도 그 안으로 제한된다.
+    """
+    print('    ############################### collect_investor_flow ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\12_collect_investor_flow.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script,
+                     "--page-size", "20", "--overwrite"],
+                    cwd=r"C:\my-project\AutoSales.py")
+
+
 def refresh_kr_lgbm_gallery():
     """국장 LGBM 갤러리 차트를 신호일 이후까지 이어 그린다(파일 대체)."""
     print('    ############################### refresh_kr_lgbm_gallery ###############################')

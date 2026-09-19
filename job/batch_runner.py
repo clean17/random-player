@@ -17,7 +17,7 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
     predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters, \
-    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery
+    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery, collect_investor_flow
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -664,6 +664,20 @@ def create_scheduler():
         trigger=CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=18, minute=30),
         id="refresh_kr_lgbm_gallery_1830",
         executor="cpu",
+        replace_existing=True,
+    )
+
+    # 4-4) 국장 투자자별 수급(외국인/기관/개인 순매수) 수집. 월~금 18:40.
+    #      거래일 당일 데이터를 모으는 잡이라 거래일 기준(mon-fri)이다 — 예측 잡(sun~thu,
+    #      "다음 거래일 전날 저녁")과 요일 축이 다르니 주의.
+    #      ⚠️ 과거 백필이 불가능하다(KRX API 사망, 네이버는 최근 50거래일만). 이 잡이 멈추면
+    #      그 기간 데이터는 영구히 사라진다 — 함부로 끄지 말 것.
+    #      네트워크 I/O 위주(2,600여 종목 HTTP 요청, 약 10분)라 cpu 풀이 아닌 io 풀에 둔다.
+    scheduler.add_job(
+        collect_investor_flow,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=40),
+        id="collect_investor_flow_1840",
+        executor="io",
         replace_existing=True,
     )
 
