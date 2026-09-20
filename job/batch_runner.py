@@ -630,10 +630,15 @@ def create_scheduler():
     # )
 
     # 4-1) 국장 LightGBM 예측 (전 종목 공용 모델, 위 predict_stock_graph_scheduled와 별개 트랙).
-    #      일~목 17:30 — 각 요일 장마감 후 다음 거래일(월~금)을 예측한다.
+    #      월~금 17:30 — KRX 마감(15:30) 후에 돌아 그날 종가 봉으로 예측한다.
+    # [2026-09-21] 일~목 -> 월~금으로 변경. 기존 일요일 런은 마지막 봉이 금요일인데 결과물
+    #      날짜가 일요일(거래일도 아닌 날짜)이 됐고, 금요일 종가는 제 날짜로 잡히지 않았다.
+    #      월~금으로 바꾸면 매 거래일이 자기 날짜로 잡힌다. 휴장일(연 11~15일)에는 여전히
+    #      마지막 봉이 전 거래일이지만, job/multi_kor_stocks_lgbm.py가 날짜를 데이터에서
+    #      읽도록 같이 고쳤으므로(signal_date) 파일명은 항상 옳다.
     scheduler.add_job(
         predict_kr_stocks_lgbm,
-        trigger=CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=17, minute=30),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=17, minute=30),
         id="predict_kr_stocks_lgbm_1730",
         executor="cpu",
         replace_existing=True,
@@ -661,7 +666,7 @@ def create_scheduler():
 
     scheduler.add_job(
         refresh_kr_lgbm_gallery,
-        trigger=CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=18, minute=30),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30),  # 예측 잡과 동일하게 월~금
         id="refresh_kr_lgbm_gallery_1830",
         executor="cpu",
         replace_existing=True,
