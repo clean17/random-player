@@ -716,9 +716,14 @@ def move_stock_image(market, filename):
 # job/multi_kor_stocks_lgbm.py, job/multi_us_stocks_lgbm.py (AutoSales.py) 결과.
 # 시장당 폴더 1개(F:\lgbm_stocks, F:\lgbm_stocks_us)에 파일이 그대로 쌓인다 — 위 kospi/nasdaq와
 # 같은 방식. 날짜 조회는 폴더가 아니라 파일명 앞의 YYYYMMDD를 파싱해서 한다.
+# [2026-09-21] kr_watch = 트랙 B(관찰 목록). ⚠️ 매수 신호가 아니다 —
+# AutoSales.py의 job/multi_kor_stocks_lgbm.py는 매수 신호(트랙 A)가 0건인 날에만
+# raw 상위 2개를 이 폴더에 넣는다. 실측 실행 건당 -0.79%로 사면 평균적으로 손해다.
+# 사이드카 json의 "track" 필드가 "alert"/"watch"로 구분되므로 화면에서 반드시 구분해 렌더할 것.
 LGBM_DIR_MAP = {
     'kr': r'F:\lgbm_stocks',
     'us': r'F:\lgbm_stocks_us',
+    'kr_watch': r'F:\lgbm_stocks_watch',
 }
 LGBM_FILENAME_DATE_RE = re.compile(r'^(\d{8})')
 

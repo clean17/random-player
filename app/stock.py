@@ -216,6 +216,9 @@ def _read_lgbm_sidecar(directory, filename):
 _LGBM_PICKLE_DIR_MAP = {
     "kr": r"C:\my-project\AutoSales.py\data\pickle",
     "us": r"C:\my-project\AutoSales.py\data\pickle_us",
+    # [2026-09-21] 트랙 B(관찰 목록)도 종목은 국장이라 같은 pkl을 쓴다.
+    # 없으면 현재가/신호일 거래대금이 비어 보인다(app/image.py의 LGBM_DIR_MAP 주석 참고).
+    "kr_watch": r"C:\my-project\AutoSales.py\data\pickle",
 }
 
 
