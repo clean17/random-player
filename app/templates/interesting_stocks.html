@@ -595,6 +595,9 @@
         <select id="predictMarketFilter" class="rule-filter" style="display:none">
             <option value="kr" selected>국장 (KR)</option>
             <option value="us">미장 (US)</option>
+            <!-- [2026-09-21] 트랙 B. 매수 신호가 0건인 날의 상위 종목이고 매수 추천이 아니다
+                 (실측 10거래일 보유 건당 -0.79%). 카드에 빨간 배지/경고가 함께 뜬다. -->
+            <option value="kr_watch">⚠ 국장 관찰목록 (매매신호 아님)</option>
         </select>
         <!-- 내 계좌 탭 전용: 조회할 계좌(실전/모의). 조회와 수동주문이 모두 이 값을 따라간다.
              옵션은 /stocks/kiwoom/envs 응답으로 JS가 채운다(서버가 가진 환경 목록이 곧 진실). -->

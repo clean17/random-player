@@ -305,6 +305,9 @@ def get_predict_stocks_data():
         parsed["signal_price"] = sidecar.get("current_price")   # 신호 당일(예측일) 종가 — 고정값
         parsed["target_price"] = sidecar.get("target_price")    # 신호가 * (1+threshold_pct/100)
         parsed["threshold_pct"] = sidecar.get("threshold_pct")
+        # [2026-09-21] "alert"(매수신호) / "watch"(관찰목록 — 매매신호 아님). 사이드카가 없거나
+        # 이 필드가 생기기 전에 만들어진 파일은 None이며, 화면은 alert로 취급한다.
+        parsed["track"] = sidecar.get("track")
         parsed["latest_price"] = _get_latest_close_price(market, parsed["stock_code"])  # 오늘 실제 종가
         parsed["signal_trading_value"] = _get_signal_day_trading_value(market, parsed["stock_code"], parsed["date_raw"])
         rows.append(parsed)

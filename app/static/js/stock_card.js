@@ -497,8 +497,12 @@ function renderPredictCardHtml(track, rows) {
 
     track.innerHTML = rows.map((r, idx) => {
         const hasImg = !!r.graph_file;
-        const marketDir = r.market === 'us' ? 'us' : 'kr';
+        // [2026-09-21] kr_watch는 별도 폴더(F:\lgbm_stocks_watch)라 그대로 넘겨야 이미지가 뜬다.
+        const marketDir = (r.market === 'us' || r.market === 'kr_watch') ? r.market : 'kr';
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
+        // 트랙 B(관찰목록) = 매수 추천이 아니다. 실측 10거래일 보유 건당 -0.79%(매수신호는 +17.87%).
+        // 사이드카에 track이 없는 예전 파일은 alert로 본다.
+        const isWatch = (r.track === 'watch');
         // 캐러셀이라 화면엔 카드 1장만 보이는데, loading="lazy" 없이는 카드 N장분 이미지가
         // 렌더링 즉시 전부 동시에 요청된다 — waitress 큐 깊이가 매번 튀는 원인이었다(2026-08-31).
         const imgHtml = hasImg
@@ -513,14 +517,15 @@ function renderPredictCardHtml(track, rows) {
       <article class="trade-card predict-card" data-index="${idx}" data-stock-code="${r.stock_code ?? ""}">
         <div class="trade-top">
           <div class="trade-text">
-            <div class="trade-name">${r.stock_name ?? ""}</div>
+            <div class="trade-name">${r.stock_name ?? ""}${isWatch ? ' <span class="predict-watch-badge">관찰 · 매매신호 아님</span>' : ''}</div>
             <div class="trade-sub">${r.stock_code ?? ""} · ${r.date ?? ""}</div>
           </div>
         </div>
+        ${isWatch ? `<div class="predict-watch-warn">매수 추천이 아닙니다. 매수 신호가 0건인 날의 상위 종목이며, 실측 10거래일 보유 건당 <b>-0.79%</b>입니다.</div>` : ''}
 
         <div class="trade-grid">
           <div class="kv"><span class="k">예측일</span><span class="v">${r.date ?? ""}</span></div>
-          <div class="kv"><span class="k">상승 확률</span><span class="v">${fmt1(r.proba)}%</span></div>
+          <div class="kv"><span class="k">+${thresholdPct}% 터치 확률</span><span class="v">${fmt1(r.proba)}%</span></div>
           <div class="kv"><span class="k">신호 당일</span><span class="v">${fmtPredictPrice(r.signal_price, r.market)}</span></div>
           <div class="kv"><span class="k">신호일 거래대금</span><span class="v">${fmtPredictTradingValue(r.signal_trading_value, r.market)}</span></div>
           <div class="kv"><span class="k">목표가 (+${thresholdPct}%)</span><span class="v">${fmtPredictPrice(r.target_price, r.market)}</span></div>

@@ -2,7 +2,12 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>예측종목 ({{ '국장' if market == 'kr' else '미장' }})</title>
+{# [2026-09-21] kr_watch = 트랙 B(관찰 목록). 매수 신호가 아니라서 제목·배너·배지로 구분한다.
+   섞여 보이면 "신호가 아닌 것을 신호로 오해"하는 반대 방향의 사고가 난다 —
+   app/image.py의 LGBM_DIR_MAP 주석 참고. #}
+{% set is_watch = (market == 'kr_watch') %}
+{% set market_label = '관찰목록 (국장)' if is_watch else ('국장' if market == 'kr' else '미장') %}
+    <title>{{ '관찰목록' if is_watch else '예측종목' }} ({{ market_label }})</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
@@ -22,6 +27,30 @@
         }
         .lgbm-count { color: #888; font-size: 13px; }
         .lgbm-empty { padding: 40px 12px; text-align: center; color: #888; }
+        /* 트랙 B(관찰목록) 경고 — 매수 신호와 절대 혼동되지 않게 강하게 표시한다 */
+        .lgbm-watch-warn {
+            margin: 10px 12px;
+            padding: 12px 14px;
+            border: 2px solid #d93025;
+            border-radius: 8px;
+            background: #fdecea;
+            color: #a50e0e;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .lgbm-watch-warn strong { font-size: 15px; }
+        .lgbm-watch-warn ul { margin: 8px 0 0; padding-left: 18px; }
+        .lgbm-watch-badge {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: #d93025;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            vertical-align: middle;
+        }
     </style>
 </head>
 
@@ -30,7 +59,7 @@
     <div class="back app-header__left">
         <a href="{{ url_for('main.home') }}" class="app-back">Back</a>
     </div>
-    <div class="app-title">예측종목</div>
+    <div class="app-title">{% if is_watch %}관찰목록<span class="lgbm-watch-badge">매매신호 아님</span>{% else %}예측종목{% endif %}</div>
     <div class="logout app-user-menu app-header__right">
         {% if current_user.is_authenticated %}
         <button type="button" class="app-menu-button" aria-label="사용자 메뉴" aria-expanded="false">☰</button>
@@ -48,6 +77,7 @@
         <select id="lgbm-market-select" onchange="location = this.value;">
             <option value="{{ url_for('image.lgbm-stock-list', market='kr') }}" {% if market == 'kr' %}selected{% endif %}>국장 (KR)</option>
             <option value="{{ url_for('image.lgbm-stock-list', market='us') }}" {% if market == 'us' %}selected{% endif %}>미장 (US)</option>
+            <option value="{{ url_for('image.lgbm-stock-list', market='kr_watch') }}" {% if is_watch %}selected{% endif %}>⚠ 국장 관찰목록 (매매신호 아님)</option>
         </select>
 
         <label for="lgbm-date-select">날짜</label>
@@ -65,8 +95,24 @@
         <span class="lgbm-count">{{ images_length }}건</span>
     </div>
 
+    {% if is_watch %}
+    {# 실측 근거는 AutoSales.py job/multi_kor_stocks_lgbm.py 상단 WATCH_DIR 주석 #}
+    <div class="lgbm-watch-warn">
+        <strong>⚠ 매수 추천이 아닙니다.</strong>
+        매수 신호(예측종목)가 <b>0건인 날</b>에 모델이 상위로 본 종목을 참고용으로 모아둔 목록입니다.
+        <ul>
+            <li>실측 결과 <b>10거래일 보유 시 건당 −0.79%</b> — 평균적으로 손해입니다.
+                (매수 신호는 +17.87%)</li>
+            <li>신호가 없는 날은 시장이 빠지는 날이고, 그날 상위 종목도 같이 빠집니다.</li>
+            <li>차트에 표시되는 확률은 <b>"10거래일 내 한 번이라도 +7% 터치"</b>일 확률이라
+                변동성만 커도 올라갑니다. 상승을 뜻하지 않습니다.</li>
+        </ul>
+        용도: "모델이 지금 무엇을 상위로 보는지" 확인, 관심종목 발굴 재료.
+    </div>
+    {% endif %}
+
     {% if images_length == 0 %}
-    <div class="lgbm-empty">이 날짜엔 예측 결과가 없습니다.</div>
+    <div class="lgbm-empty">이 날짜엔 {{ '관찰 종목' if is_watch else '예측 결과' }}이 없습니다.</div>
     {% else %}
     <div class="image-container">
         {% for image in images %}
