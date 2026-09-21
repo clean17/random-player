@@ -1084,10 +1084,12 @@
         }
 
         const isMyStocks = (tabId === 'tab-mystocks');
-        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved' || tabId === 'tab-predict' || tabId === 'tab-picks');
+        const isFavoriteOrReserved = (tabId === 'tab-favorite' || tabId === 'tab-reserved' || tabId === 'tab-predict');
 
-        // '내 종목'/즐겨찾기/자동매수 대상/예측종목/추천종목 탭은 날짜 검색 UI를 노출하지 않는다.
+        // '내 종목'/즐겨찾기/자동매수 대상/예측종목 탭은 날짜 검색 UI를 노출하지 않는다.
         // 자동매수 대상은 화면에 달력만 안 보일 뿐, 내부적으로는 관심종목과 같은 기본 기간으로 조회한다.
+        // 추천종목(tab-picks)은 2026-09-21부터 startDate 하나만 노출 — 그 날짜에 마지막으로
+        // 생성된 추천을 보여준다(범위가 아니라 특정 날짜 조회라 endDate는 계속 숨김).
         startDateInputEl.style.display = (isMyStocks || isFavoriteOrReserved) ? 'none' : '';
         if (isMyStocks || isFavoriteOrReserved) endDateInputEl.style.display = 'none';
 
@@ -1135,9 +1137,12 @@
             msStopTimer();
             loadData()
         } else if (target.id === 'tab-picks') {
-            // 계산은 스케줄 잡(12:00/14:00)이 미리 해두므로, 여기선 마지막 결과만 가볍게 조회.
+            // 계산은 스케줄 잡(평일 10:00~20:00, 5분마다)이 미리 해두므로, 여기선 결과만 가볍게
+            // 조회한다. 2026-09-21: 날짜 검색 추가 — 기본은 오늘, loadData()가 날짜 변경 시
+            // 다시 불러온다(tab-picks 분기 참고).
             msStopTimer();
-            loadInterestPicks();
+            setDefaultDateToday(0, startDateInputEl);
+            loadData()
         } else {
             msStopTimer();
             setDefaultDateToday(0, startDateInputEl);
@@ -2054,21 +2059,23 @@
         renderMyStocksOrdersSortIndicators();
     }
 
-    async function loadInterestPicks() {
+    async function loadInterestPicks(dateStr) {
+        // dateStr: yyyymmdd (startDateInputEl에서 옴). 비우면 지금까지의 최신 결과(latest.json).
         const statusEl = document.getElementById('ms-picks-status');
         if (statusEl) statusEl.textContent = '불러오는 중...';
         try {
-            const res = await fetch('/stocks/interest/data/picks');
+            const url = dateStr ? `/stocks/interest/data/picks?date=${dateStr}` : '/stocks/interest/data/picks';
+            const res = await fetch(url);
             if (!res.ok) throw new Error('요청 실패');
             const data = await res.json();
-            renderInterestPicks(data);
+            renderInterestPicks(data, dateStr);
         } catch (e) {
             console.error(e);
             if (statusEl) statusEl.textContent = '조회 실패 — 다시 탭을 눌러보세요';
         }
     }
 
-    function renderInterestPicks(data) {
+    function renderInterestPicks(data, requestedDate) {
         const table = document.getElementById('table-picks');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
@@ -2082,9 +2089,17 @@
         if (countEl) countEl.textContent = `${picks.length}건`;
 
         if (statusEl) {
+            // requestedDate(yyyymmdd)가 오늘이 아니면 "그 날짜 기준"임을 밝혀서, 최신 결과로
+            // 착각하지 않게 한다(2026-09-21 날짜 검색 추가).
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+            const isPastDate = requestedDate && requestedDate !== todayStr;
+            const dateLabel = isPastDate
+                ? `${requestedDate.slice(0, 4)}-${requestedDate.slice(4, 6)}-${requestedDate.slice(6, 8)} `
+                : '';
             statusEl.textContent = data.generated_at
-                ? `생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 12:00~20:00, 5분마다 자동 갱신)`
-                : '아직 생성된 추천이 없어요 (평일 12:00~20:00, 5분마다 자동 생성됩니다)';
+                ? `${dateLabel}생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 10:00~20:00, 5분마다 자동 갱신)`
+                : (isPastDate ? `${dateLabel}에 생성된 추천이 없어요` : '아직 생성된 추천이 없어요 (평일 10:00~20:00, 5분마다 자동 생성됩니다)');
         }
         if (discEl) discEl.textContent = data.disclaimer || '';
 
@@ -2938,6 +2953,12 @@
                     searchableDataFull = data6 || [];
                     applyStockSearchFilter();
                 }
+            }
+
+            if (target === 'tab-picks') {
+                // 2026-09-21: 날짜 검색 추가 — 선택한 날짜(yyyymmdd)에 마지막으로 생성된 추천을 본다.
+                if (seq === dataLoadSeq) await loadInterestPicks(yyyymmdd);
+                removeLoadingOverlay();
             }
 
             if (target !== 'tab-summary') {

@@ -320,10 +320,23 @@ def get_predict_stocks_data():
 @stock.route("/interest/data/picks", methods=["GET", "POST"])
 @login_required
 def get_interest_stock_picks_data():
-    """관심종목 추천 top10 (규칙기반 점수/라벨). 월~금 12:00/14:00에 job/interest_stock_picks.py가
+    """관심종목 추천 top10 (규칙기반 점수/라벨). 평일 10:00~20:00 5분마다 job/interest_stock_picks.py가
     생성해둔 결과를 그대로 읽어서 반환 — 이 요청에서 직접 계산하지 않는다(비용 있는 조회라
-    스케줄 잡에서만 생성)."""
-    from job.interest_stock_picks import load_latest_picks  # 순환 import 방지를 위해 함수 안에서 지연 import
+    스케줄 잡에서만 생성).
+
+    date(YYYYMMDD 또는 YYYY-MM-DD, GET 쿼리스트링 또는 POST JSON body): 비우면 지금까지의
+    최신 결과(latest.json), 넘기면 그 날짜에 생성된 것 중 마지막 결과를 반환한다
+    (2026-09-21 날짜 검색 추가 — load_picks_for_date 참고)."""
+    from job.interest_stock_picks import load_latest_picks, load_picks_for_date  # 순환 import 방지를 위해 함수 안에서 지연 import
+    date_str = request.args.get('date')
+    if not date_str and request.method == 'POST':
+        date_str = (request.get_json(silent=True) or {}).get('date')
+    if date_str:
+        date_str = date_str.replace('-', '')
+        result = load_picks_for_date(date_str)
+        if result is None:
+            return jsonify({"generated_at": None, "picks": [], "disclaimer": None, "date": date_str})
+        return jsonify(result)
     result = load_latest_picks()
     if result is None:
         return jsonify({"generated_at": None, "picks": [], "disclaimer": None})
