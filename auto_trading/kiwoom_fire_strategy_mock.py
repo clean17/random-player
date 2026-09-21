@@ -364,9 +364,16 @@ def _daily_metrics(stk_cd: str) -> Optional[Tuple[float, float]]:
     return dist, ret1d
 
 
-def get_fire_candidates(limit: Optional[int] = None) -> List[Dict]:
+def get_fire_candidates(limit: Optional[int] = None, end_date: Optional[datetime.date] = None) -> List[Dict]:
     """fire 쿼리(SQL 조건 통과) 결과를 반환. 정렬은 SQL의 ORDER BY(총상승률 DESC, 웹 화면과 공유)를
     그대로 따른다 — 이 함수 자체는 더 이상 매수 순서를 정하지 않는다.
+
+    end_date: 기본 None(=오늘). get_interest_stocks_info의 SQL은 endDate가 '오늘'이고 09:00
+    이후면 '오늘 신호가 실제로 발생한 종목만' 통과시킨다(app/repository/stocks/stocks.py
+    fire_condition 주석 참고) — 그래서 장이 막 열린 시각엔 그날 신호가 아직 없어 후보가 0으로
+    나온다(2026-09-21 실사고). end_date에 과거 날짜(예: 직전 거래일)를 넘기면 이 '오늘 신호'
+    게이트가 자연히 빠져, '그날 당시 fire 조건을 통과했던' 상태 그대로 후보를 다시 얻을 수
+    있다 — 예약 종목을 다음 거래일 장 시작 직후 사고 싶을 때 이걸로 우회한다.
 
     ⚠️ 2026-09-03 제거: 예전엔 여기서 총상승률 오름차순(낮은 순)으로 재정렬해 그 순서가 곧
     매수 순서라고 문서화돼 있었다(2026-08 결정, 근거는 그 시절 3,255건 시뮬레이션 +2.35%).
@@ -382,9 +389,9 @@ def get_fire_candidates(limit: Optional[int] = None) -> List[Dict]:
     순위가 낮다는 이유로 조용히 제외돼 '체크했는데 왜 안 사지?'가 되기 때문.
     (예전엔 여기서 H2 필터로 한 번 더 걸렀으나 2026-08-05 요청으로 제거 — 상단 docstring 참고)"""
     from app.repository.stocks.stocks import get_interest_stocks_info
-    today = datetime.date.today()
-    start = (today - datetime.timedelta(days=FIRE_WINDOW_DAYS)).isoformat()
-    rows = get_interest_stocks_info(start, today.isoformat())
+    end = end_date or datetime.date.today()
+    start = (end - datetime.timedelta(days=FIRE_WINDOW_DAYS)).isoformat()
+    rows = get_interest_stocks_info(start, end.isoformat())
 
     candidates = []
     for row in rows:
@@ -434,8 +441,13 @@ def log_config():
         COOLDOWN_DAYS, REBUY_PROFIT_CAP * 100, MAX_TOTAL_HOLDINGS, FIRE_WINDOW_DAYS)
 
 
-def run_fire_buy_cycle():
-    """장중 주기 실행: 레짐 확인 → fire+H2 후보 → 쿨다운/보유중/일일한도 거르고 시장가 매수."""
+def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
+    """장중 주기 실행: 레짐 확인 → fire+H2 후보 → 쿨다운/보유중/일일한도 거르고 시장가 매수.
+
+    candidates_end_date: 기본 None(=오늘, 정기 15:21 잡과 동일 동작). get_fire_candidates()의
+    '오늘 신호 필요' 게이트(09:00 이후)를 우회해 특정 과거 시점 기준 fire 후보로 사고 싶을 때만
+    넘긴다(예: 직전 거래일 종가 기준으로 다음 거래일 장 시작 직후 매수 — 2026-09-21 1회성 사고
+    대응, get_fire_candidates() docstring 참고)."""
     if not (ACNT_NO and ACNT_PWD):
         _log.error('[fire] 계좌 정보 미설정')
         return
@@ -462,7 +474,7 @@ def run_fire_buy_cycle():
         if breadth < BREADTH_MIN:
             return  # 레짐 OFF: 조용히 스킵 (레짐 상태는 breadth 계산 시 하루 1회 로그됨)
 
-    candidates = get_fire_candidates()
+    candidates = get_fire_candidates(end_date=candidates_end_date)
     if not candidates:
         return
 
