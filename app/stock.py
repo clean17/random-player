@@ -25,7 +25,7 @@ from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_
     get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
     get_stock_audit_info_map, get_market_index_rates, is_autobuy_enabled, set_autobuy_enabled
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
-    manual_cancel_all_orders, _held_business_days as _legacy_business_days
+    manual_cancel_all_orders, order_accepted, _held_business_days as _legacy_business_days
 from auto_trading import kiwoom_trailing_stop as legacy_exit
 from auto_trading import kiwoom_v8_strategy as v8_strategy
 from auto_trading import kiwoom_v8_exit
@@ -1024,6 +1024,22 @@ def get_kiwoom_live_gap_ranking_cached():
                      "empty_reason": empty_reason})
 
 
+def _order_reject_message(result) -> str:
+    """키움 거부 응답의 return_msg에서 사람이 읽을 실제 사유만 뽑아낸다.
+
+    2026-09-21: manual_buy/manual_sell은 주문이 거부돼도(RC코드 있는 return_code!=0) 그 결과를
+    그대로 반환하는데, 라우트가 order_accepted()로 성공 여부를 확인하지 않고 무조건
+    {"status":"success"}로 감싸버려서 화면엔 거부된 주문도 '매수 요청 완료'로만 보였다
+    (실사고: 드림텍 530주 요청 → '매수증거금이 부족합니다. 420주 매수가능'으로 거부됐는데
+    화면엔 안 보이고 로그에만 남음). return_msg 원본은 "[2000](855056:매수증거금이
+    부족합니다. 420주 매수가능)" 형태라, 코드 앞부분을 걷어내고 실제 사유만 보여준다."""
+    msg = (result or {}).get('return_msg') if isinstance(result, dict) else None
+    if not msg:
+        return '주문이 거부되었습니다'
+    m = re.search(r'\((?:[^()]*:)?([^()]+)\)\s*$', msg)
+    return m.group(1) if m else msg
+
+
 @stock.route("/kiwoom/buy", methods=["POST"])
 @login_required
 def post_kiwoom_buy():
@@ -1044,6 +1060,8 @@ def post_kiwoom_buy():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
+    if not order_accepted(result):
+        return jsonify({"status": "error", "message": _order_reject_message(result), "result": result}), 400
     return jsonify({"status": "success", "result": result})
 
 
@@ -1067,6 +1085,8 @@ def post_kiwoom_sell():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
+    if not order_accepted(result):
+        return jsonify({"status": "error", "message": _order_reject_message(result), "result": result}), 400
     return jsonify({"status": "success", "result": result})
 
 

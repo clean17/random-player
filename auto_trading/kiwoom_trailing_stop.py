@@ -1587,12 +1587,12 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None, env: Optional[str] = None
     acnt_no, acnt_pwd = get_account_credentials(env)
     if not (acnt_no and acnt_pwd):
         _log.error(f'[수동매수] 계좌 정보 미설정 (env={env or KIWOOM_ENV})')
-        return
+        return {'return_code': -1, 'return_msg': f'계좌 정보 미설정 (env={env or KIWOOM_ENV})'}
 
     price, stk_nm = get_current_price_and_name(stk_cd, env=env)
     if price <= 0:
         _log.error(f'[수동매수] {stk_cd} 현재가 조회 실패')
-        return
+        return {'return_code': -1, 'return_msg': f'{stk_cd} 현재가 조회 실패'}
 
     s = get_account_summary(acnt_no, acnt_pwd, env)
     total_asset = s['total_asset']
@@ -1602,7 +1602,7 @@ def manual_buy(stk_cd: str, qty: Optional[int] = None, env: Optional[str] = None
 
     if qty <= 0:
         _log.error(f'[수동매수] {stk_nm}({stk_cd}) 현재가={price:,}원, 매수 가능 수량 0')
-        return
+        return {'return_code': -1, 'return_msg': f'{stk_nm}({stk_cd}) 현재가={price:,}원 — 매수 가능 수량 0'}
 
     trade_value = qty * price
     asset_ratio = (trade_value / total_asset) if total_asset > 0 else 0.0
@@ -1647,18 +1647,18 @@ def manual_sell(stk_cd: str, qty: int, env: Optional[str] = None):
     acnt_no, acnt_pwd = get_account_credentials(env)
     if not (acnt_no and acnt_pwd):
         _log.error(f'[수동매도] 계좌 정보 미설정 (env={env or KIWOOM_ENV})')
-        return
+        return {'return_code': -1, 'return_msg': f'계좌 정보 미설정 (env={env or KIWOOM_ENV})'}
 
     holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
     match = next((h for h in holdings if h['stk_cd'] == stk_cd), None)
     if not match:
         _log.error(f'[수동매도] {stk_cd} 보유 내역 없음')
-        return
+        return {'return_code': -1, 'return_msg': f'{stk_cd} 보유 내역 없음'}
 
     sell_qty = min(qty, match['qty'])
     if sell_qty <= 0:
         _log.error(f'[수동매도] {stk_cd} 매도 가능 수량 0')
-        return
+        return {'return_code': -1, 'return_msg': f'{stk_cd} 매도 가능 수량 0'}
 
     pnl = (match['cur_price'] - match['avg_price']) * sell_qty
     trade_value = match['cur_price'] * sell_qty
