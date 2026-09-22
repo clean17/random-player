@@ -615,12 +615,12 @@
 
         <div style="display:flex; align-items:center; gap:0; margin-left:auto;">
             {% if current_user.get_id() != config.GUEST_USERNAME %}
+            <button type="button" class="btn btn-secondary" id="picks-reserve-buy-btn"
+                    style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
+                           font-size:13px; font-weight:500; line-height:1; align-items:center;">'매수' 이상 전체 자동매수 예약</button>
             <button type="button" class="btn btn-secondary" id="reserved-clear-all-btn"
                     style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
                            font-size:13px; font-weight:500; line-height:1; align-items:center;">전체 해제</button>
-            <button type="button" class="btn btn-secondary" id="picks-reserve-buy-btn"
-                    style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
-                           font-size:13px; font-weight:500; line-height:1; align-items:center;">'매수' 이상 전체 예약</button>
             {% endif %}
 
         <div class="view-toggle" role="tablist" aria-label="보기 전환">
@@ -1002,7 +1002,7 @@
     const dd = String(today.getDate()).padStart(2, '0');
     const favoriteStocks = [];
     const reservedStocks = [];   // 자동매수 대상으로 체크한 종목코드 (stock_card.js의 reserve-btn이 참조)
-    let lastInterestPicks = [];  // 추천종목 탭 마지막 렌더 결과 — "'매수' 이상 전체 예약" 버튼이 참조
+    let lastInterestPicks = [];  // 추천종목 탭 마지막 렌더 결과 — "'매수' 이상 전체 자동매수 예약" 버튼이 참조
     const viewedStocks = [];     // 카드를 한 번이라도 눌러서 확인한 종목코드 (stock_card.js의 is-viewed 배지가 참조)
     // 2026-09-14: 지금 실전/모의 계좌에 보유 중인 종목코드 — 카드뷰(stock_card.js의
     // is-owned-real/is-owned-mock 배지)와 추천종목 표(msStockNameCellHtml)가 함께 참조한다.
@@ -1103,11 +1103,12 @@
         const searchHeader = document.getElementById('searchResultsHeader');
         if (searchHeader) searchHeader.style.display = isMyStocks ? 'none' : '';
 
-        // 자동매수 대상 탭에서만 '전체 해제' 버튼 노출
+        // '전체 해제' 버튼 노출 — 자동매수 대상 탭 + 추천종목 탭(2026-09-22, 계좌 전체 자동매수
+        // 대상을 해제한다. 추천탭에 안 보이는 종목도 함께 해제되니 유의 — 사용자 확인 후 결정).
         const clearAllBtn = document.getElementById('reserved-clear-all-btn');
-        if (clearAllBtn) clearAllBtn.style.display = (tabId === 'tab-reserved') ? 'inline-flex' : 'none';
+        if (clearAllBtn) clearAllBtn.style.display = (tabId === 'tab-reserved' || tabId === 'tab-picks') ? 'inline-flex' : 'none';
 
-        // 추천종목 탭에서만 "'매수' 이상 전체 예약" 버튼 노출 — 전체 해제 버튼과 같은 자리(공용 탭바)
+        // 추천종목 탭에서만 "'매수' 이상 전체 자동매수 예약" 버튼 노출 — 전체 해제 버튼과 같은 자리(공용 탭바)
         const picksReserveBtn = document.getElementById('picks-reserve-buy-btn');
         if (picksReserveBtn) picksReserveBtn.style.display = (tabId === 'tab-picks') ? 'inline-flex' : 'none';
     }
@@ -2120,7 +2121,7 @@
         const discEl = document.getElementById('ms-picks-disclaimer');
         const countEl = document.getElementById('count');
         const picks = data.picks || [];
-        lastInterestPicks = picks;   // "'매수' 이상 전체 예약" 버튼 + 헤더 정렬이 참조하는 원본(정렬 전) 목록
+        lastInterestPicks = picks;   // "'매수' 이상 전체 자동매수 예약" 버튼 + 헤더 정렬이 참조하는 원본(정렬 전) 목록
 
         // "검색 결과" 헤더의 건수 배지 — 관심종목/예측종목 등 다른 탭이 마지막으로 남겨둔
         // 값이 그대로 보이던 문제(2026-09-08) — 이 탭은 항상 top 10이라 픽 개수로 갱신한다.
