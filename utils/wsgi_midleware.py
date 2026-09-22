@@ -21,7 +21,20 @@ class RequestLoggingMiddleware:
                 environ.get("REMOTE_ADDR", "-")
         ) # 프록시 전의 ip
         method = environ.get("REQUEST_METHOD")
+        # 2026-09-23: PATH_INFO는 WSGI 스펙(PEP 3333)상 실제 요청 경로 바이트(UTF-8)를
+        # latin-1로 디코딩한 문자열로 온다 — 한글 파일명이 섞인 경로(예: 관심종목 그래프
+        # 이미지 /image/lgbm-stocks/...)가 로그에 mojibake(ì¼ì´ì¸ 류)로 찍히던 원인.
+        # 실제 라우팅/파일서빙은 werkzeug가 내부적으로 알아서 복원해서 정상 동작하고
+        # (200 응답), 이 로그 한 줄만 안 고쳐진 상태였다. latin-1로 되돌린 뒤 utf-8로
+        # 다시 디코딩하면 원래 문자열이 복원된다 — ASCII만 있는 경로는 latin-1/utf-8에서
+        # 바이트가 동일해 왕복해도 값이 안 바뀐다(기존 로그에 영향 없음). errors='replace'는
+        # 혹시 경로 바이트가 UTF-8이 아닌 요청이 와도(스캐너 등) 로깅 자체가 죽지 않게 한다.
         path = environ.get("PATH_INFO")
+        if path:
+            try:
+                path = path.encode('latin-1').decode('utf-8', errors='replace')
+            except UnicodeEncodeError:
+                pass   # 이미 정상 유니코드 문자열이면(latin-1 범위 밖 문자 포함) 그대로 둔다
         query_string = environ.get("QUERY_STRING", "")
         decoded_query = unquote(query_string)
         full_path = f"{path}?{decoded_query}" if decoded_query else path
