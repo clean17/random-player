@@ -6,7 +6,11 @@
   2) 이미 있는 값(등락률/거래대금 증가율)만으로 1차 예선 -> PRESCREEN_N개로 추림
      (외국인/기관 조회는 종목당 API 호출이 들어서, 전체 후보 전부에 안 하고 예선 통과자만)
   3) 예선 통과자에 한해 외국인/기관 순매수(ka10059)를 조회해 최종 점수 계산
-  4) 최종 top_n개만 뉴스(Toss NEWS 섹션)까지 조회해서 리포트에 포함
+  4) 최종 점수가 MIN_SCORE(='관심' 등급 경계) 이상인 것만, 최대 MAX_N개까지 뉴스(Toss NEWS
+     섹션)까지 조회해서 리포트에 포함 — 2026-09-22부터 고정 10개가 아니라 이 기준으로 개수가
+     날마다 변한다(임계값 미만이면 0개일 수도, 상한까지 15개일 수도 있음). 무조건 10개를
+     채우다 보니 약세장엔 '관망'급까지 억지로 노출되고 강세장엔 11~15위 유망 종목이 잘리던
+     문제 대응.
   5) JSON으로 저장 (logs/interest_stock_picks/picks_<타임스탬프>.json, latest.json)
 
 ⚠️ "얼마나 오를지"는 백테스트/모델 근거가 없어 확정 수치를 만들지 않는다 — 점수 구간에 따른
@@ -31,8 +35,9 @@ _log = get_trading_logger('interest_stock_picks')
 _OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         'logs', 'interest_stock_picks')
 
-TOP_N = 10
 PRESCREEN_N = 20   # 외국인/기관 조회(API 호출)까지 갈 예선 통과 수
+MIN_SCORE = 0.40   # 최종 노출 최소 점수 = _label()의 '관심' 등급 경계. 미만('관망')은 아예 안 보여준다.
+MAX_N = 15         # 최종 노출 상한(임계값을 넘는 종목이 많아도 여기서 자른다)
 
 
 def _f(v, default=0.0) -> float:
@@ -80,7 +85,7 @@ def _upside_tier(score: float) -> str:
     return '상승여력 낮음(단기 과열 주의)'
 
 
-def generate_picks(top_n: int = TOP_N) -> Dict:
+def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
     from app.repository.stocks.stocks import get_interest_stocks  # 지연 import(위 주석 참고)
 
     today = datetime.date.today().strftime('%Y%m%d')
@@ -103,7 +108,8 @@ def generate_picks(top_n: int = TOP_N) -> Dict:
         score = _final_score(row, flow)
         enriched.append((row, flow, score))
 
-    top = sorted(enriched, key=lambda t: t[2], reverse=True)[:top_n]
+    qualified = sorted((t for t in enriched if t[2] >= min_score), key=lambda t: t[2], reverse=True)
+    top = qualified[:max_n]
 
     picks = []
     for row, flow, score in top:
@@ -140,8 +146,8 @@ def generate_picks(top_n: int = TOP_N) -> Dict:
     with open(os.path.join(_OUT_DIR, 'latest.json'), 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    _log.info('관심종목 추천 생성: 후보 %d건 -> 예선 %d건 -> 최종 %d건',
-              len(candidates), len(prescreened), len(picks))
+    _log.info('관심종목 추천 생성: 후보 %d건 -> 예선 %d건 -> 점수 %.2f 이상 %d건(상한 %d건) -> 최종 %d건',
+              len(candidates), len(prescreened), min_score, len(qualified), max_n, len(picks))
     return result
 
 
