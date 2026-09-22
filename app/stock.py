@@ -813,9 +813,16 @@ def get_kiwoom_holdings():
             # 실시간으로 갱신되는 장점이 있으니, pred_close가 cur_prc와 실제로 다를 때만
             # (=결함이 없을 때만) API 값을 쓰고, 혹시 둘이 같아지면(결함 재발 의심) pkl
             # 기반 계산으로 자동 폴백한다.
+            # 2026-09-23 추가: 192650 실사고 — pred_close_pric이 cur_prc와 "완전히 같지는
+            # 않지만"(8530 vs 8540) 실제 전일종가(8140)와도 다른, 그냥 틀린 값을 준 사례가
+            # 나왔다. 위 동일 비교로는 못 잡는 변종 결함이라, 아예 장이 열려있지 않을 때는
+            # (가격이 안 움직이니 API 실시간성의 이점도 없다) pred_close_pric을 안 믿고
+            # 무조건 pkl 기준으로 계산한다. 장중에는 기존 로직(완전 일치일 때만 폴백) 유지 —
+            # 그때는 3초 새로고침 실시간성이 더 중요하고, 이 변종이 장중에도 나타나는지는
+            # 아직 확인된 바 없다.
             pred_close = h.get('pred_close')
             cur_price = h.get('cur_price')
-            if not (pred_close and cur_price and pred_close != cur_price):
+            if not v8_strategy.is_market_open() or not (pred_close and cur_price and pred_close != cur_price):
                 h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
         asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
         # 2026-08-28: 원래 "1회 투입금(ALLOC=8%) 참고값"으로 넣었었는데, 사용자가 원한 건
