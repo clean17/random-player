@@ -509,7 +509,21 @@ def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[
     맞는다** — 천원 단위(×1,000)로는 1000배 작게 나온다(49억원). unit_tp='1' 파라미터명이
     "천주/천원"을 암시해서 잘못 짚었던 것으로 보인다. 실제 amt_qty_tp='1'(금액모드) 응답은
     unit_tp 값과 무관하게 백만원 단위로 보인다. 여기선 원 단위로 환산해서 반환한다.
-    실패하면 None(표시용 부가 데이터라 호출부가 조용히 생략할 수 있게)."""
+    실패하면 None(표시용 부가 데이터라 호출부가 조용히 생략할 수 있게).
+
+    ⚠️ 2026-09-22: foreign/institution 개별 필드는 raw 값이 없거나 빈 문자열이면 0이 아니라
+    None을 반환한다 — 실측(관심종목 추천 이력)으로 특정 5분 사이클에서 그 순간 조회된 종목
+    전부(12종목 전수)가 수억~수백억원 → 0 → 수억~수백억원으로 동시에 튀는 현상이 확인됐다.
+    한 종목만 그런 게 아니라 그 사이클 전체가 그랬다는 건 실제 수급이 순간 0이 된 게 아니라
+    ka10059가 그 순간 빈 응답을 준 것이라는 뜻 — _to_number()가 파싱 실패를 조용히 0.0으로
+    돌려버려서(범용 헬퍼라 여기 맞춰 바꾸면 다른 호출부에 영향) '진짜 수급 0'과 '이번엔 못
+    받음'이 구분이 안 됐다. 호출부(job/interest_stock_picks.py)가 None을 직전 정상값으로
+    대체할 수 있게, 여기서부터 구분해서 넘긴다."""
+    def _num_or_none(raw):
+        if raw is None or str(raw).strip() == '':
+            return None
+        return _to_number(raw) * 1_000_000
+
     try:
         data = _call('ka10059', '/api/dostk/stkinfo', {
             'dt': datetime.now().strftime('%Y%m%d'),
@@ -524,9 +538,9 @@ def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[
         latest = rows[0]
         return {
             'date': latest.get('dt'),
-            'foreign': _to_number(latest.get('frgnr_invsr')) * 1_000_000,
-            'institution': _to_number(latest.get('orgn')) * 1_000_000,
-            'individual': _to_number(latest.get('ind_invsr')) * 1_000_000,
+            'foreign': _num_or_none(latest.get('frgnr_invsr')),
+            'institution': _num_or_none(latest.get('orgn')),
+            'individual': _num_or_none(latest.get('ind_invsr')),
         }
     except Exception as e:
         print(f'[WARN] get_investor_trend 실패: {stk_cd} {e}')

@@ -39,6 +39,32 @@ PRESCREEN_N = 20   # 외국인/기관 조회(API 호출)까지 갈 예선 통과
 MIN_SCORE = 0.40   # 최종 노출 최소 점수 = _label()의 '관심' 등급 경계. 미만('관망')은 아예 안 보여준다.
 MAX_N = 15         # 최종 노출 상한(임계값을 넘는 종목이 많아도 여기서 자른다)
 
+# 2026-09-22: 외국인/기관 순매수 직전 정상값 캐시(종목코드 -> {'date','foreign','institution'}).
+# ka10059가 간헐적으로(그 사이클에 조회된 종목 전부 동시에) 빈 값을 줄 때가 있는데
+# (get_investor_trend() docstring의 실측 사례 참고), 그럴 때 0으로 표시하면 "갑자기 수급이
+# 빠졌다"는 착각을 준다. 이번 사이클에 못 받은 필드만 직전 정상값으로 메운다.
+# ⚠️ 프로세스 재시작하면 비워진다 — 의도적이다. 순매수는 그날 누적치라 날짜가 바뀌면
+# 무의미해지므로, 캐시된 날짜가 오늘이 아니면 쓰지 않는다(아래 _carry_forward_flow).
+_LAST_FLOW: Dict[str, Dict] = {}
+
+
+def _carry_forward_flow(stk_cd: str, flow: Optional[Dict]) -> Optional[Dict]:
+    """flow의 foreign/institution이 None(이번 사이클에 못 받음)이면 오늘자 직전 정상값으로
+    채운다. 정상적으로 받은 필드는 캐시를 그 값으로 갱신한다."""
+    if flow is None:
+        return None
+    today = datetime.date.today().isoformat()
+    cached = _LAST_FLOW.get(stk_cd)
+    cached = cached if (cached and cached.get('date') == today) else {'date': today}
+    for key in ('foreign', 'institution'):
+        if flow.get(key) is None:
+            flow[key] = cached.get(key)   # 캐시에도 없으면(오늘 첫 조회) None 그대로 — '-' 표시
+        else:
+            cached[key] = flow[key]
+    cached['date'] = today
+    _LAST_FLOW[stk_cd] = cached
+    return flow
+
 
 def _f(v, default=0.0) -> float:
     try:
@@ -104,7 +130,7 @@ def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
 
     enriched = []
     for row in prescreened:
-        flow = get_investor_trend(row['stock_code'], env='real')
+        flow = _carry_forward_flow(row['stock_code'], get_investor_trend(row['stock_code'], env='real'))
         score = _final_score(row, flow)
         enriched.append((row, flow, score))
 
