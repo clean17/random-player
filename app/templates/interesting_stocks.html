@@ -618,6 +618,9 @@
             <button type="button" class="btn btn-secondary" id="reserved-clear-all-btn"
                     style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
                            font-size:13px; font-weight:500; line-height:1; align-items:center;">전체 해제</button>
+            <button type="button" class="btn btn-secondary" id="picks-reserve-buy-btn"
+                    style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
+                           font-size:13px; font-weight:500; line-height:1; align-items:center;">'매수' 이상 전체 예약</button>
             {% endif %}
 
         <div class="view-toggle" role="tablist" aria-label="보기 전환">
@@ -752,8 +755,8 @@
         <div class="table-scroller"></div>
     </section>
 
-    <!-- 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가). job/interest_stock_picks.py가
-         월~금 12:00/14:00에 생성해둔 결과를 그대로 읽어서 보여준다 — 이 탭 자체는 계산하지 않는다. -->
+    <!-- 관심종목 추천(규칙기반 점수/라벨, 2026-09-08 추가). job/interest_stock_picks.py가
+         월~금 09:30~20:00 5분마다 생성해둔 결과를 그대로 읽어서 보여준다 — 이 탭 자체는 계산하지 않는다. -->
     <section id="tab-picks" class="tab-panel" style="display:none;">
         <div class="mystocks-livegap-toolbar">
             <span class="ms-refresh-status" id="ms-picks-status"></span>
@@ -999,6 +1002,7 @@
     const dd = String(today.getDate()).padStart(2, '0');
     const favoriteStocks = [];
     const reservedStocks = [];   // 자동매수 대상으로 체크한 종목코드 (stock_card.js의 reserve-btn이 참조)
+    let lastInterestPicks = [];  // 추천종목 탭 마지막 렌더 결과 — "'매수' 이상 전체 예약" 버튼이 참조
     const viewedStocks = [];     // 카드를 한 번이라도 눌러서 확인한 종목코드 (stock_card.js의 is-viewed 배지가 참조)
     // 2026-09-14: 지금 실전/모의 계좌에 보유 중인 종목코드 — 카드뷰(stock_card.js의
     // is-owned-real/is-owned-mock 배지)와 추천종목 표(msStockNameCellHtml)가 함께 참조한다.
@@ -1102,6 +1106,10 @@
         // 자동매수 대상 탭에서만 '전체 해제' 버튼 노출
         const clearAllBtn = document.getElementById('reserved-clear-all-btn');
         if (clearAllBtn) clearAllBtn.style.display = (tabId === 'tab-reserved') ? 'inline-flex' : 'none';
+
+        // 추천종목 탭에서만 "'매수' 이상 전체 예약" 버튼 노출 — 전체 해제 버튼과 같은 자리(공용 탭바)
+        const picksReserveBtn = document.getElementById('picks-reserve-buy-btn');
+        if (picksReserveBtn) picksReserveBtn.style.display = (tabId === 'tab-picks') ? 'inline-flex' : 'none';
     }
 
     // 탭 전환 (드롭다운)
@@ -2087,6 +2095,7 @@
         const discEl = document.getElementById('ms-picks-disclaimer');
         const countEl = document.getElementById('count');
         const picks = data.picks || [];
+        lastInterestPicks = picks;   // "'매수' 이상 전체 예약" 버튼이 라벨/종목코드 조회에 참조
 
         // "검색 결과" 헤더의 건수 배지 — 관심종목/예측종목 등 다른 탭이 마지막으로 남겨둔
         // 값이 그대로 보이던 문제(2026-09-08) — 이 탭은 항상 top 10이라 픽 개수로 갱신한다.
@@ -3210,6 +3219,44 @@
         } catch (e) {
             console.error(e);
             alert('자동매수 대상 해제에 실패했어요. 다시 시도해주세요.');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // 추천종목 탭: 추천상태 '매수' 이상('매수'·'적극매수')인 종목 전부를 자동매수 대상으로
+    // 일괄 체크. 이미 예약된 종목은 건드리지 않는다(/stocks/reserved가 토글이라, 이미 true인
+    // 걸 다시 부르면 꺼져버림 — 2026-09-22 추가).
+    document.getElementById('picks-reserve-buy-btn')?.addEventListener('click', async () => {
+        const targets = lastInterestPicks.filter(p =>
+            (p.label === '매수' || p.label === '적극매수') && !flagCacheHas(reservedStocks, p.stock_code));
+        if (!targets.length) {
+            showDebugToast("추가할 종목이 없어요 ('매수' 이상이 없거나 이미 전부 예약됨)");
+            return;
+        }
+        if (!confirm(`'매수' 이상 ${targets.length}종목을 자동매수 대상으로 추가할까요?`)) return;
+
+        const btn = document.getElementById('picks-reserve-buy-btn');
+        btn.disabled = true;
+        try {
+            const results = await Promise.allSettled(
+                targets.map(p => requestToggleReserved({ stockCode: p.stock_code })));
+            let okCount = 0;
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled' && (typeof r.value.flag !== 'boolean' || r.value.flag)) {
+                    updateFlagCache(reservedStocks, targets[i].stock_code, true);
+                    okCount++;
+                } else {
+                    console.error('자동매수 대상 추가 실패', targets[i].stock_code, r.reason || r.value);
+                }
+            });
+            applyStockFlagState();
+            showDebugToast(okCount === targets.length
+                ? `${okCount}종목을 자동매수 대상으로 추가했습니다`
+                : `${okCount}/${targets.length}종목만 추가됐습니다 — 일부 실패, 다시 시도해주세요`);
+        } catch (e) {
+            console.error(e);
+            alert('자동매수 대상 일괄 추가에 실패했어요. 다시 시도해주세요.');
         } finally {
             btn.disabled = false;
         }
