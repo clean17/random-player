@@ -798,6 +798,7 @@
             <span class="ms-index-bar" id="ms-index-bar">
                 <span class="ms-index-item"><span class="ms-index-name">코스피</span><span class="value" id="ms-index-kospi">-</span></span>
                 <span class="ms-index-item"><span class="ms-index-name">코스닥</span><span class="value" id="ms-index-kosdaq">-</span></span>
+                <span class="ms-index-item"><span class="ms-index-name">원/달러</span><span class="value" id="ms-index-usdkrw">-</span></span>
             </span>
             <span class="ms-refresh-status" id="ms-refresh-status"></span>
         </div>
@@ -1669,7 +1670,7 @@
         evltPlEl.className = 'value value-sub ' + msPnlClass(pnl);
     }
 
-    function renderMyStocksIndex(index) {
+    function renderMyStocksIndex(index, usdKrw) {
         [['kospi', 'ms-index-kospi'], ['kosdaq', 'ms-index-kosdaq']].forEach(([key, elId]) => {
             const el = document.getElementById(elId);
             const idx = index && index[key];
@@ -1677,6 +1678,9 @@
             el.textContent = `${idx.price.toLocaleString('ko-KR')} (${msFmtPct(idx.rate)})`;
             el.className = 'value ' + msPnlClass(idx.rate);
         });
+        // 원달러 환율 — 키움 API엔 없어 네이버에서 따로 가져온다(등락 정보 없이 현재가만).
+        const fxEl = document.getElementById('ms-index-usdkrw');
+        if (fxEl) fxEl.textContent = (usdKrw != null) ? usdKrw.toLocaleString('ko-KR') : '-';
     }
 
     function renderMyStocksPnl(pnlSummary) {
@@ -2463,7 +2467,7 @@
             renderMyStocksPnl(historyData.pnl_summary || {});
             renderMyStocksHistory(historyData.history || [], ordersData.orders || []);
             renderMyStocksOrders(ordersData.orders || []);
-            renderMyStocksIndex(indexData.index || {});
+            renderMyStocksIndex(indexData.index || {}, indexData.usd_krw);
         } catch (e) {
             console.error(e);
             if (seq === msLoadSeq) showDebugToast('내 종목 데이터를 불러오지 못했습니다');

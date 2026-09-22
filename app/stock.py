@@ -23,7 +23,7 @@ from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
     get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
-    get_stock_audit_info_map, get_market_index_rates, is_autobuy_enabled, set_autobuy_enabled
+    get_stock_audit_info_map, get_market_index_rates, get_usd_krw_rate, is_autobuy_enabled, set_autobuy_enabled
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
     manual_cancel_all_orders, order_accepted, _held_business_days as _legacy_business_days
 from auto_trading import kiwoom_trailing_stop as legacy_exit
@@ -885,7 +885,10 @@ def get_kiwoom_market_index():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
-    return jsonify({"index": rates})
+    # 원달러 환율은 계좌/env와 무관한 공통 정보라 실패해도 지수 조회 자체를 막지 않는다
+    # (표시용 부가 정보, 2026-09-22 추가).
+    usd_krw = get_usd_krw_rate()
+    return jsonify({"index": rates, "usd_krw": usd_krw})
 
 
 @stock.route("/kiwoom/orders", methods=["GET"])

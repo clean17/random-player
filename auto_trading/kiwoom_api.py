@@ -459,6 +459,45 @@ def get_market_index_rates(env: Optional[str] = None, force: bool = False) -> Di
     return result
 
 
+_FX_CACHE_LOCK = threading.Lock()
+_FX_CACHE: Optional[Tuple[float, float]] = None
+_FX_CACHE_TTL = 60.0  # 1분. 코스피/코스닥 지수와 같은 캐시 주기 — 계좌 무관 공통 정보.
+_FX_URL = ('https://m.search.naver.com/p/csearch/content/qapirender.nhn'
+           '?key=calculator&pkid=141&q=%ED%99%98%EC%9C%A8&where=m'
+           '&u1=keb&u6=standardUnit&u7=0&u3=USD&u4=KRW&u8=down&u2=1')
+
+
+def get_usd_krw_rate(force: bool = False) -> Optional[float]:
+    """네이버 환율계산기 API로 원/달러 현재가를 가져온다(키움 API엔 환율 조회가 없음).
+    AutoSales.py/utils.py get_usd_krw_rate()와 동일한 엔드포인트 — 그쪽에서 이미 운영 중인
+    방식을 그대로 재사용. 1분 캐시, 실패해도 예외 없이 이전 캐시(또는 None)를 반환한다
+    (표시용 부가 정보라 화면이 죽으면 안 됨)."""
+    global _FX_CACHE
+    now = time.time()
+    with _FX_CACHE_LOCK:
+        if not force and _FX_CACHE is not None and now - _FX_CACHE[0] < _FX_CACHE_TTL:
+            return _FX_CACHE[1]
+
+    try:
+        data = requests.get(_FX_URL, timeout=5).json()
+        rate = None
+        for item in data.get('country', []):
+            if item.get('currencyUnit') == '원':
+                rate = float(str(item.get('value', '0')).replace(',', ''))
+                break
+    except Exception as e:
+        print(f'[ERROR] get_usd_krw_rate: {e}')
+        with _FX_CACHE_LOCK:
+            if _FX_CACHE is not None:
+                return _FX_CACHE[1]
+        return None
+
+    if rate is not None:
+        with _FX_CACHE_LOCK:
+            _FX_CACHE = (now, rate)
+    return rate
+
+
 def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[str, float]]:
     """종목별 외국인/기관/개인 순매수(원). ka10059(종목별투자자기관별차트요청), 2026-09-08 확인.
 
