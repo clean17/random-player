@@ -175,7 +175,7 @@ def load_picks_for_date(date_str: str) -> Optional[Dict]:
     """특정 날짜(YYYYMMDD)에 생성된 추천 중 가장 마지막(최신) 결과를 반환한다.
 
     generate_picks()가 실행마다 latest.json과 별도로 picks_<YYYYMMDD_HHMM>.json도 남겨두므로
-    (평일 10:00~20:00 5분마다), 화면에서 과거 날짜를 골랐을 때도 그날 마지막 생성분을 그대로
+    (평일 09:30~20:00 5분마다), 화면에서 과거 날짜를 골랐을 때도 그날 마지막 생성분을 그대로
     다시 보여줄 수 있다 — 2026-09-21 날짜 검색 기능 추가. 그날 파일이 하나도 없으면 None."""
     if not date_str or not re.fullmatch(r'\d{8}', date_str):
         return None

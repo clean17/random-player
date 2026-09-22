@@ -1138,7 +1138,7 @@
             msStopTimer();
             loadData()
         } else if (target.id === 'tab-picks') {
-            // 계산은 스케줄 잡(평일 10:00~20:00, 5분마다)이 미리 해두므로, 여기선 결과만 가볍게
+            // 계산은 스케줄 잡(평일 09:30~20:00, 5분마다)이 미리 해두므로, 여기선 결과만 가볍게
             // 조회한다. 2026-09-21: 날짜 검색 추가 — 기본은 오늘, loadData()가 날짜 변경 시
             // 다시 불러온다(tab-picks 분기 참고).
             msStopTimer();
@@ -2102,8 +2102,8 @@
                 ? `${requestedDate.slice(0, 4)}-${requestedDate.slice(4, 6)}-${requestedDate.slice(6, 8)} `
                 : '';
             statusEl.textContent = data.generated_at
-                ? `${dateLabel}생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 10:00~20:00, 5분마다 자동 갱신)`
-                : (isPastDate ? `${dateLabel}에 생성된 추천이 없어요` : '아직 생성된 추천이 없어요 (평일 10:00~20:00, 5분마다 자동 생성됩니다)');
+                ? `${dateLabel}생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 09:30~20:00, 5분마다 자동 갱신)`
+                : (isPastDate ? `${dateLabel}에 생성된 추천이 없어요` : '아직 생성된 추천이 없어요 (평일 09:30~20:00, 5분마다 자동 생성됩니다)');
         }
         if (discEl) discEl.textContent = data.disclaimer || '';
 

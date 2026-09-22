@@ -320,9 +320,9 @@ def get_predict_stocks_data():
 @stock.route("/interest/data/picks", methods=["GET", "POST"])
 @login_required
 def get_interest_stock_picks_data():
-    """관심종목 추천 top10 (규칙기반 점수/라벨). 평일 10:00~20:00 5분마다 job/interest_stock_picks.py가
-    생성해둔 결과를 그대로 읽어서 반환 — 이 요청에서 직접 계산하지 않는다(비용 있는 조회라
-    스케줄 잡에서만 생성).
+    """관심종목 추천(규칙기반 점수/라벨, 점수 임계값 통과 시 최대 15개 가변). 평일 09:30~20:00
+    5분마다 job/interest_stock_picks.py가 생성해둔 결과를 그대로 읽어서 반환 — 이 요청에서
+    직접 계산하지 않는다(비용 있는 조회라 스케줄 잡에서만 생성).
 
     date(YYYYMMDD 또는 YYYY-MM-DD, GET 쿼리스트링 또는 POST JSON body): 비우면 지금까지의
     최신 결과(latest.json), 넘기면 그 날짜에 생성된 것 중 마지막 결과를 반환한다

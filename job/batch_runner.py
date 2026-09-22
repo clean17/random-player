@@ -845,10 +845,20 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 18) 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 10:00~20:00, 5분마다.
+    # 18) 관심종목 추천 top15 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 09:30~20:00, 5분마다.
     #     회당 예선 20종목 외국인/기관 조회(키움 ka10059, 실계좌 자동매매와 같은 API 예산 공유)
-    #     + 최종 10종목 뉴스 조회(토스)가 들어간다 — 트레이딩 쪽에서 429가 잦아지면 이 주기부터
-    #     의심할 것.
+    #     + 최종 최대 15종목 뉴스 조회(토스)가 들어간다 — 트레이딩 쪽에서 429가 잦아지면 이
+    #     주기부터 의심할 것.
+    #     2026-09-22: 시작 시각을 10:00 -> 09:30으로 당겼다. CronTrigger는 minute 필드가 시(hour)
+    #     전체에 공통 적용돼 "9:30부터, 10시부터는 매 5분"을 한 트리거로 못 써서 잡을 둘로 쪼갰다
+    #     (9시대는 30,35,...,55분만, 10시부터는 기존과 동일하게 */5).
+    scheduler.add_job(
+        run_interest_stock_picks,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute="30-55/5"),
+        id="interest_stock_picks_early",
+        executor="io",
+        replace_existing=True,
+    )
     scheduler.add_job(
         run_interest_stock_picks,
         trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute="*/5"),
