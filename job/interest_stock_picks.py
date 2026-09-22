@@ -82,7 +82,7 @@ def _upside_tier(score: float) -> str:
         return '상승여력 높음'
     if score >= 0.55:
         return '상승여력 보통'
-    return '상승여력 낮음(단기 과열 주의)'
+    return '상승여력 낮음'
 
 
 def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
