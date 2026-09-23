@@ -3805,6 +3805,18 @@ body.page-post-view > .container {
     }
 }
 
+/* View screen only: widen the content body's own side padding (title/edit screen untouched). */
+body.page-post-view .post-content.ql-editor {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+}
+@media (max-width: 560px) {
+    body.page-post-view .post-content.ql-editor {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+    }
+}
+
 /* list heading: slightly larger plus left margin */
 body.page-post.page-post .post-count-heading.post-count-heading {
     font-size: 19px !important;
