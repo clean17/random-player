@@ -829,14 +829,12 @@ function setView(toggle, view, focus = false) {
     renderTradingView(globalTradingRows);
 }
 
-function openStockOnToss(stockName) {
-    axios.post('/stocks/info', { stock_name: stockName }, {})
-        .then(response => {
-            if (response.status !== 200) { showDebugToast('요청 실패'); return; }
-            const code = response.data.result[0].data.items[0].code;
-            window.open("https://www.tossinvest.com/stocks/" + code, "_blank");
-        })
-        .catch(err => console.error(err));
+function openStockOnToss(stockCode) {
+    // 종목명으로 토스 검색 API를 태우면 배지 텍스트가 섞이거나(예측종목 카드)
+    // 동명이인/오탈자로 검색이 어긋나 엉뚱한 종목·무반응이 잦았다. 카드에 이미
+    // 박혀 있는 종목코드(data-stock-code)를 그대로 써서 확실하게 이동시킨다.
+    if (!stockCode) { showDebugToast('종목코드를 찾을 수 없습니다.'); return; }
+    window.open("https://www.tossinvest.com/stocks/A" + stockCode, "_blank");
 }
 
 // 드롭다운 변경 시 즉시 반영
@@ -872,7 +870,7 @@ setTimeout(()=>{
                 case 'l':
                     event.preventDefault();
                     const currentArticle1 = getCurrentArticle();
-                    currentArticle1.querySelector('.fav-btn').click();
+                    currentArticle1?.querySelector('.fav-btn')?.click();
                     break;
                 case 'o':
                     event.preventDefault();
@@ -880,9 +878,15 @@ setTimeout(()=>{
                     currentArticle3?.querySelector('.reserve-btn')?.click();
                     break;
                 case 'Enter':
+                    // 추천종목 탭(#tab-picks)은 카드 캐러셀이 아니라 테이블이라
+                    // 토스 이동 단축키 대상이 아니다.
+                    if (getActiveTabTarget() === '#tab-picks') break;
                     event.preventDefault();
                     const currentArticle2 = getCurrentArticle();
-                    openStockOnToss(currentArticle2.querySelector(".trade-name")?.textContent);
+                    if (!currentArticle2) break; // 조회된 카드가 없으면 아무 동작도 하지 않는다
+                    const stockCode2 = currentArticle2.querySelector(".fav-btn")?.dataset.stockCode
+                        || currentArticle2.dataset.stockCode;
+                    openStockOnToss(stockCode2);
                     break;
                 default:
                     break;
@@ -1231,7 +1235,14 @@ function initFavoriteButtons() {
 
 
 function getCurrentArticle() {
-    const articles = document.querySelectorAll("article.trade-card");
+    // 전체 document에서 article.trade-card를 찾으면, 다른 탭(숨겨진 섹션)에 남아있던
+    // 이전 렌더 결과의 카드까지 잡혀서 "조회된 카드가 없는데도" 그 카드가 현재 카드로
+    // 선택되는 문제가 있었다. 현재 활성 탭 안에서, 실제로 화면에 그려진(0x0이 아닌)
+    // 카드만 후보로 삼는다.
+    const activeSection = document.querySelector(getActiveTabTarget());
+    if (!activeSection) return null;
+
+    const articles = activeSection.querySelectorAll("article.trade-card");
     const viewportCenter = window.innerWidth / 2;
 
     let current = null;
@@ -1239,6 +1250,7 @@ function getCurrentArticle() {
 
     articles.forEach(article => {
         const rect = article.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return; // display:none 등으로 숨겨진 카드는 제외
         const articleCenter = rect.left + rect.width / 2;
         const distance = Math.abs(viewportCenter - articleCenter);
 
