@@ -54,6 +54,7 @@ def upload_file():
                 filename = file.filename
                 name, ext = os.path.splitext(filename)
                 # UUID 생성
+                name = name[:50]  # 원본 파일명이 과도하게 길면 경로 제한(260자)에 걸림 — 앞부분만 유지
                 uuid_filename = f"{name}_{uuid.uuid4().hex}{ext.lower()}"
                 file_ext = os.path.splitext(filename)[1].lower()
 
