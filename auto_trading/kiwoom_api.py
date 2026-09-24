@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import requests
-from datetime import datetime, time as _dtime
+from datetime import datetime, date, timedelta, time as _dtime
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv, find_dotenv
 
@@ -61,6 +61,148 @@ def get_account_credentials(env: Optional[str] = None) -> tuple:
     return os.environ.get(c['acnt_no_env']), os.environ.get(c['acnt_pwd_env'])
 
 
+# KRX 공식 휴장일(주말 제외, 평일인데 장이 안 열리는 날). 대체공휴일·임시공휴일·선거일 포함.
+# 2026-09-24 사고 계기로 추가 — is_market_open() 계열 함수가 전부 "월~금이면 영업일"로만
+# 보고 있어서, 추석 등 평일 공휴일에 청산 주문을 거부(RC4010/RC4058)당할 때까지 30초/60초마다
+# 계속 시도했다. (보유일수 계산 자체는 TRADING_RULES.md 1-2절 백테스트 근거로 일부러 그대로 둠.)
+#
+# 최초엔 이 목록을 하드코딩했으나(교차검증한 15일), 검증 도중 2026-06-03 지방선거 휴장일이
+# 그 방식으로는 빠져있었던 걸 발견했다(선거일은 연초 시판 캘린더에 없고 그때그때 공고된다) —
+# 그래서 한국천문연구원 "특일 정보" API(공공데이터포털, .env KASI_HOLIDAY_API_KEY)로 자동
+# 갱신하도록 바꿨다. KRX 정기휴장일 규정(공휴일+근로자의날+토요일+일요일+12/31, 그 외 임시
+# 공휴일·선거일 포함)이 이 API의 isHoliday=Y 판정과 정확히 일치함을 실측 확인(2026-09-24,
+# 아래 소스 대조: 현충일 6/6은 그 해 토요일이라 무관, 제헌절 7/17은 2026년에 한시적으로 법정
+# 공휴일 재지정돼 실제로 KRX도 휴장 — API가 이걸 정확히 잡아냈다).
+KRX_HOLIDAY_API_URL = ('https://apis.data.go.kr/B090041/openapi/service/'
+                        'SpcdeInfoService/getHoliDeInfo')
+_KRX_HOLIDAY_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        'krx_holidays_cache.json')
+
+# 최후 폴백(API 키 미설정·최초 실행 시 캐시 파일도 없을 때만 씀) — 2026-09-24 교차검증.
+# ⚠️ 지방선거처럼 그때그때 공고되는 휴장일은 여기 못 담는다 — 이 목록은 어디까지나
+# API/캐시가 둘 다 실패했을 때의 안전망이지 정답이 아니다.
+KRX_HOLIDAYS_2026 = {
+    date(2026, 1, 1),
+    date(2026, 2, 16), date(2026, 2, 17), date(2026, 2, 18),
+    date(2026, 3, 2),
+    date(2026, 5, 1), date(2026, 5, 5), date(2026, 5, 25),
+    date(2026, 6, 3),  # 전국동시지방선거 (2026-09-24 API 조회로 발견 — 최초 하드코딩엔 누락돼 있었다)
+    date(2026, 7, 17),  # 제헌절 (2026년 한시적 법정공휴일 재지정, KRX도 휴장)
+    date(2026, 8, 17),
+    date(2026, 9, 24), date(2026, 9, 25),
+    date(2026, 10, 5), date(2026, 10, 9),
+    date(2026, 12, 25), date(2026, 12, 31),
+}
+KRX_HOLIDAYS = set(KRX_HOLIDAYS_2026)  # refresh_krx_holidays()가 in-place로 갱신 (재바인딩 금지 —
+                                        # 다른 모듈이 from ... import KRX_HOLIDAYS 로 참조를 들고 있다)
+
+
+def _year_end_closure(year: int) -> date:
+    """12/31 결산휴장일. 주말이면 KRX 규정대로 직전 평일로 당긴다(다른 공휴일과 겹치는
+    희귀 케이스까지는 처리하지 않음 — 실무상 거의 발생하지 않는다)."""
+    d = date(year, 12, 31)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def _fetch_krx_holidays_year(year: int) -> Optional[List[str]]:
+    """KASI 특일 정보 API로 한 해 공휴일(YYYYMMDD 문자열 리스트)을 조회. 실패하면 None —
+    호출부가 기존 값을 그대로 유지할 수 있게 예외를 던지지 않는다."""
+    api_key = os.environ.get('KASI_HOLIDAY_API_KEY')
+    if not api_key:
+        return None
+    try:
+        resp = requests.get(KRX_HOLIDAY_API_URL, params={
+            'serviceKey': api_key, 'solYear': str(year), 'numOfRows': '100', '_type': 'json',
+        }, timeout=10)
+        resp.raise_for_status()
+        body = resp.json().get('response', {}).get('body', {})
+        items = (body.get('items') or {}).get('item') or []
+        if isinstance(items, dict):
+            items = [items]
+        return [str(it['locdate']) for it in items if it.get('isHoliday') == 'Y']
+    except Exception as e:
+        print(f'[WARN] KASI 휴장일 API 조회 실패({year}년): {e}')
+        return None
+
+
+def _load_krx_holiday_cache_file() -> Dict[str, List[str]]:
+    try:
+        with open(_KRX_HOLIDAY_CACHE_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_krx_holiday_cache_file(cache: Dict[str, List[str]]) -> None:
+    tmp = _KRX_HOLIDAY_CACHE_PATH + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, _KRX_HOLIDAY_CACHE_PATH)  # 원자적 교체 — kiwoom_v8_positions 파일 손상 사고 재발 방지
+
+
+def _apply_krx_holiday_cache(cache: Dict[str, List[str]]) -> bool:
+    """cache({'2026': ['20260101', ...]})를 KRX_HOLIDAYS에 in-place 반영. 파싱 가능한 날짜가
+    하나도 없으면 아무것도 바꾸지 않고 False를 반환한다(빈 캘린더로 덮어써 전부 '거래일'로
+    오판하는 게 최악의 실패 모드라서)."""
+    new_dates = set()
+    for year_str, ymd_list in (cache or {}).items():
+        try:
+            year = int(year_str)
+        except ValueError:
+            continue
+        for ymd in ymd_list:
+            try:
+                new_dates.add(datetime.strptime(str(ymd), '%Y%m%d').date())
+            except ValueError:
+                continue
+        new_dates.add(_year_end_closure(year))
+    if not new_dates:
+        return False
+    KRX_HOLIDAYS.clear()
+    KRX_HOLIDAYS.update(new_dates)
+    return True
+
+
+# 모듈 로드 시: 캐시 파일이 있으면 그걸로 하드코딩 폴백을 즉시 덮어쓴다(로컬 파일 읽기라
+# 네트워크 호출 없이 빠르다). 캐시가 없거나 비어있으면 위 KRX_HOLIDAYS_2026 폴백을 그대로 둔다.
+_apply_krx_holiday_cache(_load_krx_holiday_cache_file())
+
+
+def refresh_krx_holidays() -> bool:
+    """올해+내년 공휴일을 API로 갱신해 캐시 파일에 저장하고 KRX_HOLIDAYS에 반영한다.
+    job/batch_runner.py에 주 1회 스케줄로 등록해서 쓸 것 — 서버가 몇 달씩 재시작 없이 떠
+    있어도 새해 캘린더가 자동으로 들어오고, 지방선거처럼 갑자기 공고되는 휴장일도 반영된다.
+    ⚠️ API 실패 시 기존 캐시/폴백을 그대로 두고 False를 반환한다 — 절대 빈 값으로 덮지 않는다."""
+    this_year = datetime.now().year
+    fetched: Dict[str, List[str]] = {}
+    for y in (this_year, this_year + 1):
+        dates = _fetch_krx_holidays_year(y)
+        if dates:
+            fetched[str(y)] = dates
+    if not fetched:
+        return False
+    cache = _load_krx_holiday_cache_file()
+    cache.update(fetched)
+    ok = _apply_krx_holiday_cache(cache)
+    if ok:
+        _save_krx_holiday_cache_file(cache)
+    return ok
+
+
+def is_krx_holiday(d: Optional[date] = None) -> bool:
+    """평일인데 KRX가 쉬는 날인지(주말 여부는 별도로 봐야 함)."""
+    d = d or datetime.now().date()
+    return d in KRX_HOLIDAYS
+
+
+def is_krx_business_day(d: Optional[date] = None) -> bool:
+    """주말도 KRX_HOLIDAYS도 아닌 실제 개장일인지."""
+    d = d or datetime.now().date()
+    return d.weekday() < 5 and d not in KRX_HOLIDAYS
+
+
 def is_krx_aftermarket_open() -> bool:
     """2026-09-14 신설 KRX 애프터마켓(16:00~20:00) — 기존 시간외단일가 폐지하고 대체,
     15:30~16:00 휴장 신설. NXT 애프터마켓(15:30~20:00)과는 별개의 KRX 소속 세션.
@@ -80,7 +222,7 @@ def is_krx_aftermarket_open() -> bool:
     if KIWOOM_ENV != 'real':
         return False
     now = datetime.now()
-    if now.weekday() >= 5:
+    if not is_krx_business_day(now.date()):
         return False
     return _dtime(16, 0) <= now.time() < _dtime(20, 0)
 

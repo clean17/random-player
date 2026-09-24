@@ -509,6 +509,18 @@ def run_kiwoom_trailing_stop():
         _log.error(f'run_kiwoom_trailing_stop 실패: {e}')
 
 
+def refresh_krx_holidays_job():
+    """KASI 특일 정보 API로 KRX 휴장일 캘린더 갱신 (2026-09-24 추가). 주 1회면 충분 —
+    실패해도 kiwoom_api.KRX_HOLIDAYS는 기존 캐시/하드코딩 폴백을 그대로 유지한다."""
+    from auto_trading.kiwoom_api import refresh_krx_holidays
+    from auto_trading.kiwoom_trailing_stop import _log
+    try:
+        ok = refresh_krx_holidays()
+        _log.info('KRX 휴장일 캘린더 갱신 %s', '성공' if ok else '실패(기존 값 유지)')
+    except Exception as e:
+        _log.error(f'refresh_krx_holidays_job 실패: {e}')
+
+
 def log_kiwoom_account_summary():
     from auto_trading.kiwoom_trailing_stop import log_account_summary, is_market_open, _log
     if not is_market_open():

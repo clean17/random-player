@@ -45,7 +45,7 @@ if ROOT not in sys.path:
 
 from auto_trading import kiwoom_api as api          # noqa: E402
 from auto_trading import kiwoom_v8_strategy as v8   # noqa: E402
-from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
+from auto_trading.kiwoom_api import env_path, get_trading_logger, KRX_HOLIDAYS, is_krx_business_day  # noqa: E402
 from auto_trading.kiwoom_trailing_stop import _record_trade, manual_owned_codes  # noqa: E402
 
 # 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
@@ -130,6 +130,8 @@ def log_config():
         TP_PCT * 100, TP_FRAC * 100, MAX_HOLD_DAYS,
         ('%.0f%%' % (HARD_FLOOR_PCT * 100)) if HARD_FLOOR_PCT is not None else 'None(비활성)',
         ANOMALY_DROP * 100, AFTERMARKET_SELL_SLIPPAGE * 100)
+    _log.info('KRX 휴장일 캘린더: %d일 로드(연도별 갱신 필요) 오늘(%s) 거래일=%s',
+              len(KRX_HOLIDAYS), datetime.date.today().isoformat(), is_krx_business_day())
 
 
 def _load() -> Dict:
@@ -159,6 +161,10 @@ def v8_position_codes() -> set:
 
 
 def _business_days(d0: str) -> int:
+    """d0 이후 지난 영업일(월~금) 수. np.busday_count()는 주말만 빼고 공휴일은 영업일로
+    센다 — kiwoom_trailing_stop._held_business_days()와 같은 특성이고, 그쪽은
+    TRADING_RULES.md 1-2절에 "고치지 말 것"(백테스트로 공휴일발 조기청산이 유리함 확인)이
+    명시돼 있다. v8 쪽은 같은 백테스트 검증이 없어 함부로 고치지 않는다(2026-09-24)."""
     try:
         a = datetime.date.fromisoformat(d0)
     except Exception:

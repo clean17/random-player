@@ -99,7 +99,8 @@ from dotenv import load_dotenv, find_dotenv
 
 from auto_trading.kiwoom_api import get_holdings_and_summary, sell_market, sell_limit, buy_market, get_current_price, get_current_price_and_name, \
     dump_holdings_raw, get_account_credentials, get_account_summary, get_filled_orders, env_path, \
-    cancel_order, KIWOOM_ENV, VALID_ENVS, is_krx_aftermarket_open, get_unfilled_orders
+    cancel_order, KIWOOM_ENV, VALID_ENVS, is_krx_aftermarket_open, get_unfilled_orders, \
+    is_krx_business_day, KRX_HOLIDAYS
 from typing import List
 
 dotenv_path = find_dotenv(usecwd=True) or ".env"
@@ -378,7 +379,7 @@ NXT_AFTERMARKET_END = datetime.time(20, 0)
 def is_market_open() -> bool:
     """시장가 주문이 실제로 체결될 수 있는 구간인지. KRX 정규장만 True."""
     now = datetime.datetime.now()
-    if now.weekday() >= 5:  # 토/일 제외
+    if not is_krx_business_day(now.date()):  # 주말+공휴일 제외 (2026-09-24)
         return False
     return KRX_REGULAR_START <= now.time() < KRX_REGULAR_END
 
@@ -401,9 +402,14 @@ def is_trailing_window_open() -> bool:
     결과(2026-09-14/15, 모듈 docstring 참고): 실전은 지정가로 되고(_sell()이 자동 전환),
     모의는 지정가/시장가 다 거부된다(RC4058) — is_krx_aftermarket_open()이 mock이면 이미
     False를 반환하므로, 이 함수는 실전에서만 실질적으로 애프터마켓을 열어준다(모의는 이
-    구간에서 그냥 원래대로 정규장 09:00~15:20만 True)."""
+    구간에서 그냥 원래대로 정규장 09:00~15:20만 True).
+
+    2026-09-24: 주말뿐 아니라 평일 공휴일(추석 등)에도 False가 되도록
+    is_krx_business_day()로 게이트를 옮겼다 — 안 그러면 이 함수가 이 모듈의 유일한
+    바깥 게이트(job/batch_process.py:run_kiwoom_trailing_stop)라서, 공휴일 내내
+    30초마다 run_cycle()이 돌며 보유상한 매도가 RC4010으로 거부만 반복 기록했다."""
     now = datetime.datetime.now()
-    if now.weekday() >= 5:
+    if not is_krx_business_day(now.date()):
         return False
     if KRX_REGULAR_START <= now.time() < TRAILING_STOP_END:
         return True
@@ -434,7 +440,7 @@ def is_closing_auction_open() -> bool:
     아니라 정규장과 같은 접속매매(실시간 체결)라 '종가 매수' 가정도 어차피 깨졌을 구간이었다
     — 열렸어도 fire의 '신호일 종가 매수' 전제와는 안 맞았을 것."""
     now = datetime.datetime.now()
-    if now.weekday() >= 5:
+    if not is_krx_business_day(now.date()):  # 주말+공휴일 제외 (2026-09-24)
         return False
     if CLOSING_AUCTION_START <= now.time() < CLOSING_AUCTION_END:
         return True
@@ -1106,7 +1112,9 @@ def _fresh_position_state(qty: int) -> Dict:
 
 def _held_business_days(entry_date: Optional[str]) -> Optional[int]:
     """entry_date 이후 지난 영업일(월~금) 수. 공휴일은 반영하지 않으므로 실제 거래일보다 크거나
-    같다 — 상한에 약간 일찍 걸릴 수 있는데, 늦게 파는 것보다 안전한 방향이라 그대로 둔다."""
+    같다 — 상한에 약간 일찍 걸릴 수 있는데, 늦게 파는 것보다 안전한 방향이라 그대로 둔다.
+    ⚠️ 2026-09-24: TRADING_RULES.md 1-2절에 이게 "고치지 말 것"으로 명시돼 있다(백테스트 표
+    D — 공휴일 낀 4일차 청산이 표본 최고 수익, exit_open_vs_close.py 실측). 의도적으로 유지."""
     if not entry_date:
         return None
     try:
@@ -1462,6 +1470,8 @@ def log_config():
         TRAIL_ACTIVATE_RATE * 100, TRAIL_GAP * 100, MIN_PROFIT_FLOOR * 100,
         ARMED_GIVEBACK_STOP * 100, STALL_GAP * 100, MAX_HOLD_DAYS, ANOMALY_DROP * 100,
         ANOMALY_RATE * 100, AFTERMARKET_SELL_SLIPPAGE * 100)
+    _log.info('KRX 휴장일 캘린더: %d일 로드(연도별 갱신 필요) 오늘(%s) 거래일=%s',
+              len(KRX_HOLIDAYS), datetime.date.today().isoformat(), is_krx_business_day())
 
 
 def run_cycle():

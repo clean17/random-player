@@ -42,7 +42,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from auto_trading import kiwoom_api as api  # noqa: E402
-from auto_trading.kiwoom_api import env_path, get_trading_logger, is_krx_aftermarket_open  # noqa: E402
+from auto_trading.kiwoom_api import env_path, get_trading_logger, is_krx_aftermarket_open, is_krx_business_day  # noqa: E402
 from auto_trading.kiwoom_trailing_stop import _record_trade  # noqa: E402
 
 # 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
@@ -283,6 +283,8 @@ def log_config():
         V8_ENABLED, DEPTH * 100, ALLOC * 100, SLOTS, MAX_OPEN_ORDERS, VALID_DAYS,
         RUN_MIN * 100, AMOUNT_MIN / 1e8, PRICE_MIN, WATCH_PRIORITY, RESIZE_TOL * 100,
         LIVE_REGAP)
+    _log.info('KRX 휴장일 캘린더: %d일 로드(연도별 갱신 필요) 오늘(%s) 거래일=%s',
+              len(api.KRX_HOLIDAYS), datetime.date.today().isoformat(), is_krx_business_day())
 
 
 def universe_codes() -> Optional[set]:
@@ -313,7 +315,7 @@ KRX_CLOSE = datetime.time(15, 20)
 
 def is_market_open() -> bool:
     now = datetime.datetime.now()
-    if now.weekday() >= 5:
+    if not is_krx_business_day(now.date()):  # 주말+공휴일 제외 (2026-09-24)
         return False
     if KRX_OPEN <= now.time() < KRX_CLOSE:
         return True

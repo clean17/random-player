@@ -17,7 +17,7 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
     predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters, \
-    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery, collect_investor_flow
+    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery, collect_investor_flow, refresh_krx_holidays_job
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -321,6 +321,12 @@ def create_scheduler():
     print(f'   계좌번호    : {acnt_no}')
     print(f'   전략        : v8 (15:55 스크리닝 + 장중 지정가 대기) — 실제 상수는 아래 로그 참고')
     print('=' * 68)
+    # KRX 휴장일 캘린더 시작 시 1회 갱신(2026-09-24) — log_config()가 찍는 '거래일=' 값이
+    # 최신 상태를 보여주도록 log_config() 호출보다 먼저 갱신한다. 실패해도 기존 캐시/
+    # 하드코딩 폴백을 그대로 쓰므로 아래 로그 호출들이 실패하지 않는다.
+    from auto_trading.kiwoom_api import refresh_krx_holidays
+    refresh_krx_holidays()
+
     kiwoom_v8_strategy.log_config()
     kiwoom_v8_exit.log_config()
     kiwoom_trailing_stop.log_config()   # v8 미소유 잔존 종목의 청산 상수(실계좌에도 여전히 쓰인다)
@@ -540,6 +546,16 @@ def create_scheduler():
         update_stock_data_daily,
         trigger=CronTrigger(day_of_week="sat", hour=2, minute=0),
         id="update_stock_data_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-0-1) KRX 휴장일 캘린더 주 1회 갱신 (일요일 새벽 1시) — 서버가 재시작 없이 몇 달씩
+    # 떠 있어도 새해 캘린더·지방선거 같은 새 휴장 공고가 자동으로 반영되게 한다(2026-09-24).
+    scheduler.add_job(
+        refresh_krx_holidays_job,
+        trigger=CronTrigger(day_of_week="sun", hour=1, minute=0),
+        id="refresh_krx_holidays_weekly",
         executor="io",
         replace_existing=True,
     )

@@ -658,6 +658,16 @@ NXT 프리(08:00~08:50)·애프터(15:30~20:00)는 **2026-08-18에 제외했다*
   버그가 있었다 — 모의계좌 17종목 영향, 수정 및 데이터 복구 완료(위 "상태 파일" 절 참고).
 - 영업일 계산에 **공휴일은 반영하지 않는다** → 실제 거래일보다 크거나 같아 상한에 약간 일찍
   걸린다. **고치지 말 것** — 일찍 나가는 쪽이 실측으로 더 낫다(아래 표 D, 단 5일 기준 실측).
+  ⚠️ 2026-09-24: 추석 연휴에 이 미반영 때문에 청산 시도가 매 사이클 RC4010으로 거부만
+  반복되는 걸 보고 "보유일수 계산도 고쳐달라"는 요청이 있었으나, 위 백테스트 근거 때문에
+  `_held_business_days()`/`kiwoom_v8_exit._business_days()`는 **그대로 뒀다**. 대신
+  `is_market_open()`/`is_trailing_window_open()`/`is_closing_auction_open()`/
+  `kiwoom_v8_strategy.is_market_open()`/`kiwoom_api.is_krx_aftermarket_open()`에
+  `kiwoom_api.is_krx_business_day()`(신규, 한국천문연구원 특일정보 API로 매주 자동 갱신 —
+  상세는 `.claude/KIWOOM_AUTO_TRADING.md` 9절 '해결됨') 체크를 추가해 **공휴일엔 사이클
+  자체가 안 돌게**만 막았다. 이건 보유일수 계산과 무관하게
+  "장이 열리는지"만 보는 게이트라서, 실제 청산 시각(=휴장일 다음 첫 거래일 개장 직후, 표 B와
+  동일)은 안 바뀌고 헛된 주문 시도·거부 로그·`kt10001` rate-limit 소모만 없앤다.
 - 청산 이력의 `reason`은 `max_hold`
 
 **언제 체결되나 (2026-08-18 확인, 당시 기준 held>=5. 지금은 held>=15로 조건만 바뀌고 체결
@@ -828,7 +838,7 @@ return_code == 0  AND  ord_no 존재
 |---|---|---|---|
 | `FIRE_WINDOW_DAYS` | 6일 | 6일 | fire |
 | `BREADTH_MIN` | 0.0 (게이트 OFF) | 0.0 | fire |
-| `CASH_DEPLOY_RATIO` | **0.75** | 0.65 | fire |
+| `CASH_DEPLOY_RATIO` | **0.80**(2026-09-23, 아래 6절 경고 참고 — 실측상 0.75보다 나쁨) | 0.65 | fire |
 | `BUY_SLOTS` | **20** (하루 신규매수 상한) | 5 | fire |
 | `MAX_TOTAL_HOLDINGS` | **40** (2026-09-03 신규, 총 보유 상한) | 없음(무제한) | fire |
 | `POS_CAP_DIVISOR` | 20 (= `BUY_SLOTS`) | 5 (= `BUY_SLOTS`) | fire |
@@ -877,6 +887,12 @@ trailing_gap|giveback_stop               773   1/3 익절 후 −6%까지 되돌
 > `CASH_DEPLOY_RATIO`를 올리는 변경은 기대값이 확실히 플러스임을 먼저 입증한 뒤에만 의미가 있다.
 > (한때 `POS_CAP_DIVISOR=10`으로 내렸다가 되돌렸다 — 근거였던 구 CSV가 목표가 +15%가 살아
 > 있던 시절 규칙이라 기대값을 +0.39%로 과대평가하고 있었다.)
+>
+> **2026-09-23 — 위 경고대로 mock `CASH_DEPLOY_RATIO`를 0.75→0.80으로 올렸다(사용자 요청,
+> 성과 근거 아님).** `cash_ratio_test.py --ratios 0.65,0.70,0.75,0.80`으로 재검증한 결과
+> 0.80은 0.75보다 모든 지표가 나쁘다(부트스트랩 30회, 슬롯20/2400만원): 평균수익 -5.1%→-5.7%,
+> 최저 -13.8%→-15.2%, 음수비율 93%→97%, MDD -34.3%→-35.1%. 되돌리려면 0.75로.
+> 상세 수치·근거는 `kiwoom_fire_strategy_mock.py`의 `CASH_DEPLOY_RATIO` 정의부 docstring.
 
 ---
 
