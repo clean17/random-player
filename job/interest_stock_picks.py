@@ -22,7 +22,7 @@ import json
 import datetime
 from typing import Dict, List, Optional
 
-from auto_trading.kiwoom_api import get_investor_trend, get_trading_logger
+from auto_trading.kiwoom_api import get_investor_trend, get_trading_logger, is_krx_business_day
 from utils.request_toss_api import get_stock_news
 # app.repository.stocks.stocks는 함수 안에서 지연 import한다(순환 import 방지) —
 # job.batch_runner가 이 모듈을 최상단에서 import하는데, job.batch_runner는
@@ -178,7 +178,12 @@ def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
 
 
 def run_interest_stock_picks():
-    """스케줄러 등록용 래퍼 — 예외를 삼켜서 스케줄 전체가 죽지 않게 한다."""
+    """스케줄러 등록용 래퍼 — 예외를 삼켜서 스케줄 전체가 죽지 않게 한다.
+    ⚠️ 2026-09-24: 공휴일엔 등락률/거래대금 등 원천 데이터가 전날 것 그대로라 5분마다
+    돌려봐야 결과가 똑같고, 예선 통과자가 있으면 외국인/기관 순매수(ka10059) 조회까지
+    나가 API를 낭비한다 — is_krx_business_day()로 건너뛴다."""
+    if not is_krx_business_day():
+        return
     try:
         generate_picks()
     except Exception as e:

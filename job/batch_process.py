@@ -535,9 +535,14 @@ def reconcile_kiwoom_fills():
     """당일 거래이력에 실제 체결 데이터(체결가/체결수량/수수료/세금/슬리피지)를 채워넣는다.
     ka10076이 '당일분'만 주므로 반드시 같은 날 장 마감 후에 돌려야 한다.
     is_market_open() 체크를 하지 않는다 — 조회 전용이고, 장 마감 후에 도는 것이 목적이다.
+    ⚠️ 2026-09-24: 다만 휴장일(공휴일)엔 '당일분'이 원천적으로 있을 수 없으므로
+    is_krx_business_day()로만 걸러 헛조회를 막는다 — 시간대 체크(장중/마감후)는 그대로 안 함.
     장중 15분 간격 잡 전용 — finalize 안 함(그날 아직 안 끝났으니 '확정 미체결' 판단은
     reconcile_kiwoom_fills_final()의 몫)."""
+    from auto_trading.kiwoom_api import is_krx_business_day
     from auto_trading.kiwoom_trailing_stop import reconcile_fills, _log
+    if not is_krx_business_day():
+        return
     try:
         reconcile_fills()
     except Exception as e:
@@ -548,8 +553,13 @@ def reconcile_kiwoom_fills_final():
     """그날의 마지막 정산(20:10 전용). 2026-09-08 069540 사고로 추가 — 이 시점까지도
     ka10076 체결내역에서 못 찾은 매수는 '아직 체결 안 들어옴'이 아니라 '끝내 체결 안 됨'
     (상한가 등)으로 보고 거래이력/보유상태를 되돌린다. 자세한 배경은
-    auto_trading/kiwoom_trailing_stop.py의 reconcile_fills/_reverse_unfilled_buys 참고."""
+    auto_trading/kiwoom_trailing_stop.py의 reconcile_fills/_reverse_unfilled_buys 참고.
+    ⚠️ 2026-09-24: 휴장일엔 '당일분' 체결이 있을 수 없어 되돌릴 것도 없으므로
+    is_krx_business_day()로 건너뛴다(게이트 덕에 애초에 오늘 새 주문 자체가 없었을 것)."""
+    from auto_trading.kiwoom_api import is_krx_business_day
     from auto_trading.kiwoom_trailing_stop import reconcile_fills, _log
+    if not is_krx_business_day():
+        return
     try:
         reconcile_fills(finalize=True)
     except Exception as e:
