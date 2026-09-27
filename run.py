@@ -97,7 +97,9 @@ if __name__ == '__main__':
 
             # 실제 클라이언트 IP (X-Forwarded-For) 를 읽도록
             app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
-            app.run(debug=True, host='0.0.0.0', port=8088, use_reloader=True, threaded=True)
+            # debug=True + host=0.0.0.0 조합은 Werkzeug 디버거 콘솔(임의 코드 실행)이
+            # 네트워크 전체에 열리는 것과 같다. 로컬 개발은 127.0.0.1로만 붙는다.
+            app.run(debug=False, host='127.0.0.1', port=8088, use_reloader=True, threaded=True)
             # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True)
 
         if select_server == 1: # waitress, 운영
