@@ -1,6 +1,7 @@
 # 키움 자동매매 — API 레이어 & 운영 노트
 
-최종 갱신 2026-08-19 · 코드 기준 `auto_trading/`
+최종 갱신 2026-09-24(본문 곳곳의 날짜 있는 각주가 더 최신일 수 있다 — 절대값보다 날짜가
+가장 최근인 문단을 우선할 것) · 코드 기준 `auto_trading/`
 
 > **이 문서의 역할**: 키움 REST 레이어의 실사양과 이 코드를 건드릴 때 알아야 할 함정.
 > **전략 파라미터(매수/매도 조건)는 여기 없다** → `auto_trading/TRADING_RULES.md` 참고.
@@ -16,22 +17,25 @@
 auto_trading/
 ├── kiwoom_api.py               # REST 공통 호출 + 조회/주문 래퍼
 ├── renew_kiwoom_token.py       # 토큰 발급 (fn_au10001)
-├── kiwoom_fire_strategy.py     # fire 매수 — 2026-08-19 스케줄 중단(코드는 유지)
+├── kiwoom_fire_strategy_mock.py # fire 매수 — 2026-08-19 실전 스케줄 중단, 모의는 지금도 가동
+│                               #   (⚠️ 개명됨 — 구 kiwoom_fire_strategy.py, 원본은
+│                               #   backup/auto_trading_20260819_101232/)
 ├── kiwoom_trailing_stop.py     # 청산 + 거래이력/손익집계 + 수동매수/매도
 │                               #   v8 소유 종목은 건너뛴다 (v8_owned_codes)
 ├── kiwoom_v8_strategy.py       # v8 매수 — 매일 스크리닝 + 지정가 대기  (2026-08-19~)
 ├── kiwoom_v8_exit.py           # v8 청산 — ATR 샹들리에/트레일링/익절/보유상한
 ├── v8_limit_order_test.py      # 지정가 주문 1주 검증용 CLI
 ├── request_kiwoom_thema.py     # 테마 조회 (스케줄 미등록)
-├── kiwoom_fire_state.json      # 종목별 마지막 매수일, 당일 매수 건수  (gitignore)
-├── kiwoom_trailing_state.json  # 종목별 고점·분할 진행상태            (gitignore)
+├── kiwoom_fire_state_{mock,real}.json     # 종목별 마지막 매수일, 당일 매수 건수  (gitignore)
+├── kiwoom_trailing_state_{mock,real}.json # 종목별 고점·분할 진행상태            (gitignore)
+├── kiwoom_manual_owned_{mock,real}.json   # 수동매수 보호 등록 종목코드          (gitignore)
 ├── kiwoom_v8_pending_real.json # v8 대기 후보 + 소유권 원장 + 아침 캐시 (gitignore)
 ├── kiwoom_v8_positions_real.json # v8 포지션 peak/분할 진행상태        (gitignore)
+├── krx_holidays_cache.json     # KRX 휴장일 API 캐시 (gitignore, 2026-09-24 신설)
 ├── TRADING_RULES.md            # 매수/매도 조건 스펙 (0절 = v8)
 ├── V8_SWITCHOVER.md            # v8 전환 절차·차이·리스크
-└── backtest/
-    ├── fire_backtest_regen.py      # 현재 규칙으로 백테스트 CSV 재생성
-    └── fire_sizing_backtest.py     # 사이징 규칙 포트폴리오 재시뮬레이션
+└── backtest/                   # ⚠️ 2026-08-19 이후 스크립트가 30개 넘게 늘었다(파라미터
+                                 #   재검증 스크립트들 — 개별 목록은 안 적는다, ls로 확인할 것)
 ```
 
 스케줄 등록은 `job/batch_runner.py`, 잡 래퍼는 `job/batch_process.py`.
@@ -68,8 +72,15 @@ auto_trading/
 | 장 종료 후 주문 | `RC4058: 모의투자 장종료` (`return_code: 20`) |
 
 → **mock에서는 실질적으로 09:00~15:20만 청산이 작동한다.** 프리마켓 갭 하락은 09:00까지 방치된다.
-거부 메시지가 "모의투자에서는"이라고 명시하므로 실계좌에서는 NXT가 열릴 것으로 보이나
-**검증된 바 없다.** 실계좌 전환 시 동작이 달라지며, 백테스트(일봉)는 이 차이를 반영하지 못한다.
+
+⚠️ **2026-09-24 갱신 — 아래 "검증된 바 없다"는 더는 사실이 아니다, 실계좌로 이미 검증됨**
+(`aftermarket_order_test.py`, `kiwoom_api.is_krx_aftermarket_open()` docstring 참고):
+- **NXT 자체(08:00~08:50 프리 / 15:30~20:00 애프터)는 실계좌도 여전히 막힌다** — 시장가만
+  보내는 래퍼 구조 때문에 `407022: 주문이 불가능한 주문종류입니다`로 거부된다(모의의
+  RC9000과는 다른 사유). 재현하려면 지정가 분기가 먼저 필요하다(TRADING_RULES.md 3절 참고).
+- **2026-09-14 신설된 KRX 자체 애프터마켓(16:00~20:00, NXT와 별개)은 실계좌에서 지정가로
+  실제 체결됐다**(18:55~19:12, v8 트레일링 청산 3건). 모의는 이 시간대도 지정가/시장가
+  가리지 않고 전부 거부된다(`RC4058`).
 
 ---
 
@@ -328,9 +339,8 @@ python auto_trading/backtest/fire_sizing_backtest.py <csv> all
    참고: 8월 자동청산은 −73,232원(39건)으로 7월(−3,138,813원, 40건)보다 규모·손실이 크게
    줄었다. 7월은 파라미터를 계속 바꾸며 테스트한 기간이고 티엘비 액면분할 오인 청산
    −939,000원도 포함된다. 8월 데이터가 쌓이면 재조정 효과를 실측으로 볼 수 있다.
-2. **NXT 시간대 동작을 mock으로 검증할 수 없다.** 실계좌에서 처음 겪는다.
-3. `interest_v2` 신호는 2026-08-11 도입으로 데이터가 1일뿐이라 백테스트 불가.
-4. **`KASI_HOLIDAY_API_KEY`(.env)가 만료되거나 data.go.kr 트래픽 한도를 넘기면** 휴장일
+2. `interest_v2` 신호는 2026-08-11 도입으로 데이터가 1일뿐이라 백테스트 불가.
+3. **`KASI_HOLIDAY_API_KEY`(.env)가 만료되거나 data.go.kr 트래픽 한도를 넘기면** 휴장일
    캘린더 자동 갱신이 조용히 실패한다(`refresh_krx_holidays()`가 예외 없이 False만 반환).
    `trading.log`의 "KRX 휴장일 캘린더 갱신 실패" 로그로만 알 수 있다 — 알림 연동은 없음.
    실패해도 `kiwoom_api.KRX_HOLIDAYS_2026`(2026년 한정 하드코딩 폴백)로 계속 동작은 하니
@@ -339,6 +349,9 @@ python auto_trading/backtest/fire_sizing_backtest.py <csv> all
 ### 해결됨
 
 - ~~체결조회 API 연동~~ → 2026-08-12 `ka10076` 연동 + `reconcile_fills()` 구현 (3·4절)
+- ~~NXT/애프터마켓 동작을 mock으로 검증할 수 없다~~ → 실계좌에서 검증됨 (2절 2026-09-24 갱신 참고):
+  NXT 자체는 실계좌도 여전히 거부(407022)되지만, 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)은
+  실계좌 지정가로 실제 체결 확인됨(18:55~19:12, v8 트레일링 3건)
 - ~~`trades.jsonl` 손익 불일치~~ → 불일치가 아니었다. 기간을 잘못 맞춰 비교한 것 (6절)
 - ~~슬리피지가 기대값을 뒤집을 수 있다~~ → 실측 ±0.03% 수준으로 무영향 (8절)
 - ~~평일 공휴일(추석 등)에 청산 사이클이 계속 돌며 RC4010/RC4058 거부 로그와 `kt10001`

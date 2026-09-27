@@ -22,7 +22,10 @@
    2026-08-19 전환으로 batch_runner 의 kiwoom_fire_buy 잡을 주석 처리했다.
 ✔ 지정가 주문(trde_tp='0')은 2026-08-19 실계좌에서 접수/취소 확인됨(주문번호 0274100).
   단 하한가보다 낮은 가격은 `[2000] 주문단가가 하한가보다 낮습니다` 로 거부된다.
-⚠️ 실계좌 체결까지 간 이력은 아직 없다. 체결률·슬리피지는 미실측이다.
+⚠️ 2026-09-24 확인: 이 docstring 작성 당시(2026-08-19)엔 실계좌 체결 이력이 없었으나,
+   지금은 trades_real.jsonl에 reason=v8_buy 64건 + v8_buy_backfilled 5건이 쌓여 있다 —
+   실계좌 체결 자체는 이미 여러 건 발생했다. 다만 체결률·슬리피지를 정량 집계한 분석은
+   여전히 없다(필요하면 새로 측정할 것).
 """
 import os
 import sys
@@ -283,7 +286,7 @@ def log_config():
         V8_ENABLED, DEPTH * 100, ALLOC * 100, SLOTS, MAX_OPEN_ORDERS, VALID_DAYS,
         RUN_MIN * 100, AMOUNT_MIN / 1e8, PRICE_MIN, WATCH_PRIORITY, RESIZE_TOL * 100,
         LIVE_REGAP)
-    _log.info('KRX 휴장일 캘린더: %d일 로드(연도별 갱신 필요) 오늘(%s) 거래일=%s',
+    _log.info('KRX 휴장일 캘린더: %d일 로드(API 자동갱신, kiwoom_api.refresh_krx_holidays) 오늘(%s) 거래일=%s',
               len(api.KRX_HOLIDAYS), datetime.date.today().isoformat(), is_krx_business_day())
 
 
@@ -803,8 +806,9 @@ def run_v8_screen() -> Dict:
 def buy_limit(stk_cd: str, qty: int, price: int, dmst_stex_tp: str = 'KRX') -> dict:
     """지정가 매수. trde_tp='0' (보통).
 
-    2026-08-19 실계좌에서 접수/취소 확인됨(주문번호 0274100). 체결까지 간 이력은 아직 없다.
-    하한가보다 낮은 가격은 `[2000] 주문단가가 하한가보다 낮습니다` 로 거부된다.
+    2026-08-19 실계좌에서 접수/취소 확인됨(주문번호 0274100). 이후 체결도 다수 발생했다
+    (2026-09-24 확인: trades_real.jsonl reason=v8_buy 64건+backfilled 5건, 위 모듈
+    docstring 참고). 하한가보다 낮은 가격은 `[2000] 주문단가가 하한가보다 낮습니다` 로 거부된다.
     """
     return api.place_order(stk_cd, qty, int(price), side='1', trde_tp='0',
                            dmst_stex_tp=dmst_stex_tp)

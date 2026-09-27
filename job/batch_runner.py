@@ -538,9 +538,10 @@ def create_scheduler():
         id="v8_eod", executor="trading", replace_existing=True,
     )
 
-    # 2-1) 국장 pkl 전체 갱신 (토요일 새벽 2시, 1500일치 전 종목)
-    # [2026-09-09] 매일(월~금) -> 주 1회로 변경. 전 종목 1500일치를 통째로 다시 받는 무거운
-    # 작업이라 장 없는 주말에 돌린다. 분할/역분할로 어긋난 가격 기준이 여기서 정리되고,
+    # 2-1) 국장 pkl 전체 갱신 (토요일 새벽 2시, 1200일치 전 종목)
+    # [2026-09-09] 매일(월~금) -> 주 1회로 변경. 전 종목 1200일치를 통째로 다시 받는 무거운
+    # 작업이라 장 없는 주말에 돌린다(1500 -> 1200일은 AutoSales.py utils.FULL_REFETCH_DAYS
+    # 2026-09-10 변경 반영, 2026-09-28 검증). 분할/역분할로 어긋난 가격 기준이 여기서 정리되고,
     # 평일에는 0_periodically_fetch_stock_data.py의 불일치 감지가 그날그날 잡는다.
     scheduler.add_job(
         update_stock_data_daily,
@@ -560,10 +561,12 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-1-1) 미장 pkl 전체 갱신 (일요일 새벽 2시, 1500일치 전 종목)
+    # 2-1-1) 미장 pkl 전체 갱신 (일요일 새벽 2시, 1200일치 전 종목)
     # [2026-09-09] 신설. 그동안 미장엔 전체 갱신이 없어 최근 5일 병합만 반복됐고, 가격 오염이
     # 미장 65% vs 국장 1.9%로 벌어졌다. 국장과 하루 띄워 배치해 부하가 겹치지 않게 한다
-    # (미장은 5,100종목 x yfinance라 2~3시간 걸린다).
+    # (미장은 3,280종목 x yfinance라 2~3시간 걸린다 — 2026-09-11 AutoSales.py
+    # get_nasdaq_symbols()에 보통주만 남기는 필터가 추가되며 5,100 -> 3,280으로 줄었다.
+    # 1500 -> 1200일치도 AutoSales.py utils.FULL_REFETCH_DAYS 2026-09-10 변경 반영, 2026-09-28 검증).
     scheduler.add_job(
         update_stock_data_us_weekly,
         trigger=CronTrigger(day_of_week="sun", hour=2, minute=0),

@@ -130,7 +130,7 @@ def log_config():
         TP_PCT * 100, TP_FRAC * 100, MAX_HOLD_DAYS,
         ('%.0f%%' % (HARD_FLOOR_PCT * 100)) if HARD_FLOOR_PCT is not None else 'None(비활성)',
         ANOMALY_DROP * 100, AFTERMARKET_SELL_SLIPPAGE * 100)
-    _log.info('KRX 휴장일 캘린더: %d일 로드(연도별 갱신 필요) 오늘(%s) 거래일=%s',
+    _log.info('KRX 휴장일 캘린더: %d일 로드(API 자동갱신, kiwoom_api.refresh_krx_holidays) 오늘(%s) 거래일=%s',
               len(KRX_HOLIDAYS), datetime.date.today().isoformat(), is_krx_business_day())
 
 

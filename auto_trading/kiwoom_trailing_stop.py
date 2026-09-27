@@ -57,7 +57,8 @@
     (ANOMALY_DROP / ANOMALY_RATE). 값이 정상 범위로 돌아오면 자동 재개.
 
 30초 간격으로 호출되는 것을 전제로 설계됨 (job/batch_runner.py에 등록).
-실제 평가/매매는 is_market_open() 기준 월~금 **09:00~15:20(KRX 정규장)** 에서만 수행됨.
+실제 평가/매매는 is_market_open() 기준 월~금(평일 공휴일 제외, 2026-09-24부터
+kiwoom_api.is_krx_business_day() 적용) **09:00~15:20(KRX 정규장)** 에서만 수행됨.
 08:50~09:00(동시호가)과 15:20~15:30(KRX 종가 단일가매매)은 연속체결이 아니라서 제외한다.
 
 NXT(넥스트트레이드) 프리 08:00~08:50 / 애프터 15:30~20:00은 2026-08-18에 제외했다 —
@@ -1470,7 +1471,7 @@ def log_config():
         TRAIL_ACTIVATE_RATE * 100, TRAIL_GAP * 100, MIN_PROFIT_FLOOR * 100,
         ARMED_GIVEBACK_STOP * 100, STALL_GAP * 100, MAX_HOLD_DAYS, ANOMALY_DROP * 100,
         ANOMALY_RATE * 100, AFTERMARKET_SELL_SLIPPAGE * 100)
-    _log.info('KRX 휴장일 캘린더: %d일 로드(연도별 갱신 필요) 오늘(%s) 거래일=%s',
+    _log.info('KRX 휴장일 캘린더: %d일 로드(API 자동갱신, kiwoom_api.refresh_krx_holidays) 오늘(%s) 거래일=%s',
               len(KRX_HOLIDAYS), datetime.date.today().isoformat(), is_krx_business_day())
 
 
