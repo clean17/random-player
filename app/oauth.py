@@ -9,6 +9,7 @@ THREADS_APP_ID2 = settings['THREADS_APP_ID2']
 THREADS_APP_SECRET = settings['THREADS_APP_SECRET']
 THREADS_APP_SECRET2 = settings['THREADS_APP_SECRET2']
 FACEBOOK_APP_ID = settings['FACEBOOK_APP_ID']
+FACEBOOK_APP_SECRET = settings['FACEBOOK_APP_SECRET']
 
 @oauth.route('/policy', methods=['GET'])
 def get_personal_information_processing_policy():
@@ -129,8 +130,6 @@ import base64
 import json
 
 
-APP_SECRET = 'a81ad4c69277b75c4e3b4b361b28d4f5'  # Meta 앱 시크릿으로 교체하세요
-
 def base64_url_decode(data):
     data += '=' * (-len(data) % 4)  # 패딩 추가
     return base64.urlsafe_b64decode(data.encode('utf-8'))
@@ -163,7 +162,7 @@ def delete_callback():
     if not signed_request:
         return jsonify({'error': 'Missing signed_request'}), 400
 
-    data = parse_signed_request(signed_request, APP_SECRET)
+    data = parse_signed_request(signed_request, FACEBOOK_APP_SECRET)
     if not data:
         return jsonify({'error': 'Invalid signed_request'}), 400
 
