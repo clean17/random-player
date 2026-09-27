@@ -20,7 +20,7 @@ from app.push import send_push_to_user
 from job.batch_process import run_crawl_ai_image
 from job.buy_lotto import async_buy_lotto
 from utils.common import open_folder
-from utils.fetch_url_preview import fetch_url_preview_by_selenium
+from utils.fetch_url_preview import fetch_url_preview_by_selenium, is_safe_external_url
 from job.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
@@ -791,11 +791,15 @@ def handle_last_chat_id():
 ################################# PREVIEW ####################################
 
 @func.route('/api/url-preview', methods=['POST'])
+@login_required
 def render_preview():
     data = request.get_json()
     url = data.get('url')
     chat_id = data.get('chat_id')
     # return fetch_url_preview(url)
+
+    if not url or not is_safe_external_url(url):
+        return jsonify({'error': 'Invalid or disallowed url'}), 400
 
     # chat_id 로 검색한 결과가 없으면 데이터 fetch
     result = find_chat_url_preview(url)

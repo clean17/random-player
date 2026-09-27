@@ -1,4 +1,6 @@
 import re
+import socket
+import ipaddress
 import requests
 from bs4 import BeautifulSoup
 
@@ -10,7 +12,7 @@ import os, subprocess
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from io import BytesIO
 import re, requests
@@ -161,6 +163,34 @@ def pick_largest_image_url(soup, base_url, max_fetch=3, timeout=6, max_bytes=2_0
     return cands[0]['url']
 
 
+def is_safe_external_url(url: str) -> bool:
+    """SSRF 방지: http/https만 허용하고, 호스트가 사설/루프백/링크로컬 등
+    내부·예약 주소로 풀리면 차단한다(리다이렉트로 우회하는 것도 막기 위해
+    resolve_url의 각 hop과 최종 목적지 모두에 적용한다)."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+        return False
+
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except Exception:
+        return False
+
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    return True
+
+
 def resolve_url(url: str, timeout: int = 10, max_hops: int = 10) -> str:
     """
     경유(짧은) URL을 최종 URL로 해석해 반환.
@@ -183,6 +213,9 @@ def resolve_url(url: str, timeout: int = 10, max_hops: int = 10) -> str:
         if current in visited:
             break
         visited.add(current)
+
+        if not is_safe_external_url(current):
+            break  # 내부/사설 주소로 리다이렉트됨 — 더 진행하지 않고 반환(호출부에서 재검증)
 
         # 1) HEAD로 가볍게 시도 (일부 사이트는 405/403/4xx 가능)
         try:
@@ -287,8 +320,14 @@ def find_business1_src(driver, timeout=8):
 def fetch_url_preview_by_selenium(url):
     driver = None
     try:
+        if not is_safe_external_url(url):
+            raise ValueError(f"차단된 URL(내부/사설 주소 또는 허용되지 않은 스킴): {url}")
+
         final_url = resolve_url(url)  # 리다이렉트 미리 풀기
         # print('final_url', final_url)
+
+        if not is_safe_external_url(final_url):
+            raise ValueError(f"리다이렉트 최종 목적지가 내부/사설 주소임: {final_url}")
 
         os.environ["CHROME_LOG_FILE"] = os.devnull  # Windows는 "NUL"도 가능
 
