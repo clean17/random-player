@@ -7,6 +7,7 @@ import io
 import json
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
+from app.image import DIR_CONFIG, clean_filename
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
@@ -171,9 +172,17 @@ def download_all_zip():
     if not directory:
         return jsonify({"error": "Missing 'dir' parameter"}), 400
 
+    # dir은 임의의 파일시스템 경로가 아니라 DIR_CONFIG에 등록된 화이트리스트 키(또는 'temp')만 허용
     if directory == 'temp':
-        directory = os.path.join(TEMP_IMAGE_DIR, title_directory)
+        if not title_directory:
+            return jsonify({"error": "Missing 'title' parameter"}), 400
+        safe_title = clean_filename(os.path.basename(title_directory))
+        directory = os.path.join(TEMP_IMAGE_DIR, safe_title)
         print('download_all_zip - directory', directory)
+    elif directory in DIR_CONFIG:
+        directory = DIR_CONFIG[directory].base_dir
+    else:
+        return jsonify({"error": "Invalid 'dir' parameter"}), 400
 
     zip_filename = f"compressed_{os.path.basename(directory)}_.zip"
     zip_filepath = os.path.join(directory, zip_filename)
