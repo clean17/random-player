@@ -32,6 +32,7 @@ import uuid
 from config.config import settings
 from redis import Redis
 from urllib.parse import urlparse, urljoin
+from pathlib import Path
 
 # 허용할 엔드포인트 경로 - 추가될수록 유지보수가 힘들어진다 > 블랙리스트로 전환 필요
 ALLOWED_PATHS = [
@@ -382,7 +383,25 @@ def create_app():
 
     @app.route("/htmltest")
     def get_test():
-        return render_template('test.html', version=int(time.time()))
+        return render_template('test_cctv.html', version=int(time.time()))
+
+    BASE = Path(r"\\wsl.localhost\docker-desktop-data\data\docker\volumes\igdata\_data")
+
+    @app.route("/download")
+    def download():
+        name = request.args.get("filename")  # /download?filename=report.csv
+        if not name:
+            abort(400, "name 파라미터가 필요합니다.")
+
+        # 경로 이동(../) 방지: 순수 파일명만 허용
+        if Path(name).name != name:
+            abort(400, "잘못된 파일명입니다.")
+
+        p = BASE / name
+        if not p.exists() or not p.is_file():
+            abort(404, "파일이 없습니다.")
+
+        return send_file(p, as_attachment=True, download_name=p.name)
 
     @app.after_request
     def track_404(response):
