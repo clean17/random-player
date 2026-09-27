@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from collections import defaultdict, deque
 from flask import Flask, session, send_file, render_template, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
 from flask_login import LoginManager, current_user, logout_user, login_required
-from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 
 # from job.batch_runner import create_scheduler
 from .auth import auth, User, users, SESSION_EXPIRATION_TIME, GUEST_SESSION_EXPIRATION_TIME, SECOND_PASSWORD_SESSION_KEY, check_active_session, save_verified_time, get_verified_time
@@ -162,8 +161,6 @@ def create_app():
     app.config['SESSION_TYPE'] = 'redis'
     app.config['SESSION_REDIS'] = Redis(host='localhost', port=6379)
 
-    app.config["JWT_SECRET_KEY"] = app.config['SECRET_KEY'] # jwt 테스트 한다고 추가했음, 사용안함
-
     app.register_blueprint(main, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/auth')
     app.register_blueprint(api, url_prefix='/api')
@@ -198,9 +195,6 @@ def create_app():
 
     # Flask 앱에 WebSocket 기능을 추가
     socketio.init_app(app)
-
-    # jwt test
-    jwt = JWTManager(app)
 
     # csrf.init_app(app)  # 앱에 CSRF 보호 적용
 
@@ -379,12 +373,6 @@ def create_app():
     @app.route("/htmltest")
     def get_test():
         return render_template('test.html', version=int(time.time()))
-
-    @app.route("/protected")
-    @jwt_required()
-    def protected():
-        user_id = get_jwt_identity()
-        return f"Hello {user_id}"
 
     @app.after_request
     def track_404(response):
