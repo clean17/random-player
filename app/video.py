@@ -14,6 +14,7 @@ from flask_login import login_required
 from urllib.parse import quote
 
 from config.config import settings
+from .image import safe_path_join
 
 video = Blueprint('video', __name__)
 
@@ -465,9 +466,6 @@ def set_sync_offset():
 @video.route('/videos/<path:filepath>', methods=['GET'])
 @login_required
 def get_video(filepath):
-    # basename() : ../../test.mp4 >> test.mp4 .. 경로 traversal 방지
-    file_dir = os.path.dirname(filepath)
-    filename = os.path.basename(filepath)
     directory = request.args.get('dir')
 
     key = 'VIDEO_DIRECTORY' + directory
@@ -475,7 +473,11 @@ def get_video(filepath):
         abort(404)
 
     video_directory = settings[key]  # 딕셔너리 접근 방식으로 수정
-    full_path = os.path.join(video_directory, file_dir, filename)
+    try:
+        # video_directory 밖으로 탈출하는 경로(../..)는 차단, 하위 폴더 구조는 그대로 지원
+        full_path = safe_path_join(video_directory, filepath)
+    except ValueError:
+        abort(404)
 
     if not os.path.exists(full_path):
         print(f"[video] not found: {full_path}")
@@ -545,8 +547,12 @@ def delete_video(filename):
     video_directory = settings.get('VIDEO_DIRECTORY' + directory)  # 딕셔너리 접근 방식으로 수정
     if not video_directory:
         return '', 404
-    
-    file_path = os.path.join(video_directory, filename)
+
+    try:
+        file_path = safe_path_join(video_directory, filename)
+    except ValueError:
+        return '', 404
+
     if os.path.exists(file_path):
         normalized_path = os.path.normpath(file_path)
         try:
@@ -698,11 +704,20 @@ def stream_video_transcoded(file_path):
 
 
 @video.route('/stream/<path:filename>', methods=['GET'])
+@login_required
 def video_stream(filename):
     print('############### stream ###################')
     directory = request.args.get('dir')
-    video_directory = settings['VIDEO_DIRECTORY' + directory]
-    file_path = os.path.join(video_directory, filename)
+
+    key = 'VIDEO_DIRECTORY' + directory
+    if key not in settings:
+        abort(404)
+
+    video_directory = settings[key]
+    try:
+        file_path = safe_path_join(video_directory, filename)
+    except ValueError:
+        abort(404)
 
     if not os.path.exists(file_path):
         abort(404)
