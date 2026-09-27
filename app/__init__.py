@@ -150,6 +150,12 @@ def create_app():
 
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
     app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
+    # 세션 쿠키 보안 속성: HTTPONLY(JS로 쿠키 접근 차단, XSS 시 쿠키 탈취 방지),
+    # SECURE(HTTPS로만 전송 — ReverseProxied 미들웨어로 항상 https 스킴이라 안전),
+    # SAMESITE=Lax(크로스사이트 요청에 쿠키를 안 실어 CSRF 보완)
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.secret_key = app.config['SECRET_KEY'] # app.config.update(load_config()) 에서 키를 통해 가져온다
     # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정, Flask 공식 설정값 >>> 25.05.13 Redis로 TTL을 체크하기 위해 주석
     # app.permanent_session_lifetime = SESSION_EXPIRATION_TIME  # 기본 유효기간 설정 (기본값: timedelta(days=31), property 접근 방식; 위와 동일; 내부적으로 app.config['PERMANENT_SESSION_LIFETIME']를 읽고 쓴다
