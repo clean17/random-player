@@ -704,7 +704,10 @@ def move_stock_image(market, filename):
     if directory is None:
         return jsonify({'status': 'error', 'message': 'Invalid market specified'}), 400
 
-    src_path = os.path.join(directory, filename)
+    try:
+        src_path = safe_path_join(directory, filename)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
     # dest_path = os.path.join(MOVE_DIR, filename)
     if os.path.exists(src_path):
         try:
