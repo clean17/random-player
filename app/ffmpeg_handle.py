@@ -1,6 +1,8 @@
 import os
+import re
 import subprocess
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, send_from_directory
+from urllib.parse import urlparse
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, send_from_directory, abort
 from flask_login import login_required
 from flask_cors import cross_origin
 from config.config import settings
@@ -8,6 +10,8 @@ from utils.ffmpeg.ffmpeg_handle_task_manager import tasks, Task, current_date, t
 import shutil
 
 m_ffmpeg = Blueprint('ffmpeg', __name__, template_folder='templates')
+
+KEYWORD_PATTERN = re.compile(r'^[\w\-가-힣]+$')  # 셸 메타문자(& | " ^ 공백 등) 차단
 
 @m_ffmpeg.route('/ffmpeg')
 @login_required
@@ -17,15 +21,24 @@ def ffmpeg():
 @m_ffmpeg.route('/run-batch', methods=['POST'], endpoint='run-batch')
 @login_required
 def run_batch():
-    keyword = request.form['keyword']
+    keyword = request.form['keyword'].strip()
     url = request.form['clipboard_content'].replace('\r\n', '').replace('\n', '').strip()
+
+    if not KEYWORD_PATTERN.fullmatch(keyword):
+        abort(400, "keyword에 허용되지 않는 문자가 포함되어 있습니다.")
+
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in ('http', 'https') or not parsed_url.netloc:
+        abort(400, "올바른 URL이 아닙니다.")
+
     current_date_str = current_date()
     file_pattern = f"{settings['WORK_DIRECTORY']}/{current_date_str}{keyword}_*.ts"
 
-    cmd = f'cmd /c "{settings["FFMPEG_SCRIPT_PATH"]} {keyword} "{url}" && exit"'
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True, encoding='utf-8')
+    # shell=True로 문자열을 조립하지 않고, 인자를 리스트로 분리해 cmd.exe에 그대로 전달
+    # (keyword는 위에서 화이트리스트 검증, url은 스킴 검증까지 마친 값만 여기 도달)
+    cmd = ['cmd', '/c', settings['FFMPEG_SCRIPT_PATH'], keyword, url]
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
     '''
-    shell=True 새로운 셸
     capture_output=True 표준 출력,오류 캡쳐
     stdout=subprocess.PIPE 파이프로 캡쳐 (capture_output=True 의 기본값)
     '''
