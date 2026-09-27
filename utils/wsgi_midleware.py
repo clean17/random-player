@@ -1,11 +1,32 @@
 from config.logger_config import setup_logging
 from werkzeug.middleware.proxy_fix import ProxyFix
-from urllib.parse import unquote
+from urllib.parse import unquote, parse_qsl
 from http.cookies import SimpleCookie
 from config.config import settings
 
 logger = setup_logging()
 SUPER_USERNAME = settings['SUPER_USERNAME']
+
+# OAuth 인가 코드/토큰/비밀번호 등 로그에 그대로 남으면 안 되는 쿼리 파라미터
+SENSITIVE_QUERY_KEYS = {
+    'code', 'token', 'access_token', 'refresh_token', 'id_token',
+    'password', 'secret', 'client_secret', 'signed_request',
+    'api_key', 'apikey',
+}
+
+
+def _redact_query_string(query_string):
+    """쿼리스트링을 로그용으로 디코딩하되, 민감한 키의 값은 마스킹한다."""
+    if not query_string:
+        return ''
+    try:
+        pairs = parse_qsl(query_string, keep_blank_values=True)
+    except Exception:
+        return unquote(query_string)
+    return '&'.join(
+        f"{k}=***" if k.lower() in SENSITIVE_QUERY_KEYS else f"{k}={v}"
+        for k, v in pairs
+    )
 
 # 요청 로깅 미들웨어
 class RequestLoggingMiddleware:
@@ -36,7 +57,7 @@ class RequestLoggingMiddleware:
             except UnicodeEncodeError:
                 pass   # 이미 정상 유니코드 문자열이면(latin-1 범위 밖 문자 포함) 그대로 둔다
         query_string = environ.get("QUERY_STRING", "")
-        decoded_query = unquote(query_string)
+        decoded_query = _redact_query_string(query_string)
         full_path = f"{path}?{decoded_query}" if decoded_query else path
         protocol = environ.get("SERVER_PROTOCOL", "-")
 

@@ -249,6 +249,7 @@ def get_logs_by_date(date):
     # return jsonify({"logs": logs})
 
 @func.route("/logs/stream")
+@login_required
 def stream_logs():
     """SSE를 사용하여 실시간 로그 스트리밍"""
     def generate():
