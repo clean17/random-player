@@ -481,26 +481,31 @@ def move_image():
 
     # send2trash(os.path.join(IMAGE_DIR2, new_path)) # 휴지통으로 보낸다
 
-    if imagepath in DIR_CONFIG:
-        cfg = DIR_CONFIG[imagepath]
-        src_path = os.path.join(cfg.base_dir, filename)
-        thumb_dir = os.path.join(cfg.base_dir, "thumb")
-        if imagepath == "move":
-            dest_path = ref_dest_path
-    elif imagepath == "refine":
-        src_path = os.path.join(REF_IMAGE_DIR, filename)
-        thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
-    elif imagepath == "trip":
-        src_path = os.path.join(TRIP_IMAGE_DIR, filename)
-        thumb_dir = os.path.join(TRIP_IMAGE_DIR, "thumb")
-    elif imagepath == "temp":
-        dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
-        src_path = os.path.join(TEMP_IMAGE_DIR, subpath, filename)
-        thumb_dir = os.path.join(TEMP_IMAGE_DIR, subpath, "thumb")
-    else:
-        return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
+    # filename의 os.path.dirname 부분은 clean_filename을 거치지 않으므로(하위 폴더 구조 보존 목적),
+    # 실제 파일 경로는 반드시 safe_path_join으로 base_dir 밖 탈출 여부를 검증한다.
+    try:
+        if imagepath in DIR_CONFIG:
+            cfg = DIR_CONFIG[imagepath]
+            src_path = safe_path_join(cfg.base_dir, filename)
+            thumb_dir = os.path.join(cfg.base_dir, "thumb")
+            if imagepath == "move":
+                dest_path = ref_dest_path
+        elif imagepath == "refine":
+            src_path = safe_path_join(REF_IMAGE_DIR, filename)
+            thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
+        elif imagepath == "trip":
+            src_path = safe_path_join(TRIP_IMAGE_DIR, filename)
+            thumb_dir = os.path.join(TRIP_IMAGE_DIR, "thumb")
+        elif imagepath == "temp":
+            dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
+            src_path = safe_path_join(TEMP_IMAGE_DIR, os.path.join(subpath, filename))
+            thumb_dir = os.path.join(TEMP_IMAGE_DIR, subpath, "thumb")
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
 
-    webp_file = os.path.join(thumb_dir, name_without_ext + ".webp")
+        webp_file = safe_path_join(thumb_dir, name_without_ext + ".webp")
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
 
     # 존재하면 휴지통으로 이동
     if os.path.exists(webp_file):
