@@ -7,6 +7,7 @@ from config.config import settings
 from zipfile import ZipFile
 from utils.ffmpeg.generate_thumbnail import convert_file
 from utils.ffmpeg.webm_to_mp4 import convert_webm_to_mp4
+from .image import clean_filename
 import uuid
 import time
 from mimetypes import guess_type
@@ -36,6 +37,7 @@ def upload_file():
         title = request.form.get("title", "no_title")  # 'title' 데이터 받기
         if title == "":
             title = "no_title"
+        title = clean_filename(os.path.basename(title))  # 경로 이동(../) 및 구분자 제거
         saved_files = []
 
         # 지정한 타이틀로 하위 디렉토리 생성
@@ -50,8 +52,8 @@ def upload_file():
         total_files = len(uploaded_files)
         for index, file in enumerate(uploaded_files, start=1):
             if file and file.filename:  # 파일명이 있는 경우 저장
-                # filename = secure_filename(file.filename)
-                filename = file.filename
+                # 경로 이동(../) 및 구분자 제거: 클라이언트가 보낸 filename은 전적으로 신뢰 불가
+                filename = clean_filename(os.path.basename(file.filename))
                 name, ext = os.path.splitext(filename)
                 # UUID 생성
                 name = name[:50]  # 원본 파일명이 과도하게 길면 경로 제한(260자)에 걸림 — 앞부분만 유지
