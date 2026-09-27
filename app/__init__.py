@@ -31,7 +31,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import uuid
 from config.config import settings
 from redis import Redis
-from flask_wtf.csrf import CSRFProtect
 from urllib.parse import urlparse, urljoin
 
 # 허용할 엔드포인트 경로 - 추가될수록 유지보수가 힘들어진다 > 블랙리스트로 전환 필요
@@ -115,8 +114,6 @@ BLOCK_DURATION = timedelta(days=99999)                # 차단 기간
 # BLOCKED_IP_PREFIXES = ['43', '3', '222', '139', '49', '66', '51', '34', '104', '124', '45', '167', '185', '64', '65', '162', '172', '170']
 BLOCKED_IP_PREFIXES = ['222.239.104']
 
-# csrf = CSRFProtect()
-
 def get_client_ip(request):
     # 1. X-Real-IP (Nginx에서 주로 세팅, 프록시 뒤에 있을 경우)
     ip = request.environ.get("HTTP_X_REAL_IP")
@@ -196,8 +193,6 @@ def create_app():
     # Flask 앱에 WebSocket 기능을 추가
     socketio.init_app(app)
 
-    # csrf.init_app(app)  # 앱에 CSRF 보호 적용
-
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
@@ -206,6 +201,15 @@ def create_app():
     # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
     @app.before_request
     def before_request():
+        # CSRF 완화: 상태변경 요청(POST/PUT/DELETE/PATCH)의 Origin/Referer가
+        # 있는데 이 서버 host와 다르면 차단 (크로스사이트 위조 요청 방어).
+        # 헤더 자체가 없으면(서버-서버 웹훅 등) 통과시킨다 — flask_wtf
+        # CSRFProtect처럼 토큰을 전부 심어야 하는 방식 대신 최소 침습적으로 적용.
+        if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
+            origin = request.headers.get('Origin') or request.headers.get('Referer')
+            if origin and urlparse(origin).netloc != request.host:
+                return abort(403, description="Cross-site request blocked.")
+
         ip = get_client_ip(request)
 
         if ip and any(ip.startswith(prefix + '.') for prefix in BLOCKED_IP_PREFIXES):
