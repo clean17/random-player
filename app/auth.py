@@ -1,3 +1,4 @@
+import hmac
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, make_response
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
@@ -226,7 +227,7 @@ def verify_password():
     if request.method == "POST":
         password = request.form.get("password")
 
-        if password == YOUR_SECRET_PASSWORD:
+        if password and hmac.compare_digest(password, YOUR_SECRET_PASSWORD):
             session[SECOND_PASSWORD_SESSION_KEY] = True # session.get(SECOND_PASSWORD_SESSION_KEY)
             # session['second_password_verified_at'] = datetime.now().isoformat()
             save_verified_time(current_user.get_id()) # redis 동기화
