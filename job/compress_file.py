@@ -3,6 +3,7 @@ import re
 from datetime import datetime, timedelta
 import zipfile
 from config.config import settings
+from utils.wsgi_midleware import logger
 
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
@@ -10,13 +11,12 @@ DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR]
 
 # I/O 바운드 작업: 디렉토리를 압축하는 함수
 def compress_directory_to_zip():
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-    print(f"### {current_time} - All Directory start compressing")
+    logger.info("All Directory start compressing")
 
     for dir_to_compress in DIRECTORIES_TO_COMPRESS:
 
         if not os.path.exists(dir_to_compress):
-            print(f"Directory does not exist: {dir_to_compress}")
+            logger.warning(f"Directory does not exist: {dir_to_compress}")
             continue
 
         # 하위 디렉토리 목록 수집
@@ -26,7 +26,7 @@ def compress_directory_to_zip():
             if os.path.isdir(subdir_path):
                 SUFFIXES = ('영상', '유틸', 'war', 'video-call', 'chat')
                 if os.path.basename(subdir_path).endswith(SUFFIXES):
-                    print(f"Skip compressing directory: {subdir_path}")
+                    logger.info(f"Skip compressing directory: {subdir_path}")
                     continue
                 subdirs.append(subdir_path)
 
@@ -38,8 +38,7 @@ def compress_directory_to_zip():
             # 하위 디렉토리가 없으면 현재 디렉토리 내의 파일들을 압축
             compress_directory(dir_to_compress)
 
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-    print(f"### {current_time} - All Directory successfully compressed")
+    logger.info("All Directory successfully compressed")
 
 
 def compress_directory(directory):
@@ -59,9 +58,9 @@ def compress_directory(directory):
         if pattern.match(filename) and filename != new_zip_filename:
             try:
                 os.remove(os.path.join(directory, filename))
-                print(f"🧹 이전 압축파일 삭제: {filename}")
+                logger.info(f"🧹 이전 압축파일 삭제: {filename}")
             except Exception as e:
-                print(f"⚠️ 파일 삭제 실패: {filename}, {e}")
+                logger.warning(f"⚠️ 파일 삭제 실패: {filename}, {e}")
 
     try:
         # ZIP 파일 생성 (기본 ZIP_STORED : 압축 x, ZIP_DEFLATED : deflate 알고리즘으로 압축)
@@ -77,8 +76,7 @@ def compress_directory(directory):
                     arcname = os.path.relpath(file_path, directory) # file과 명칭 동일
                     zipf.write(file_path, arcname)
     except Exception as e:
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-        print(f"### {current_time} - Error while compressing {directory}: {e}")
+        logger.exception(f"Error while compressing {directory}: {e}")
         return
 
     try:
@@ -101,10 +99,9 @@ def compress_directory(directory):
                 try:
                     os.remove(os.path.join(directory, f))
                 except Exception as e:
-                    print(f"삭제 실패: {f} → {e}")
+                    logger.warning(f"삭제 실패: {f} → {e}")
 
         # .zip01 → .zip 으로 다시 이름 변경
         os.rename(zip01_path, old_zip_filepath)
     except Exception as e:
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-        print(f"### {current_time} - Error while renaming zip file: {e}")
+        logger.exception(f"Error while renaming zip file: {e}")
