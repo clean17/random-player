@@ -770,6 +770,7 @@
                     <th>관리</th>
                     <th class="ms-sortable" data-sort="label">추천</th>
                     <th class="ms-sortable" data-sort="upside_tier">상승여력</th>
+                    <th class="right" id="th-picks-price" style="display:none;">가격</th>
                     <th class="right">현재가</th>
                     <th class="right ms-sortable" data-sort="today_price_change_pct">등락률</th>
                     <th class="right ms-sortable" data-sort="trading_value_change_pct">거래대금 증가율</th>
@@ -2127,12 +2128,18 @@
         // 값이 그대로 보이던 문제(2026-09-08) — 이 탭은 항상 top 10이라 픽 개수로 갱신한다.
         if (countEl) countEl.textContent = `${picks.length}건`;
 
+        // requestedDate(yyyymmdd)가 오늘이 아니면 "그 날짜 기준"임을 밝혀서, 최신 결과로
+        // 착각하지 않게 한다(2026-09-21 날짜 검색 추가).
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const isPastDate = !!requestedDate && requestedDate !== todayStr;
+        // 과거 날짜 조회면 '가격'(추천 당시 가격) 컬럼을 보이고, '현재가'엔 실제 현재가를 채운다.
+        msPicksShowLive = isPastDate;
+        msPicksLivePrice.clear();   // 다시 불러올 때마다 실제 현재가를 새로 조회
+        const pricePickTh = document.getElementById('th-picks-price');
+        if (pricePickTh) pricePickTh.style.display = isPastDate ? '' : 'none';
+
         if (statusEl) {
-            // requestedDate(yyyymmdd)가 오늘이 아니면 "그 날짜 기준"임을 밝혀서, 최신 결과로
-            // 착각하지 않게 한다(2026-09-21 날짜 검색 추가).
-            const now = new Date();
-            const todayStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-            const isPastDate = requestedDate && requestedDate !== todayStr;
             const dateLabel = isPastDate
                 ? `${requestedDate.slice(0, 4)}-${requestedDate.slice(4, 6)}-${requestedDate.slice(6, 8)} `
                 : '';
@@ -2143,6 +2150,43 @@
         if (discEl) discEl.textContent = data.disclaimer || '';
 
         renderInterestPicksRows(msSortPicks(picks));
+        if (isPastDate) loadPicksLivePrices(picks);
+    }
+
+    let msPicksShowLive = false;                 // 과거 날짜 조회 중이면 true — 가격/현재가 컬럼을 나눠 보여준다
+    const msPicksLivePrice = new Map();          // stock_code → 실제 현재가 (정렬로 재렌더돼도 유지)
+    let msPicksLiveToken = 0;                    // 날짜를 바꿔 다시 불러올 때 이전 조회 결과를 버리기 위한 토큰
+
+    // 실제 현재가 + 추천 당시 가격 대비 등락률: "12,000원(-2.3%)"
+    function msPicksLiveCellHtml(p) {
+        const live = msPicksLivePrice.get(p.stock_code);
+        if (live == null) return '<span class="ms-picks-live-empty">조회 중...</span>';
+        const base = Number(p.current_price);
+        if (!(base > 0)) return msFmtWon(live);
+        const pct = (live / base - 1) * 100;
+        const pctText = `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+        return `<span class="${msPnlClass(pct)}">${msFmtWon(live)}(${pctText})</span>`;
+    }
+
+    async function loadPicksLivePrices(picks) {
+        const token = ++msPicksLiveToken;
+        // 종목당 1회 조회라 한꺼번에 쏘지 않고 순서대로 부른다(키움 레이트리밋 보호).
+        for (const p of picks) {
+            if (token !== msPicksLiveToken) return;
+            if (!p.stock_code || msPicksLivePrice.has(p.stock_code)) continue;
+            try {
+                const res = await fetch(`/stocks/kiwoom/price?stk_cd=${encodeURIComponent(p.stock_code)}${msEnvQuery('&')}`);
+                if (!res.ok) throw new Error('조회 실패');
+                const data = await res.json();
+                if (!data.price) continue;
+                msPicksLivePrice.set(p.stock_code, Number(data.price));
+            } catch (e) {
+                continue;
+            }
+            if (token !== msPicksLiveToken) return;
+            const cell = document.querySelector(`#table-picks td.picks-live[data-stock-code="${p.stock_code}"]`);
+            if (cell) cell.innerHTML = msPicksLiveCellHtml(p);
+        }
     }
 
     function renderInterestPicksRows(picks) {
@@ -2183,7 +2227,10 @@
           </td>
           <td class="${labelClass}">${p.label ?? ''}</td>
           <td>${p.upside_tier ?? ''}</td>
-          <td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>
+          ${msPicksShowLive
+            ? `<td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>
+          <td class="right picks-live" data-stock-code="${p.stock_code ?? ''}">${msPicksLiveCellHtml(p)}</td>`
+            : `<td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>`}
           <td class="right ${msPnlClass(p.today_price_change_pct)}">${msFmtPct((p.today_price_change_pct || 0) / 100)}</td>
           <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100, 0)}</td>
           <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
