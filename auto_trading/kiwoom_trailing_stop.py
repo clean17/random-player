@@ -95,6 +95,7 @@ import logging
 import logging.handlers
 import datetime
 import time
+import unicodedata
 from typing import Dict, Optional
 from dotenv import load_dotenv, find_dotenv
 
@@ -856,7 +857,7 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None,
              '폴백매칭': legacy, '갱신': updated, '이미정산': skipped, 'ord_no없음': no_ord_no,
              '체결내역에없음': not_found, '부분체결': partial, '미체결취소': len(reversed_buys)}
     if dry_run:
-        _log.info(f'[정산-dry_run:{KIWOOM_ENV}:{ACNT_NO}] {stats}')
+        _log.info(f'[정산-dry_run:{KIWOOM_ENV}:{ACNT_NO}]\n{_fmt_settle_stats(stats)}')
         return stats
 
     if updated or reversed_buys:
@@ -865,8 +866,19 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None,
             f.write('\n'.join(out) + '\n')
         os.replace(tmp, TRADES_FILE)   # 원자적 교체 — 쓰다가 죽어도 원본이 남는다
     _reverse_unfilled_buys(reversed_buys)
-    _log.info(f'[정산:{KIWOOM_ENV}:{ACNT_NO}] {stats}')
+    _log.info(f'[정산:{KIWOOM_ENV}:{ACNT_NO}]\n{_fmt_settle_stats(stats)}')
     return stats
+
+
+def _fmt_settle_stats(stats: Dict) -> str:
+    """정산 통계를 한 줄 dict 대신 '라벨  값' 정렬 다중행으로 만든다(한글 전각폭 반영)."""
+    def width(s: str) -> int:
+        return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in s)
+
+    label_w = max(width(str(k)) for k in stats)
+    return '\n'.join(
+        f'    {k}{" " * (label_w - width(str(k)))} : {v}' for k, v in stats.items()
+    )
 
 
 def get_trade_history(limit: int = 200, env: Optional[str] = None) -> List[Dict]:
@@ -1582,7 +1594,7 @@ def log_account_summary():
         # f'\n오늘손익(자산기준)={asset_pnl["daily"]["pnl"]:+,.0f}원({asset_pnl["daily"]["rate"]:+.2%}) '
         # f'주간손익(자산기준)={asset_pnl["weekly"]["pnl"]:+,.0f}원({asset_pnl["weekly"]["rate"]:+.2%}) '
         # f'월간손익(자산기준)={asset_pnl["monthly"]["pnl"]:+,.0f}원({asset_pnl["monthly"]["rate"]:+.2%}) '
-        f'\n오늘손익(체결기준)={trade_pnl["daily"]["pnl"]:+,.0f}원({trade_pnl["daily"]["rate"]:+.2%}) '
+        f'\n    오늘손익(체결기준)={trade_pnl["daily"]["pnl"]:+,.0f}원({trade_pnl["daily"]["rate"]:+.2%}) '
         f'주간손익(체결기준)={trade_pnl["weekly"]["pnl"]:+,.0f}원({trade_pnl["weekly"]["rate"]:+.2%}) '
         f'월간손익(체결기준)={trade_pnl["monthly"]["pnl"]:+,.0f}원({trade_pnl["monthly"]["rate"]:+.2%}) '
         f'손익비={ratio_str}'
