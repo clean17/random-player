@@ -605,13 +605,14 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-3-1) 미장 데이터 파일 (pkl) 갱신 - 하루 1회 11:00
+    # 2-3-1) 미장 데이터 파일 (pkl) 갱신 - 하루 1회 13:00
+    # [2026-10-01] 11:00 -> 13:00 (사용자 요청). 미장 LGBM 예측(14:30)보다 앞이라 순서는 유지된다.
     # [2026-09-09] 장중 매시간(12~21시) -> 하루 1회로 변경. 최근 5일치만 받아 병합하되,
     # 겹치는 날짜의 종가가 어긋나면(분할/역분할) 그 종목만 전 구간을 다시 받는다
     # (job/0-1_periodically_fetch_stock_data_us.py의 detect_scale_shift).
     scheduler.add_job(
         fetch_us_stock_data,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=11, minute=0),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=13, minute=0),
         id="minutely_60_fetch_us_stock_data",
         executor="io",
         replace_existing=True,
