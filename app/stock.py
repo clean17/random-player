@@ -342,6 +342,70 @@ def get_interest_stock_picks_data():
         return jsonify({"generated_at": None, "picks": [], "disclaimer": None})
     return jsonify(result)
 
+@stock.route("/interest/picks/export", methods=["POST"])
+@login_required
+def export_interest_picks_excel():
+    """추천종목 표를 화면에 보이는 그대로 .xlsx로 내려준다. 화면(정렬·실시간 현재가 포함)이 곧
+    원본이라 서버가 다시 계산하지 않고, 클라이언트가 보낸 headers/rows 텍스트를 시트로 옮긴다."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    body = request.get_json(silent=True) or {}
+    headers = body.get("headers")
+    rows = body.get("rows")
+    if not isinstance(headers, list) or not isinstance(rows, list) or not headers or len(rows) > 500:
+        return {"status": "error", "message": "invalid table data"}, 400
+
+    def clean(v):
+        return "" if v is None else str(v)[:2000]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "추천종목"
+    ws.append([clean(h) for h in headers])
+    for r in rows:
+        if not isinstance(r, list):
+            return {"status": "error", "message": "invalid row"}, 400
+        ws.append([clean(c) for c in r[:len(headers)]])
+
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.data_type = "s"   # '='로 시작하는 텍스트가 수식으로 해석되지 않게 문자열로 고정
+
+    # links[i][j] = i번째 행 j번째 칸에 걸 URL(없으면 빈 문자열). http(s)만 허용한다.
+    links = body.get("links")
+    if isinstance(links, list):
+        for i, urls in enumerate(links[:len(rows)]):
+            for j, url in enumerate(urls[:len(headers)] if isinstance(urls, list) else []):
+                if isinstance(url, str) and url.startswith(("http://", "https://")) and len(url) <= 2000:
+                    cell = ws.cell(row=i + 2, column=j + 1)
+                    cell.hyperlink = url
+                    cell.font = Font(color="0563C1", underline="single")
+
+    head_fill = PatternFill("solid", fgColor="F2F2F2")
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.fill = head_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for i in range(1, len(headers) + 1):
+        longest = max((max((len(line) for line in str(c.value or "").split("\n")), default=0)
+                       for c in ws[get_column_letter(i)]), default=8)
+        ws.column_dimensions[get_column_letter(i)].width = min(max(longest * 1.6, 10), 70)
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    name = re.sub(r'[\\/:*?"<>|]', "_", str(body.get("filename") or "추천종목"))[:80]
+    return send_file(buf, as_attachment=True, download_name=f"{name}.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @stock.route("/interest/view", methods=["GET"])
 @login_required
 def get_view_of_interesting_stocks():

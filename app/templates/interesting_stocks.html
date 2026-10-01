@@ -383,6 +383,19 @@
         }
         .mystocks-orders-count { font-weight: 400; font-size: 13px; color: #6b7280; }
         .mystocks-livegap-toolbar { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+        .ms-header-actions .btn { white-space: nowrap; flex-shrink: 0; }
+        /* 모바일: 검색 결과 제목 줄이 좁아 버튼 글자가 밖으로 넘치므로, 버튼 묶음을 다음 줄로 내린다. */
+        @media (max-width: 640px) {
+            #searchResultsHeader { flex-wrap: wrap; row-gap: 8px; }
+            #searchResultsHeader .ms-header-actions {
+                flex: 1 1 100%;
+                margin-left: 0 !important;
+                flex-wrap: wrap;
+                row-gap: 8px;
+            }
+            #searchResultsHeader .ms-header-actions .btn { margin: 0 8px 0 0 !important; }
+            #searchResultsHeader .ms-header-actions .view-toggle { margin-left: auto; }
+        }
         /* 주문 목록 툴바(전체 취소 / 자동 재주문). 실시간gap 툴바와 레이아웃은 같고
            버튼만 두 개라 flex-wrap 만 더 준다(모바일에서 두 번째 버튼이 밀려 잘리는 것 방지). */
         .ms-orders-toolbar { flex-wrap: wrap; }
@@ -613,7 +626,10 @@
     <h3 class="section-title" id="searchResultsHeader">검색 결과
         <span class="badge" id="count">0건</span>
 
-        <div style="display:flex; align-items:center; gap:0; margin-left:auto;">
+        <div class="ms-header-actions" style="display:flex; align-items:center; gap:0; margin-left:auto;">
+            <button type="button" class="btn btn-secondary" id="ms-picks-export"
+                    style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
+                           font-size:13px; font-weight:500; line-height:1; align-items:center;">엑셀 다운로드</button>
             {% if current_user.get_id() != config.GUEST_USERNAME %}
             <button type="button" class="btn btn-secondary" id="picks-reserve-buy-btn"
                     style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
@@ -1112,6 +1128,10 @@
         // 추천종목 탭에서만 "'매수' 이상 전체 자동매수 예약" 버튼 노출 — 전체 해제 버튼과 같은 자리(공용 탭바)
         const picksReserveBtn = document.getElementById('picks-reserve-buy-btn');
         if (picksReserveBtn) picksReserveBtn.style.display = (tabId === 'tab-picks') ? 'inline-flex' : 'none';
+
+        // 추천종목 표 엑셀 다운로드 — 이 탭에서만 노출(게스트 포함)
+        const picksExportBtn = document.getElementById('ms-picks-export');
+        if (picksExportBtn) picksExportBtn.style.display = (tabId === 'tab-picks') ? 'inline-flex' : 'none';
     }
 
     // 탭 전환 (드롭다운)
@@ -2245,6 +2265,69 @@
         syncStockFlagsFromServer();
         renderInterestPicksSortIndicators();
     }
+
+    // 추천종목 표를 화면에 보이는 그대로(정렬·가격/현재가 컬럼 포함) 엑셀로 내려받는다.
+    // '관리'(즐겨찾기/자동매수 버튼) 컬럼은 텍스트가 없어 제외한다.
+    document.getElementById('ms-picks-export')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        const table = document.getElementById('table-picks');
+        // 숨겨진 헤더('가격' — 오늘 조회일 땐 display:none)는 행에도 칸이 없으므로 처음부터 뺀다.
+        const ths = Array.from(table.querySelectorAll('thead th')).filter(th => th.style.display !== 'none');
+        const keep = ths.map((th, i) => th.textContent.trim() !== '관리' ? i : -1).filter(i => i >= 0);
+        // 뉴스 컬럼은 기사마다 링크를 걸 수 있게 '뉴스1'·'뉴스2' 두 칸으로 펼친다(셀 하나엔 링크 하나만 가능).
+        const NEWS_N = 2;
+        const headers = keep.flatMap(i => {
+            const h = ths[i].textContent.trim();
+            return h === '뉴스' ? Array.from({length: NEWS_N}, (_, k) => `뉴스${k + 1}`) : [h];
+        });
+        const rows = [], links = [];
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            if (tr.children.length !== ths.length) return;
+            const cells = [], urls = [];
+            keep.forEach(i => {
+                const td = tr.children[i];
+                if (ths[i].textContent.trim() === '뉴스') {
+                    const items = td.querySelectorAll('.ms-pick-news-item');
+                    for (let k = 0; k < NEWS_N; k++) {
+                        const item = items[k];
+                        cells.push(item ? item.innerText.replace(/\s*\n\s*/g, ' ').trim() : '');
+                        urls.push(item?.querySelector('a')?.href || '');
+                    }
+                } else {
+                    cells.push(td.innerText.replace(/\s*\n\s*/g, '\n').trim());
+                    urls.push('');
+                }
+            });
+            rows.push(cells);
+            links.push(urls);
+        });
+        if (!rows.length) { alert('내려받을 추천 결과가 없어요'); return; }
+
+        const d = new Date(), p2 = n => String(n).padStart(2, '0');
+        const stamp = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
+        btn.disabled = true;
+        try {
+            const res = await fetch('/stocks/interest/picks/export', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({headers, rows, links, filename: `추천종목_${stamp}`}),
+            });
+            if (!res.ok) throw new Error('다운로드 실패');
+            const url = URL.createObjectURL(await res.blob());
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `추천종목_${stamp}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            alert('엑셀 다운로드에 실패했어요');
+        } finally {
+            btn.disabled = false;
+        }
+    });
 
     document.getElementById('table-picks')?.addEventListener('click', (e) => {
         const nameCell = e.target.closest('.ms-stock-name');
