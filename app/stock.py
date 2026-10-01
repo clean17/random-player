@@ -342,6 +342,58 @@ def get_interest_stock_picks_data():
         return jsonify({"generated_at": None, "picks": [], "disclaimer": None})
     return jsonify(result)
 
+_LOGO_HOST = "static.toss.im"
+_LOGO_PX = 28        # 엑셀 셀에 들어갈 로고 한 변(px)
+_LOGO_ROW_PT = 36    # 로고가 들어가는 행 높이(pt) — 2줄짜리 종목명 칸도 이 높이에 맞는다
+
+
+def _fetch_logo_png(url):
+    """토스 로고를 받아 _LOGO_PX 정사각 PNG 바이트로 만든다. 실패하거나 허용 호스트가 아니면 None."""
+    import io
+    from urllib.parse import urlparse
+    import requests
+    from PIL import Image as PILImage
+
+    try:
+        u = urlparse(url)
+        if u.scheme != "https" or u.hostname != _LOGO_HOST:
+            return None
+        res = requests.get(url, timeout=4, allow_redirects=False)
+        if res.status_code != 200 or len(res.content) > 300_000:
+            return None
+        img = PILImage.open(io.BytesIO(res.content)).convert("RGBA").resize((_LOGO_PX, _LOGO_PX))
+        out = io.BytesIO()
+        img.save(out, format="PNG")
+        return out.getvalue()
+    except Exception:
+        return None
+
+
+def _embed_logo_images(ws, icons):
+    import io
+    from concurrent.futures import ThreadPoolExecutor
+    from openpyxl.drawing.image import Image as XlImage
+    from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+    from openpyxl.drawing.xdr import XDRPositiveSize2D
+    from openpyxl.utils.units import pixels_to_EMU
+
+    urls = [u for u in dict.fromkeys(i for i in icons if isinstance(i, str) and i)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        fetched = dict(zip(urls, pool.map(_fetch_logo_png, urls)))
+
+    off = pixels_to_EMU(int((_LOGO_ROW_PT * 96 / 72 - _LOGO_PX) / 2))   # 행 안에서 세로 가운데
+    for i, url in enumerate(icons):
+        png = fetched.get(url) if isinstance(url, str) else None
+        if not png:
+            continue
+        img = XlImage(io.BytesIO(png))
+        img.anchor = OneCellAnchor(
+            _from=AnchorMarker(col=0, row=i + 1, colOff=pixels_to_EMU(6), rowOff=off),
+            ext=XDRPositiveSize2D(pixels_to_EMU(_LOGO_PX), pixels_to_EMU(_LOGO_PX)))
+        ws.add_image(img)
+        ws.row_dimensions[i + 2].height = _LOGO_ROW_PT
+
+
 @stock.route("/interest/picks/export", methods=["POST"])
 @login_required
 def export_interest_picks_excel():
@@ -406,6 +458,13 @@ def export_interest_picks_excel():
                        for c in ws[get_column_letter(i)]), default=8)
         ws.column_dimensions[get_column_letter(i)].width = min(max(longest * 1.6, 10), 70)
     ws.freeze_panes = "A2"
+
+    # 첫 컬럼('마크')에 종목 로고 이미지를 심는다. icons[i] = i번째 행 로고 URL.
+    # 서버가 외부 URL을 받아오므로 토스 로고 서버(https://static.toss.im)만 허용한다(SSRF 방지).
+    icons = body.get("icons")
+    if isinstance(icons, list) and headers[0] == "마크":
+        _embed_logo_images(ws, icons[:len(rows)])
+        ws.column_dimensions["A"].width = 7
 
     buf = io.BytesIO()
     wb.save(buf)

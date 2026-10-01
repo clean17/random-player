@@ -2280,13 +2280,16 @@
             const h = ths[i].textContent.trim();
             return h === '뉴스' ? Array.from({length: NEWS_N}, (_, k) => `뉴스${k + 1}`) : [h];
         });
-        const rows = [], links = [], tones = [];
+        headers.unshift('마크');   // 종목 로고 이미지가 들어갈 첫 컬럼(서버가 이미지를 심는다)
+        const rows = [], links = [], tones = [], icons = [];
         // 웹의 상승(빨강 .ms-positive)/하락(파랑 .ms-negative) 색을 엑셀에도 입히기 위해 칸마다 'pos'/'neg'/''를 보낸다.
         const toneOf = td => (td.matches('.ms-positive') || td.querySelector('.ms-positive')) ? 'pos'
             : ((td.matches('.ms-negative') || td.querySelector('.ms-negative')) ? 'neg' : '');
         table.querySelectorAll('tbody tr').forEach(tr => {
             if (tr.children.length !== ths.length) return;
-            const cells = [], urls = [], toneRow = [];
+            const cells = [''], urls = [''], toneRow = [''];
+            // 로고가 이미지면 그 주소를 보낸다(이니셜 원으로 대체된 종목은 이미지가 없어 빈 칸).
+            icons.push(tr.querySelector('img.ms-stock-icon')?.currentSrc || tr.querySelector('img.ms-stock-icon')?.src || '');
             keep.forEach(i => {
                 const td = tr.children[i];
                 if (ths[i].textContent.trim() === '뉴스') {
@@ -2330,7 +2333,7 @@
             const res = await fetch('/stocks/interest/picks/export', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({headers, rows, links, tones, filename: `추천종목_${stamp}`}),
+                body: JSON.stringify({headers, rows, links, tones, icons, filename: `추천종목_${stamp}`}),
             });
             if (!res.ok) throw new Error('다운로드 실패');
             const url = URL.createObjectURL(await res.blob());
