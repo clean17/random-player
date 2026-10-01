@@ -870,14 +870,16 @@ def reconcile_fills(dry_run: bool = False, session_date: Optional[str] = None,
     return stats
 
 
+def _visual_width(s: str) -> int:
+    """터미널 표시 폭 — 한글 등 전각 문자는 2칸으로 센다."""
+    return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in s)
+
+
 def _fmt_settle_stats(stats: Dict) -> str:
     """정산 통계를 한 줄 dict 대신 '라벨  값' 정렬 다중행으로 만든다(한글 전각폭 반영)."""
-    def width(s: str) -> int:
-        return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in s)
-
-    label_w = max(width(str(k)) for k in stats)
+    label_w = max(_visual_width(str(k)) for k in stats)
     return '\n'.join(
-        f'    {k}{" " * (label_w - width(str(k)))} : {v}' for k, v in stats.items()
+        f'    {k}{" " * (label_w - _visual_width(str(k)))} : {v}' for k, v in stats.items()
     )
 
 
@@ -1588,17 +1590,34 @@ def log_account_summary():
     ratio = get_win_loss_ratio()
     ratio_str = f'{ratio:.2f}' if ratio is not None else '손실없음'
 
-    _log.info(
-        f'[계좌현황:{KIWOOM_ENV}:{ACNT_NO}] 총자산={s["total_asset"]:,.0f}원 매입={s["tot_pur_amt"]:,.0f}원 '
-        f'평가={s["tot_evlt_amt"]:,.0f}원 손익={s["tot_evlt_pl"]:+,.0f}원 수익률={s["tot_prft_rt"]:+.2%} '
-        # f'\n오늘손익(자산기준)={asset_pnl["daily"]["pnl"]:+,.0f}원({asset_pnl["daily"]["rate"]:+.2%}) '
-        # f'주간손익(자산기준)={asset_pnl["weekly"]["pnl"]:+,.0f}원({asset_pnl["weekly"]["rate"]:+.2%}) '
-        # f'월간손익(자산기준)={asset_pnl["monthly"]["pnl"]:+,.0f}원({asset_pnl["monthly"]["rate"]:+.2%}) '
-        f'\n    오늘손익(체결기준)={trade_pnl["daily"]["pnl"]:+,.0f}원({trade_pnl["daily"]["rate"]:+.2%}) '
-        f'주간손익(체결기준)={trade_pnl["weekly"]["pnl"]:+,.0f}원({trade_pnl["weekly"]["rate"]:+.2%}) '
-        f'월간손익(체결기준)={trade_pnl["monthly"]["pnl"]:+,.0f}원({trade_pnl["monthly"]["rate"]:+.2%}) '
-        f'손익비={ratio_str}'
-    )
+    # 금액은 오른쪽 정렬 한 열로, 체결기준 손익은 금액/수익률 두 열로 맞춰 찍는다.
+    # (자산기준 손익은 asset_pnl로 계산돼 있지만 로그에는 안 찍는다 — 예전부터 주석 처리였음)
+    amounts = [
+        ('총자산', f'{s["total_asset"]:,.0f}원', ''),
+        ('매입', f'{s["tot_pur_amt"]:,.0f}원', ''),
+        ('평가', f'{s["tot_evlt_amt"]:,.0f}원', ''),
+        ('평가손익', f'{s["tot_evlt_pl"]:+,.0f}원', f'{s["tot_prft_rt"]:+.2%}'),
+    ]
+    realized = [
+        (f'{label}손익', f'{trade_pnl[key]["pnl"]:+,.0f}원', f'{trade_pnl[key]["rate"]:+.2%}')
+        for label, key in (('오늘', 'daily'), ('주간', 'weekly'), ('월간', 'monthly'))
+    ]
+    rows = amounts + realized
+    label_w = max(_visual_width(r[0]) for r in rows)
+    amt_w = max(len(r[1]) for r in rows)
+    rate_w = max(len(r[2]) for r in rows)
+
+    def line(label, amt, rate):
+        pad = ' ' * (label_w - _visual_width(label))
+        tail = f'  ({rate.rjust(rate_w)})' if rate else ''
+        return f'    {label}{pad}  {amt.rjust(amt_w)}{tail}'
+
+    out = [f'[계좌현황:{KIWOOM_ENV}:{ACNT_NO}]']
+    out += [line(*r) for r in amounts]
+    out.append('    ── 체결기준 실현손익 ──')
+    out += [line(*r) for r in realized]
+    out.append(f'    손익비  {ratio_str}')
+    _log.info('\n'.join(out))
 
 
 def manual_buy(stk_cd: str, qty: Optional[int] = None, env: Optional[str] = None):
