@@ -2280,10 +2280,13 @@
             const h = ths[i].textContent.trim();
             return h === '뉴스' ? Array.from({length: NEWS_N}, (_, k) => `뉴스${k + 1}`) : [h];
         });
-        const rows = [], links = [];
+        const rows = [], links = [], tones = [];
+        // 웹의 상승(빨강 .ms-positive)/하락(파랑 .ms-negative) 색을 엑셀에도 입히기 위해 칸마다 'pos'/'neg'/''를 보낸다.
+        const toneOf = td => (td.matches('.ms-positive') || td.querySelector('.ms-positive')) ? 'pos'
+            : ((td.matches('.ms-negative') || td.querySelector('.ms-negative')) ? 'neg' : '');
         table.querySelectorAll('tbody tr').forEach(tr => {
             if (tr.children.length !== ths.length) return;
-            const cells = [], urls = [];
+            const cells = [], urls = [], toneRow = [];
             keep.forEach(i => {
                 const td = tr.children[i];
                 if (ths[i].textContent.trim() === '뉴스') {
@@ -2292,14 +2295,28 @@
                         const item = items[k];
                         cells.push(item ? item.innerText.replace(/\s*\n\s*/g, ' ').trim() : '');
                         urls.push(item?.querySelector('a')?.href || '');
+                        toneRow.push('');
                     }
-                } else {
-                    cells.push(td.innerText.replace(/\s*\n\s*/g, '\n').trim());
-                    urls.push('');
+                    return;
                 }
+                let text;
+                const nm = td.querySelector('.ms-stock-nm');
+                if (nm) {
+                    // 종목명 칸: 보유(실전/모의) 배지는 빼고 이름 + (관리종목 등 경고 배지) + 코드만 남긴다.
+                    const c = nm.cloneNode(true);
+                    c.querySelectorAll('.ms-owned-badge').forEach(b => b.remove());
+                    c.querySelectorAll('.ms-audit-badge').forEach(b => { b.textContent = ` [${b.textContent.trim()}]`; });
+                    text = `${c.textContent.trim()}\n${td.querySelector('.ms-stock-code')?.textContent.trim() ?? ''}`;
+                } else {
+                    text = td.innerText.replace(/\s*\n\s*/g, '\n').trim();
+                }
+                cells.push(text);
+                urls.push('');
+                toneRow.push(toneOf(td));
             });
             rows.push(cells);
             links.push(urls);
+            tones.push(toneRow);
         });
         if (!rows.length) { alert('내려받을 추천 결과가 없어요'); return; }
 
@@ -2310,7 +2327,7 @@
             const res = await fetch('/stocks/interest/picks/export', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({headers, rows, links, filename: `추천종목_${stamp}`}),
+                body: JSON.stringify({headers, rows, links, tones, filename: `추천종목_${stamp}`}),
             });
             if (!res.ok) throw new Error('다운로드 실패');
             const url = URL.createObjectURL(await res.blob());

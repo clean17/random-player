@@ -374,6 +374,15 @@ def export_interest_picks_excel():
         for cell in row:
             cell.data_type = "s"   # '='로 시작하는 텍스트가 수식으로 해석되지 않게 문자열로 고정
 
+    # tones[i][j] = 'pos'(상승, 빨강) / 'neg'(하락, 파랑) — 웹 표(.ms-positive/.ms-negative)와 같은 색.
+    tone_colors = {"pos": "D32F2F", "neg": "1565C0"}
+    tones = body.get("tones")
+    if isinstance(tones, list):
+        for i, trow in enumerate(tones[:len(rows)]):
+            for j, tone in enumerate(trow[:len(headers)] if isinstance(trow, list) else []):
+                if tone in tone_colors:
+                    ws.cell(row=i + 2, column=j + 1).font = Font(color=tone_colors[tone])
+
     # links[i][j] = i번째 행 j번째 칸에 걸 URL(없으면 빈 문자열). http(s)만 허용한다.
     links = body.get("links")
     if isinstance(links, list):
