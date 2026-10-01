@@ -30,6 +30,7 @@ import sys                                       # noqa: E402
 import time                                      # noqa: E402
 
 from job.batch_runner import create_mock_scheduler   # noqa: E402
+from auto_trading.kiwoom_trailing_stop import max_hold_days_for   # noqa: E402
 
 _LOCK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                           'logs', 'kiwoom_trading', '.run_mock.lock')
@@ -84,7 +85,7 @@ def main():
     print(f'   KIWOOM_ENV : {KIWOOM_ENV}')
     print(f'   API host   : {_cfg_for()["base_url"]}')
     print(f'   계좌번호    : {acnt_no}')
-    print(f'   전략        : fire (15:21 동시호가 시장가 매수 / 손절 -6% + 보유 15영업일, 트레일링 없음)')
+    print(f'   전략        : fire (15:21 동시호가 시장가 매수 / 손절 -6% + 보유 {max_hold_days_for("mock")}영업일, 트레일링 없음)')
     print('=' * 68)
 
     scheduler = create_mock_scheduler()
