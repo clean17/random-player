@@ -23,6 +23,7 @@ from job.buy_lotto import async_buy_lotto
 from job.compress_file import compress_directory_to_zip
 from job.renew_stock_close import renew_interest_stocks_close, verify_low_stock_data, update_product_code
 from job.interest_stock_picks import run_interest_stock_picks
+from utils.image_thumbs import run_image_thumbs_job
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
 
@@ -37,6 +38,16 @@ work_directory = settings['WORK_DIRECTORY']
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 TRIP_IMAGE_DIR = settings['TRIP_IMAGE_DIR']
 DIRECTORIES_TO_COMPRESS = [TEMP_IMAGE_DIR, TRIP_IMAGE_DIR]
+
+# 갤러리 썸네일 생성 대상(app/image.py DIR_CONFIG 의 이미지 폴더). 값이 비어 있는 폴더는 job 안에서 걸러진다.
+# 자식 프로세스(cpu 풀)가 DB 설정을 다시 읽지 않도록 경로를 인자로 넘긴다.
+IMAGE_THUMB_DIRS = {
+    'image': settings.get('IMAGE_DIR'),
+    'image2': settings.get('IMAGE_DIR2'),
+    'cos': settings.get('COS_DIR'),
+    'move': settings.get('MOVE_DIR'),
+    'refine': settings.get('REF_IMAGE_DIR'),
+}
 
 
 scheduler = None
@@ -401,6 +412,21 @@ def create_scheduler():
         trigger=CronTrigger(hour=4, minute=0),
         id="scrap_ai_daily",
         executor="io",
+        replace_existing=True,
+    )
+
+    # 1-5) 매일 05:00 갤러리 썸네일(thumb/<이름>.webp, 가로 800px) 증분 생성 (2026-10-02)
+    # 02:00(IG)·04:00(AI) 스크랩으로 들어온 새 이미지를 이어서 처리하도록 그 뒤로 잡았다.
+    # 이미 만든 것/만들 필요 없는 것은 건너뛰어(.skip.json) 평소엔 몇 초~몇 분이면 끝난다.
+    # 첫 실행은 약 24,500장(약 25~40분 예상, utils/image_thumbs_dryrun.py 추정)이고 max_seconds(2시간)를
+    # 넘기면 남은 것은 다음 날로 이월된다. Flask 웹 프로세스와 GIL을 나누지 않도록 cpu(프로세스) 풀에서 돈다.
+    # 상세 규칙·이름 충돌 처리: utils/image_thumbs.py 모듈 docstring.
+    scheduler.add_job(
+        run_image_thumbs_job,
+        kwargs={"dirs": IMAGE_THUMB_DIRS},
+        trigger=CronTrigger(hour=5, minute=0),
+        id="image_thumbs_daily",
+        executor="cpu",
         replace_existing=True,
     )
 
