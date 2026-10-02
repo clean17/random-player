@@ -323,6 +323,18 @@ def delete_images_task(images_to_delete, dir):
             else:
                 continue  # 알 수 없는 dir
 
+            # 썸네일(thumb/<상대경로 확장자 뺌>.webp)도 같이 휴지통으로 — 원본이 이미 없어도 남은 썸네일은 정리한다.
+            # move-image(원본 이동)가 하는 것과 같은 처리이고, utils/image_thumbs.py 가 만드는 경로와 같다.
+            thumb_base = IMAGE_DIR2 if dir == 'image2' else DIR_CONFIG[dir].base_dir
+            rel = os.path.relpath(safe_path, os.path.realpath(thumb_base)).replace('\\', '/')
+            # normpath: send2trash(Windows)는 '\'와 '/'가 섞인 경로(IG 하위 폴더)를 거부한다(WinError -2147024809).
+            webp_file = os.path.normpath(os.path.join(thumb_base, 'thumb', os.path.splitext(rel)[0] + '.webp'))
+            if os.path.exists(webp_file):
+                try:
+                    send2trash(webp_file)
+                except Exception as e:
+                    print(f"[WARN] thumb delete failed: {webp_file} -> {e}")
+
             if not os.path.exists(safe_path):
                 # 이미 지워졌거나 잘못된 이름
                 # print(f"[WARN] not found: {safe_path}")
