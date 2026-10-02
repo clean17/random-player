@@ -189,7 +189,7 @@ function setSlide(filename) {
         videoEl.style.display = "none";
         imgEl.style.display = "block";
         imgEl.src = activeDir === 'refine'
-            ? `https://chickchick.kr/image/images?filename=${enc}&dir=refine`
+            ? `https://chickchick.kr/image/images?filename=${enc}&dir=refine&original=1`
             : `/image/images?filename=${enc}&dir=${encodeURIComponent(activeDir)}&selected_dir=${encodeURIComponent(selDir)}&original=1`;
     }
 
