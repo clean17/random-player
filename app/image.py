@@ -583,6 +583,18 @@ def delete_images():
 
 
 
+IMAGE_CACHE_SECONDS = 60 * 60 * 24   # 갤러리 이미지 브라우저 캐시(1일) — 같은 이미지를 다시 볼 때 재요청을 줄인다
+
+
+def _send_cached(directory, filename):
+    """send_from_directory + 브라우저 캐시. 로그인이 필요한 이미지라 공용(프록시) 캐시는 막고 private으로만 둔다.
+    ETag/Last-Modified는 그대로라 만료 후에는 304로 재검증된다."""
+    resp = send_from_directory(directory, filename, max_age=IMAGE_CACHE_SECONDS)
+    resp.cache_control.public = None
+    resp.cache_control.private = True
+    return resp
+
+
 @image_bp.route('/images')
 @login_required
 def get_image():
@@ -608,7 +620,7 @@ def get_image():
             base_dir = os.path.join(TEMP_IMAGE_DIR, selected_dir)
     elif dir == 'stock':
         if directory is not None:
-            return send_from_directory(directory, filename)  # 없으면 함수가 404를 응답함
+            return _send_cached(directory, filename)  # 없으면 함수가 404를 응답함
         else:
             abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
     else:
@@ -616,20 +628,20 @@ def get_image():
 
     if original:
         # 원본 요청 시 썸네일을 건너뛰고 원본 파일을 바로 반환
-        return send_from_directory(base_dir, filename)
+        return _send_cached(base_dir, filename)
 
     # thumb 서브디렉토리에 동일 이름 .webp 있으면 우선 반환
     thumb_dir = os.path.join(base_dir, 'thumb')
     if not os.path.isdir(thumb_dir):
         # raise FileNotFoundError(f"thumb_dir이 존재하지 않습니다: {thumb_dir}")
-        return send_from_directory(base_dir, filename)
+        return _send_cached(base_dir, filename)
 
     name_without_ext, _ = os.path.splitext(filename)
     webp_path = os.path.join(thumb_dir, name_without_ext + '.webp')
     if os.path.exists(webp_path):
-        return send_from_directory(thumb_dir, name_without_ext + '.webp')
+        return _send_cached(thumb_dir, name_without_ext + '.webp')
 
-    return send_from_directory(base_dir, filename)
+    return _send_cached(base_dir, filename)
 
 @image_bp.route('/shuffle/ref-images', methods=['POST'], endpoint='shuffle/ref-images')
 @login_required
