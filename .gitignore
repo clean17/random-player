@@ -63,3 +63,7 @@ out/
 images/
 move/
 data/
+
+# AI 업스케일(Real-ESRGAN ncnn-vulkan) 실행 파일·모델 — 공식 배포본(약 50MB), 저장소에 넣지 않는다.
+# 받는 곳: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip
+tools/realesrgan/

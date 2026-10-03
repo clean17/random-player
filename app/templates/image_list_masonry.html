@@ -1373,6 +1373,7 @@
                                    background: #3d3d3d; color: #fff; font-size: 15px; cursor: pointer; white-space: nowrap;
                                    overflow: hidden; text-overflow: ellipsis; }
     #crop-modal .crop-bar button.primary { background: #2f88ff; border-color: #2f88ff; color: #fff; }
+    #crop-modal .crop-bar button.ai { background: #7a4dff; border-color: #7a4dff; color: #fff; }
     #crop-modal .crop-bar button:not(:disabled):hover { filter: brightness(1.12); }
     /* 덮개를 껐으니 테두리가 어떤 이미지 위에서도 보이게: 흰 선 + 바깥 어두운 선 */
     /* 테두리: 얇고 덜 눈에 띄게(1px 반투명 흰 선). 바깥은 이미 어둡게 덮여 있어 이 정도로도 경계가 보인다 */
@@ -1415,7 +1416,8 @@
     <div class="crop-bar" id="crop-bar">
         <span class="crop-info" id="crop-info">불러오는 중...</span>
         <div class="crop-btns">
-            <button type="button" class="primary" id="crop-save-btn" disabled title="스페이스">확정(덮어쓰기)</button>
+            <button type="button" class="primary" id="crop-save-btn" disabled title="Space / Enter">확정(덮어쓰기)</button>
+            <button type="button" class="ai" id="crop-ai-btn" disabled title="Shift+Space / Shift+Enter — AI(Real-ESRGAN)로 깨끗하게 정리해 저장(확대·축소 모두), 약 5~10초">AI로 확정</button>
             <button type="button" id="crop-restore-btn" style="visibility:hidden;" title="백스페이스">원본으로 되돌리기</button>
             <button type="button" id="crop-move-btn" title="이미지 클릭과 같은 동작">refine으로 이동 ›</button>
         </div>
@@ -1439,6 +1441,7 @@
     }, { passive: false });
     const info = document.getElementById('crop-info');
     const saveBtn = document.getElementById('crop-save-btn');
+    const aiBtn = document.getElementById('crop-ai-btn');
     const restoreBtn = document.getElementById('crop-restore-btn');
     let cropper = null, state = null, saving = false;
 
@@ -1447,10 +1450,10 @@
         const box = cropper.getCropBoxData();
         return Math.max(1, Math.round(box.width * (window.devicePixelRatio || 1) / RATIO_W));
     }
-    function payload(preview) {
+    function payload(preview, ai) {
         const d = cropper.getData(true);    // 원본(회전 반영) 픽셀 좌표
         return { dir: 'move', filename: state.filename, box: { x: d.x, y: d.y, w: d.width, h: d.height },
-                 unit: outUnit(), preview: !!preview };
+                 unit: outUnit(), preview: !!preview, ai: !!ai };
     }
     // 화살표·버튼 패널을 지금 틀 위치에 맞춰 배치한다(틀이 움직이거나 크기가 바뀔 때마다 = updateInfo 때마다).
     // [‹] [틀] [›] [패널] — 패널이 화면 오른쪽에 안 들어가면 우하단 고정(docked).
@@ -1582,6 +1585,7 @@
             .catch(() => {});
         // 비교 화면·미리보기 결과만 정리하고 편집기(cropper)는 남겨 둔다 — 이미지를 바꾸는 동안 화면이 비지 않게
         saveBtn.disabled = true;               // 새 편집기가 준비되면 바로 확정할 수 있다
+        aiBtn.disabled = true;
         hideChromeForEdit();
         modal.classList.add('open');
         info.textContent = opts.loadingText || '원본 불러오는 중...';
@@ -1612,6 +1616,7 @@
         updateIndex();
         updateInfo();
         saveBtn.disabled = false;
+        aiBtn.disabled = false;
         prefetchNeighbors(imageItem);
     }
 
@@ -1783,6 +1788,7 @@
                 if (e.repeat) break;              // 누르고 있어도 1번만
                 // 스페이스·엔터 = 확정(덮어쓰기). 단 틀이 이미지 전체와 같으면(자를 게 없음 — 이미 3:4 로 맞춰진 이미지 등)
                 // 갤러리 클릭과 같은 'refine 으로 이동'을 한다.
+                if (e.shiftKey) { if (!aiBtn.disabled) aiBtn.click(); break; }   // Shift = AI로 확정
                 if (frameCoversImage()) moveBtn.click();
                 else if (!saveBtn.disabled) saveBtn.click();
                 break;
@@ -1849,16 +1855,21 @@
         }
     };
 
-    saveBtn.onclick = async () => {
+    // 확정(덮어쓰기). ai=true 면 서버가 Real-ESRGAN 으로 확대해 저장한다(확대일 때만, 실패하면 일반 방식으로 저장 후 사유를 알려줌).
+    async function doSave(ai) {
         if (!cropper || saving) return;     // 확인창 없이 바로 저장(원본은 move/origin 에 보관된다)
         saving = true;
         saveBtn.disabled = true;
-        info.textContent = '저장 중...';
+        aiBtn.disabled = true;
+        const t0 = Date.now();
+        const tick = ai ? setInterval(() => { info.textContent = `AI 처리 중... ${((Date.now() - t0) / 1000).toFixed(0)}초 (보통 5~10초)`; }, 500) : null;
+        info.textContent = ai ? 'AI 처리 중... (보통 5~10초)' : '저장 중...';
         try {
             const res = await fetch('/image/crop-image', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                         body: JSON.stringify(payload(false)) });
+                                                         body: JSON.stringify(payload(false, ai)) });
             const data = await res.json();
             if (!res.ok || data.status !== 'success') throw new Error(data.message || res.status);
+            if (tick) clearInterval(tick);
             const thumb = state.item.querySelector('img.thumbnail');
             const url = `/image/images?filename=${state.enc}&dir=move&v=${data.v}`;   // 새 버전값으로 캐시 회피
             if (thumb) { thumb.src = url; thumb.dataset.src = url; }
@@ -1866,16 +1877,20 @@
             // 이어서 다시 자르면 저장된 파일 기준 좌표라 어긋나지 않는다. 새 편집기가 준비될 때까지는 지금 편집기가
             // 그대로 보이다가 한 번에 바뀐다(빈 화면 없음).
             const sz = `${data.size[0]}×${data.size[1]}`;
-            await open(state.item, { loadingText: `저장했어요 ✓ (${sz}) — 새 이미지 불러오는 중...`,
-                                     notice: `저장했어요 ✓ (${sz})` });
+            const how = ai ? (data.ai_used ? 'AI로 저장했어요 ✓' : `AI 없이 저장했어요(${data.ai_note || '사유 없음'})`) : '저장했어요 ✓';
+            await open(state.item, { loadingText: `${how} (${sz}) — 새 이미지 불러오는 중...`, notice: `${how} (${sz})` });
             updateInfo();
         } catch (err) {
             info.textContent = '저장 실패: ' + err.message;
             saveBtn.disabled = false;
+            aiBtn.disabled = false;
         } finally {
+            if (tick) clearInterval(tick);
             saving = false;
         }
-    };
+    }
+    saveBtn.onclick = () => doSave(false);
+    aiBtn.onclick = () => doSave(true);
 })();
 </script>
 {% endif %}

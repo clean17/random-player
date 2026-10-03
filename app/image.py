@@ -688,8 +688,50 @@ def _soften_jaggies(img):
     return out
 
 
-def _render_crop(src_path, box, out_w, out_h):
-    """원본(EXIF 회전 반영)에서 box=(x, y, w, h)를 잘라 (out_w, out_h)로 리샘플한 PIL 이미지."""
+# ── AI 업스케일(Real-ESRGAN, ncnn-vulkan 실행 파일) ─────────────────────────────
+# 'AI로 확정' 때만 쓴다(2026-10-03 사용자 요청). 파이썬 패키지 없이 tools/realesrgan 의 공식 배포 실행 파일을 호출하므로
+# 자동매매가 쓰는 venv 에 영향이 없다. move 실사진 비교: 경계·머리카락·직선이 또렷해지고 계단현상이 사라지는 대신
+# 평평한 면의 질감이 매끈해지고, 확정 1회 약 5.5~6.5초(그중 약 3초는 매번 프로그램·모델을 띄우는 시간).
+# GPU 하나를 쓰므로 동시에 하나씩만 돌린다(_AI_LOCK). 실패·시간초과면 호출부가 일반 방식으로 저장한다.
+_REALESRGAN_EXE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               'tools', 'realesrgan', 'realesrgan-ncnn-vulkan.exe')
+_REALESRGAN_MODEL = 'realesrgan-x4plus'
+_AI_TIMEOUT_SEC = 60
+# AI 입력 최대 가로(px). 영역이 저장 크기보다 크면 저장 크기(최대 이 값)로 먼저 줄여서 넣는다 — 처리 시간이 입력 크기에
+# 비례해서(move 실사진, RTX 3070: 540x720 4.3초 / 810x1080 6.5초 / 1080x1440 9.9초) 최대 약 10초로 묶는다.
+_AI_MAX_INPUT_W = 1080
+import threading as _threading
+_AI_LOCK = _threading.Lock()
+
+
+def _ai_upscale(region, out_w, out_h):
+    """region(PIL)을 Real-ESRGAN 으로 4배 키운 뒤 (out_w, out_h)로 LANCZOS 축소. 투명도는 BICUBIC 으로 따로 키워 붙인다."""
+    import subprocess
+    import tempfile
+    from PIL import Image
+    if not os.path.isfile(_REALESRGAN_EXE):
+        raise RuntimeError('AI 업스케일 실행 파일이 없어요(tools/realesrgan)')
+    alpha = region.getchannel('A') if region.mode == 'RGBA' else None
+    with tempfile.TemporaryDirectory(prefix='crop_ai_') as td:
+        ip, op = os.path.join(td, 'in.png'), os.path.join(td, 'out.png')
+        region.convert('RGB').save(ip, 'PNG', compress_level=1)
+        with _AI_LOCK:
+            r = subprocess.run([_REALESRGAN_EXE, '-i', ip, '-o', op, '-n', _REALESRGAN_MODEL],
+                               cwd=os.path.dirname(_REALESRGAN_EXE), capture_output=True, timeout=_AI_TIMEOUT_SEC,
+                               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if r.returncode != 0 or not os.path.isfile(op):
+            raise RuntimeError(f'AI 업스케일 실패(code {r.returncode})')
+        with Image.open(op) as up:
+            out = up.convert('RGB').resize((out_w, out_h), Image.LANCZOS)
+    if alpha is not None:
+        out.putalpha(alpha.resize((out_w, out_h), Image.BICUBIC))
+    return out
+
+
+def _render_crop(src_path, box, out_w, out_h, ai=False, meta=None):
+    """원본(EXIF 회전 반영)에서 box=(x, y, w, h)를 잘라 (out_w, out_h)로 리샘플한 PIL 이미지.
+    ai=True 면 확대·축소와 상관없이 Real-ESRGAN 을 쓴다(원본이 흐릿할 때 노이즈·블록·흐림 정리용으로도 쓰므로 —
+    2026-10-03 사용자 요청, 처음엔 확대일 때만 썼다). meta(dict)를 주면 {'ai_used': bool, 'ai_note': 사유}를 채운다."""
     from PIL import Image, ImageOps
     with Image.open(src_path) as im:
         im = ImageOps.exif_transpose(im)
@@ -703,12 +745,29 @@ def _render_crop(src_path, box, out_w, out_h):
             has_alpha = im.mode in ('LA', 'PA') or (im.mode == 'P' and 'transparency' in im.info)
             im = im.convert('RGBA' if has_alpha else 'RGB')
         region = im.crop((x, y, x + w, y + h))
-        if out_w > w:
+        out = None
+        if meta is not None:
+            meta.update(ai_used=False, ai_note=None)
+        if ai:
+            try:
+                ai_in = region
+                max_in_w = min(out_w, _AI_MAX_INPUT_W)
+                if region.width > max_in_w:   # 축소·1:1 이면 저장 크기로 먼저 줄여 넣는다(시간 제한) → AI 4배 → 저장 크기
+                    ai_in = region.resize((max_in_w, max(1, round(region.height * max_in_w / region.width))), Image.LANCZOS)
+                out = _ai_upscale(ai_in, out_w, out_h)
+                if meta is not None:
+                    meta['ai_used'] = True
+            except Exception as e:   # noqa: BLE001 — 실패하면 일반 확대로 저장한다
+                import subprocess
+                if meta is not None:
+                    meta['ai_note'] = (f'AI 처리 시간 초과({_AI_TIMEOUT_SEC}초)' if isinstance(e, subprocess.TimeoutExpired)
+                                       else str(e)[:120])
+        if out is None and out_w > w:
             # 확대: BICUBIC 만, 선명화 없음(2026-10-03 사용자 요청). LANCZOS 는 확대 시 경계에 밝고 어두운 띠(링잉)를
             # 만들어 날카롭게 보인다. 경과: LANCZOS+UnsharpMask(1.0,50%) → BICUBIC+UnsharpMask(1.6) 20→15→12→9→5% → 없음.
             # move 실사진 8장 기준 날카로움(처음 방식=100%): 지금 66% / 5% 언샤프 68% / BILINEAR 53%(확연히 흐림).
             out = _soften_jaggies(region.resize((out_w, out_h), Image.BICUBIC))
-        else:
+        elif out is None:
             # 축소: LANCZOS 만으로 충분히 선명하다 — 추가 선명화는 과해진다
             out = region.resize((out_w, out_h), Image.LANCZOS)
         icc = im.info.get('icc_profile')
@@ -757,7 +816,8 @@ def crop_image():
     out_w, out_h = CROP_RATIO[0] * unit, CROP_RATIO[1] * unit
 
     with _timed('render'):
-        img, icc, used_box, orig_size = _render_crop(src, box, out_w, out_h)
+        meta = {}
+        img, icc, used_box, orig_size = _render_crop(src, box, out_w, out_h, ai=bool(p.get('ai')), meta=meta)
 
     if p.get('preview'):
         buf = io.BytesIO()
@@ -804,7 +864,8 @@ def crop_image():
     _save_crop_history()
     ver = _bump_edit_version(dir_, filename)
     return jsonify({'status': 'success', 'v': ver, 'size': [out_w, out_h], 'box': list(used_box),
-                    'original_size': list(orig_size), 'has_origin': True})
+                    'original_size': list(orig_size), 'has_origin': True,
+                    'ai_used': meta.get('ai_used', False), 'ai_note': meta.get('ai_note')})
 
 
 def _rebuild_thumb(base, rel, src):
