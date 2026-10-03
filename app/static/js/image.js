@@ -193,16 +193,9 @@ function setSlide(filename) {
             : `/image/images?filename=${enc}&dir=${encodeURIComponent(activeDir)}&selected_dir=${encodeURIComponent(selDir)}&original=1`;
     }
 
-    // 라벨 (masonry item-label과 동일 로직)
+    // 라벨: 파일명 전체(확장자·하위 경로 포함). 2026-10-03 사용자 요청 — 예전엔 '_img_'/'_reel_' 앞 계정명만 40자까지 보였다.
     const labelEl = document.getElementById('slideshow-label');
-    if (labelEl) {
-        const segment = filename.split('/')[0];
-        const _i = segment.indexOf('_img_');
-        const _r = segment.indexOf('_reel_');
-        const cut = [_i, _r].filter(v => v !== -1).reduce((a, b) => Math.min(a, b), Infinity);
-        const text = cut < Infinity ? segment.slice(0, cut) : segment.replace(/\.[^.]+$/, '');
-        labelEl.textContent = text.slice(0, 40);
-    }
+    if (labelEl) labelEl.textContent = filename;
 
     // 현재 인덱스
     const indexEl = document.getElementById('slideshow-index');

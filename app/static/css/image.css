@@ -459,10 +459,10 @@ button.delete-button:hover {
     background: rgba(0,0,0,0.45);
     padding: 2px 10px;
     border-radius: 4px;
-    max-width: 35%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    /* 파일명 전체를 보여준다 — 한 줄에 안 들어가면 잘라내지 않고 줄바꿈(긴 영문/숫자 이름도 끊어서). 우하단 순번과 안 겹치게 폭 제한 */
+    max-width: calc(100% - 140px);
+    white-space: normal;
+    word-break: break-all;
 }
 #slideshow-index {
     position: absolute;
