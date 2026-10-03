@@ -1330,6 +1330,8 @@
         box-shadow: none !important;
         pointer-events: none;
     }
+    /* 로딩 오버레이(#overlay, z-index 9999)가 편집 창(10000) 뒤에 가려지지 않게 올린다(반투명이라 AI 진행 시간 문구는 비쳐 보인다) */
+    body.crop-editing #overlay { z-index: 10002 !important; }
     /* 편집 중 뒤의 갤러리가 스크롤되면 ui_chrome.js 가 상단바를 다시 내리므로 페이지 스크롤을 잠근다 */
     html.crop-editing, body.crop-editing { overflow: hidden !important; }
     /* 버튼 묶음: 틀 오른쪽 중간(다음 화살표 바깥)에 붙는다 — 위치는 layoutChrome() 이 틀을 따라 계산한다.
@@ -1429,9 +1431,9 @@
     const RATIO_W = 3, RATIO_H = 4;            // 1440x1920 = 3:4 (서버 CROP_RATIO 와 같아야 한다)
     const modal = document.getElementById('crop-modal');
     const editBox = document.getElementById('crop-edit');
-    // 휠 확대 단계: 기본 2%, Ctrl 을 누르고 휠이면 5%. Cropper 는 휠 이벤트마다 options.wheelZoomRatio 를 읽으므로,
+    // 휠 확대 단계: 기본 2%, Ctrl 을 누르고 휠이면 10%. Cropper 는 휠 이벤트마다 options.wheelZoomRatio 를 읽으므로,
     // 그보다 먼저(capture, 바깥 요소) 실행되는 여기서 값만 바꿔 준다.
-    const WHEEL_STEP = 0.02, WHEEL_STEP_CTRL = 0.05;
+    const WHEEL_STEP = 0.02, WHEEL_STEP_CTRL = 0.10;
     editBox.addEventListener('wheel', (e) => {
         if (cropper) cropper.options.wheelZoomRatio = e.ctrlKey ? WHEEL_STEP_CTRL : WHEEL_STEP;
     }, { capture: true, passive: true });
@@ -1702,7 +1704,7 @@
                     modal: true, highlight: false, guides: false, center: false,
                     // 틀 자체는 끌어서 옮기지 않는다(cropBoxMovable:false) — 틀 안을 끌어도 이미지가 끄는 방향으로 움직인다(attachPan)
                     cropBoxMovable: false,
-                    wheelZoomRatio: WHEEL_STEP,        // 휠 한 칸 = 2% 확대/축소(Ctrl+휠은 5% — 위 editBox wheel 핸들러)
+                    wheelZoomRatio: WHEEL_STEP,        // 휠 한 칸 = 2% 확대/축소(Ctrl+휠은 10% — 위 editBox wheel 핸들러)
                     ready: () => {
                         // 원본이 이미 3:4(오차 0.5% 이내 — 예: 이미 잘라 둔 1440x1920)면 3분할 눈금을 숨긴다
                         const d = c.getImageData();
@@ -1861,6 +1863,7 @@
         saving = true;
         saveBtn.disabled = true;
         aiBtn.disabled = true;
+        if (typeof renderLoadingOverlay === 'function') renderLoadingOverlay();   // 확정(저장·새 이미지 불러오기) 동안 로딩 오버레이
         const t0 = Date.now();
         const tick = ai ? setInterval(() => { info.textContent = `AI 처리 중... ${((Date.now() - t0) / 1000).toFixed(0)}초 (보통 5~10초)`; }, 500) : null;
         info.textContent = ai ? 'AI 처리 중... (보통 5~10초)' : '저장 중...';
@@ -1886,6 +1889,7 @@
             aiBtn.disabled = false;
         } finally {
             if (tick) clearInterval(tick);
+            if (typeof removeLoadingOverlay === 'function') removeLoadingOverlay();
             saving = false;
         }
     }
