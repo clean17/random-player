@@ -1,13 +1,18 @@
 # image.py
 import os
 import re
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, send_from_directory, abort
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, send_from_directory, abort, g, \
+    send_file
 from flask_login import login_required, current_user
 from send2trash import send2trash
 from jinja2 import Environment
 from config.config import settings
 import random
 import time
+import io
+import json
+import logging
+import functools
 import urllib.parse
 import shutil
 from urllib.parse import unquote
@@ -351,6 +356,59 @@ def delete_images_task(images_to_delete, dir):
 
 ###################### image ########################
 
+# ── 느린 요청 계측 ────────────────────────────────────────────────────────────
+# 간헐적으로 10초 걸리는 /image/move-image 의 원인을 가리기 위한 로그(2026-10-02). 핸들러 안에서 걸린
+# 시간이 임계값(기본 1초)을 넘으면 단계별 시간과 함께 app 로그에 남긴다. 이 로그가 안 찍혔는데 화면에서
+# 느렸다면 지연은 핸들러 밖(대기열·GIL·nginx·네트워크)이다 — 반대로 찍혔다면 steps 에 병목 단계가 나온다.
+_slow_log = logging.getLogger('image.slow')
+
+
+def _ensure_slow_log_handlers():
+    # 앱 로그(config/logger_config.py)는 로거마다 핸들러를 직접 붙이고 root 로 전파하지 않는 구조다. 게다가
+    # 기본 로거에는 NO_LOGS_URLS 필터가 걸려 있어 '/image/move-image' 가 들어간 메시지는 통째로 사라진다.
+    # 그래서 필터가 없는 'waitress.queue' 로거가 쓰는 핸들러(콘솔+파일 큐)를 첫 사용 시 그대로 빌려 쓴다.
+    if _slow_log.handlers:
+        return
+    borrowed = logging.getLogger('waitress.queue').handlers
+    if borrowed:
+        for h in borrowed:
+            _slow_log.addHandler(h)
+        _slow_log.setLevel(logging.INFO)
+        _slow_log.propagate = False
+
+
+class _timed:
+    """with _timed('trash'): ... — 단계 시간을 g.steps 에 기록한다."""
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        self.t = time.perf_counter()
+
+    def __exit__(self, *exc):
+        steps = getattr(g, 'steps', None)
+        if steps is None:
+            steps = g.steps = {}
+        steps[self.name] = round(time.perf_counter() - self.t, 3)
+
+
+def _log_slow(threshold=1.0):
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            t = time.perf_counter()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                total = time.perf_counter() - t
+                if total > threshold:
+                    _ensure_slow_log_handlers()
+                    _slow_log.warning('[느린요청] %s %.1fs 단계=%s ip=%s', request.path, total,
+                                      getattr(g, 'steps', {}), request.remote_addr)
+        return wrapper
+    return deco
+
+
 @image_bp.route('/pages', methods=['GET'])
 @login_required
 def image_list():
@@ -460,6 +518,7 @@ def fetch_image_list():
 
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
 @login_required
+@_log_slow()
 def move_image():
     payload = request.get_json(silent=True) or {}
     # imagepath의 값에 따라 src_path 결정
@@ -520,13 +579,17 @@ def move_image():
         return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
 
     # 존재하면 휴지통으로 이동
-    if os.path.exists(webp_file):
-        send2trash(webp_file)
+    with _timed('thumb_trash'):
+        if os.path.exists(webp_file):
+            send2trash(webp_file)
 
     # print('src_path', src_path)
-    if os.path.exists(src_path):
+    with _timed('src_exists'):
+        src_exists = os.path.exists(src_path)
+    if src_exists:
         # os.rename(src_path, dest_path) # OS ERROR : 다른 드라이브로 이동시킬 수 없다, shutil 사용을 권장
-        shutil.move(src_path, dest_path) # src_path > dest_path 이동
+        with _timed('move'):
+            shutil.move(src_path, dest_path) # src_path > dest_path 이동
 
         raw_filename = urllib.parse.unquote(payload.get('filename', ''))
         if imagepath in DIR_CONFIG:
@@ -609,6 +672,7 @@ def _send_cached(directory, filename):
 
 @image_bp.route('/images')
 @login_required
+@_log_slow()
 def get_image():
     filename = request.args.get('filename')
     filename = urllib.parse.unquote_plus(filename)
