@@ -91,10 +91,11 @@ def make_thumb(path: str, width: int = THUMB_WIDTH, quality: int = QUALITY) -> b
 
 
 def scan_images(base: str) -> List[Tuple[str, str, float, int]]:
-    """(경로, 상대경로('/' 구분), mtime, 크기) 목록. thumb 폴더·영상·제외 확장자는 건너뛴다."""
+    """(경로, 상대경로('/' 구분), mtime, 크기) 목록. thumb·origin(자르기 전 원본 백업) 폴더, 영상,
+    제외 확장자는 건너뛴다."""
     out = []
     for root, dirs, files in os.walk(base):
-        dirs[:] = [d for d in dirs if d.lower() != 'thumb']
+        dirs[:] = [d for d in dirs if d.lower() not in ('thumb', 'origin')]
         for f in files:
             ext = os.path.splitext(f)[1].lower()
             if ext not in IMG_EXT:

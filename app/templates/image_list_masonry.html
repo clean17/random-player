@@ -326,14 +326,17 @@
                 {% if dir in ['trip', 'temp', 'refine'] %}
                 <button class="delete-btn" type="button">×</button>
                 {% endif %}
+                {% if dir == 'move' and current_user.get_id() != config.GUEST_USERNAME %}
+                <button class="crop-btn" type="button" title="자르기">✂</button>
+                {% endif %}
                 <!-- 이미지를 스켈레톤으로 변경 filename='no-image.png' >> filename='svg/image_skeleton.svg' -->
                 <img class="thumbnail {% if dir == 'stock' %}stock-graph{% endif %}"
                      src="{% if loop.index <= 5 %}
-                            {{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}
+                            {{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None, v=img_v(dir, image)) }}
                           {% else %}
                             {{ url_for('static', filename='svg/image_skeleton.svg') }}
                           {% endif %}"
-                     data-src="{{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None) }}"
+                     data-src="{{ url_for('image.get_image', market=market, filename=image|urlencode, dir=dir, selected_dir=selected_dir if selected_dir else None, v=img_v(dir, image)) }}"
                      alt="{{ image|urlencode }}"
                      onerror="this.onerror=null; this.closest('.image-item')?.remove(); if(typeof decrementTotalCount==='function') decrementTotalCount(); if(typeof adjustColumnsIfNeeded==='function') adjustColumnsIfNeeded();"
                      {% if dir not in ['trip', 'temp'] %}
@@ -1301,6 +1304,581 @@
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
+{% if dir == 'move' %}
+<!-- 이미지 자르기(3:4) — 영역 선택은 Cropper.js, 실제 리샘플(LANCZOS+언샤프)·저장은 서버(/image/crop-image) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<style>
+    .masonry-column .image-item .crop-btn {
+        position: absolute; top: 6px; right: 6px; z-index: 10;
+        width: 36px; height: 36px; border: none; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        padding: 0; margin: 0; line-height: 1;            /* 사이트 공통 button 규칙(padding 15px·margin 10px) 무효화 */
+        background: rgba(0, 0, 0, 0.35); color: #fff; font-size: 19px; cursor: pointer;
+    }
+    .masonry-column .image-item .crop-btn:hover { background: rgba(0, 0, 0, 0.6); }
+    #crop-modal { display: none; position: fixed; inset: 0; z-index: 10000; background: #0b0b0b;   /* 불투명: 뒤 갤러리가 비쳐 깜빡여 보이지 않게 */
+                  flex-direction: column; padding: 0; box-sizing: border-box; color: #eee; }
+    #crop-modal.open { display: flex; }
+    /* 편집 중에는 상단바를 스크롤 자동숨김과 같은 모양(style.css 의 .chrome-hidden 값)으로 올리고, ui_chrome.js 가
+       chrome-visible 을 다시 붙여도 내려오지 않게 고정한다. style.css 의 '.top-bar[data-auto-hide].chrome-visible
+       { translateY(0) !important }' 보다 우선순위가 높아야 해서 body.crop-editing 을 앞에 붙였다. */
+    body.crop-editing .top-bar[data-auto-hide="true"],
+    body.crop-editing .top-bar[data-auto-hide="true"].chrome-visible {
+        transform: translateY(calc(-1 * (var(--app-header-height) + env(safe-area-inset-top) + 14px))) !important;
+        opacity: 0.05 !important;
+        box-shadow: none !important;
+        pointer-events: none;
+    }
+    /* 편집 중 뒤의 갤러리가 스크롤되면 ui_chrome.js 가 상단바를 다시 내리므로 페이지 스크롤을 잠근다 */
+    html.crop-editing, body.crop-editing { overflow: hidden !important; }
+    /* 버튼 묶음: 틀 오른쪽 중간(다음 화살표 바깥)에 붙는다 — 위치는 layoutChrome() 이 틀을 따라 계산한다.
+       그 자리에 들어갈 공간이 없으면(좁은 화면) 화면 우하단에 고정(.docked). 크기는 고정(폭·버튼 칸·안내 3줄) —
+       되돌리기 버튼은 없을 때도 자리를 비워 둔다(visibility) — 그래서 이미지마다 패널 크기가 달라지지 않는다. */
+    #crop-modal .crop-bar { position: fixed; z-index: 3; box-sizing: border-box; visibility: hidden;
+                            display: flex; flex-direction: column; gap: 6px;
+                            width: min(230px, calc(100vw - 32px)); padding: 10px 12px; border-radius: 12px;
+                            background: rgba(20, 20, 20, 0.82); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5); }
+    #crop-modal .crop-bar.placed { visibility: visible; }
+    #crop-modal .crop-bar.docked { left: auto !important; top: auto !important;
+                                   right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); }
+    #crop-modal .crop-btns { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    /* 닫기 X — 슬라이드쇼(#slideshow-modal .close-modal)와 같은 자리·모양 */
+    /* 사이트 공통 button 규칙(style.css: padding 15px·margin-bottom 10px·파란 배경, 호버 효과)이 편집 창 버튼에도
+       먹어서 X 가 화면 폭 전체로 늘어나 상단 가운데에 보였다 → 편집 창 버튼은 그 값들을 직접 되돌린다 */
+    #crop-modal button { margin: 0; box-sizing: border-box; }
+    #crop-modal .crop-x { position: fixed; top: 16px; right: 16px; left: auto; width: auto; height: auto; z-index: 5;
+                          padding: 6px 10px; font-size: 2.2em; line-height: 1; color: #fff; background: none; border: none;
+                          border-radius: 0; box-shadow: none; cursor: pointer; opacity: 0.7; transition: opacity 0.16s; }
+    #crop-modal .crop-x:hover { opacity: 1; background: none; box-shadow: none !important; filter: none !important; transform: none !important; }
+    /* 이전/다음 화살표 — 슬라이드쇼와 같은 모양, 위치는 틀 좌우 모서리 바깥(layoutChrome) */
+    #crop-modal .crop-nav { position: fixed; z-index: 4; width: 48px; height: 48px; border: none; border-radius: 50%;
+                            display: flex; align-items: center; justify-content: center; padding: 0 0 4px;
+                            font-size: 2.4em; line-height: 1; color: #fff; background: rgba(0, 0, 0, 0.35);
+                            cursor: pointer; opacity: 0.65; user-select: none; visibility: hidden;
+                            transition: opacity 0.16s, background 0.16s; }
+    #crop-modal .crop-nav.placed { visibility: visible; }
+    /* 순번 — 슬라이드쇼(#slideshow-index)와 같은 자리·모양. 버튼 패널이 우하단에 붙는 좁은 화면에선 그 위로 올린다 */
+    #crop-modal .crop-index { position: fixed; bottom: 20px; right: 16px; z-index: 5; color: #fff; font-size: 13px;
+                              font-family: monospace; pointer-events: none; background: rgba(0, 0, 0, 0.45);
+                              padding: 2px 10px; border-radius: 4px; }
+    /* 파일명 — 슬라이드쇼(#slideshow-label)와 같은 자리·모양(좌하단) */
+    #crop-modal .crop-label { position: fixed; bottom: 20px; left: 16px; z-index: 5; color: #fff; font-size: 13px;
+                              font-family: monospace; pointer-events: none; background: rgba(0, 0, 0, 0.45);
+                              padding: 2px 10px; border-radius: 4px; max-width: calc(100% - 140px); box-sizing: border-box;
+                              white-space: normal; word-break: break-all; }   /* 파일명 전체, 길면 줄바꿈 */
+    #crop-modal .crop-label:empty { display: none; }
+    #crop-modal .crop-nav:hover { opacity: 1; background: rgba(0, 0, 0, 0.6); box-shadow: none !important; filter: none !important; transform: none !important; }
+    #crop-modal .crop-bar button { width: 100%; height: 42px; padding: 0 10px; border-radius: 8px; border: 1px solid #6e6e6e;
+                                   background: #3d3d3d; color: #fff; font-size: 15px; cursor: pointer; white-space: nowrap;
+                                   overflow: hidden; text-overflow: ellipsis; }
+    #crop-modal .crop-bar button.primary { background: #2f88ff; border-color: #2f88ff; color: #fff; }
+    #crop-modal .crop-bar button:not(:disabled):hover { filter: brightness(1.12); }
+    /* 덮개를 껐으니 테두리가 어떤 이미지 위에서도 보이게: 흰 선 + 바깥 어두운 선 */
+    /* 테두리: 얇고 덜 눈에 띄게(1px 반투명 흰 선). 바깥은 이미 어둡게 덮여 있어 이 정도로도 경계가 보인다 */
+    #crop-modal .cropper-view-box { outline: 1px solid rgba(255, 255, 255, 0.45); box-shadow: none; }
+    /* 틀 바깥 어둡게(Cropper 기본 0.5보다 조금 더 진하게) */
+    #crop-modal .cropper-modal { background-color: #000; opacity: 0.85; }
+    /* 3분할 안내선 — 흰 점선, Cropper 기본(0.5)보다 조금 진하게 */
+    #crop-modal .cropper-dashed { border-color: #fff; opacity: 0.6; }
+    #crop-modal .cropper-dashed.dashed-h { display: none; }   /* 가로 3분할 선은 숨기고 세로 선만 남긴다 */
+    #crop-modal .crop-layer.ratio-match .cropper-dashed { display: none; }   /* 원본이 이미 3:4 면 눈금 없음 */
+    #crop-modal .cropper-point { background-color: #fff; opacity: 0.55; }
+    #crop-modal .crop-bar button:disabled { opacity: 0.5; cursor: default; }
+    #crop-modal .crop-info { font-size: 13px; line-height: 1.3; height: 3.9em; overflow: hidden; color: #bbb; text-align: left;
+                             display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+    /* 편집 영역은 여백 없이 화면 전체 — 원본이 화면 모서리(세로 이미지는 위·아래, 가로 이미지는 좌·우)까지 꽉 차게
+       보인다. 남는 쪽은 어두운 배경이고, 그 배경이 화면 전체를 덮어 뒤 갤러리가 눌리지 않는다.
+       버튼 패널(.crop-bar)은 화면 우하단에 고정된다(이미지 크기·비교 화면과 무관하게 항상 같은 자리). */
+    #crop-modal .crop-panel { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;
+                              width: 100%; }
+    /* 편집 영역과 전후 비교 화면을 같은 자리에 겹쳐 둔다. 비교 중에도 편집 영역은 크기를 유지한 채 숨기만 해서
+       (visibility), 그 사이 새로 만드는 편집기(저장 직후 새 이미지 등)가 제 크기를 잴 수 있게 한다. */
+    #crop-modal .crop-stage { flex: 1; min-height: 0; position: relative; }
+    #crop-modal .crop-edit { position: absolute; inset: 0; }
+    /* 편집기는 레이어 단위로 만든다. 다음/이전 이미지는 새 레이어를 '보이지 않게(pending)' 완성해 두었다가 준비되면
+       한 번에 바꿔 끼운다 — 기존 편집기를 해체했다 다시 만드는 사이의 빈 화면·덮개 없는 이미지가 보이지 않는다. */
+    #crop-modal .crop-edit .crop-layer { position: absolute; inset: 0; }
+    #crop-modal .crop-edit .crop-layer.pending { visibility: hidden; pointer-events: none; }
+    #crop-modal .crop-edit .crop-layer > img { display: block; max-width: 100%; }
+</style>
+<div id="crop-modal" aria-hidden="true">
+  <div class="crop-panel">
+    <div class="crop-stage">
+        <div class="crop-edit" id="crop-edit"></div>
+    </div>
+    <button type="button" class="crop-x" id="crop-x-btn" title="닫기 (Esc)"><i class="fas fa-times"></i></button>
+    <button type="button" class="crop-nav" id="crop-prev-btn" title="이전 이미지 (←)">&#8249;</button>
+    <button type="button" class="crop-nav" id="crop-next-btn" title="다음 이미지 (→)">&#8250;</button>
+    <div class="crop-label" id="crop-label"></div>
+    <div class="crop-index" id="crop-index"></div>
+    <div class="crop-bar" id="crop-bar">
+        <span class="crop-info" id="crop-info">불러오는 중...</span>
+        <div class="crop-btns">
+            <button type="button" class="primary" id="crop-save-btn" disabled title="스페이스">확정(덮어쓰기)</button>
+            <button type="button" id="crop-restore-btn" style="visibility:hidden;" title="백스페이스">원본으로 되돌리기</button>
+            <button type="button" id="crop-move-btn" title="이미지 클릭과 같은 동작">refine으로 이동 ›</button>
+        </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+    const RATIO_W = 3, RATIO_H = 4;            // 1440x1920 = 3:4 (서버 CROP_RATIO 와 같아야 한다)
+    const modal = document.getElementById('crop-modal');
+    const editBox = document.getElementById('crop-edit');
+    // 휠 확대 단계: 기본 2%, Ctrl 을 누르고 휠이면 5%. Cropper 는 휠 이벤트마다 options.wheelZoomRatio 를 읽으므로,
+    // 그보다 먼저(capture, 바깥 요소) 실행되는 여기서 값만 바꿔 준다.
+    const WHEEL_STEP = 0.02, WHEEL_STEP_CTRL = 0.05;
+    editBox.addEventListener('wheel', (e) => {
+        if (cropper) cropper.options.wheelZoomRatio = e.ctrlKey ? WHEEL_STEP_CTRL : WHEEL_STEP;
+    }, { capture: true, passive: true });
+    // 편집 중 Ctrl+휠은 브라우저 화면 확대(페이지 줌)로 넘기지 않는다(버튼 패널 위 등 편집 영역 밖에서 돌려도)
+    document.addEventListener('wheel', (e) => {
+        if (e.ctrlKey && document.getElementById('crop-modal').classList.contains('open')) e.preventDefault();
+    }, { passive: false });
+    const info = document.getElementById('crop-info');
+    const saveBtn = document.getElementById('crop-save-btn');
+    const restoreBtn = document.getElementById('crop-restore-btn');
+    let cropper = null, state = null, saving = false;
+
+    // 출력 크기 = 화면에 보이는 자르기 틀의 실제 픽셀 크기(CSS px × 화면 배율)를 3:4 배수로 맞춘 값
+    function outUnit() {
+        const box = cropper.getCropBoxData();
+        return Math.max(1, Math.round(box.width * (window.devicePixelRatio || 1) / RATIO_W));
+    }
+    function payload(preview) {
+        const d = cropper.getData(true);    // 원본(회전 반영) 픽셀 좌표
+        return { dir: 'move', filename: state.filename, box: { x: d.x, y: d.y, w: d.width, h: d.height },
+                 unit: outUnit(), preview: !!preview };
+    }
+    // 화살표·버튼 패널을 지금 틀 위치에 맞춰 배치한다(틀이 움직이거나 크기가 바뀔 때마다 = updateInfo 때마다).
+    // [‹] [틀] [›] [패널] — 패널이 화면 오른쪽에 안 들어가면 우하단 고정(docked).
+    const bar = document.getElementById('crop-bar');
+    const prevBtn = document.getElementById('crop-prev-btn');
+    const nextBtn = document.getElementById('crop-next-btn');
+    const indexEl = document.getElementById('crop-index');
+    const labelEl = document.getElementById('crop-label');
+    function updateIndex() {
+        if (!state) { indexEl.textContent = ''; labelEl.textContent = ''; return; }
+        labelEl.textContent = state.filename;   // 파일명 전체(슬라이드쇼와 같음)
+        const idxOf = el => Number(el.dataset.index || 0);
+        const list = Array.from(document.querySelectorAll('#image-data .image-item img.thumbnail')).sort((a, b) => idxOf(a) - idxOf(b));
+        const cur = Number(state.item.querySelector('img.thumbnail')?.dataset.index || 0);
+        const pos = list.findIndex(el => idxOf(el) === cur);
+        indexEl.textContent = pos >= 0 ? `${pos + 1} / ${list.length}` : `- / ${list.length}`;
+    }
+    function layoutChrome() {
+        if (!cropper || !modal.classList.contains('open')) return;
+        const b = cropper.getCropBoxData();
+        const er = editBox.getBoundingClientRect();
+        const L = er.left + b.left, R = L + b.width, CY = er.top + b.top + b.height / 2;
+        const vw = window.innerWidth, vh = window.innerHeight, G = 12, A = 48, M = 8;
+        const navTop = Math.min(Math.max(M, CY - A / 2), vh - A - M) + 'px';
+        prevBtn.style.left = Math.max(M, L - G - A) + 'px';
+        prevBtn.style.top = navTop;
+        nextBtn.style.left = Math.min(vw - M - A, R + G) + 'px';
+        nextBtn.style.top = navTop;
+        prevBtn.classList.add('placed');
+        nextBtn.classList.add('placed');
+        const pw = bar.offsetWidth, ph = bar.offsetHeight, px = R + G + A + G;
+        if (px + pw <= vw - M) {
+            bar.classList.remove('docked');
+            bar.style.left = px + 'px';
+            bar.style.top = Math.min(Math.max(M, CY - ph / 2), vh - ph - M) + 'px';
+        } else {
+            bar.classList.add('docked');
+        }
+        bar.classList.add('placed');
+        // 패널이 우하단에 붙었으면 순번은 그 위로, 아니면 슬라이드쇼와 같은 우하단
+        indexEl.style.bottom = bar.classList.contains('docked') ? `${bar.offsetHeight + 28}px` : '';
+        labelEl.style.maxWidth = bar.classList.contains('docked')
+            ? `${Math.max(80, bar.getBoundingClientRect().left - 16 - 8)}px` : '';
+    }
+    window.addEventListener('resize', () => setTimeout(layoutChrome, 0));
+
+    function updateInfo() {
+        if (!cropper) return;
+        layoutChrome();
+        const d = cropper.getData(true), u = outUnit();
+        info.textContent = (state && state.notice ? state.notice + ' · ' : '')
+            + `영역 ${d.width}×${d.height} → 저장 ${RATIO_W * u}×${RATIO_H * u} (${RATIO_W}:${RATIO_H})`
+            + (RATIO_W * u > d.width ? ' · 확대' : '');
+    }
+    function teardown() {
+        if (cropper) { cropper.destroy(); cropper = null; }
+        editBox.innerHTML = '';             // 활성/준비 중 레이어 모두 정리
+        activeLayer = null;
+    }
+    // 상단바: 편집 시작 시 스크롤로 숨길 때와 같은 클래스(chrome-hidden)로 올리고, 닫으면 열기 전 상태로 되돌린다.
+    let chromeWasVisible = null;
+    function hideChromeForEdit() {
+        if (document.body.classList.contains('crop-editing')) return;   // 다음/이전 이미지로 넘어갈 때는 이미 숨김 상태
+        const bar = document.querySelector('[data-auto-hide="true"]');
+        chromeWasVisible = bar ? !bar.classList.contains('chrome-hidden') : null;
+        if (bar) { bar.classList.add('chrome-hidden'); bar.classList.remove('chrome-visible'); }
+        document.body.classList.remove('chrome-visible');
+        document.documentElement.classList.add('crop-editing');
+        document.body.classList.add('crop-editing');
+    }
+    function restoreChrome() {
+        document.documentElement.classList.remove('crop-editing');
+        document.body.classList.remove('crop-editing');
+        const bar = document.querySelector('[data-auto-hide="true"]');
+        if (bar && chromeWasVisible) {
+            bar.classList.add('chrome-visible'); bar.classList.remove('chrome-hidden');
+            document.body.classList.add('chrome-visible');
+        }
+        chromeWasVisible = null;
+    }
+    function close() {
+        modal.classList.remove('open');
+        [bar, prevBtn, nextBtn].forEach(el => el.classList.remove('placed'));
+        restoreChrome();
+        teardown();
+        state = null;
+    }
+    // 원본 주소. 매번 다른 캐시 회피값을 붙이면 미리 받아 둔 이미지를 못 쓰므로, 타일 주소의 v(편집 시각,
+    // 편집된 이미지에만 있음)를 그대로 붙인다 — 편집 후엔 주소가 바뀌어 새로 받고, 그 외엔 브라우저 캐시를 쓴다.
+    function originalUrl(item) {
+        const thumb = item.querySelector('img.thumbnail');
+        const enc = thumb.dataset.filename || thumb.alt;     // urlencode 된 상대경로
+        let v = '';
+        try { v = new URL(thumb.dataset.src || thumb.src, location.href).searchParams.get('v') || ''; } catch (e) { /* noop */ }
+        return `/image/images?filename=${enc}&dir=move&original=1` + (v ? `&v=${v}` : '');
+    }
+    // 다음/이전 원본을 미리 받아 둔다(최근 몇 장만 유지) → 넘길 때 기다림 없이 바로 뜬다
+    const preloaded = new Map();
+    function preload(url) {
+        if (preloaded.has(url)) return preloaded.get(url);
+        const p = new Promise((resolve, reject) => {
+            const im = new Image();
+            im.onload = () => resolve(im);
+            im.onerror = reject;
+            im.src = url;
+        });
+        preloaded.set(url, p);
+        p.catch(() => preloaded.delete(url));
+        while (preloaded.size > 6) preloaded.delete(preloaded.keys().next().value);
+        return p;
+    }
+    function prefetchNeighbors(item) {
+        [findNext(item), findPrev(item)].forEach(it => { if (it) preload(originalUrl(it)).catch(() => {}); });
+    }
+
+    let openToken = 0;
+    async function open(imageItem, opts = {}) {
+        const thumb = imageItem.querySelector('img.thumbnail');
+        if (!thumb) return;
+        const token = ++openToken;
+        const enc = thumb.dataset.filename || thumb.alt;
+        const url = originalUrl(imageItem);
+        state = { item: imageItem, filename: decodeURIComponent(enc), enc };
+        // 이 이미지에 origin/ 백업(= 한 번 이상 잘린 적 있음)이 있을 때만 '원본으로 되돌리기'를 보인다
+        restoreBtn.style.visibility = 'hidden';   // 자리는 남겨 둔다(패널 크기 고정)
+        fetch(`/image/crop-info?dir=move&filename=${enc}`)
+            .then(r => r.json())
+            .then(d => { if (token === openToken && d.has_origin) restoreBtn.style.visibility = 'visible'; })
+            .catch(() => {});
+        // 비교 화면·미리보기 결과만 정리하고 편집기(cropper)는 남겨 둔다 — 이미지를 바꾸는 동안 화면이 비지 않게
+        saveBtn.disabled = true;               // 새 편집기가 준비되면 바로 확정할 수 있다
+        hideChromeForEdit();
+        modal.classList.add('open');
+        info.textContent = opts.loadingText || '원본 불러오는 중...';
+        try {
+            await preload(url);
+        } catch (e) {
+            if (token === openToken) info.textContent = '원본을 불러오지 못했어요';
+            return;
+        }
+        if (token !== openToken) return;       // 기다리는 사이 다른 이미지로 넘어감(키를 빠르게 연타)
+        let built;
+        try {
+            built = await buildEditor(url, token);
+        } catch (e) {
+            if (token === openToken) info.textContent = '편집기를 만들지 못했어요';
+            return;
+        }
+        if (token !== openToken) { built.c.destroy(); built.layer.remove(); return; }
+        // 준비된 새 편집기를 보이게 하고 기존 것을 치운다 — 한 프레임 안에서 바뀌어 가운데 이미지만 교체된다
+        const old = { c: cropper, layer: activeLayer };
+        built.layer.classList.remove('pending');
+        cropper = built.c;
+        activeLayer = built.layer;
+        if (old.c) old.c.destroy();
+        if (old.layer) old.layer.remove();
+        state.url = url;
+        if (opts.notice) state.notice = opts.notice;
+        updateIndex();
+        updateInfo();
+        saveBtn.disabled = false;
+        prefetchNeighbors(imageItem);
+    }
+
+    // 틀 안을 끌어도 틀은 제자리에 두고 '뒤 이미지를 직접 끄는 것처럼' 같은 방향으로 이미지를 옮긴다 — 틀 바깥 끌기
+    // (Cropper 기본 dragMode 'move')와 방향이 같아서, 화면 어디를 끌어도 이미지가 손가락/마우스를 따라온다.
+    // viewMode 1 이라 틀이 이미지 밖으로 나가는 만큼은 더 움직이지 않는다. 틀 가장자리 선·모서리 핸들(크기 조절)은 그대로.
+    function attachPan(layer, c) {
+        const face = layer.querySelector('.cropper-face');
+        if (!face) return;
+        face.style.cursor = 'grab';
+        face.addEventListener('pointerdown', (e) => {
+            if (e.button !== undefined && e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();               // Cropper 의 기본 '틀 옮기기' 동작으로 넘기지 않는다
+            let lastX = e.clientX, lastY = e.clientY;
+            face.setPointerCapture(e.pointerId);
+            face.style.cursor = 'grabbing';
+            const move = (ev) => {
+                c.move(ev.clientX - lastX, ev.clientY - lastY);   // 끄는 방향 그대로(틀 바깥 끌기와 같은 방향)
+                lastX = ev.clientX;
+                lastY = ev.clientY;
+            };
+            const up = () => {
+                face.removeEventListener('pointermove', move);
+                face.removeEventListener('pointerup', up);
+                face.removeEventListener('pointercancel', up);
+                face.style.cursor = 'grab';
+                if (c === cropper) updateInfo();
+            };
+            face.addEventListener('pointermove', move);
+            face.addEventListener('pointerup', up);
+            face.addEventListener('pointercancel', up);
+        });
+    }
+
+    // 기록된 틀(lc.box = 원본 좌표 [x, y, w, h], lc.unit = 그때 출력 단위)을 편집기에 다시 씌운다.
+    // 확대 정도는 '틀이 화면에서 그때와 같은 크기'가 되게 맞춘다(= 저장 크기도 같아짐). 화면에 다 안 들어가면 들어가는 만큼만.
+    // viewMode 1 의 제한(틀은 이미지 안·이미지는 틀을 덮어야 함) 때문에 순서대로 옮기면 중간에 위치가 깎이므로,
+    // 잠깐 viewMode 0 으로 풀어 한 번에 배치하고 다시 1로 돌린다.
+    function applyFrame(c, lc) {
+        try {
+            const cont = c.getContainerData();
+            const dpr = window.devicePixelRatio || 1;
+            const [x, y, w, h] = lc.box;
+            if (!(w > 0 && h > 0)) return false;
+            let ratio = (RATIO_W * lc.unit / dpr) / w;              // 화면 px / 원본 px
+            ratio = Math.min(ratio, cont.width / w, cont.height / h);   // 화면을 넘지 않게만(꽉 찬 틀도 그대로 복원)
+            const bw = w * ratio, bh = h * ratio;
+            const left = (cont.width - bw) / 2, top = (cont.height - bh) / 2;
+            const vm = c.options.viewMode;
+            c.options.viewMode = 0;
+            c.zoomTo(ratio);
+            c.setCanvasData({ left: left - x * ratio, top: top - y * ratio });
+            c.setCropBoxData({ left, top, width: bw, height: bh });
+            c.options.viewMode = vm;
+            updateInfo();
+            return true;
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
+    }
+
+    // 보이지 않는 레이어에 새 편집기를 완성해서 돌려준다({layer, c}). 오래된 요청(token 불일치)은 스스로 정리한다.
+    let activeLayer = null;
+    function buildEditor(url, token) {
+        return new Promise((resolve, reject) => {
+            const layer = document.createElement('div');
+            layer.className = 'crop-layer pending';
+            const im = document.createElement('img');
+            im.alt = '';
+            layer.appendChild(im);
+            editBox.appendChild(layer);
+            im.onerror = () => { layer.remove(); reject(new Error('load')); };
+            im.onload = () => {
+                if (token !== openToken) { layer.remove(); reject(new Error('stale')); return; }
+                const c = new Cropper(im, {
+                    aspectRatio: RATIO_W / RATIO_H, viewMode: 1, dragMode: 'move', autoCropArea: 1,
+                    background: false, responsive: true, zoomable: true, toggleDragModeOnDblclick: false,
+                    // 틀 바깥만 어둡게(modal), 틀 안은 덮개 없이 원본 그대로(highlight 끔) — 틀 안이 뿌옇게 보이지 않는다.
+                    // 3분할 안내선(guides)과 가운데 십자(center)는 끈다(2026-10-02 사용자 요청 — 눈금 없이 테두리만).
+                    // 어둡기·테두리 색은 CSS(.cropper-modal/.cropper-view-box)
+                    modal: true, highlight: false, guides: false, center: false,
+                    // 틀 자체는 끌어서 옮기지 않는다(cropBoxMovable:false) — 틀 안을 끌어도 이미지가 끄는 방향으로 움직인다(attachPan)
+                    cropBoxMovable: false,
+                    wheelZoomRatio: WHEEL_STEP,        // 휠 한 칸 = 2% 확대/축소(Ctrl+휠은 5% — 위 editBox wheel 핸들러)
+                    ready: () => {
+                        // 원본이 이미 3:4(오차 0.5% 이내 — 예: 이미 잘라 둔 1440x1920)면 3분할 눈금을 숨긴다
+                        const d = c.getImageData();
+                        const a = d.naturalWidth * RATIO_H, b = d.naturalHeight * RATIO_W;
+                        layer.classList.toggle('ratio-match', Math.abs(a - b) <= 0.005 * Math.max(a, b));
+                        attachPan(layer, c);
+                        resolve({ layer, c });
+                    },
+                    // 준비 중인(아직 안 보이는) 편집기의 이벤트는 무시한다 — 안내 문구는 화면에 보이는 편집기 기준
+                    crop: () => { if (c === cropper) updateInfo(); },
+                    zoom: () => { if (c === cropper) setTimeout(updateInfo, 0); },
+                });
+            };
+            im.src = url;                      // preload 로 이미 받아 둔 주소라 캐시에서 바로 뜬다
+        });
+    }
+
+    // 틀이 이미지 전체와 같은 크기·위치인지(원본 픽셀 기준 ±2px)
+    function frameCoversImage() {
+        if (!cropper) return false;
+        const d = cropper.getData(true), im = cropper.getImageData();
+        return Math.abs(d.x) <= 2 && Math.abs(d.y) <= 2
+            && Math.abs(d.width - im.naturalWidth) <= 2 && Math.abs(d.height - im.naturalHeight) <= 2;
+    }
+
+    // 화면(masonry)에 그려진 이미지 타일 중 지금 것 다음/이전(data-index 순). 다음이 아직 안 그려졌으면 더 그려서 찾는다.
+    function itemIndex(it) { return Number(it.querySelector('img.thumbnail')?.dataset.index || 0); }
+    function croppableItems() {
+        return Array.from(document.querySelectorAll('#masonry .image-item'))
+            .filter(it => it.querySelector('.crop-btn') && it.querySelector('img.thumbnail'))
+            .sort((x, y) => itemIndex(x) - itemIndex(y));
+    }
+    function findNext(cur) {
+        const ci = itemIndex(cur);
+        let next = croppableItems().find(it => itemIndex(it) > ci);
+        if (!next && typeof preloadAheadOfSlide === 'function') {
+            preloadAheadOfSlide(ci);
+            next = croppableItems().find(it => itemIndex(it) > ci);
+        }
+        return next;
+    }
+    function findPrev(cur) {
+        const ci = itemIndex(cur);
+        return croppableItems().filter(it => itemIndex(it) < ci).pop();
+    }
+    function goNext() {
+        if (!state) return;
+        const next = findNext(state.item);
+        if (!next) { info.textContent = '마지막 이미지예요'; return; }
+        open(next);
+    }
+    function goPrev() {
+        if (!state) return;
+        const prev = findPrev(state.item);
+        if (!prev) { info.textContent = '첫 이미지예요'; return; }
+        open(prev);
+    }
+
+    // 편집 창이 열려 있는 동안 키 입력은 여기서만 처리한다(capture 단계에서 가로챔). 페이지에 걸린
+    // 방향키/PageUp·Down(가운데 이미지 이동)과 Enter(가운데 이미지를 refine 으로 이동)가 뒤에서 같이
+    // 동작하면 편집 중인 목록이 바뀌거나 이미지가 옮겨지므로, 편집 중에는 페이지 핸들러로 넘기지 않는다.
+    document.addEventListener('keydown', (e) => {
+        if (!modal.classList.contains('open')) return;
+        e.stopImmediatePropagation();
+        switch (e.key) {
+            case 'ArrowRight':
+            case 'PageDown':
+                e.preventDefault();
+                goNext();
+                break;
+            case 'ArrowLeft':
+            case 'PageUp':
+                e.preventDefault();
+                goPrev();
+                break;
+            case 'Escape':
+                e.preventDefault();
+                close();
+                break;
+            case ' ':
+            case 'Enter':
+                e.preventDefault();
+                if (e.repeat) break;              // 누르고 있어도 1번만
+                // 스페이스·엔터 = 확정(덮어쓰기). 단 틀이 이미지 전체와 같으면(자를 게 없음 — 이미 3:4 로 맞춰진 이미지 등)
+                // 갤러리 클릭과 같은 'refine 으로 이동'을 한다.
+                if (frameCoversImage()) moveBtn.click();
+                else if (!saveBtn.disabled) saveBtn.click();
+                break;
+            case 'Backspace':
+                e.preventDefault();               // 브라우저 '뒤로 가기' 방지
+                // 백스페이스 = 원본으로 되돌리기(버튼이 보일 때 = origin/ 백업이 있을 때만). 누르고 있어도 1번만
+                if (!e.repeat && !restoreBtn.disabled && restoreBtn.style.visibility === 'visible') restoreBtn.click();
+                break;
+            case 'ArrowUp':
+            case 'ArrowDown':
+                e.preventDefault();       // 페이지 스크롤·가운데 이미지 이동 방지
+                break;
+        }
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.crop-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();               // 타일 클릭(= refine 으로 이동)으로 번지지 않게
+        const item = btn.closest('.image-item');
+        if (item) open(item);
+    }, true);
+
+    document.getElementById('crop-x-btn').onclick = close;
+    prevBtn.onclick = goPrev;
+    nextBtn.onclick = goNext;
+    // 갤러리에서 이미지를 클릭했을 때와 같은 동작(moveAndRemove: refine 폴더로 이동 + 목록에서 제거)을 편집 창에서 한다.
+    // 지금 이미지가 목록에서 빠지므로, 이동 전에 다음(없으면 이전) 이미지를 찾아 두었다가 바로 연다.
+    const moveBtn = document.getElementById('crop-move-btn');
+    moveBtn.onclick = () => {
+        if (!state || typeof moveAndRemove !== 'function') return;
+        const item = state.item;
+        const thumb = item.querySelector('img.thumbnail');
+        if (!thumb) return;
+        const target = findNext(item) || findPrev(item);
+        moveAndRemove(item, thumb.getAttribute('data-filename'), thumb.getAttribute('data-index'));
+        if (target) open(target, { notice: 'refine으로 옮겼어요 ✓' });
+        else close();
+    };
+
+    // origin/ 의 최초 원본으로 되돌린 뒤, 되돌린 이미지로 편집기를 다시 연다(확인창 없이 바로 진행)
+    restoreBtn.onclick = async () => {
+        if (!state) return;
+        restoreBtn.disabled = true;
+        info.textContent = '원본으로 되돌리는 중...';
+        try {
+            const res = await fetch('/image/crop-restore', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                           body: JSON.stringify({ dir: 'move', filename: state.filename }) });
+            const data = await res.json();
+            if (!res.ok || data.status !== 'success') throw new Error(data.message || res.status);
+            const thumb = state.item.querySelector('img.thumbnail');
+            const url = `/image/images?filename=${state.enc}&dir=move&v=${data.v}`;   // 새 버전값으로 캐시 회피
+            if (thumb) { thumb.src = url; thumb.dataset.src = url; }
+            await open(state.item);                // 새 v 가 붙은 원본 주소로 다시 불러온다
+            // 마지막으로 확정했던 틀이 기록돼 있으면 같은 위치·크기·확대로 다시 씌운다 → 그 틀에서 조금만 움직여 다시 확정
+            const framed = !!(data.last_crop && cropper && applyFrame(cropper, data.last_crop));
+            // 편집기 ready/crop 이벤트가 안내 문구를 크기 정보로 덮어쓰므로, 상태에 남겨 크기 정보 앞에 붙인다
+            if (state) { state.notice = framed ? '원본으로 되돌렸어요 ✓ · 이전 틀 복원' : '원본으로 되돌렸어요 ✓'; updateInfo(); }
+        } catch (err) {
+            info.textContent = '되돌리기 실패: ' + err.message;
+        } finally {
+            restoreBtn.disabled = false;
+        }
+    };
+
+    saveBtn.onclick = async () => {
+        if (!cropper || saving) return;     // 확인창 없이 바로 저장(원본은 move/origin 에 보관된다)
+        saving = true;
+        saveBtn.disabled = true;
+        info.textContent = '저장 중...';
+        try {
+            const res = await fetch('/image/crop-image', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                         body: JSON.stringify(payload(false)) });
+            const data = await res.json();
+            if (!res.ok || data.status !== 'success') throw new Error(data.message || res.status);
+            const thumb = state.item.querySelector('img.thumbnail');
+            const url = `/image/images?filename=${state.enc}&dir=move&v=${data.v}`;   // 새 버전값으로 캐시 회피
+            if (thumb) { thumb.src = url; thumb.dataset.src = url; }
+            // 저장된 새 파일(새 v)로 편집기를 바로 다시 연다 — 같은 창에서 바뀐 이미지를 불러온 것처럼 보이고,
+            // 이어서 다시 자르면 저장된 파일 기준 좌표라 어긋나지 않는다. 새 편집기가 준비될 때까지는 지금 편집기가
+            // 그대로 보이다가 한 번에 바뀐다(빈 화면 없음).
+            const sz = `${data.size[0]}×${data.size[1]}`;
+            await open(state.item, { loadingText: `저장했어요 ✓ (${sz}) — 새 이미지 불러오는 중...`,
+                                     notice: `저장했어요 ✓ (${sz})` });
+            updateInfo();
+        } catch (err) {
+            info.textContent = '저장 실패: ' + err.message;
+            saveBtn.disabled = false;
+        } finally {
+            saving = false;
+        }
+    };
+})();
+</script>
+{% endif %}
 <script src="/static/js/ui_chrome.js?v={{ version }}"></script>
 </body>
 </html>

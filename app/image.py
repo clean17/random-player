@@ -128,7 +128,8 @@ def get_images(start, count, page, dir, image_arr=None):
         full_paths = []
 
         for root, dirs, files in os.walk(dir):
-            dirs[:] = [d for d in dirs if d != 'thumb']
+            # thumb: 썸네일 / origin: 자르기 전 원본 백업(crop-image) — 둘 다 갤러리 목록에 넣지 않는다
+            dirs[:] = [d for d in dirs if d not in ('thumb', 'origin')]
             for f in files:
                 if f.lower().endswith(EXCLUDE_SUFFIXES):
                     continue
@@ -600,6 +601,304 @@ def move_image():
     else:
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
+
+
+# ── 이미지 자르기(dir=move) ──────────────────────────────────────────────────
+# 갤러리에서 영역을 골라 3:4 비율로 잘라 **같은 파일명으로 덮어쓴다**(2026-10-02, 사용자 요청).
+#  - 원본은 <base_dir>/origin/<상대경로> 에 1회만 백업한다(이미 있으면 그게 최초 원본이라 덮지 않는다).
+#    origin/ 은 갤러리 목록(get_images)과 썸네일 생성(utils/image_thumbs.py)에서 제외된다.
+#  - 리샘플: 확대는 BICUBIC + 넓고 약한 언샤프(부드럽되 선명도는 유지), 축소는 LANCZOS 만(_render_crop 참고).
+#  - 포맷은 확장자 그대로: PNG 는 무손실, JPG 는 품질 95·크로마 서브샘플링 없음, WEBP 는 품질 95.
+#  - 원본의 수정시각을 유지한다(move 갤러리는 수정시각 순 정렬이라, 바꾸면 편집한 이미지가 맨 뒤로 튄다).
+#    그래서 브라우저 캐시(1일) 회피용 버전값은 수정시각이 아니라 '편집한 시각'을 따로 기록해 쓴다(img_v).
+#  - 저장 즉시 썸네일(thumb/<이름>.webp)도 새로 만든다.
+CROP_RATIO = (3, 4)            # 1440x1920 = 3:4 (최대공약수 480). 2026-10-02 53:72(1060x1440)에서 변경
+CROP_DIRS = ('move',)
+CROP_MAX_UNIT = 2000           # 출력 최대 6000 x 8000
+_CROP_FORMATS = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.jfif': 'JPEG', '.png': 'PNG', '.webp': 'WEBP'}
+_EDIT_VER_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              'logs', 'image_edits', 'versions.json')
+
+
+def _load_edit_versions():
+    try:
+        with open(_EDIT_VER_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+_edit_versions = _load_edit_versions()
+
+# 마지막으로 확정한 틀(최초 원본 기준 좌표)과 출력 단위. '원본으로 되돌리기' 때 같은 틀을 다시 씌우는 데 쓴다.
+# 두 번 이상 자른 경우에도 최초 원본(origin/) 좌표로 환산해 저장하므로, 되돌린 원본 위에 정확히 같은 영역이 잡힌다.
+_CROP_HIST_PATH = os.path.join(os.path.dirname(_EDIT_VER_PATH), 'crop_history.json')
+try:
+    with open(_CROP_HIST_PATH, 'r', encoding='utf-8') as _f:
+        _crop_history = json.load(_f)
+except (OSError, ValueError):
+    _crop_history = {}
+
+
+def _save_crop_history():
+    try:
+        os.makedirs(os.path.dirname(_CROP_HIST_PATH), exist_ok=True)
+        with open(_CROP_HIST_PATH + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump(_crop_history, f, ensure_ascii=False)
+        os.replace(_CROP_HIST_PATH + '.tmp', _CROP_HIST_PATH)
+    except OSError as e:
+        print(f'[WARN] crop history save failed: {e}')
+
+
+def _origin_box(key, used_box, cur_size, had_backup):
+    """이번 틀(used_box, 지금 파일 좌표)을 최초 원본 좌표로 환산. 지금 파일이 이미 한 번 잘린 결과면
+    (had_backup) 직전 기록(원본에서 어떤 영역을 어떤 크기로 만들었는지)으로 거꾸로 환산한다. 모르면 None."""
+    x, y, w, h = used_box
+    if not had_backup:
+        return [x, y, w, h]
+    prev = _crop_history.get(key)
+    if not prev or list(prev.get('out') or []) != list(cur_size):
+        return None                       # 직전 결과 크기와 다르면(기록 없음/다른 경로로 바뀜) 환산 불가
+    px, py, pw, ph = prev['box']
+    sx, sy = pw / cur_size[0], ph / cur_size[1]
+    return [px + x * sx, py + y * sy, w * sx, h * sy]
+
+
+@image_bp.app_template_global('img_v')
+def img_v(dir, filename):
+    """편집된 이미지만 캐시 회피용 버전값(편집 시각). 편집 안 된 이미지는 None → url_for 가 v 를 빼고 만든다."""
+    return _edit_versions.get(f'{dir}/{filename}')
+
+
+def _soften_jaggies(img):
+    """확대 결과의 계단현상(원본 픽셀·JPG 블록이 커진 경계)을 경계 보존 블러(양방향 필터)로 완화한다.
+    평평한 곳과 경계 주변의 들쭉날쭉함만 고르게 하고 뚜렷한 경계는 남긴다. 2026-10-03 사용자 요청(D안):
+    move 실사진 2배 확대 비교에서 Bicubic 만 쓴 것보다 계단이 줄고 질감은 대부분 유지, 1080x1440 기준 약 40ms.
+    색 거리만 보는 필터라 RGB/BGR 순서와 무관하고, 투명도(알파)는 건드리지 않는다."""
+    import numpy as np
+    import cv2
+    from PIL import Image
+    if img.mode == 'RGBA':
+        rgb, alpha = img.convert('RGB'), img.getchannel('A')
+    else:
+        rgb, alpha = img.convert('RGB'), None
+    out = Image.fromarray(cv2.bilateralFilter(np.asarray(rgb), 7, 25, 7))
+    if alpha is not None:
+        out.putalpha(alpha)
+    return out
+
+
+def _render_crop(src_path, box, out_w, out_h):
+    """원본(EXIF 회전 반영)에서 box=(x, y, w, h)를 잘라 (out_w, out_h)로 리샘플한 PIL 이미지."""
+    from PIL import Image, ImageOps
+    with Image.open(src_path) as im:
+        im = ImageOps.exif_transpose(im)
+        W, H = im.size
+        x, y, w, h = box
+        w = max(1, min(int(round(w)), W))
+        h = max(1, min(int(round(h)), H))
+        x = max(0, min(int(round(x)), W - w))
+        y = max(0, min(int(round(y)), H - h))
+        if im.mode not in ('RGB', 'RGBA'):
+            has_alpha = im.mode in ('LA', 'PA') or (im.mode == 'P' and 'transparency' in im.info)
+            im = im.convert('RGBA' if has_alpha else 'RGB')
+        region = im.crop((x, y, x + w, y + h))
+        if out_w > w:
+            # 확대: BICUBIC 만, 선명화 없음(2026-10-03 사용자 요청). LANCZOS 는 확대 시 경계에 밝고 어두운 띠(링잉)를
+            # 만들어 날카롭게 보인다. 경과: LANCZOS+UnsharpMask(1.0,50%) → BICUBIC+UnsharpMask(1.6) 20→15→12→9→5% → 없음.
+            # move 실사진 8장 기준 날카로움(처음 방식=100%): 지금 66% / 5% 언샤프 68% / BILINEAR 53%(확연히 흐림).
+            out = _soften_jaggies(region.resize((out_w, out_h), Image.BICUBIC))
+        else:
+            # 축소: LANCZOS 만으로 충분히 선명하다 — 추가 선명화는 과해진다
+            out = region.resize((out_w, out_h), Image.LANCZOS)
+        icc = im.info.get('icc_profile')
+    return out, icc, (x, y, w, h), (W, H)
+
+
+def _save_image(img, path, fmt, icc=None):
+    kw = {}
+    if icc:
+        kw['icc_profile'] = icc
+    if fmt == 'JPEG':
+        img.convert('RGB').save(path, 'JPEG', quality=95, subsampling=0, optimize=True, **kw)
+    elif fmt == 'PNG':
+        # 무손실(압축 수준은 크기·속도만 바꾼다). 2026-10-03 optimize=True → compress_level=6 → 3:
+        # move 실제 PNG 1080x1440 기준 저장 2,251ms → 196ms, 파일 +8% (자르기 확정이 매번 2~3초 걸리던 원인)
+        img.save(path, 'PNG', compress_level=3, **kw)
+    else:
+        img.save(path, 'WEBP', quality=95, method=6, **kw)
+
+
+@image_bp.route('/crop-image', methods=['POST'], endpoint='crop-image')
+@login_required
+@_log_slow()
+def crop_image():
+    """payload: dir, filename, box{x,y,w,h}(원본 픽셀, EXIF 회전 반영 후 좌표), unit(출력 = CROP_RATIO 각 항 × unit),
+    preview(true면 결과 이미지만 돌려주고 파일은 건드리지 않는다)."""
+    if hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']:
+        return jsonify({'status': 'error', 'message': 'forbidden'}), 403
+    p = request.get_json(silent=True) or {}
+    dir_ = p.get('dir')
+    filename = urllib.parse.unquote(p.get('filename') or '')
+    if dir_ not in CROP_DIRS or not filename:
+        return jsonify({'status': 'error', 'message': 'invalid dir/filename'}), 400
+    base = DIR_CONFIG[dir_].base_dir
+    try:
+        src = safe_path_join(base, filename)
+        b = p.get('box') or {}
+        box = (float(b['x']), float(b['y']), float(b['w']), float(b['h']))
+        unit = int(p.get('unit'))
+    except (ValueError, KeyError, TypeError):
+        return jsonify({'status': 'error', 'message': 'invalid parameters'}), 400
+    fmt = _CROP_FORMATS.get(os.path.splitext(src)[1].lower())
+    if fmt is None or not os.path.isfile(src):
+        return jsonify({'status': 'error', 'message': 'unsupported or missing file'}), 400
+    unit = max(1, min(unit, CROP_MAX_UNIT))
+    out_w, out_h = CROP_RATIO[0] * unit, CROP_RATIO[1] * unit
+
+    with _timed('render'):
+        img, icc, used_box, orig_size = _render_crop(src, box, out_w, out_h)
+
+    if p.get('preview'):
+        buf = io.BytesIO()
+        _save_image(img, buf, fmt, icc)
+        buf.seek(0)
+        resp = send_file(buf, mimetype={'JPEG': 'image/jpeg', 'PNG': 'image/png'}.get(fmt, 'image/webp'))
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
+    rel = os.path.relpath(src, os.path.realpath(base)).replace(os.sep, '/')
+    st = os.stat(src)
+    with _timed('backup'):
+        backup = os.path.normpath(os.path.join(base, 'origin', rel))
+        had_backup = os.path.exists(backup)
+        if not had_backup:                    # 최초 원본만 보관(두 번째 편집부터는 이미 있는 백업을 유지)
+            os.makedirs(os.path.dirname(backup), exist_ok=True)
+            shutil.copy2(src, backup)
+    with _timed('save'):
+        tmp = src + '.croptmp'
+        _save_image(img, tmp, fmt, icc)
+        # Windows 는 다른 요청이 그 파일을 읽는 중(열린 핸들)이면 교체를 거부한다 — 잠깐 재시도하고,
+        # 그래도 안 되면 원본은 그대로 두고 오류를 돌려준다.
+        for attempt in range(5):
+            try:
+                os.replace(tmp, src)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+                    return jsonify({'status': 'error', 'message': '파일이 사용 중이라 저장하지 못했어요. 잠시 후 다시 시도해 주세요'}), 409
+                time.sleep(0.3)
+        os.utime(src, (st.st_atime, st.st_mtime))   # 원본 수정시각 유지 → 갤러리 순서 그대로
+    with _timed('thumb'):
+        _rebuild_thumb(base, rel, src)
+    hist_key = f'{dir_}/{filename}'
+    obox = _origin_box(hist_key, used_box, orig_size, had_backup)
+    if obox is None:
+        _crop_history.pop(hist_key, None)
+    else:
+        _crop_history[hist_key] = {'box': [round(v, 2) for v in obox], 'unit': unit, 'out': [out_w, out_h]}
+    _save_crop_history()
+    ver = _bump_edit_version(dir_, filename)
+    return jsonify({'status': 'success', 'v': ver, 'size': [out_w, out_h], 'box': list(used_box),
+                    'original_size': list(orig_size), 'has_origin': True})
+
+
+def _rebuild_thumb(base, rel, src):
+    """편집/복원 직후 썸네일을 다시 만든다. utils/image_thumbs.py 와 같은 규칙: 이미 작으면(가로 800 이하 +
+    200KB 이하) 썸네일 없이 원본을 그대로 보내고, 썸네일이 원본보다 커지면 만들지 않는다."""
+    from utils.image_thumbs import make_thumb, probe, thumb_path, THUMB_WIDTH, SMALL_BYTES
+    tp = os.path.normpath(thumb_path(base, rel))
+    size = os.path.getsize(src)
+    width = probe(src)[0]
+    data = None if (width <= THUMB_WIDTH and size <= SMALL_BYTES) else make_thumb(src)
+    if data is None or len(data) >= size:
+        if os.path.exists(tp):
+            os.remove(tp)
+        return
+    os.makedirs(os.path.dirname(tp), exist_ok=True)
+    with open(tp + '.tmp', 'wb') as f:
+        f.write(data)
+    os.replace(tp + '.tmp', tp)
+
+
+def _bump_edit_version(dir_, filename):
+    """캐시 회피용 버전값(편집/복원 시각)을 기록하고 돌려준다.
+    밀리초 단위 + 같은 파일은 항상 이전 값보다 크게 — 초 단위였을 때 확정과 되돌리기가 같은 1초 안에 일어나면
+    버전값이 같아져, 브라우저가 되돌린 원본 대신 방금 받은 잘린 이미지를 캐시에서 그대로 보여줬다(틀이 엉뚱하게 튐)."""
+    key = f'{dir_}/{filename}'
+    ver = max(int(time.time() * 1000), int(_edit_versions.get(key) or 0) + 1)
+    _edit_versions[key] = ver
+    try:
+        os.makedirs(os.path.dirname(_EDIT_VER_PATH), exist_ok=True)
+        with open(_EDIT_VER_PATH + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump(_edit_versions, f, ensure_ascii=False)
+        os.replace(_EDIT_VER_PATH + '.tmp', _EDIT_VER_PATH)
+    except OSError as e:
+        print(f'[WARN] edit version save failed: {e}')
+    return ver
+
+
+def _crop_paths(dir_, filename):
+    """(base, src, rel, backup) — 잘못된 dir/경로면 ValueError."""
+    if dir_ not in CROP_DIRS or not filename:
+        raise ValueError('invalid dir/filename')
+    base = DIR_CONFIG[dir_].base_dir
+    src = safe_path_join(base, filename)
+    rel = os.path.relpath(src, os.path.realpath(base)).replace(os.sep, '/')
+    backup = os.path.normpath(os.path.join(base, 'origin', rel))
+    return base, src, rel, backup
+
+
+@image_bp.route('/crop-info', methods=['GET'], endpoint='crop-info')
+@login_required
+def crop_info():
+    """편집 창이 '원본으로 되돌리기' 버튼을 보일지 정하는 용도 — origin/ 에 백업이 있는지."""
+    try:
+        _, _, _, backup = _crop_paths(request.args.get('dir'), urllib.parse.unquote(request.args.get('filename') or ''))
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'invalid dir/filename'}), 400
+    return jsonify({'status': 'success', 'has_origin': os.path.isfile(backup)})
+
+
+@image_bp.route('/crop-restore', methods=['POST'], endpoint='crop-restore')
+@login_required
+@_log_slow()
+def crop_restore():
+    """origin/ 의 백업을 원래 자리로 되돌린다(백업 파일을 그대로 옮기므로 내용·수정시각 모두 최초 원본).
+    되돌린 뒤에는 백업이 없어지고, 다시 자르면 그때 새로 백업된다."""
+    if hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']:
+        return jsonify({'status': 'error', 'message': 'forbidden'}), 403
+    p = request.get_json(silent=True) or {}
+    dir_ = p.get('dir')
+    filename = urllib.parse.unquote(p.get('filename') or '')
+    try:
+        base, src, rel, backup = _crop_paths(dir_, filename)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'invalid dir/filename'}), 400
+    if not os.path.isfile(backup):
+        return jsonify({'status': 'error', 'message': '되돌릴 원본 백업이 없어요'}), 404
+    with _timed('restore'):
+        for attempt in range(5):           # 다른 요청이 파일을 읽는 중이면 Windows 가 교체를 거부한다
+            try:
+                os.replace(backup, src)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    return jsonify({'status': 'error', 'message': '파일이 사용 중이라 되돌리지 못했어요. 잠시 후 다시 시도해 주세요'}), 409
+                time.sleep(0.3)
+    with _timed('thumb'):
+        _rebuild_thumb(base, rel, src)
+    ver = _bump_edit_version(dir_, filename)
+    # 마지막 확정 틀(원본 좌표)을 돌려줘서 편집 창이 같은 틀을 다시 씌우게 한다. 원본으로 돌아갔으니 기록은 지운다
+    # (다음 확정은 원본에서 새로 시작 → 그때 다시 기록된다).
+    last = _crop_history.pop(f'{dir_}/{filename}', None)
+    _save_crop_history()
+    return jsonify({'status': 'success', 'v': ver, 'has_origin': False,
+                    'last_crop': {'box': last['box'], 'unit': last['unit']} if last else None})
 
 
 # @image_bp.route('/delete-images/<path:filename>', methods=['POST'], endpoint='delete-images')

@@ -97,7 +97,7 @@ def scan(base):
     """(이미지 후보 [(경로, 상대경로, 크기)], 영상 수, 기타 수). thumb/ 폴더는 건너뛴다."""
     imgs, videos, others = [], 0, 0
     for root, dirs, files in os.walk(base):
-        dirs[:] = [d for d in dirs if d.lower() != 'thumb']
+        dirs[:] = [d for d in dirs if d.lower() not in ('thumb', 'origin')]   # origin: 자르기 전 원본 백업
         for f in files:
             ext = os.path.splitext(f)[1].lower()
             if ext in EXCLUDE_EXT:
