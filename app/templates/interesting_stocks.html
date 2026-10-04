@@ -2190,22 +2190,27 @@
 
     async function loadPicksLivePrices(picks) {
         const token = ++msPicksLiveToken;
-        // 종목당 1회 조회라 한꺼번에 쏘지 않고 순서대로 부른다(키움 레이트리밋 보호).
+        // 2026-10-05: 종목당 1회씩 순서대로 부르던 것을 키움 ka10095(다종목 조회) 1회로 바꿨다.
+        const codes = picks.map(p => p.stock_code).filter(c => c && !msPicksLivePrice.has(c));
+        if (!codes.length) return;
+        let prices = {};
+        try {
+            const res = await fetch(`/stocks/kiwoom/prices?stk_cd=${encodeURIComponent(codes.join(','))}${msEnvQuery('&')}`);
+            if (!res.ok) throw new Error('조회 실패');
+            prices = (await res.json()).prices || {};
+        } catch (e) {
+            // 실패하면 '조회 중...'이 영원히 남지 않게 아래에서 '-'로 채운다
+        }
+        if (token !== msPicksLiveToken) return;   // 그 사이 다른 날짜를 골랐으면 버린다
         for (const p of picks) {
-            if (token !== msPicksLiveToken) return;
-            if (!p.stock_code || msPicksLivePrice.has(p.stock_code)) continue;
-            try {
-                const res = await fetch(`/stocks/kiwoom/price?stk_cd=${encodeURIComponent(p.stock_code)}${msEnvQuery('&')}`);
-                if (!res.ok) throw new Error('조회 실패');
-                const data = await res.json();
-                if (!data.price) continue;
-                msPicksLivePrice.set(p.stock_code, Number(data.price));
-            } catch (e) {
-                continue;
-            }
-            if (token !== msPicksLiveToken) return;
+            if (!p.stock_code) continue;
             const cell = document.querySelector(`#table-picks td.picks-live[data-stock-code="${p.stock_code}"]`);
-            if (cell) cell.innerHTML = msPicksLiveCellHtml(p);
+            if (prices[p.stock_code]) {
+                msPicksLivePrice.set(p.stock_code, Number(prices[p.stock_code]));
+                if (cell) cell.innerHTML = msPicksLiveCellHtml(p);
+            } else if (cell) {
+                cell.textContent = '-';
+            }
         }
     }
 

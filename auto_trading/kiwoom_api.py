@@ -520,6 +520,37 @@ def get_current_price(stk_cd: str) -> int:
     return get_current_price_and_name(stk_cd)[0]
 
 
+# 2026-10-05 실측(ka10095 관심종목정보요청, /api/dostk/stkinfo): stk_cd에 '005930|000660'처럼 '|'로
+# 이어 보내면 한 번에 받는다. 100종목까지 되고(101개는 응답에 atn_stk_infr 자체가 없음) 100종목도
+# 0.14초 — 단건(ka10001)을 종목 수만큼 부르던 것(레이트리밋으로 약 0.15초×N)을 1회로 줄인다.
+# 응답은 요청 순서 그대로이고, 없는 종목코드는 stk_cd/cur_prc가 빈 문자열인 행으로 온다.
+# cur_prc엔 전일 대비 부호(+/-)가 붙어 있어 abs 처리한다(ka10001과 같다 — 단건과 값 일치 확인).
+_BULK_PRICE_MAX = 100
+
+
+def get_current_prices(stk_cds: List[str], env: Optional[str] = None) -> Dict[str, int]:
+    """종목코드들의 현재가(원)를 한 번에 조회해 {코드: 가격}으로 반환. 조회 실패·없는 종목은 빼고 돌려준다.
+    100종목씩 나눠 호출하고, 한 묶음이 실패해도 나머지는 계속한다."""
+    codes = []
+    for c in stk_cds:
+        c = (c or '').strip()
+        if c and c not in codes:
+            codes.append(c)
+    out: Dict[str, int] = {}
+    for i in range(0, len(codes), _BULK_PRICE_MAX):
+        chunk = codes[i:i + _BULK_PRICE_MAX]
+        try:
+            data = _call('ka10095', '/api/dostk/stkinfo', {'stk_cd': '|'.join(chunk)}, env=env)
+        except Exception as e:
+            print(f'[ERROR] get_current_prices {len(chunk)}종목: {e}')
+            continue
+        for code, row in zip(chunk, data.get('atn_stk_infr') or []):   # 요청 순서 = 응답 순서
+            raw = str(row.get('cur_prc') or '').replace(',', '').replace('+', '').replace('-', '')
+            if raw.isdigit() and int(raw) > 0:
+                out[code] = int(raw)
+    return out
+
+
 # ── 종목 상태(투자경고/관리종목/거래정지 등) 조회 (ka10099) ─────────────────────
 # 2026-09-02 실측: ka10001엔 이 정보가 없다. ka10099(mrkt_tp='0' 코스피/'10' 코스닥)의
 # 응답 list[].auditInfo 가 '정상'/'거래정지'/'관리종목'/'투자주의환기종목'/'투자경고'/

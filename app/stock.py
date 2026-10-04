@@ -22,7 +22,7 @@ from utils.request_toss_api import request_stock_overview_with_toss_api, request
 from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
-    get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
+    get_current_price_and_name, get_current_prices, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
     get_stock_audit_info_map, get_market_index_rates, get_usd_krw_rate, is_autobuy_enabled, set_autobuy_enabled
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
     manual_cancel_all_orders, order_accepted, _held_business_days as _legacy_business_days
@@ -720,6 +720,23 @@ def get_kiwoom_price():
         print(e)
         return {"status": "error", "message": str(e)}, 500
     return jsonify({"stk_cd": stk_cd, "stk_nm": stk_nm, "price": price})
+
+
+@stock.route("/kiwoom/prices", methods=["GET"])
+@login_required
+def get_kiwoom_prices():
+    """여러 종목 현재가를 키움 ka10095 한 번으로 조회(최대 200개 — 100개씩 묶어 호출). stk_cd=a,b,c"""
+    codes = [c.strip() for c in (request.args.get("stk_cd") or "").split(",") if c.strip()]
+    if not codes:
+        return {"status": "error", "message": "stk_cd is required"}, 400
+    if len(codes) > 200:
+        return {"status": "error", "message": "too many codes (max 200)"}, 400
+    try:
+        prices = get_current_prices(codes, env=_req_env())
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"prices": prices})
 
 
 def _load_v8_positions(env):
