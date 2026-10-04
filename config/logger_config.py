@@ -21,6 +21,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
+# 와일드카드 미지원 (*)
 # NO_LOGS_URLS = ["/image/images", "/video/videos/", "/static/", "/func/chat/save-file", "/func/logs/stream", "/video/temp-video/"]
 NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
 
@@ -48,6 +49,7 @@ NO_LOGS_URLS = ["/static/", "/service-worker.js", "/favicon.ico",
                 "/stocks/kiwoom/market-index",
                 "/stocks/kiwoom/live_gap_ranking/cached",
                 "/stocks/kiwoom/owned_codes",
+                "/stocks/kiwoom/price",
                 "/stocks/viewed",
                 "/stocks/reserved",
                 "/stocks/favorite",
