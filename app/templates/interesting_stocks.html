@@ -2254,7 +2254,7 @@
           <td class="right ${msPnlClass(p.today_price_change_pct)}">${msFmtPct((p.today_price_change_pct || 0) / 100)}</td>
           <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100, 0)}</td>
           <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
-          <td class="right ${msPnlClass(p.institution_net)}">${p.institution_net != null ? msFmtEok(p.institution_net) : '-'}</td>
+          <td class="right ${msPnlClass(p.institution_net)}">${p.institution_net != null ? msFmtEok(p.institution_net) : (p.institution_pending ? '<span title="장중 기관 수급은 일부 종목만 잠정 집계됩니다(16시 이후 확정)">집계 전</span>' : '-')}</td>
           <td>${newsHtml}</td>
         </tr>`;
         }).join('');

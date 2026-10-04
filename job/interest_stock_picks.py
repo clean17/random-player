@@ -12,6 +12,10 @@
      채우다 보니 약세장엔 '관망'급까지 억지로 노출되고 강세장엔 11~15위 유망 종목이 잘리던
      문제 대응.
   5) JSON으로 저장 (logs/interest_stock_picks/picks_<타임스탬프>.json, latest.json)
+     2026-10-05부터 최종 picks 외에 후보 전체(candidates)와 예선 통과자의 수급·최종점수
+     (prescreened)도 같이 남긴다 — 사후 검증용. 전엔 picks만 남아 탈락 후보의 장중 값과
+     수급이 사라져서, '점수식이 후보 중에서 잘 골랐는가'를 실제 추천 시점 데이터로 잴 수
+     없었다(그날 최종값은 DB에 있지만 장중 스냅샷과 수급은 없음). 추가 API 호출은 없다.
 
 ⚠️ "얼마나 오를지"는 백테스트/모델 근거가 없어 확정 수치를 만들지 않는다 — 점수 구간에 따른
    정성적 라벨(상승여력 높음/보통/낮음)만 준다. 실제 매수 여부는 사용자 판단이다.
@@ -38,6 +42,23 @@ _OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 PRESCREEN_N = 20   # 외국인/기관 조회(API 호출)까지 갈 예선 통과 수
 MIN_SCORE = 0.40   # 최종 노출 최소 점수 = _label()의 '관심' 등급 경계. 미만('관망')은 아예 안 보여준다.
 MAX_N = 15         # 최종 노출 상한(임계값을 넘는 종목이 많아도 여기서 자른다)
+
+# 2026-10-05: '적극매수'는 점수 0.70 이상 + 외국인·기관 순매수 합이 거래대금의 이 비율 이상일 때만.
+# 미달이면 '매수'로 한 단계 내린다(점수·정렬·자동매수 대상 여부는 그대로 — 매수/적극매수 둘 다 대상).
+# 근거(9/8~10/2 15:20 추천 실측): 등급별 D+1/D+3/D+5가 관심 +1.1/+5.4/+8.1%,
+# 매수 +0.9/+2.4/+4.7%, 적극매수 -0.1/+0.4/+3.4%로 점수가 높을수록 오히려 나빴다. 등락률 30%·
+# 거래대금 5배를 채우면 수급이 0이어도 0.60+0.20(수급 중립)=0.80이 돼서, 수급 없는 상한가 종목이
+# 최고 등급을 받던 구조다. 적극매수 중 수급 3% 이상 44건은 D+3 +1.5%(승률 57%), 미만 22건은
+# -1.7%(41%). 네이버 수급(7~10월, 39거래일)에서도 당일 외+기 순매수 비중은 넓은 후보군 기준
+# 양(+)의 신호였다(IC +0.07, t 2.7). 표본이 작아 확정치는 아니다 — candidates 기록이 쌓이면 재검증.
+STRONG_FLOW_MIN = 0.03
+
+# 2026-10-05: ka10059의 기관 순매수는 장중엔 일부 종목만 잠정치가 나오고 나머지는 0으로 온다.
+# 추천 이력 실측(9/23~10/2) 기관=0 비율: 10시대 33~37%, 13시대 18~28%, 15시대 6~16%, 16시 이후 1%.
+# 장 마감 후 값은 네이버 수급과 상관 1.0으로 일치 — 즉 장중 0은 '0원'이 아니라 '미집계'다.
+# 이 시각 전의 기관 0은 None(미집계)으로 바꿔 '집계 전'으로 표시하고, 오늘 앞 사이클의 정상값이
+# 있으면 그걸로 메운다(_carry_forward_flow). 점수 계산에선 None=0이라 기존과 같다.
+INST_FINAL_HOUR = 16
 
 # 2026-09-22: 외국인/기관 순매수 직전 정상값 캐시(종목코드 -> {'date','foreign','institution'}).
 # ka10059가 간헐적으로(그 사이클에 조회된 종목 전부 동시에) 빈 값을 줄 때가 있는데
@@ -93,9 +114,18 @@ def _final_score(row: Dict, flow: Optional[Dict]) -> float:
     return chg * 0.35 + vol * 0.25 + flow_score * 0.40
 
 
-def _label(score: float) -> str:
+def _flow_ratio(row: Dict, flow: Optional[Dict]) -> Optional[float]:
+    """외국인+기관 순매수 / 오늘 거래대금. 수급 조회 실패나 거래대금 0이면 None."""
+    trd_amt = _f(row.get('last_trading_value'))
+    if not flow or trd_amt <= 0:
+        return None
+    return (_f(flow.get('foreign')) + _f(flow.get('institution'))) / trd_amt
+
+
+def _label(score: float, flow_ratio: Optional[float] = None) -> str:
     if score >= 0.70:
-        return '적극매수'
+        # 수급 확인이 안 되면(조회 실패 포함) 적극매수를 주지 않는다 — STRONG_FLOW_MIN 주석 참고
+        return '적극매수' if (flow_ratio is not None and flow_ratio >= STRONG_FLOW_MIN) else '매수'
     if score >= 0.55:
         return '매수'
     if score >= 0.40:
@@ -103,10 +133,11 @@ def _label(score: float) -> str:
     return '관망'
 
 
-def _upside_tier(score: float) -> str:
-    if score >= 0.70:
+def _upside_tier(label: str) -> str:
+    # 등급과 어긋나지 않게 등급에서 파생한다(적극매수에서 내려간 종목이 '높음'으로 남지 않도록)
+    if label == '적극매수':
         return '상승여력 높음'
-    if score >= 0.55:
+    if label == '매수':
         return '상승여력 보통'
     return '상승여력 낮음'
 
@@ -128,9 +159,13 @@ def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
 
     prescreened = sorted(candidates, key=_prescreen_score, reverse=True)[:PRESCREEN_N]
 
+    inst_pending_window = datetime.datetime.now().hour < INST_FINAL_HOUR
     enriched = []
     for row in prescreened:
-        flow = _carry_forward_flow(row['stock_code'], get_investor_trend(row['stock_code'], env='real'))
+        flow = get_investor_trend(row['stock_code'], env='real')
+        if flow is not None and inst_pending_window and flow.get('institution') == 0:
+            flow['institution'] = None   # 장중 0 = 미집계 (INST_FINAL_HOUR 주석 참고)
+        flow = _carry_forward_flow(row['stock_code'], flow)
         score = _final_score(row, flow)
         enriched.append((row, flow, score))
 
@@ -140,6 +175,8 @@ def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
     picks = []
     for row, flow, score in top:
         news = get_stock_news(row['stock_name'], limit=3)
+        ratio = _flow_ratio(row, flow)
+        label = _label(score, ratio)
         picks.append({
             'stock_code': row['stock_code'],
             'stock_name': row['stock_name'],
@@ -150,17 +187,45 @@ def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
             'current_price': _f(row.get('current_price')),
             'foreign_net': flow.get('foreign') if flow else None,
             'institution_net': flow.get('institution') if flow else None,
+            # 장중 기관 미집계(화면에 '집계 전'). 조회 실패(flow None)와 구분한다
+            'institution_pending': bool(flow and flow.get('institution') is None and inst_pending_window),
+            'flow_ratio': round(ratio, 4) if ratio is not None else None,
             'score': round(score, 3),
-            'label': _label(score),
-            'upside_tier': _upside_tier(score),
+            'label': label,
+            'upside_tier': _upside_tier(label),
             'news': news,
         })
+
+    picked_codes = {p['stock_code'] for p in picks}
+    flow_by_code = {row['stock_code']: (flow, score) for row, flow, score in enriched}
+    candidates_log = []
+    for row in sorted(candidates, key=_prescreen_score, reverse=True):
+        code = row['stock_code']
+        item = {
+            'stock_code': code,
+            'stock_name': row['stock_name'],
+            'today_price_change_pct': _f(row.get('today_price_change_pct')),
+            'trading_value_change_pct': _f(row.get('trading_value_change_pct')),
+            'current_trading_value': _f(row.get('last_trading_value')),
+            'current_price': _f(row.get('current_price')),
+            'prescreen_score': round(_prescreen_score(row), 4),
+            'created_at': str(row.get('created_at')),
+            'picked': code in picked_codes,
+        }
+        if code in flow_by_code:   # 예선 통과자만 수급·최종점수가 있다
+            flow, score = flow_by_code[code]
+            item['foreign_net'] = flow.get('foreign') if flow else None
+            item['institution_net'] = flow.get('institution') if flow else None
+            item['institution_pending'] = bool(flow and flow.get('institution') is None and inst_pending_window)
+            item['final_score'] = round(score, 4)
+        candidates_log.append(item)
 
     result = {
         'generated_at': datetime.datetime.now().isoformat(timespec='seconds'),
         'candidate_count': len(candidates),
         'prescreened_count': len(prescreened),
         'picks': picks,
+        'candidates': candidates_log,   # 사후 검증용(화면 미사용). 위 docstring 5) 참고
         'disclaimer': '정량 지표(등락률·거래대금 증가율·외국인/기관 순매수) 기반 참고용 순위입니다. '
                       '실제 매수 여부와 손익 책임은 본인에게 있습니다.',
     }
