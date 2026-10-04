@@ -176,7 +176,7 @@ _IS_MOCK_ENV = (KIWOOM_ENV == 'mock')
 # 게이트만 끈 것이라 슬롯이 부족한 날엔 여전히 종가위치 높은 것부터 채워진다.
 # 되돌리려면 mock을 0.6으로. 근거: 세션 스크래치패드 v1_exit_portfolio40*.log / v1_slot_priority_search.log
 CLOSE_POS_MIN = 0.0
-CASH_DEPLOY_RATIO = 0.80 if _IS_MOCK_ENV else 0.65   # 가용 현금 중 자동매수에 쓸 최대 비율.
+CASH_DEPLOY_RATIO = 0.90 if _IS_MOCK_ENV else 0.65   # 가용 현금 중 자동매수에 쓸 최대 비율.
                            # ⚠️ 2026-08-24: 계좌 환경별로 분리했다. 기존 0.65는 real(슬롯5/divisor5/
                            #    소액) 기준으로 검증된 값인데, 실제로 이 값을 소비하는 건 mock(슬롯20/
                            #    divisor20/약 2,400만원)뿐이었다(real fire 매수는 batch_runner에서
@@ -213,6 +213,15 @@ CASH_DEPLOY_RATIO = 0.80 if _IS_MOCK_ENV else 0.65   # 가용 현금 중 자동�
                            #   ratio 0.80(신) → 현금 22.0%  평균 -5.7%  최저 -15.2%  음수 97%  MDD -35.1%  ← 채택
                            # ⚠️ 0.80은 위 표에서도 전 지표(평균/최저/음수비율/MDD)가 0.75보다 나쁘다.
                            #    성과 근거가 아니라 사용자가 수치를 보고도 원해서 택한 값이다.
+                           # [mock] 2026-10-04 0.90으로 재변경(사용자 요청 '90%까지 사도록'). 같은 스크립트로
+                           #   0.75~0.90을 다시 돌렸다(최신 pkl, 256거래일, 슬롯20/divisor20/2,400만원/후보 20개):
+                           #   ratio 0.75     → 현금 21.0%  총수익 +1.8%  Sharpe 0.19  MDD -35.7%
+                           #   ratio 0.80(구) → 현금 18.7%  총수익 +0.9%  Sharpe 0.14  MDD -36.4%
+                           #   ratio 0.85     → 현금 16.7%  총수익 +1.2%  Sharpe 0.16  MDD -37.3%
+                           #   ratio 0.90(신) → 현금 14.7%  총수익 +0.7%  Sharpe 0.14  MDD -37.9%  ← 채택
+                           # ⚠️ 0.80 대비 수익은 거의 같고(+0.9→+0.7%) MDD만 -36.4→-37.9%로 1.5%p 나빠진다 —
+                           #    위와 같은 방향(노출을 늘릴수록 불리)이고, 이 구간에선 격차가 작다. 성과 근거가 아니라
+                           #    사용자 요청이다. 되돌리려면 0.80으로(0.75가 가장 낫다). 변경은 서버 재시작 후 적용.
                            # 근거: auto_trading/backtest/cash_ratio_test.py
                            #   (venv/Scripts/python.exe auto_trading/backtest/cash_ratio_test.py
                            #    --capital 24000000 --slots 20 --divisor 20 --pool 20 --bootstrap 30
