@@ -1682,6 +1682,35 @@
         }
     }
 
+    // 처음 열 때 틀을 '화면(편집 영역)에 꽉 차는 3:4'로 잡는다. 그냥 두면 Cropper(viewMode 1)가 이미지 전체를 화면에
+    // 맞춘 뒤 그 안에 틀을 만들어서, 3:4에서 많이 벗어난 이미지(예: 3000x1000 가로로 긴 것, 500x1500 세로로 긴 것)는
+    // 틀이 화면의 20~50%로 작아진다(2026-10-05 실측: 틀/화면 0.52, 0.44, 0.22). 이미지를 틀을 덮을 때까지 확대하고
+    // 가운데에 맞춘다(넘치는 쪽은 끌어서 옮긴다). 보통 이미지는 이미 꽉 차 있어 건드리지 않는다.
+    // 위치·배율은 applyFrame 과 같은 방식으로 viewMode 0 에서 한 번에 배치한다.
+    function fitFullFrame(c) {
+        try {
+            const cont = c.getContainerData(), im = c.getImageData();
+            const nw = im.naturalWidth, nh = im.naturalHeight;
+            if (!(cont.width > 0 && cont.height > 0 && nw > 0 && nh > 0)) return false;
+            let bw = cont.width, bh = bw * RATIO_H / RATIO_W;
+            if (bh > cont.height) { bh = cont.height; bw = bh * RATIO_W / RATIO_H; }
+            const cur = c.getCropBoxData();
+            if (cur.width >= bw * 0.99 || cur.height >= bh * 0.99) return false;   // 이미 꽉 찬 틀
+            const ratio = Math.max(bw / nw, bh / nh);                              // 화면 px / 원본 px — 틀을 덮는 최소 배율
+            const cw = nw * ratio, ch = nh * ratio;
+            const vm = c.options.viewMode;
+            c.options.viewMode = 0;
+            c.zoomTo(ratio);
+            c.setCanvasData({ left: (cont.width - cw) / 2, top: (cont.height - ch) / 2, width: cw, height: ch });
+            c.setCropBoxData({ left: (cont.width - bw) / 2, top: (cont.height - bh) / 2, width: bw, height: bh });
+            c.options.viewMode = vm;
+            return true;
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
+    }
+
     // 보이지 않는 레이어에 새 편집기를 완성해서 돌려준다({layer, c}). 오래된 요청(token 불일치)은 스스로 정리한다.
     let activeLayer = null;
     function buildEditor(url, token) {
@@ -1710,6 +1739,7 @@
                         const d = c.getImageData();
                         const a = d.naturalWidth * RATIO_H, b = d.naturalHeight * RATIO_W;
                         layer.classList.toggle('ratio-match', Math.abs(a - b) <= 0.005 * Math.max(a, b));
+                        fitFullFrame(c);
                         attachPan(layer, c);
                         resolve({ layer, c });
                     },
