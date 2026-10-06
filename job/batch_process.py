@@ -259,11 +259,24 @@ def sweep_orphan_mp_workers(min_age_sec=120, dry_run=False):
     return killed
 
 
+def _reload_kiwoom_tokens_into_memory():
+    """갱신 subprocess가 .env에 쓴 새 토큰을 이 프로세스 메모리에도 반영한다(2026-10-06).
+    subprocess는 .env만 고쳐서, 안 하면 서버가 어제 토큰을 들고 있다가 09:00 첫 호출이 401로 막힌다.
+    실패해도 갱신 자체는 끝난 상태라(.env 저장됨) 예외를 삼키고, 401 재발급 경로가 안전장치로 남는다."""
+    log = _get_batch_logger()
+    try:
+        from auto_trading.kiwoom_api import reload_tokens_from_env_file
+        log.info(f'키움 토큰 메모리 재로딩: {reload_tokens_from_env_file()}')
+    except Exception as e:
+        log.error(f'키움 토큰 메모리 재로딩 실패(401 재발급 경로로 폴백): {e}')
+
+
 def renew_kiwoom_token_job():
     print('    ############################### renew_kiwoom_token ###############################')
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
     py_script = r"C:\my-project\random-player\auto_trading\renew_kiwoom_token.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\random-player")
+    _reload_kiwoom_tokens_into_memory()
 
 
 def renew_kiwoom_mock_token_job():
@@ -276,6 +289,7 @@ def renew_kiwoom_mock_token_job():
     venv_python = r"C:\my-project\random-player\venv\Scripts\python.exe"
     py_script = r"C:\my-project\random-player\auto_trading\renew_kiwoom_token.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--mock"], cwd=r"C:\my-project\random-player")
+    _reload_kiwoom_tokens_into_memory()
 
 
 def run_crawl_ai_image():

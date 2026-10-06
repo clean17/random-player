@@ -381,6 +381,32 @@ def _get_token(env: Optional[str] = None) -> str:
     return os.environ.get(_cfg_for(env)['token_env'], '')
 
 
+def reload_tokens_from_env_file(path: Optional[str] = None) -> Dict[str, str]:
+    """`.env`의 접근토큰(실전/모의)을 이 프로세스의 os.environ으로 다시 읽어온다. 반환: {env: 'updated'|'same'|'missing'}.
+
+    2026-10-06 추가. 06:55/06:57/07:00 토큰 갱신 잡은 renew_kiwoom_token.py를 **subprocess**로 돌려서
+    새 토큰이 `.env`에만 쓰이고 실행 중인 서버(run.py/run_mock.py)의 메모리엔 반영되지 않았다. 메모리엔 어제
+    07:00에 받은 토큰이 남아 07:00:01에 만료되고, 09:00 정산의 첫 키움 호출이 401을 맞고서야
+    _refresh_token()이 다시 받아 왔다(같은 토큰이 재발급돼 로그에 아침과 동일한 토큰·만료시각이 찍힘).
+    갱신 잡이 끝난 직후 이 함수를 불러 장 시작 전에 메모리를 새 토큰으로 맞춘다.
+    .env에 값이 없거나 비어 있으면 건드리지 않는다(기존 메모리 토큰 유지 — 401 재발급 경로가 그대로 안전장치).
+    """
+    from dotenv import dotenv_values
+    vals = dotenv_values(path or dotenv_path)
+    result: Dict[str, str] = {}
+    for env, c in _ENV_CONFIG.items():
+        key = c['token_env']
+        new = (vals.get(key) or '').strip()
+        if not new:
+            result[env] = 'missing'
+        elif new == os.environ.get(key, ''):
+            result[env] = 'same'
+        else:
+            os.environ[key] = new
+            result[env] = 'updated'
+    return result
+
+
 # ── 토큰 재발급 동시요청 방지 (2026-09-05) ──────────────────────────────────
 # waitress가 스레드 24개로 돌아서, 대시보드 탭 하나 열 때 여러 스레드가 동시에 kt00018/
 # ka10099/kt00001/ka10075 등을 호출한다. 이 시점에 토큰이 무효하면 각 스레드가 각자
