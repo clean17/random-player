@@ -53,6 +53,14 @@ def _env_write_lock(timeout: float = 10.0):
         fh.close()
 
 
+def _mask_token(token) -> str:
+    """로그용 마스킹 — 앞 4자 + 길이 + 뒤 4자만 남긴다(2026-10-06). 토큰 전체가 로그/대화에 남으면
+    만료 전까지 그 값으로 계좌 API를 호출할 수 있다. 발급이 됐는지·같은 토큰이 재사용됐는지(앞뒤가 같음)는
+    마스킹된 값으로도 구분된다."""
+    t = str(token or '')
+    return f'{t[:4]}…{t[-4:]} (len={len(t)})' if len(t) > 12 else '***'
+
+
 # 접근토큰 발급
 # host / token_env_key를 지정하면 모의투자용 토큰도 동일 함수로 발급 가능 (기존 실전 호출부는 인자 생략 시 그대로 동작)
 def fn_au10001(data, host='https://api.kiwoom.com', token_env_key='KIWOOM_ACCESS_TOKEN'):
@@ -75,12 +83,14 @@ def fn_au10001(data, host='https://api.kiwoom.com', token_env_key='KIWOOM_ACCESS
     print('Header:', json.dumps({key: response.headers.get(key) for key in ['next-key', 'cont-yn', 'api-id']}, indent=4, ensure_ascii=False))
     body = json.dumps(response.json(), indent=4, ensure_ascii=False)
     data = json.loads(body)
-    print('Body:', body)  # 실패 시에도 실제 응답 내용을 먼저 볼 수 있도록 파싱 전에 출력
+    # 실패 시에도 실제 응답 내용을 먼저 볼 수 있도록 파싱 전에 출력 — 토큰 값만 마스킹한다
+    print('Body:', json.dumps({**data, **({'token': _mask_token(data['token'])} if 'token' in data else {})},
+                              indent=4, ensure_ascii=False))
 
     if 'token' not in data:
         raise RuntimeError(f'토큰 발급 실패 (host={host}): {body}')
     token = data['token']
-    print('Token:', token)
+    print('Token:', _mask_token(token))
 
     # 5) 현재 프로세스 환경에도 반영 (즉시 사용 목적)
     os.environ[token_env_key] = token
