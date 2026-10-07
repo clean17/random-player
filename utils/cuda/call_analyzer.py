@@ -1,11 +1,39 @@
+import os
+import sys
+from pathlib import Path
+
+dll_handles = []
+
+site_packages = Path(sys.prefix) / "Lib" / "site-packages"
+
+cublas_bin = site_packages / "nvidia" / "cublas" / "bin"
+cudnn_bin = site_packages / "nvidia" / "cudnn" / "bin"
+
+dll_handles.append(
+    os.add_dll_directory(str(cublas_bin))
+)
+
+dll_handles.append(
+    os.add_dll_directory(str(cudnn_bin))
+)
+
+os.environ["PATH"] = (
+        str(cublas_bin)
+        + os.pathsep
+        + str(cudnn_bin)
+        + os.pathsep
+        + os.environ["PATH"]
+)
+
+from faster_whisper import WhisperModel
+
 import json
 import re
 import hashlib
 import urllib.request
-from datetime import datetime
-from pathlib import Path
+import time
+from datetime import datetime, timedelta
 
-from faster_whisper import WhisperModel
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -18,17 +46,19 @@ from openpyxl.utils import get_column_letter
 CALL_DIR = Path(r"E:\통화녹음")
 
 # small: 빠름 / medium: 좀 더 정확함
-WHISPER_MODEL = "medium"
+# WHISPER_MODEL = "medium"
+WHISPER_MODEL = "small"
 
 # CPU에서 실행
-WHISPER_DEVICE = "cpu"
-WHISPER_COMPUTE_TYPE = "int8"
+# WHISPER_DEVICE = "cpu"
+# WHISPER_COMPUTE_TYPE = "int8"
 
 # NVIDIA GPU + CUDA 환경이 제대로 되어 있다면:
-# WHISPER_DEVICE = "cuda"
-# WHISPER_COMPUTE_TYPE = "float16"
+WHISPER_DEVICE = "cuda"
+WHISPER_COMPUTE_TYPE = "float16"
 
-OLLAMA_MODEL = "qwen3:4b"
+# OLLAMA_MODEL = "qwen3:4b"
+OLLAMA_MODEL = "qwen2.5:1.5b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
 OUTPUT_FILE = CALL_DIR / "통화문의내역.xlsx"
@@ -50,6 +80,26 @@ CACHE_DIR.mkdir(exist_ok=True)
 TRANSCRIPT_DIR.mkdir(exist_ok=True)
 ANALYSIS_DIR.mkdir(exist_ok=True)
 
+
+# =========================================================
+# 소요시간 표기
+# =========================================================
+
+def format_duration(seconds):
+
+    if seconds < 60:
+        return f"{seconds:.2f}초"
+
+    total_seconds = int(seconds)
+
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+
+    if hours > 0:
+        return f"{hours}시간 {minutes}분 {secs}초"
+
+    return f"{minutes}분 {secs}초"
 
 # =========================================================
 # 파일명에서 날짜 / 시간 / 상대방 추출
@@ -126,11 +176,21 @@ def transcribe_audio(path: Path, model: WhisperModel):
 
     print("    음성 → 텍스트 변환 중...")
 
+    # segments, info = model.transcribe(
+    #     str(path),
+    #     language="ko",
+    #     beam_size=5,
+    #     vad_filter=True,
+    #     vad_parameters={
+    #         "min_silence_duration_ms": 500
+    #     }
+    # )
     segments, info = model.transcribe(
         str(path),
         language="ko",
-        beam_size=5,
+        beam_size=1,
         vad_filter=True,
+        condition_on_previous_text=False,
         vad_parameters={
             "min_silence_duration_ms": 500
         }
@@ -145,14 +205,15 @@ def transcribe_audio(path: Path, model: WhisperModel):
         if not text:
             continue
 
-        start = int(segment.start)
-
-        minute = start // 60
-        second = start % 60
-
-        lines.append(
-            f"[{minute:02d}:{second:02d}] {text}"
-        )
+        # start = int(segment.start)
+        #
+        # minute = start // 60
+        # second = start % 60
+        #
+        # lines.append(
+        #     f"[{minute:02d}:{second:02d}] {text}"
+        # )
+        lines.append(text)
 
     transcript = "\n".join(lines)
 
@@ -631,6 +692,14 @@ def main():
     print("갤럭시 통화녹음 업무문의 자동 분석")
     print("=" * 60)
 
+    program_start = time.perf_counter()
+    program_start_datetime = datetime.now()
+
+    print(
+        f"시작시간: "
+        f"{program_start_datetime.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
     if not CALL_DIR.exists():
 
         print(
@@ -663,10 +732,12 @@ def main():
         ]
     )
 
+    total_files = len(audio_files)
+
     print()
     print(
         f"발견된 통화녹음: "
-        f"{len(audio_files)}개"
+        f"{total_files}개"
     )
     print()
 
@@ -678,22 +749,37 @@ def main():
         f"{WHISPER_MODEL}"
     )
 
+    model_start = time.perf_counter()
+
     whisper = WhisperModel(
         WHISPER_MODEL,
         device=WHISPER_DEVICE,
         compute_type=WHISPER_COMPUTE_TYPE
     )
 
+    model_elapsed = time.perf_counter() - model_start
+
+    print(
+        f"Whisper 모델 로딩 완료: "
+        f"{format_duration(model_elapsed)}"
+    )
+
     results = []
+
+    # 파일별 처리시간 기록
+    processing_times = []
 
     for index, path in enumerate(
             audio_files,
             start=1
     ):
 
+        file_start = time.perf_counter()
+
         print()
+        print("=" * 60)
         print(
-            f"[{index}/{len(audio_files)}] "
+            f"[{index}/{total_files}] "
             f"{path.name}"
         )
 
@@ -703,22 +789,62 @@ def main():
                 path
             )
 
+            # ==============================================
+            # STT 시간 측정
+            # ==============================================
+
+            stt_start = time.perf_counter()
+
             transcript = transcribe_audio(
                 path,
                 whisper
             )
 
+            stt_elapsed = time.perf_counter() - stt_start
+
+            print(
+                f"    STT 소요시간: "
+                f"{format_duration(stt_elapsed)}"
+            )
+
             if not transcript.strip():
+
+                file_elapsed = (
+                        time.perf_counter()
+                        - file_start
+                )
 
                 print(
                     "    녹취 내용 없음 - 건너뜀"
                 )
 
+                print(
+                    f"    파일 처리시간: "
+                    f"{format_duration(file_elapsed)}"
+                )
+
+                processing_times.append(
+                    file_elapsed
+                )
+
                 continue
+
+            # ==============================================
+            # AI 분석 시간 측정
+            # ==============================================
+
+            ai_start = time.perf_counter()
 
             analysis = analyze_transcript(
                 path,
                 transcript
+            )
+
+            ai_elapsed = time.perf_counter() - ai_start
+
+            print(
+                f"    AI 분석시간: "
+                f"{format_duration(ai_elapsed)}"
             )
 
             results.append({
@@ -735,25 +861,143 @@ def main():
                 )
             )
 
+            # ==============================================
+            # 파일 총 처리시간
+            # ==============================================
+
+            file_elapsed = (
+                    time.perf_counter()
+                    - file_start
+            )
+
+            processing_times.append(
+                file_elapsed
+            )
+
             print(
                 f"    완료 - 문의 {count}건"
             )
 
+            print(
+                f"    파일 총 처리시간: "
+                f"{format_duration(file_elapsed)}"
+            )
+
+            # ==============================================
+            # 평균 / 남은시간 계산
+            # ==============================================
+
+            average_time = (
+                    sum(processing_times)
+                    / len(processing_times)
+            )
+
+            remaining_files = (
+                    total_files - index
+            )
+
+            estimated_remaining = (
+                    average_time
+                    * remaining_files
+            )
+
+            estimated_end = (
+                    datetime.now()
+                    + timedelta(
+                seconds=estimated_remaining
+            )
+            )
+
+            total_elapsed = (
+                    time.perf_counter()
+                    - program_start
+            )
+
+            print()
+            print(
+                f"    평균 처리시간: "
+                f"{format_duration(average_time)} / 파일"
+            )
+
+            print(
+                f"    현재까지 소요: "
+                f"{format_duration(total_elapsed)}"
+            )
+
+            print(
+                f"    남은 파일: "
+                f"{remaining_files}개"
+            )
+
+            print(
+                f"    남은 예상시간: "
+                f"{format_duration(estimated_remaining)}"
+            )
+
+            print(
+                f"    예상 종료시각: "
+                f"{estimated_end.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
         except Exception as error:
+
+            file_elapsed = (
+                    time.perf_counter()
+                    - file_start
+            )
+
+            processing_times.append(
+                file_elapsed
+            )
 
             print(
                 f"    오류: {error}"
             )
 
+            print(
+                f"    오류 발생까지: "
+                f"{format_duration(file_elapsed)}"
+            )
+
     print()
     print("Excel 생성 중...")
 
+    excel_start = time.perf_counter()
+
     create_excel(results)
+
+    excel_elapsed = (
+            time.perf_counter()
+            - excel_start
+    )
+
+    total_elapsed = (
+            time.perf_counter()
+            - program_start
+    )
+
+    end_datetime = datetime.now()
 
     print()
     print("=" * 60)
     print("완료")
     print(f"결과: {OUTPUT_FILE}")
+    print(
+        f"Excel 생성시간: "
+        f"{format_duration(excel_elapsed)}"
+    )
+    print(
+        f"전체 시작시간: "
+        f"{program_start_datetime.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    print(
+        f"전체 종료시간: "
+        f"{end_datetime.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    print(
+        f"전체 소요시간: "
+        f"{format_duration(total_elapsed)}"
+    )
     print("=" * 60)
 
 
