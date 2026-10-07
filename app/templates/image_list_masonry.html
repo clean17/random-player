@@ -1057,6 +1057,24 @@
         }, 120);
     });
 
+    // 탭 활성화 시 저장된 열 선택값을 다시 읽어 현재 렌더링과 다르면 재구성
+    function syncColumnCountOnActivate() {
+        if (document.hidden || isRendering || isRestoringLayout) return;
+
+        const stored = Number(localStorage.getItem(COL_STORAGE_KEY)) || null;
+        manualColumnCount = stored;
+        lastWidth = window.innerWidth;
+
+        const desired = getColumnCount();
+        updateColBtnActive();
+        if (desired === columns.length) return;
+
+        lastColumnCount = desired;
+        rebuildMasonryKeepingScroll();
+    }
+    document.addEventListener("visibilitychange", syncColumnCountOnActivate);
+    window.addEventListener("pageshow", syncColumnCountOnActivate);
+
 
 
 
