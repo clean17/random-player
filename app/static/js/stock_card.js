@@ -469,8 +469,8 @@ function renderLowCardHtml(track, rows) {
 
 
 // 예측종목(LightGBM) — /stocks/interest/data/predict 응답을 기존 카드 셸(article.trade-card)
-// 그대로 재사용해서 그린다. 거래대금/시총 같은 필드가 없어(DB 기반이 아니라 파일명 파싱이라)
-// 다른 카드보다 정보가 단순하다 — 즐겨찾기/자동매수 버튼도 이 목록엔 의미가 없어 뺐다.
+// 그대로 재사용해서 그린다. 시총 같은 필드는 없어(DB 기반이 아니라 파일명 파싱이라) 다른
+// 카드보다 정보가 단순하다 — 즐겨찾기/자동매수 버튼도 이 목록엔 의미가 없어 뺐다.
 // 시장별로 통화가 다르다(KR=원, US=달러) — signal_price/target_price/latest_price는 원본
 // 통화 그대로 내려온다(job/multi_kor_stocks_lgbm.py 등 참고).
 function fmtPredictPrice(v, market) {
@@ -479,13 +479,30 @@ function fmtPredictPrice(v, market) {
     return market === 'us' ? `$${num.toFixed(2)}` : `${Math.round(num).toLocaleString()}원`;
 }
 
+// 신호 당일 거래대금(종가×거래량, app/stock.py의 _get_signal_day_trading_value). KR은
+// trValFmtWon(조/억/만원)을 그대로 쓰고, US는 원화 단위가 안 맞으므로 달러 B/M/K로 축약한다.
+function fmtPredictTradingValue(v, market) {
+    const num = toFloat(v);
+    if (num === null) return "-";
+    if (market !== 'us') return trValFmtWon(num);
+    const abs = Math.abs(num);
+    if (abs >= 1e9) return `$${(num / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
+    if (abs >= 1e6) return `$${(num / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+    if (abs >= 1e3) return `$${(num / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+    return `$${Math.round(num).toLocaleString()}`;
+}
+
 function renderPredictCardHtml(track, rows) {
     if (!track) return;
 
     track.innerHTML = rows.map((r, idx) => {
         const hasImg = !!r.graph_file;
-        const marketDir = r.market === 'us' ? 'us' : 'kr';
+        // [2026-09-21] kr_watch는 별도 폴더(F:\lgbm_stocks_watch)라 그대로 넘겨야 이미지가 뜬다.
+        const marketDir = (r.market === 'us' || r.market === 'kr_watch') ? r.market : 'kr';
         const encoded_url = encodeURIComponent(String(r.graph_file ?? ""));
+        // 트랙 B(관찰목록) = 매수 추천이 아니다. 실측 10거래일 보유 건당 -0.79%(매수신호는 +17.87%).
+        // 사이드카에 track이 없는 예전 파일은 alert로 본다.
+        const isWatch = (r.track === 'watch');
         // 캐러셀이라 화면엔 카드 1장만 보이는데, loading="lazy" 없이는 카드 N장분 이미지가
         // 렌더링 즉시 전부 동시에 요청된다 — waitress 큐 깊이가 매번 튀는 원인이었다(2026-08-31).
         const imgHtml = hasImg
@@ -497,18 +514,20 @@ function renderPredictCardHtml(track, rows) {
         const thresholdPct = r.threshold_pct ?? 10;
 
         return `
-      <article class="trade-card predict-card" data-index="${idx}">
+      <article class="trade-card predict-card" data-index="${idx}" data-stock-code="${r.stock_code ?? ""}">
         <div class="trade-top">
           <div class="trade-text">
-            <div class="trade-name">${r.stock_name ?? ""}</div>
+            <div class="trade-name">${r.stock_name ?? ""}${isWatch ? ' <span class="predict-watch-badge">관찰 · 매매신호 아님</span>' : ''}</div>
             <div class="trade-sub">${r.stock_code ?? ""} · ${r.date ?? ""}</div>
           </div>
         </div>
+        ${isWatch ? `<div class="predict-watch-warn">매수 추천이 아닙니다. 매수 신호가 0건인 날의 상위 종목이며, 실측 10거래일 보유 건당 <b>-0.79%</b>입니다.</div>` : ''}
 
         <div class="trade-grid">
           <div class="kv"><span class="k">예측일</span><span class="v">${r.date ?? ""}</span></div>
-          <div class="kv"><span class="k">상승 확률</span><span class="v">${fmt1(r.proba)}%</span></div>
+          <div class="kv"><span class="k">+${thresholdPct}% 터치 확률</span><span class="v">${fmt1(r.proba)}%</span></div>
           <div class="kv"><span class="k">신호 당일</span><span class="v">${fmtPredictPrice(r.signal_price, r.market)}</span></div>
+          <div class="kv"><span class="k">신호일 거래대금</span><span class="v">${fmtPredictTradingValue(r.signal_trading_value, r.market)}</span></div>
           <div class="kv"><span class="k">목표가 (+${thresholdPct}%)</span><span class="v">${fmtPredictPrice(r.target_price, r.market)}</span></div>
           <div class="kv"><span class="k">현재가</span><span class="v">${fmtPredictPrice(r.latest_price, r.market)}${(toFloat(r.latest_price) !== null && toFloat(r.signal_price)) ? ` (${calCloseReturn(toFloat(r.latest_price), toFloat(r.signal_price))})` : ''}</span></div>
         </div>
@@ -574,7 +593,9 @@ function renderTradingCards(rows, section, tableName) {
         if (!trigger) return;
         const article = trigger.closest("article.trade-card");
         if (!article) return;
-        const stockCode = article.querySelector(".fav-btn")?.dataset.stockCode;
+        // 예측종목 카드는 즐겨찾기 버튼(.fav-btn)이 없어(즐겨찾기 대상이 아님) 종목코드를
+        // article 자체의 data-stock-code에서 읽는다(2026-09-07).
+        const stockCode = article.querySelector(".fav-btn")?.dataset.stockCode || article.dataset.stockCode;
         if (stockCode) {
             window.open(`https://m.stock.naver.com/domestic/stock/${stockCode}/total`, "_blank");
             markStockViewed(stockCode, article);
@@ -808,14 +829,12 @@ function setView(toggle, view, focus = false) {
     renderTradingView(globalTradingRows);
 }
 
-function openStockOnToss(stockName) {
-    axios.post('/stocks/info', { stock_name: stockName }, {})
-        .then(response => {
-            if (response.status !== 200) { showDebugToast('요청 실패'); return; }
-            const code = response.data.result[0].data.items[0].code;
-            window.open("https://www.tossinvest.com/stocks/" + code, "_blank");
-        })
-        .catch(err => console.error(err));
+function openStockOnToss(stockCode) {
+    // 종목명으로 토스 검색 API를 태우면 배지 텍스트가 섞이거나(예측종목 카드)
+    // 동명이인/오탈자로 검색이 어긋나 엉뚱한 종목·무반응이 잦았다. 카드에 이미
+    // 박혀 있는 종목코드(data-stock-code)를 그대로 써서 확실하게 이동시킨다.
+    if (!stockCode) { showDebugToast('종목코드를 찾을 수 없습니다.'); return; }
+    window.open("https://www.tossinvest.com/stocks/A" + stockCode, "_blank");
 }
 
 // 드롭다운 변경 시 즉시 반영
@@ -851,7 +870,7 @@ setTimeout(()=>{
                 case 'l':
                     event.preventDefault();
                     const currentArticle1 = getCurrentArticle();
-                    currentArticle1.querySelector('.fav-btn').click();
+                    currentArticle1?.querySelector('.fav-btn')?.click();
                     break;
                 case 'o':
                     event.preventDefault();
@@ -859,9 +878,15 @@ setTimeout(()=>{
                     currentArticle3?.querySelector('.reserve-btn')?.click();
                     break;
                 case 'Enter':
+                    // 추천종목 탭(#tab-picks)은 카드 캐러셀이 아니라 테이블이라
+                    // 토스 이동 단축키 대상이 아니다.
+                    if (getActiveTabTarget() === '#tab-picks') break;
                     event.preventDefault();
                     const currentArticle2 = getCurrentArticle();
-                    openStockOnToss(currentArticle2.querySelector(".trade-name")?.textContent);
+                    if (!currentArticle2) break; // 조회된 카드가 없으면 아무 동작도 하지 않는다
+                    const stockCode2 = currentArticle2.querySelector(".fav-btn")?.dataset.stockCode
+                        || currentArticle2.dataset.stockCode;
+                    openStockOnToss(stockCode2);
                     break;
                 default:
                     break;
@@ -1079,10 +1104,29 @@ function applyStockFlagState() {
     });
     // '확인함' 배지 — 버튼이 아니라 카드(article) 자체에 클래스로 표시한다.
     // fav-btn의 data-stock-code를 그대로 재사용해 카드마다 코드를 다시 마크업에 넣지 않는다.
+    // predict-card는 fav-btn이 없어(즐겨찾기 의미가 없음) article 자체의 data-stock-code로 폴백한다.
     document.querySelectorAll("article.trade-card").forEach((card) => {
-        const code = card.querySelector(".fav-btn")?.dataset.stockCode;
+        const code = card.querySelector(".fav-btn")?.dataset.stockCode || card.dataset.stockCode;
         if (!code) return;
         card.classList.toggle("is-viewed", flagCacheHas(typeof viewedStocks !== "undefined" ? viewedStocks : null, code));
+
+        // 2026-09-14: 실전/모의 계좌 보유중 배지. 종목명 오른쪽에 실제 span을 붙여서 채운다
+        // (색/문구가 3가지 상태라 CSS 생성 콘텐츠만으로는 번거로움 — carousel.css 참고).
+        // 카드는 데이터가 새로 로드될 때마다 innerHTML로 통째로 다시 그려지므로, 배지 span도
+        // 매번 없어졌다 새로 붙는다 — querySelector로 있으면 재사용, 없으면 새로 만든다.
+        const nameEl = card.querySelector(".trade-name");
+        if (nameEl) {
+            let badge = nameEl.querySelector(".card-owned-badge");
+            if (!badge) {
+                badge = document.createElement("span");
+                badge.className = "card-owned-badge";
+                nameEl.appendChild(badge);
+            }
+            const real = flagCacheHas(typeof ownedRealCodes !== "undefined" ? ownedRealCodes : null, code);
+            const mock = flagCacheHas(typeof ownedMockCodes !== "undefined" ? ownedMockCodes : null, code);
+            badge.className = "card-owned-badge" + (real && mock ? " is-both" : real ? " is-real" : mock ? " is-mock" : "");
+            badge.textContent = real && mock ? "보유(실전+모의)" : real ? "보유(실전)" : mock ? "보유(모의)" : "";
+        }
     });
 }
 
@@ -1191,7 +1235,14 @@ function initFavoriteButtons() {
 
 
 function getCurrentArticle() {
-    const articles = document.querySelectorAll("article.trade-card");
+    // 전체 document에서 article.trade-card를 찾으면, 다른 탭(숨겨진 섹션)에 남아있던
+    // 이전 렌더 결과의 카드까지 잡혀서 "조회된 카드가 없는데도" 그 카드가 현재 카드로
+    // 선택되는 문제가 있었다. 현재 활성 탭 안에서, 실제로 화면에 그려진(0x0이 아닌)
+    // 카드만 후보로 삼는다.
+    const activeSection = document.querySelector(getActiveTabTarget());
+    if (!activeSection) return null;
+
+    const articles = activeSection.querySelectorAll("article.trade-card");
     const viewportCenter = window.innerWidth / 2;
 
     let current = null;
@@ -1199,6 +1250,7 @@ function getCurrentArticle() {
 
     articles.forEach(article => {
         const rect = article.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return; // display:none 등으로 숨겨진 카드는 제외
         const articleCenter = rect.left + rect.width / 2;
         const distance = Math.abs(viewportCenter - articleCenter);
 

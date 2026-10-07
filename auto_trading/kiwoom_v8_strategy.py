@@ -22,7 +22,10 @@
    2026-08-19 전환으로 batch_runner 의 kiwoom_fire_buy 잡을 주석 처리했다.
 ✔ 지정가 주문(trde_tp='0')은 2026-08-19 실계좌에서 접수/취소 확인됨(주문번호 0274100).
   단 하한가보다 낮은 가격은 `[2000] 주문단가가 하한가보다 낮습니다` 로 거부된다.
-⚠️ 실계좌 체결까지 간 이력은 아직 없다. 체결률·슬리피지는 미실측이다.
+⚠️ 2026-09-24 확인: 이 docstring 작성 당시(2026-08-19)엔 실계좌 체결 이력이 없었으나,
+   지금은 trades_real.jsonl에 reason=v8_buy 64건 + v8_buy_backfilled 5건이 쌓여 있다 —
+   실계좌 체결 자체는 이미 여러 건 발생했다. 다만 체결률·슬리피지를 정량 집계한 분석은
+   여전히 없다(필요하면 새로 측정할 것).
 """
 import os
 import sys
@@ -42,7 +45,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from auto_trading import kiwoom_api as api  # noqa: E402
-from auto_trading.kiwoom_api import env_path, get_trading_logger  # noqa: E402
+from auto_trading.kiwoom_api import env_path, get_trading_logger, is_krx_aftermarket_open, is_krx_business_day  # noqa: E402
 from auto_trading.kiwoom_trailing_stop import _record_trade  # noqa: E402
 
 # 2026-08-24: 예전엔 getLogger()만 하고 핸들러를 안 붙여서, 스케줄러(run.py) 경로로 돌 때
@@ -51,6 +54,7 @@ from auto_trading.kiwoom_trailing_stop import _record_trade  # noqa: E402
 _log = get_trading_logger('kiwoom_v8')
 
 _last_regap_ts = 0.0   # 마지막으로 현재가를 조회해 live_gap 을 다시 세운 시각
+_autobuy_off_logged = False   # '자동 재주문 OFF' 로그를 60초마다 반복하지 않기 위한 래치
 
 # ── 안전 스위치 ──────────────────────────────────────────────────────────────
 # 실계좌(KIWOOM_ENV=real)에서 돈다. 2026-08-19 전환 완료.
@@ -60,7 +64,28 @@ V8_ENABLED = True
 # ── 파라미터 (ANALYSIS_V8.md §1) ─────────────────────────────────────────────
 RUN_MIN = 0.10          # 최근 20일 내 5일 상승률 문턱
 RUN_LOOKBACK = 20       # 급등 이력 탐색 구간(거래일)
-DEPTH = 0.25            # 지정가 = 종가 x (1-DEPTH)
+DEPTH = 0.40            # 지정가 = 종가 x (1-DEPTH)
+                        #  ⚠️ 2026-09-13 v11 전환: 0.25 -> 0.40 (사용자 승인).
+                        #  **ALLOC 0.04 -> 0.08 과 반드시 한 세트로 움직인다**(아래 ALLOC 주석).
+                        #  아래 2026-09-04 그리드는 dailylimit.scan() 의 시간순서 편향 위에서
+                        #  나온 값이라 과대평가였다(ANALYSIS_V10.md §2-1, v10_verify_ordering.py
+                        #  로 독립 재현: 같은 설정이 +68.9% -> +6.7%). 편향 없는 날짜순 스캐너 +
+                        #  ±30% 밴드 + K 제약으로 다시 재면(현행 청산 기준, 단일 변경):
+                        #      깊이 25%(현행) +2.10%  MDD -18.5%  Sharpe 0.21  건당 +0.05%
+                        #      깊이 40%       +9.04%  MDD  -5.5%  Sharpe 1.10  건당 +1.12%
+                        #      + ALLOC 8% 동반 시 +15.38%  MDD -8.6%  3-fold +7/+8/+36
+                        #  ⚠️ **값 자체는 스파이크다**: 같은 조건에서 38% +2.26% / 40% +15.38% /
+                        #  42% +6.00% 로 이웃의 2.6~6.8배다. "깊게 가는 편이 낫다"는 방향만
+                        #  신뢰하고 40%라는 정확한 값은 신뢰하지 않는다(두 독립 엔진이 방향에는
+                        #  동의 — ANALYSIS_V10.md 의 현금원장 모델도 d25 음수 / d40 양수).
+                        #  ⚠️ 전환 부작용: 체결이 약 1/5로 준다(3.15년 2,622건 -> 551건).
+                        #  ⚠️ 기존 대기 지정가는 종가x0.75 기준이라 무효다 — v9_reprice_pending.py
+                        #     방식으로 종가x0.60 재계산하거나 유효기간(10거래일) 만료를 기다릴 것.
+                        #  근거: strategy-ab-backtest/ANALYSIS_V11.md, ANALYSIS_V11.1.md,
+                        #        v11_1_oneat_a_time.py
+                        #  되돌리기: DEPTH 0.25 / ALLOC 0.04 를 함께 원복.
+                        #
+                        #  --- 아래는 2026-09-04 v9 전환 당시 기록(편향 엔진 기준, 참고용) ---
                         #  2026-09-04 v9 전환: 0.30 -> 0.25 (사용자 승인).
                         #  깊이 x 투입비중 전체 그리드 재측정 결과(500만원/슬롯25/최소주문10만원,
                         #  청산은 아래 kiwoom_v8_exit 상수 그대로):
@@ -85,7 +110,21 @@ AMOUNT_MIN = 1_000_000_000   # 당일 거래대금 10억
 PRICE_MIN = 700
 
 SLOTS = 25              # 동시 보유 상한
-ALLOC = 0.04            # 1회 투입 = 평가자산의 4%
+ALLOC = 0.08            # 1회 투입 = 평가자산의 8%
+                        #  ⚠️ 2026-09-13 v11 전환: 0.04 -> 0.08 (사용자 승인).
+                        #  **DEPTH 0.40 과 반드시 한 세트다. 단독으로 올리면 계좌가 망가진다.**
+                        #  편향 없는 엔진 + K 제약으로 잰 단일 변경 효과(현행 깊이 25% 유지):
+                        #      ALLOC 4% -> 8% 단독:  +2.10% -> **-5.76%**  MDD -18.5% -> -37.4%
+                        #  같은 인상을 DEPTH 40% 와 함께 하면:
+                        #      깊이40+투입4%  +9.04%  ->  깊이40+투입8%  +15.38%  MDD -5.5%->-8.6%
+                        #  이유: 깊이 40%는 노출이 5~7%뿐이라(체결이 드물다) 자금이 놀고 있고,
+                        #  투입을 올리는 것이 '레버리지'가 아니라 '빈 공간 채우기'다. 반면 깊이
+                        #  25%는 이미 노출 22%라 같은 인상이 순수 레버리지가 된다.
+                        #  K 제약 하에서 8%가 정점이다(4% +9.5 / 8% +15.2 / 12% +11.0 / 16% +9.6,
+                        #  K가 23->11->7->5 로 무너지기 때문) — 8%를 더 올리지 말 것.
+                        #  근거: strategy-ab-backtest/ANALYSIS_V11.md 5절, v11_k_constraint.py
+                        #
+                        #  --- 아래는 2026-08-19 기록(편향 엔진 기준, 참고용) ---
                         #  2026-08-19 측정(DEPTH=0.30 고정): 투입액을 줄이면 같은 예수금으로
                         #  미체결 주문을 더 걸 수 있고(K ~= 1/ALLOC), CAGR 은 거의 전부 K 로 결정된다.
                         #    10% K=10  CAGR +28.8%  MDD -35.4%  Sh 0.98  F1 +1%
@@ -132,6 +171,30 @@ CLAMP_TO_BAND = False   # 지정가가 오늘 하한가보다 낮을 때: False=
 #    즉 폴링의 포착은 역선택된다. 같은 이유로 LIVE_REGAP(장중 재정렬)도 끈다.
 #    분석: strategy-ab-backtest/polling_floor.py
 #
+# ── 2026-09-14 재검증 (현재 설정 · 편향 없는 엔진) ──────────────────────────
+# 위 측정은 DEPTH 30% / 트레일 5% / 보유 10일 / 편향 있는 DL.scan() 기준이었다.
+# 현재 설정(DEPTH 40% / 트레일 1.5% / 보유 7일 / ALLOC 8%)에서 날짜순 엔진으로 다시 재도
+# 결론이 같고, **격차는 오히려 더 벌어졌다** (strategy-ab-backtest/v13_polling_recheck.py):
+#
+#   체결일 829건 분류 — 같은 체결가로 두 그룹을 비교(그룹 자체의 질만 본다)
+#     지속(종가도 지정가 이하) 395건 47.6%  건당 -1.89%  승률 35.9%  t=-4.27  ← 폴링이 잡는 것
+#     반등(종가 > 지정가)      434건 52.4%  건당 +4.58%  승률 69.1%  t=12.73  ← 폴링이 놓치는 것
+#     반등폭 중앙값 +3.82% (DEPTH 30% 시절 +2.9%에서 더 커졌다)
+#
+#   포트폴리오          CAGR      MDD    체결   건당
+#     A 현행(K제약)    +17.14%   -8.53%   547  +1.21%
+#     B 폴링 상한      +20.30%   -9.68%   672  +1.50%   (지연0 + 예수금 안묶임 = 불가능한 상한)
+#     C 폴링 지연      -11.56%  -35.03%   663  -0.02%   (모두 포착하되 체결가=종가)
+#     D 폴링 현실       -4.29%  -19.90%   338  +0.10%   (지속만 포착, 체결가=종가)
+#   분해: 예수금을 푸는 이득 +3.15%p / 감지 지연 비용 -31.86%p -> 순 -21.43%p
+#
+# ⭐ 여기서 나오는 **상한선**이 중요하다. 주문을 걸 후보를 아무리 잘 골라도(= B),
+#    현행 대비 최대 **+3.15%p** 다. K=11 이 터치의 66%만 덮는 건 사실이지만
+#    (v13_coverage.py: K=5 53% / 11 66% / 25 81% / 100 98%), 나머지를 전부 덮어도
+#    ALLOC 8% 의 체결시점 현금이 동시보유를 ~12개로 묶어 추가 체결이 포지션으로 다 바뀌지
+#    않는다. 즉 '주문이 며칠씩 안 걸린다'는 관찰은 사실이나 비용은 3%p 수준이다.
+#    반대로 꼬리(반등)를 놓치는 비용은 20%p 단위다 — **호가창에 미리 걸어두는 것이 본질**.
+#
 # 순서
 #   1) [아침 1회, API 0회] pkl 로 오늘 도달 가능한 후보만 남긴다.
 #      지정가 < 오늘 하한가(전일종가 x 0.70)면 주문이 거부되므로 제외.
@@ -149,6 +212,11 @@ MAX_OPEN_ORDERS = 25    # 동시에 걸어둘 미체결 지정가 주문 수 상
                         #  이 상한을 12로 두면 ALLOC 4% 의 이점(K~=1/ALLOC=25)을 절반만 쓰게 된다.
                         #  ⚠️ 실제로는 예수금·남은슬롯이 먼저 묶여 K 가 6~10 수준에서 돈다.
                         #  근거: strategy-ab-backtest/ANALYSIS_V9.md 3~4절
+                        #
+                        #  2026-09-10 v10: ALLOC 이 4%->10%로 오르면서 25건을 전부 채우면
+                        #  예수금 250%가 필요해 산술적으로는 맞지 않지만, 위와 같은 이유로
+                        #  실제 동시주문수는 예수금 제약(K~=1/ALLOC=10)에서 먼저 막히므로
+                        #  MAX_OPEN_ORDERS 자체를 낮출 필요는 없다(상한일 뿐 실제 도달값이 아님).
 LIVE_REGAP = False      # ⚠️ 켜지 말 것. 2026-08-19 측정으로 폐기.
                         #  장중 현재가로 순위를 다시 세우면 '이미 지정가 아래로 내려가
                         #  머물러 있는' 종목 쪽으로 주문을 옮기게 되는데, 그게 가장 나쁜
@@ -198,6 +266,30 @@ COLMAP = {'시가': 'open', '고가': 'high', '저가': 'low', '종가': 'close'
 _UNIVERSE = None
 
 
+def log_config():
+    """서버(스케줄러) 시작 시 1회 호출 — 지금 이 프로세스에 실제로 로드된 v8 매수 상수를
+    로그에 남긴다 (2026-09-15 사용자 요청).
+
+    ⚠️ 파일을 고쳐도 재시작 전까지는 반영 안 될 수 있다는 게 이 프로젝트에서 반복된 사고
+    원인이었다(.claude/CLAUDE.md, .claude/KIWOOM_AUTO_TRADING.md 5절). "재시작했으니 새
+    값이 들어갔겠지"를 눈으로 직접 확인할 수 있게, 재시작 직후 로그 맨 앞에 실제 값을
+    찍어준다 — job/batch_runner.py의 create_scheduler()가 이 함수를 스케줄러 시작 직후
+    호출한다.
+
+    ⚠️ 상수를 하나라도 추가/변경하면 이 함수도 같이 갱신할 것 — 안 그러면 로그가 낡은 값을
+    보여주는 채로 계속 남아 오히려 오판의 원인이 된다(.claude/KIWOOM_AUTO_TRADING.md
+    '상수 변경 시 체크리스트' 참고)."""
+    _log.info(
+        'v8 매수 설정: V8_ENABLED=%s DEPTH=%.0f%% ALLOC=%.0f%% SLOTS=%d MAX_OPEN_ORDERS=%d '
+        'VALID_DAYS=%d거래일 RUN_MIN=%.0f%% AMOUNT_MIN=%.0f억 PRICE_MIN=%d원 '
+        'WATCH_PRIORITY=%s RESIZE_TOL=%.0f%% LIVE_REGAP=%s',
+        V8_ENABLED, DEPTH * 100, ALLOC * 100, SLOTS, MAX_OPEN_ORDERS, VALID_DAYS,
+        RUN_MIN * 100, AMOUNT_MIN / 1e8, PRICE_MIN, WATCH_PRIORITY, RESIZE_TOL * 100,
+        LIVE_REGAP)
+    _log.info('KRX 휴장일 캘린더: %d일 로드(API 자동갱신, kiwoom_api.refresh_krx_holidays) 오늘(%s) 거래일=%s',
+              len(api.KRX_HOLIDAYS), datetime.date.today().isoformat(), is_krx_business_day())
+
+
 def universe_codes() -> Optional[set]:
     """백테스트와 동일한 종목 집합. 파일이 없으면 None (코드 패턴으로 폴백)."""
     global _UNIVERSE
@@ -216,15 +308,21 @@ def universe_codes() -> Optional[set]:
 # KRX 정규장만 주문한다. 15:20~15:30 은 종가 단일가라 지정가가 그대로 체결되지 않고,
 # NXT 시간대(08:00~08:50, 15:30~20:00)는 kiwoom_trailing_stop 주석대로 거부된다
 # (real: 407022). 가드가 없으면 60초마다 거부 로그만 쌓인다.
+# 2026-09-14~: KRX 자체 애프터마켓(16:00~20:00, 기존 시간외단일가 폐지 대체, 15:30~16:00
+# 휴장 신설)도 이제 여기서 허용한다(2026-09-12 사용자 요청 — 검증 전 상태로 우선 반영,
+# 안 되면 주문 거부 로그로 드러난다는 전제). 상세는 kiwoom_api.is_krx_aftermarket_open
+# docstring / kiwoom_trailing_stop.py 모듈 docstring 참고.
 KRX_OPEN = datetime.time(9, 0)
 KRX_CLOSE = datetime.time(15, 20)
 
 
 def is_market_open() -> bool:
     now = datetime.datetime.now()
-    if now.weekday() >= 5:
+    if not is_krx_business_day(now.date()):  # 주말+공휴일 제외 (2026-09-24)
         return False
-    return KRX_OPEN <= now.time() < KRX_CLOSE
+    if KRX_OPEN <= now.time() < KRX_CLOSE:
+        return True
+    return is_krx_aftermarket_open()
 
 
 # ── 상태 ─────────────────────────────────────────────────────────────────────
@@ -378,8 +476,12 @@ def _mark_ordered(code: str):
         _log.info('v8 소유권 등록 %s', code)
 
 
-def release_ordered(code: str):
-    """v8 이 해당 종목을 완전히 청산했을 때 호출 — 소유권 해제."""
+def release_ordered(code: str, quiet: bool = False):
+    """v8 이 해당 종목을 완전히 청산했을 때 호출 — 소유권 해제.
+
+    quiet=True 면 이 함수 자신의 로그를 남기지 않는다 — 호출부가 이미 더 자세한 메시지를
+    남긴 경우(예: kiwoom_v8_exit.run_v8_exit_cycle()의 '청산 체결확인' 로그) 같은 사건이
+    두 줄로 중복 찍히는 걸 막기 위함(2026-09-16 사용자 지적)."""
     st = _load_pending()
     od = st.setdefault('ordered', {})
     fq = st.setdefault('filled_qty', {})
@@ -388,7 +490,8 @@ def release_ordered(code: str):
         changed = True
     if changed:
         _save_pending(st)
-        _log.info('v8 소유권 해제 %s', code)
+        if not quiet:
+            _log.info('v8 소유권 해제 %s', code)
 
 
 def _take_fill_delta(code: str, cur_qty: int) -> int:
@@ -703,8 +806,9 @@ def run_v8_screen() -> Dict:
 def buy_limit(stk_cd: str, qty: int, price: int, dmst_stex_tp: str = 'KRX') -> dict:
     """지정가 매수. trde_tp='0' (보통).
 
-    2026-08-19 실계좌에서 접수/취소 확인됨(주문번호 0274100). 체결까지 간 이력은 아직 없다.
-    하한가보다 낮은 가격은 `[2000] 주문단가가 하한가보다 낮습니다` 로 거부된다.
+    2026-08-19 실계좌에서 접수/취소 확인됨(주문번호 0274100). 이후 체결도 다수 발생했다
+    (2026-09-24 확인: trades_real.jsonl reason=v8_buy 64건+backfilled 5건, 위 모듈
+    docstring 참고). 하한가보다 낮은 가격은 `[2000] 주문단가가 하한가보다 낮습니다` 로 거부된다.
     """
     return api.place_order(stk_cd, qty, int(price), side='1', trde_tp='0',
                            dmst_stex_tp=dmst_stex_tp)
@@ -958,18 +1062,46 @@ def run_v8_buy_cycle():
                               '추정) %s qty=%d(누적%d) px=%.0f — 거래이력 기록 생략',
                               code, delta, qty, px)
 
+    # ── 자동 재주문 스위치 (2026-09-14) ─────────────────────────────────────
+    # 대시보드에서 '자동 재주문'을 끄면 여기서 멈춘다. 위치가 중요하다 —
+    #  · 위(체결 감지)는 그대로 돈다. 스위치를 끄기 전에 이미 걸려 있던 주문이 체결되면
+    #    소유권/거래이력/지정가 소진이 정상적으로 기록돼야 한다.
+    #  · 아래(후보이탈 취소 / 수량조정 / 신규주문 / 교체)는 전부 '주문을 내는' 동작이라 막는다.
+    #    특히 수량조정은 취소 후 곧바로 다시 거는 경로여서, 여기서 안 막으면 사용자가
+    #    전량 취소해 둔 주문이 되살아난다.
+    # _save_open_codes 는 빼먹지 않는다. 갱신하지 않으면 다음 사이클이 "직전엔 주문이
+    # 있었는데 지금 없다"를 계속 참으로 보고 체결 오탐을 낼 수 있다.
+    global _autobuy_off_logged
+    if not api.is_autobuy_enabled():
+        _save_open_codes(open_buy.keys())
+        if not _autobuy_off_logged:
+            _autobuy_off_logged = True
+            _log.info('v8 매수 스킵 — 자동 재주문 OFF (대시보드 스위치). 미체결 %d건은 그대로 둔다',
+                      len(open_buy))
+            api.log_event('v8_signals', {'kind': 'autobuy_disabled', 'open_orders': len(open_buy)})
+        return
+    _autobuy_off_logged = False
+
     # 하루 1회 계산된 캐시를 쓴다 (첫 사이클에서만 pkl 을 읽는다)
     #  · 보유 중 종목 제외      = 동일 종목 중복 보유 금지
     #  · 당일 매도 종목 제외    = sequential_filter 의 두 번째 규칙
-    #  · 투자주의환기종목/거래정지 제외 = 2026-09-03, 270520 사례로 요청. ka10099 auditInfo
-    #    기준(5분 캐시). 조회 실패 시엔 빈 dict가 와서 아무것도 안 걸러지므로(안전 쪽으로
-    #    폴백), 이 필터가 매수를 막지는 않되 보호도 안 해줄 수 있다는 점은 감안할 것.
+    #  · 투자주의환기종목/거래정지/관리종목 제외(무조건) = 2026-09-03, 270520 사례로 요청.
+    #    관리종목은 2026-09-07 008290(원풍물산) 사례로 한 번 무조건 차단했다가, 2026-09-08
+    #    "관리종목이라도 다 위험한 건 아니다"라는 피드백으로 1000원 미만(동전주)일 때만
+    #    제외하도록 완화했었으나, 2026-09-14 "관리종목은 매수 안 되도록" 요청으로
+    #    가격 조건 없이 다시 무조건 차단으로 되돌렸다.
+    #    ka10099 auditInfo 기준(5분 캐시). 조회 실패 시엔 빈 dict가 와서 아무것도 안
+    #    걸러지므로(안전 쪽으로 폴백), 이 필터가 매수를 막지는 않되 보호도 안 해줄 수 있다.
     _sold = sold_today_codes()
     _audit_map = api.get_stock_audit_info_map()
-    _AUDIT_BLOCK = {'투자주의환기종목', '거래정지'}
+    _AUDIT_BLOCK_HARD = {'투자주의환기종목', '거래정지', '관리종목'}
+
+    def _audit_blocked(c):
+        return _audit_map.get(c['code']) in _AUDIT_BLOCK_HARD
+
     cands = [c for c in daily_candidates()
              if c['code'] not in held and c['code'] not in _sold
-             and _audit_map.get(c['code']) not in _AUDIT_BLOCK]
+             and not _audit_blocked(c)]
 
     # ── 후보에서 빠진 종목의 미체결 주문 취소
     #  '후보 이탈'은 세 가지뿐이다.

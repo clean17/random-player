@@ -351,7 +351,7 @@ return_code == 0  AND  ord_no 존재
 당일 체결내역(`ka10076`)을 조회해 실제 값을 채운다 — `fill_price`, `fill_qty`, `unfilled`,
 `cmsn`(수수료), `tax`(거래세), `slippage`, `fill_pnl`.
 
-`ord_no`로 매칭하며, 없으면 (종목+구분+수량+시각 120초 내) 폴백한다. 수동 실행은
+`ord_no`로 매칭하며, 없으면 (종목+구분+수량+시각 150초 내) 폴백한다. 수동 실행은
 `python -m auto_trading.kiwoom_trailing_stop --reconcile [--dry-run] [--date YYYY-MM-DD]`.
 `ka10076`은 날짜 파라미터가 없어 **당일분만** 주므로 소급 정산은 같은 날에만 가능하다.
 

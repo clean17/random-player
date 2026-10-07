@@ -47,6 +47,32 @@
     font-weight: 900;
 }
 
+/* 2026-09-14: 실전/모의 계좌 보유중 배지 — 종목명 **오른쪽**(글자 바로 뒤)에 붙인다.
+   확인함 체크(::after)는 CSS 생성 콘텐츠라 실제 텍스트가 없어도 되지만, 이 배지는
+   상태 3가지(실전/모의/둘다) + 계정별 표시 여부(내 계좌 탭에서 보고 있는 계좌는 숨김)를
+   조합해야 해서 CSS ::before/after만으로는 표현이 번거롭다 — 실제 span을 종목명 뒤에
+   붙이고 내용을 JS(stock_card.js applyStockFlagState)가 채운다. 아무것도 보유하지 않으면
+   빈 텍스트만 남는데, :empty로 그 자리 자체를 숨긴다. */
+.table-scroller .trade-name { display: flex; align-items: center; flex-wrap: wrap; }
+.table-scroller .card-owned-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 3px;
+    padding: 0 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.table-scroller .card-owned-badge:empty {
+    display: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+.table-scroller .card-owned-badge.is-real { color: #d93025; border: 1px solid #d93025; }
+.table-scroller .card-owned-badge.is-mock { color: #1a7f37; border: 1px solid #1a7f37; }
+.table-scroller .card-owned-badge.is-both { color: #b8860b; border: 1px solid #b8860b; }
+
 /* Header */
 .table-scroller .trade-top {
     display: flex;

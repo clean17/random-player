@@ -499,3 +499,30 @@ body.page-stocks .table-scroller .carousel-btn .chev {
         top: 65vh !important;
     }
 }
+
+/* ===== 예측종목 트랙 B(관찰목록) 구분 표시 — [2026-09-21] =====
+   AutoSales.py의 job/multi_kor_stocks_lgbm.py가 매수 신호 0건인 날에만 만드는 목록이다.
+   실측 10거래일 보유 건당 -0.79%(매수신호는 +17.87%)로 매수 추천이 아니다.
+   매수 신호 카드와 한눈에 구분되지 않으면 "신호가 아닌 것을 신호로 오해"하게 된다. */
+.predict-watch-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #d93025;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.predict-watch-warn {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border: 1px solid #d93025;
+    border-radius: 6px;
+    background: #fdecea;
+    color: #a50e0e;
+    font-size: 12px;
+    line-height: 1.5;
+}

@@ -17,6 +17,9 @@ month_dir = f"logs/i/{month}"
 os.makedirs(month_dir, exist_ok=True)
 filename = f"{month_dir}/scrap_ig_{today}.log"
 
+INVALID_SCREEN_DIR = f"{month_dir}/invalid"
+os.makedirs(INVALID_SCREEN_DIR, exist_ok=True)
+
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
@@ -27,9 +30,9 @@ BASE_SAVE_DIR = IMAGE_DIR2
 # BASE_SAVE_DIR = r"D:\temp"
 
 # ======== 설정 ========
-USER_DATA_DIR = str(Path("./data/ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014 // dlsdn317!
-# USER_DATA_DIR = str(Path("./data/ig_profile-1").resolve())  # fx015
-# USER_DATA_DIR = str(Path("./data/ig_profile-16").resolve())  # fx016.. 사용하지마_법무부_
+# USER_DATA_DIR = str(Path("./data/ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014 // dlsdn317!
+USER_DATA_DIR = str(Path("./data/ig_profile-15").resolve())  # fx015
+# USER_DATA_DIR = str(Path("./data/ig_profile-16").resolve())  # fx016.. 사용하지마_법무부_패스워드는_인증서
 HEADLESS = False
 
 USERNAME = settings['SCRAP_USERNAME']   # 인스타 로그인 계정
@@ -44,7 +47,9 @@ PASSWORD = settings['SCRAP_PASSWORD']   # 비밀번호
 SCROLL_PAUSE = 1.8
 MAX_SCROLLS = 30001
 DELAY_2_SECOND = 2
+DELAY_5_SECOND = 5
 DELAY_10_SECOND = 10
+DELAY_30_SECOND = 30
 DELAY_1_MINUTE = 60 * 1
 DELAY_3_MINUTE = 60 * 3
 DELAY_10_MINUTE = 60 * 10
@@ -60,89 +65,6 @@ MAX_CONCURRENCY = 4
 # 팔로우
 ACCOUNTS = [
 
-    # 다시 시작할때는 아래부터
-    'yvrvxs', '_wonlyone', 'onewinter.k', 'omao_o1', 'hobaby_8888', 'helloauutumn', 'min98_____', '___jummm___',
-    'o_o_mj____', 'aki1998nana', 'ih_dressroom', 'nameisran', 'bani43_ay_', 'meowforlili', 'yelinnne', 'k_ch0502',
-    'lim_sieuni', '64_65_.i', 'nanjibeivv', 'hiju.73', 'sstraw_be.rry', 'cutieseula', 'yundong_ei', 'imparkseoyi',
-    'xmlm_666', 'ji_hyeoniii_', 'vina_009i', 'god.se', 'tkdboutique', 'g._yng_', 'for.daon', 'darin_moon_',
-    'xx_jaehee_xx', 'ycosag', 'dear__on', 'imeunldl', 'sieun1104', 'ju1ys2ven', 'milkmehiru', 'rkdms0283',
-    'hyxz.xxo', 'lexsxxloxn', 'ekdmsoll8', 'phakanat.t', 'sorrylylyy', 'na._.kkk', 'moiichanx', 'lisiyu2003',
-    'jileeseul', 'ysmzuu_', 'kxxty_070', 'mo0ndal_', '4rxnge', 'mmmcute123', 'nisazandy.19', 'eva.ulzzangg',
-    '5.22__c', 'bunn_y3500', 'roro_luv.19', '_lilly_eun', 'xoeexsol', 'miwkimin._', 'coxyu_', 'ng_n_ha',
-    'ha.hyunnn', 'innseinn', 'soheego', 'happyunaaa', 'sehee2_2', 'suyyyisss', '0w0_ji', '3are.ee', 'clare_12100',
-    'dailyssong', 'daisy.baby1004', 'phoebe_.xn', 'lilygumii', 'within_elin', 'linhlinhchip', 'tania__cho',
-    'ngquynhnhi_qni', 'Phanva_vye', '1.21.apm', 'nahaneulll', 'hiyroze', 'da.seol_', 'xaaemie', 'yoonie.bby_',
-    '_uchu_uchu_123', 'hhr_301', 'rika7me', '11sukiyo', 'callmemira926', 'jjimmy.am', 'nlinhd.04', 'mj____7.7',
-    'kyliett1', 'dumb_pink6', 'songzi_won', 'kk.kyl0', 'asyalikizpaylasiom', 'yumyum1807', 'khoaiid.06',
-    'kyu__ming', 'luv_mr.9', 'so_rabimu', 'heduolexiangtu00', 'xeoeunx', 'meowsso', 'p.___.gj', 'nlingbe_',
-    'soxuni_6', '_____serendip1ty__', 'tokki_0_0_', 'alice_milkers', 'bambi_jesuis2', 'juicy_s2_', 'babi_bunnie03',
-    'voos._.soov', '6nthespot_j', 'passerby_383', 'cheeerry_g', 'lovelynnboo', 'sirobutadesu', 'yyuu_1127._.1',
-    'composer_seol', 'meowhae_02', 'ruri_azurrum', 'sakura_maomao', '_maianieee05', 'thocon.chienbanh',
-    'mypinktension', 'bin___chuuu', 'im_your_jyeon', 'ryeo_11_', 'alicejungxx', 'syx_janeyoo', '01.00_akixik',
-    'mikanaka9999', 'godrhea', 'rosie_weiwei', 'duyenn.hipp10_4', 'duyenn.hipp10_4', 'syb.3_3', '__e_zz',
-    'ji_hye._.choi', 'xtrzssss', 'ellie.yh.kim', 'eatha_02', 'only_jin_want', 'jeonsebin606', 'g.xyn_8',
-    'jinyomissong', '1004yyyyyy', 'ini_113', 'y._.yun__', 'taemmimm', '__etre0301', 's_ye__j',
-    'hiandme_lhj', 'eliteiaai', '9530.2', 'innooonni', 'sseuldl', '__khina.z', 'bbimthune', 'menpo.senpai',
-    'takomayuyi', 'zuozuo0701', 'kekexiyyy_', 'mmikobbb', 'xiianger', 'sxxg_a', '4saruru', '__habin_s2',
-    'noonnyvichudawan', 'hbbxx_milk', 'x2_w2_', 'xx1oo9', 'love.been_', 'vely.mom', 'xx_miiyo', 'binnnibii',
-    'yundeun_', 'nna_yomi', 'serena__sy', 'haeun_______', 'byhyunbi', 'inah_sekiz05', '75.twl_', 'peach__army',
-    'vivivxxy__', 'xx_sunh_xx', 'lee_so0810', 'bibee2ee', 'neutral_magazine_', 'cotton.un', 'love._.lett',
-    'iamsxxy', '_dear_bella_', 'pilaxxs', '171___55', 'sia2_2a', 'sha2_s2022', 'kabiqiu', 'pat_parichat_', 'l70.4_',
-    'onlyone_zin', '_young2._', '7x3gram', 'serin.2am', 'huru.huruu', '173_sj', 'cutesww0125',
-    'via_olivia_xoxo', 'me.ow_me.ow_', '175_pyeon', 'l2.sh__', 'hip_pretty', 'hajiwon.22', 'jeehyeounn',
-    'jini_bbangg_', '_aarome', 'soooobxxn', 'sexy_minji_', 'yoomstagramm_', 'hbbxx_s2', 'jiseon_tv', 'jini__0227',
-    'slowswan', '___jung.g', 'chaexnn', 'hana_sooong', 'floretta__', 'floretta_for_summer', 'u.zyn', 'kalokagatxia',
-    'from__honeyvivi', 'berryooon', '0y_joo0', 'n__yoonn', 'h_s.s2', 'yee.rimi', 'si.young', 'yea_rang', 'xxaxix_',
-    'diamant.ete', 'aa_yoon', 'zhuhaina', '__dmswl_', 'seultori_510', 'yuri_luffy', 'iamruzzxng', 'sukimi0320',
-    'iloveyou._.3000', 'rinrin.zip', 'guswl_0409', 'green.teabag', 'ji2une', 'ssoyeomi', 'nannychanada',
-    'candyseul', 'bin___0812', 'oaoagirl', 'badass._.sky', 'jiee_wen', 'miya.02822',
-    'lim__bell', 'ellaeaaa', 'o_8.6', 'honey___bikini', 'otracyo8', 'ahyo12_07', 'roxeuoon',
-    'yund_s2', 'gaheunii', 'bai_zzi', 'flora_0ne', 'bo.nn._y', 'my._ju', 'seo__0.x', 'nowex._', 'hhauuni',
-    'crewme_academy', 'f0iury_1', 'vuv_lly', 'luvbbeen', 'eve_noh_', 'sorakxx', 'cooomong', 'arreumii', 'hee._.tty',
-    'sys2_s2', 'yourmuseisu', 'yaozhuzhu_', 'suming_ee', 'nanaring_', 'ddo._.uuuu', 'blossom_rim___',
-    'yea__won_', 'baek_nahyun_', '_.0_.oo', 'richyaaaaaa', 'fullmooon___', 'dh_oh_eb',
-    'jonye.com_', 'seohavivi', 'rh_ab', '_peachme_', '875cos', 'daaddaad_daad', '_sorang__',
-    'lamianxiong7717', 'samura2.heart', '92ddo', 'bhabiesol', 'heenyang___', 'bambiaura9999',
-    'rogle__', '36.mxmxyyy', 'hyxmimi', 'hee.zini', 'lluvly_', 'binxnnn', 'crystalgramx', '4._30ark___p',
-    'furee999', 'c.haee_', '5.24_c', 'd___q_', 'k__xiin', 'zisoooop', 'sinyxii', 'hoy_ni_', 'luvurse1f_',
-    'velyroom', 'hoi__yoon', '___eunluv', 'juneeexoxo', 'god.seolhwa', 'eun2ang', 'yunseul_000',
-    'dear._.jung', 'dlove_x', '0_u_ng', 'kangtokki_', 'cheap_box', 'its_suzy_time', 'amourfor_u',
-    'wellhari_', 'seolhip', 'pu.___', 'chennierubychane', 'inooyeah', 'beloved__yoo', 'a.__.rume',
-    'vvknkk', 'cherish.__h', 'akdeb_', 'iamyeoninn', 'mio_love_y', 'cha_sohyeon', 'yisoah', 'pilarim__',
-    'signoey', 'nuuzln', 'yuanweiibing', 'loyewe_official', 'dduen2', 'beena._s2', 'se0kxxg', 'soo_dayo2',
-    'min_vely__26', '_9.km', 'kss0x', 'ssoyababe', '_chae_rin2', 'kyoungsxx', 'realminzu', 'oasis_0_0', 'lovelykce',
-    'selpo_s2', 'sonming52', 'cosyounghere', 'momokini_com', 'yasal_170', 's0zzzi', '_jinuary_',
-    'ye0n2yo', 'aoi_9z', 'c_dbfl', 'its_hr_time', 'red.bell3', '__szimpatikus', 'soapurin', 'jdabyeol2', 'gu__zzzi',
-    'ddohyun', 'j1ns1m', 'soo_m___', 'leedahve', 'zennyrt', 'siu.im', 'su0rla', 'yeji._.joo', '10o4z',
-    'u__stagram__', 'himeno_yudi', 'ye.eun_son', '_hheya', 'kingvivianelee', 'nar1n_2', '_sumang._',
-    'xov.xul_', 'xouuuus', 'lssaaxx', 'closecurve_official', 'j.warm_', 'zero0silver', 'sin_e_g',
-    'g.naaaa_', 'le_wnyoung_', 'love__coc0', 'zzuu.___', 'lxzlqzp', 'simgaram', 'inkyung97',
-    'minimini_1004', '_dudu_di_', 'b_____star', 'youdaeng__', 'egg00_2.0', 'lovejaewonzz', 'h_a_c_a_', 'rlwndud05_',
-    'jihyun_09_16', 'yoo.oonni', '_kkhj2', 'prettygirl__stagram__', 'hyerininng', 'ejyoooou', 'charming__ny',
-    'dltnqls823', 'so__w0n', 'xxinchye_', 'h1_chu_', 'lilly_11029', 'seon_h_e', 'youuuu_d', 'heex.x_',
-    '59.5994', 'susan.n426', 'seo._.llll', 'kim_s_ofo', 'koreangirlsontop', 'obolzr_', 'uni_h_',
-    'bi._.kini', '9.74kg', 'lylakong01', 'fluffycandyrat', 's_jisu_02', 'ju_.vely_', '_yj2.18k',
-    '70g_ee_y', 'xmoonoa', 'bodyon_bikini', 'star____b._', 'yu._.mei', 'necomimi_b', 's0on_ho',
-    'roongzie', 'meww.jin', 'myuxxrv', 'y._.dulcet', 'si_euns2', 'in2327_h', 'jihea_a', '5959__50', 'ch__hana',
-
-    # 비공개였다가 공개된 계정들
-    'eunnhong', 'dinnydyu',  'jiyouxn', 'sen.xy_', 'iilike.0', 'you_mini_da', 'soxxhui', 'seasooseasoo',
-    's2ena2', 'nhagirlxinh', 'meimeii.99', '0.0_ey', 'ulzzanggirlasia__', '_.plo_y', 'youvlyna', 'kurosakiqiqi',
-    'eye.luv.uuu', 'julia_yang01', 'pnl_prs',
-
-    # 비공개 계정들
-    'viesuzami', 'immzoo', 'no.park.gu_', 'zzyuridarong',  '24iz.u', 'lalababy.jennn',
-    'nn_yun_s', '2pendency', 'koberryy', 'anhamm_1111', 'ba.kkung', 'jxngxxin', 'zzyuridayo', 'jjo_nyxx',
-    'lovres_min_',  'suu.eun', 'uhwa_171', 'sux_eon', 'yunxvly',
-
-    # 삭제된 프로필
-    'baberamii', # (가룸)
-    'chocomintteri', 'yasminabb_', 'xipduksoojeong', 'jqbabyby', 'onibaby2001', 'h___rvn', 'sunny_chijnn',
-    'jxngxxin', 'sindabazzi', 'yun_iia', 'ye.__119', 'lasy_243', 'ne_0_ie', 'yonuonly', 'necomimivv', 'da._.hae12',
-    'hmmmem', 'dirinzero', '_qingzi00', 'j.nsul', 'hyexnst', 'songe_love07', 'ssseulkkkii', 'beombangyeong_dory',
-    'siyeon_lovee', 'ryu._sy', 'nameisgrvn1015', 'yuuko_uzi', 'illl__._', 'ssuduck', 'jena.legs', 'eiiiiiiem',
-    'ivytt77', 'meiyouyuanzi_001', 'areuumm__', 'the.muse_elen', 'rim._.kim', 'queenzy._nail',
-    'hal.h.l', '1.02erina', 'p0_0q_12', 's2_u.l', 'xiaoyou_uzi', 'zav_by1',
 ]
 # ACCOUNTS = ["fkaus014"]  # 스크랩 대상 계정 배열
 
@@ -295,6 +217,26 @@ def extract_account_and_type(url):
     }
 
 # ======== 브라우저 조작 ========
+async def get_logged_in_username(page) -> Optional[str]:
+    """현재 브라우저 세션이 실제로 어느 IG 계정으로 로그인돼 있는지 확인.
+    USER_DATA_DIR(프로필 폴더)마다 캐시된 세션이 달라, 설정된 SCRAP_USERNAME과
+    실제 로그인 계정이 다를 수 있어 진단용으로 넣음."""
+    try:
+        resp = await page.request.get(
+            "https://i.instagram.com/api/v1/accounts/current_user/?edit=true",
+            headers={
+                "X-IG-App-ID": "936619743392459",
+                "Accept": "application/json",
+            }
+        )
+        if resp.ok:
+            data = await resp.json()
+            return (data.get("user") or {}).get("username")
+    except Exception as e:
+        print(f"[WARN] 로그인 계정 확인 실패: {e}")
+    return None
+
+
 async def ensure_login(page):
     await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
     await asyncio.sleep(4)
@@ -313,6 +255,9 @@ async def ensure_login(page):
             if await btn.count():
                 await btn.click()
                 await asyncio.sleep(1)
+
+    logged_in_user = await get_logged_in_username(page)
+    print(f"[INFO] 현재 로그인된 IG 계정: {logged_in_user or '확인 불가'} (USER_DATA_DIR={USER_DATA_DIR})")
 
 async def go_to_profile(page, handle: str):
     url = f"https://www.instagram.com/{handle.strip('/')}/"
@@ -341,13 +286,55 @@ def normalize_ig_post_url(url: str) -> str:
     return urlunsplit((s.scheme, s.netloc, new_path, s.query, s.fragment))
 
 
-async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, target_url: Optional[str] = None) -> List[str]:
+async def diagnose_invalid_account(page, account: str) -> str:
+    """ERROR-1(앵커 0개) 발생 시 원인 힌트를 남긴다: 스크린샷 저장 + 페이지 문구 매칭.
+    반환값은 사람이 읽을 reason 태그 (매칭 안 되면 '원인불명')."""
+    reason = "원인불명"
+
+    try:
+        current_url = page.url
+    except Exception:
+        current_url = ""
+
+    try:
+        body_text = await page.evaluate("() => document.body ? document.body.innerText : ''")
+    except Exception:
+        body_text = ""
+
+    markers = [
+        ("비공개 계정", ["비공개 계정입니다", "This Account is Private", "This profile is private", "비공개 프로필"]),
+        ("존재하지 않음", ["페이지를 사용할 수 없습니다", "Sorry, this page isn't available"]),
+        ("로그인 월", ["로그인하고", "Log in to continue", "계속하려면 로그인"]),
+        ("일시 차단/속도제한", ["나중에 다시 시도", "Try Again Later", "일시적으로 차단"]),
+        ("민감 콘텐츠 경고", ["민감할 수 있는 콘텐츠", "Sensitive Content"]),
+    ]
+    for tag, needles in markers:
+        if any(n in body_text for n in needles):
+            reason = tag
+            break
+
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshot_path = os.path.join(INVALID_SCREEN_DIR, sanitize_filename(f"{account}_{ts}.png"))
+        await page.screenshot(path=screenshot_path, full_page=False)
+    except Exception as e:
+        screenshot_path = f"(스크린샷 실패: {e})"
+
+    print(f"[ERROR-1-DIAG] [{account}] url={current_url} reason={reason} screenshot={screenshot_path}")
+    if body_text:
+        snippet = body_text.strip().replace("\n", " ")[:200]
+        print(f"[ERROR-1-DIAG] [{account}] body_snippet={snippet}")
+
+    return reason
+
+
+async def collect_post_links(page, account: str = "", max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, target_url: Optional[str] = None) -> List[str]:
     """프로필 페이지에서 스크롤하며 /p/, /reel/ 링크 수집 (상대경로 → 절대경로)
     target_url을 주면, 스크롤 도중 해당 게시물을 만나는 순간 더 스크롤하지 않고 즉시 반환한다."""
     links = []
     post_links: Set[str] = set()
-    # stable_rounds = 0
-    # last_count = 0
+    checked_hrefs: Set[str] = set()  # 스크롤마다 DOM에 남아있는 앵커가 재조회되므로, 이미 처리한 href는 재요청/재카운트하지 않는다
+    stable_rounds = 0  # scrollHeight가 연속으로 안 늘어난 횟수 (IG 비동기 로드가 SCROLL_PAUSE 안에 못 끝날 수 있어 1번만 보면 오판함)
     already_collected_count = 0
     target_norm = normalize_ig_post_url(target_url) if target_url else None
     await page.wait_for_selector("main", timeout=20000)
@@ -364,7 +351,11 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
     for _ in range(max_scrolls):
         anchors = await page.locator('a[href*="/p/"], a[href*="/reel/"]').element_handles()
         if len(anchors) == 0:
+            # 앵커가 아예 없는 건 "아직 안 늘어남"(scrollHeight stall)과 다른 신호라
+            # stable_rounds 재시도를 타지 않고 즉시 종료한다 (재시도해도 나아지지 않음)
+            await diagnose_invalid_account(page, account)
             print('[ERROR-1] ★★★★★★★★★★★★★★★★★★★★★★★ Account is not valid ★★★★★★★★★★★★★★★★★★★★★★★ ')
+            break
         for a in anchors:
             href = await a.get_attribute("href")
             if not href:
@@ -382,6 +373,10 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
             # href = normalize_ig_post_url(href)
 
             if is_post_or_reel(href):
+                if href in checked_hrefs:
+                    continue
+                checked_hrefs.add(href)
+
                 if target_norm and normalize_ig_post_url(href) == target_norm:
                     print(f"[INFO] 목표 URL 도달, 스크롤 중단: {href}")
                     rev_links = links[::-1]   # slicing, 원본 보존
@@ -407,31 +402,21 @@ async def collect_post_links(page, max_scrolls=MAX_SCROLLS, pause=SCROLL_PAUSE, 
                 if href not in post_links:
                     post_links.add(href)
                     links.append(href)
+                    already_collected_count = 0  # 새 게시물 발견 → "연속 이미 수집됨" 카운트 리셋
 
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
         await asyncio.sleep(pause)
 
-        # 새로운 콘텐츠 로딩됐는지 확인
+        # 새로운 콘텐츠 로딩됐는지 확인 (IG가 SCROLL_PAUSE 안에 다음 배치를 못 그렸을 수 있으니
+        # 한 번 안 늘었다고 바로 끝내지 않고, 연속 3번 안 늘어날 때만 종료)
         new_height = await page.evaluate("document.body.scrollHeight")
         if new_height == last_height:
-            # 더 이상 늘어나지 않으면 종료
-            break
-        last_height = new_height
-
-        # await page.evaluate("window.scrollBy(0, Math.max(400, window.innerHeight*0.9));")
-        # try:
-        #     await page.wait_for_load_state("networkidle", timeout=3000) # 스크롤 후 대기(최대)
-        # except:
-        #     pass
-        # await asyncio.sleep(pause)
-        #
-        # if len(post_links) == last_count:
-        #     stable_rounds += 1
-        #     if stable_rounds >= 3:
-        #         break
-        # else:
-        #     stable_rounds = 0
-        #     last_count = len(post_links)
+            stable_rounds += 1
+            if stable_rounds >= 3:
+                break
+        else:
+            stable_rounds = 0
+            last_height = new_height
 
     # return sorted(post_links)
     # links.reverse() # 역순으로 뒤집기
@@ -1161,10 +1146,9 @@ async def handle_account(page, account: str, preset_links: Optional[List[str]] =
     if throttle is None:
         throttle = {"processed": 0}
 
-    await ensure_login(page)
     await go_to_profile(page, account)
 
-    links = preset_links if preset_links is not None else await collect_post_links(page, target_url=target_url)
+    links = preset_links if preset_links is not None else await collect_post_links(page, account=account, target_url=target_url)
 
     if len(links) > 5:
         today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
@@ -1317,6 +1301,10 @@ async def run_scrap():
 
         throttle = {"processed": 0}  # 계정 간 누적 카운터 공유
 
+        login_page = await context.new_page()
+        await ensure_login(login_page)
+        await login_page.close()
+
         for i, acc in enumerate(ACCOUNTS):
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
             print(f"\n[INFO] [{today}] Start account processing: [{acc}] ({i+1}/{len(ACCOUNTS)})")
@@ -1340,10 +1328,10 @@ async def run_scrap():
             if i < len(ACCOUNTS) - 1:
                 if rs > 30:
                     today_c = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-                    print(f"[INFO] [{today_c}] [{acc}] 계정 간 쿨다운 1분 대기")
-                    await asyncio.sleep(DELAY_1_MINUTE)
+                    print(f"[INFO] [{today_c}] [{acc}] 계정 간 쿨다운 30초 대기")
+                    await asyncio.sleep(DELAY_30_SECOND)
                 else:
-                    await asyncio.sleep(DELAY_10_SECOND)
+                    await asyncio.sleep(DELAY_5_SECOND)
 
         # 재시도: 스냅샷 후 초기화 → 재시도 중 발생한 새 에러는 다시 파일에 누적
         pending = {acc: links for acc, links in ERROR_LINKS.items() if links}

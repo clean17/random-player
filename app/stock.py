@@ -18,14 +18,14 @@ from app.repository.stocks.stocks import merge_daily_interest_stocks, get_intere
 from app.repository.users.users import find_user_by_username
 import time
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
-    request_stock_volume_and_amount, request_stock_category
+    request_stock_volume_and_amount, request_stock_category, get_trading_amounts
 from job.batch_runner import predict_stock_graph
 from config.config import settings
 from auto_trading.kiwoom_api import get_holdings_and_summary, get_holdings, get_account_credentials, \
     get_current_price_and_name, get_deposit, get_unfilled_orders, cancel_order, env_path, KIWOOM_ENV, VALID_ENVS, \
-    get_stock_audit_info_map, get_market_index_rates
+    get_stock_audit_info_map, get_market_index_rates, get_usd_krw_rate, is_autobuy_enabled, set_autobuy_enabled
 from auto_trading.kiwoom_trailing_stop import get_trade_history, get_pnl_summary, get_asset_based_pnl, manual_buy, manual_sell, manual_cancel_order, \
-    _held_business_days as _legacy_business_days
+    manual_cancel_all_orders, order_accepted, _held_business_days as _legacy_business_days
 from auto_trading import kiwoom_trailing_stop as legacy_exit
 from auto_trading import kiwoom_v8_strategy as v8_strategy
 from auto_trading import kiwoom_v8_exit
@@ -216,6 +216,9 @@ def _read_lgbm_sidecar(directory, filename):
 _LGBM_PICKLE_DIR_MAP = {
     "kr": r"C:\my-project\AutoSales.py\data\pickle",
     "us": r"C:\my-project\AutoSales.py\data\pickle_us",
+    # [2026-09-21] 트랙 B(관찰 목록)도 종목은 국장이라 같은 pkl을 쓴다.
+    # 없으면 현재가/신호일 거래대금이 비어 보인다(app/image.py의 LGBM_DIR_MAP 주석 참고).
+    "kr_watch": r"C:\my-project\AutoSales.py\data\pickle",
 }
 
 
@@ -247,6 +250,37 @@ def _get_latest_close_price(market, ticker):
         return None
 
 
+# 신호 당일 거래대금(종가 × 거래량)은 신호 시점엔 알 수 없어서(그날 장중엔 아직 미확정) 예측
+# 잡이 사이드카에 저장해두지 않는다 — 그래서 현재가와 마찬가지로 pkl에서 그때그때 계산한다.
+# 현재가와 달리 "그날"이 고정값이라 매번 신호일(date_raw)의 그 행을 찾아야 한다.
+def _get_signal_day_trading_value(market, ticker, date_raw):
+    pickle_dir = _LGBM_PICKLE_DIR_MAP.get(market)
+    if not pickle_dir or not date_raw:
+        return None
+    path = os.path.join(pickle_dir, f"{ticker}.pkl")
+    if not os.path.isfile(path):
+        return None
+    try:
+        df = pd.read_pickle(path)
+        if df.empty:
+            return None
+        col_c = "종가" if "종가" in df.columns else ("Close" if "Close" in df.columns else None)
+        col_v = "거래량" if "거래량" in df.columns else ("Volume" if "Volume" in df.columns else None)
+        if col_c is None or col_v is None:
+            return None
+        ts = pd.Timestamp(date_raw)
+        if ts not in df.index:
+            return None
+        close = pd.to_numeric(df.loc[ts, col_c], errors="coerce")
+        volume = pd.to_numeric(df.loc[ts, col_v], errors="coerce")
+        if pd.isna(close) or pd.isna(volume):
+            return None
+        return float(close) * float(volume)
+    except Exception as e:
+        print(f"[stock] pkl 신호일 거래대금 조회 실패 ({market}/{ticker}/{date_raw}): {e}")
+        return None
+
+
 @stock.route("/interest/data/predict", methods=["POST"])
 def get_predict_stocks_data():
     from app.image import LGBM_DIR_MAP  # 순환 import 방지를 위해 함수 안에서 지연 import
@@ -271,12 +305,42 @@ def get_predict_stocks_data():
         parsed["signal_price"] = sidecar.get("current_price")   # 신호 당일(예측일) 종가 — 고정값
         parsed["target_price"] = sidecar.get("target_price")    # 신호가 * (1+threshold_pct/100)
         parsed["threshold_pct"] = sidecar.get("threshold_pct")
+        # [2026-09-21] "alert"(매수신호) / "watch"(관찰목록 — 매매신호 아님). 사이드카가 없거나
+        # 이 필드가 생기기 전에 만들어진 파일은 None이며, 화면은 alert로 취급한다.
+        parsed["track"] = sidecar.get("track")
         parsed["latest_price"] = _get_latest_close_price(market, parsed["stock_code"])  # 오늘 실제 종가
+        parsed["signal_trading_value"] = _get_signal_day_trading_value(market, parsed["stock_code"], parsed["date_raw"])
         rows.append(parsed)
 
     # 날짜 내림차순(최신 먼저), 같은 날짜 안에서는 확률 내림차순
     rows.sort(key=lambda r: (r["date_raw"], r["proba"]), reverse=True)
     return jsonify(rows)
+
+
+@stock.route("/interest/data/picks", methods=["GET", "POST"])
+@login_required
+def get_interest_stock_picks_data():
+    """관심종목 추천(규칙기반 점수/라벨, 점수 임계값 통과 시 최대 15개 가변). 평일 09:30~20:00
+    5분마다 job/interest_stock_picks.py가 생성해둔 결과를 그대로 읽어서 반환 — 이 요청에서
+    직접 계산하지 않는다(비용 있는 조회라 스케줄 잡에서만 생성).
+
+    date(YYYYMMDD 또는 YYYY-MM-DD, GET 쿼리스트링 또는 POST JSON body): 비우면 지금까지의
+    최신 결과(latest.json), 넘기면 그 날짜에 생성된 것 중 마지막 결과를 반환한다
+    (2026-09-21 날짜 검색 추가 — load_picks_for_date 참고)."""
+    from job.interest_stock_picks import load_latest_picks, load_picks_for_date  # 순환 import 방지를 위해 함수 안에서 지연 import
+    date_str = request.args.get('date')
+    if not date_str and request.method == 'POST':
+        date_str = (request.get_json(silent=True) or {}).get('date')
+    if date_str:
+        date_str = date_str.replace('-', '')
+        result = load_picks_for_date(date_str)
+        if result is None:
+            return jsonify({"generated_at": None, "picks": [], "disclaimer": None, "date": date_str})
+        return jsonify(result)
+    result = load_latest_picks()
+    if result is None:
+        return jsonify({"generated_at": None, "picks": [], "disclaimer": None})
+    return jsonify(result)
 
 @stock.route("/interest/view", methods=["GET"])
 @login_required
@@ -563,6 +627,7 @@ def _v8_holding_state(pos, cur_price):
         'type': 'v8',
         'hold_days': _v8_business_days(pos.get('entry_date', '')),
         'max_hold_days': kiwoom_v8_exit.MAX_HOLD_DAYS,
+        'peak': peak,                                      # 고점 가격(원) — 2026-09-10 UI에 값 노출 요청
         'pullback_from_peak': cur / peak - 1.0,           # 현재가가 고점 대비 몇 % 아래인지(음수)
         'trail_pct': kiwoom_v8_exit.TRAIL_PCT,             # 트레일링 트리거 폭(예: 0.05 = -5%)
         'trail_armed': bool(pos.get('trail_armed', True)),
@@ -583,6 +648,49 @@ def _load_legacy_positions(env):
     except Exception as e:
         print(f'레거시 청산 상태 로드 실패: {e}')
         return {}
+
+
+def _live_gap_empty_reason():
+    """실시간gap 후보가 비어있는 이유. kiwoom_v8_strategy.run_v8_screen()이 15:55 스크리닝
+    직후 오늘자 후보 캐시(state['day'])를 지우므로(다음 장 시작 때 다시 채움), 장 마감~다음
+    개장 사이엔 항상 비어있다 — '표시할 데이터가 없어요' 같은 무의미한 문구 대신 정확한
+    이유를 보여주기 위해 실제 장 시간 기준으로 판단한다(2026-09-07)."""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return '주말이라 휴장이에요. 다음 거래일 09:00 이후 갱신됩니다.'
+    if now.time() < v8_strategy.KRX_OPEN:
+        return '아직 장 시작 전이에요. 09:00 이후 갱신됩니다.'
+    if not v8_strategy.is_market_open():
+        return '오늘 장이 마감됐어요. 다음 거래일 09:00 이후 갱신됩니다.'
+    return '오늘자 후보가 없어요.'
+
+
+def _live_gap_cache_path(env):
+    """실시간gap 순위 서버 캐시 경로. 조회가 8~9초(종목당 API 1회)라 한 기기에서 새로고침한
+    결과를 다른 기기도 볼 수 있게 서버에 저장한다(2026-09-07, 예전엔 sessionStorage라
+    브라우저별로 갇혀 있었음)."""
+    return env_path(os.path.join(os.path.dirname(kiwoom_v8_exit.__file__),
+                                  'kiwoom_v8_live_gap_cache.json'), env)
+
+
+def _save_live_gap_cache(env, ranking):
+    try:
+        with open(_live_gap_cache_path(env), 'w', encoding='utf-8') as f:
+            json.dump({'ranking': ranking, 'ts': datetime.now().isoformat()}, f, ensure_ascii=False)
+    except Exception as e:
+        print(f'실시간gap 캐시 저장 실패: {e}')
+
+
+def _load_live_gap_cache(env):
+    path = _live_gap_cache_path(env)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f'실시간gap 캐시 로드 실패: {e}')
+        return None
 
 
 def _legacy_holding_state(pos, avg_price, cur_price, env=None):
@@ -681,6 +789,10 @@ def get_kiwoom_holdings():
         # 투자경고/관리종목/거래정지 등 배지 표시용 (2026-09-02, ka10099 실측 — 실계좌
         # 011090/057540 관리종목, 모의계좌 417840 투자주의로 확인됨). '정상'이면 표시 안 함.
         audit_map = get_stock_audit_info_map(env)
+        # 오늘 거래대금 (2026-09-07) — kt00018엔 없는 값이라 토스 캔들 API에서 따로 받아온다.
+        # 60초 캐시라 실패해도(get()이 빈 dict 반환) 화면은 그대로 '-'로 표시될 뿐 안 죽는다.
+        trde_amt_map = get_trading_amounts(
+            [h.get('stk_cd') for h in holdings if h.get('stk_cd')])
         for h in holdings:
             code = h.get('stk_cd')
             v8p = v8pos.get(code)
@@ -692,6 +804,7 @@ def get_kiwoom_holdings():
             h['v8'] = exit_state
             h['logo_url'] = logo_urls.get(code)
             h['audit_info'] = _audit_badge(code, audit_map)
+            h['trde_amt'] = trde_amt_map.get(code)
             # 2026-08-28: kt00018의 pred_close_pric(전일종가)이 cur_prc와 항상 똑같이 와서
             # (실측 확인 — 키움 API 쪽 결함으로 보임) day_change_rate가 매번 0%로 나왔다.
             # 2026-09-02 재확인: 지금은 pred_close_pric이 실제 전일종가와 정확히 일치하고
@@ -700,9 +813,16 @@ def get_kiwoom_holdings():
             # 실시간으로 갱신되는 장점이 있으니, pred_close가 cur_prc와 실제로 다를 때만
             # (=결함이 없을 때만) API 값을 쓰고, 혹시 둘이 같아지면(결함 재발 의심) pkl
             # 기반 계산으로 자동 폴백한다.
+            # 2026-09-23 추가: 192650 실사고 — pred_close_pric이 cur_prc와 "완전히 같지는
+            # 않지만"(8530 vs 8540) 실제 전일종가(8140)와도 다른, 그냥 틀린 값을 준 사례가
+            # 나왔다. 위 동일 비교로는 못 잡는 변종 결함이라, 아예 장이 열려있지 않을 때는
+            # (가격이 안 움직이니 API 실시간성의 이점도 없다) pred_close_pric을 안 믿고
+            # 무조건 pkl 기준으로 계산한다. 장중에는 기존 로직(완전 일치일 때만 폴백) 유지 —
+            # 그때는 3초 새로고침 실시간성이 더 중요하고, 이 변종이 장중에도 나타나는지는
+            # 아직 확인된 바 없다.
             pred_close = h.get('pred_close')
             cur_price = h.get('cur_price')
-            if not (pred_close and cur_price and pred_close != cur_price):
+            if not v8_strategy.is_market_open() or not (pred_close and cur_price and pred_close != cur_price):
                 h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
         asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
         # 2026-08-28: 원래 "1회 투입금(ALLOC=8%) 참고값"으로 넣었었는데, 사용자가 원한 건
@@ -772,7 +892,10 @@ def get_kiwoom_market_index():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
-    return jsonify({"index": rates})
+    # 원달러 환율은 계좌/env와 무관한 공통 정보라 실패해도 지수 조회 자체를 막지 않는다
+    # (표시용 부가 정보, 2026-09-22 추가).
+    usd_krw = get_usd_krw_rate()
+    return jsonify({"index": rates, "usd_krw": usd_krw})
 
 
 @stock.route("/kiwoom/orders", methods=["GET"])
@@ -825,6 +948,19 @@ def get_kiwoom_orders():
     return jsonify({"orders": orders, "env": env or KIWOOM_ENV})
 
 
+@stock.route("/kiwoom/owned_codes", methods=["GET"])
+@login_required
+def get_kiwoom_owned_codes():
+    """실전/모의 계좌에 지금 보유 중인 종목코드 (2026-09-14, 카드뷰·추천종목 '보유중' 배지용).
+
+    화면에 선택된 env(msEnv)와 무관하게 **항상 둘 다** 반환한다 — 관심종목/추천종목
+    카드에는 계좌 선택 개념이 없고, "실전이든 모의든 이미 들고 있다"만 알면 되기 때문.
+    계좌 정보가 없는 환경은 kiwoom_api.get_owned_codes()가 빈 집합으로 폴백한다.
+    """
+    from auto_trading.kiwoom_api import get_owned_codes
+    return jsonify({env: sorted(get_owned_codes(env)) for env in VALID_ENVS})
+
+
 @stock.route("/kiwoom/live_gap_ranking", methods=["GET"])
 @login_required
 def get_kiwoom_live_gap_ranking():
@@ -856,6 +992,24 @@ def get_kiwoom_live_gap_ranking():
     # 투자경고/관리종목 등 배지 표시용 (2026-09-02, /kiwoom/holdings와 동일한 패턴)
     audit_map = get_stock_audit_info_map(env)
 
+    # 매수 자체가 안 되는 종목은 실시간gap 목록에서도 제외한다(2026-09-11) — 어차피 안 살
+    # 종목이 목록에 남아있으면 혼란만 준다. kiwoom_v8_strategy.run_v8_buy_cycle()의
+    # _audit_blocked()와 동일한 규칙: 투자주의환기종목/거래정지는 무조건, 관리종목은
+    # 1000원 미만일 때만 제외.
+    _AUDIT_BLOCK_HARD = {'투자주의환기종목', '거래정지'}
+    _ADMIN_ISSUE = '관리종목'
+    _ADMIN_ISSUE_PRICE_CEILING = 1000
+
+    def _livegap_audit_blocked(c):
+        audit = audit_map.get(c.get('code'))
+        if audit in _AUDIT_BLOCK_HARD:
+            return True
+        if audit == _ADMIN_ISSUE and float(c.get('prev_close') or 0) < _ADMIN_ISSUE_PRICE_CEILING:
+            return True
+        return False
+
+    ranking = [c for c in ranking if not _livegap_audit_blocked(c)]
+
     out = [{
         'rank': i + 1,
         'stk_cd': c.get('code'),
@@ -869,7 +1023,44 @@ def get_kiwoom_live_gap_ranking():
         'holding_value': held_value.get(c.get('code')),
         'audit_info': _audit_badge(c.get('code'), audit_map),
     } for i, c in enumerate(ranking)]
-    return jsonify({"ranking": out, "env": env or KIWOOM_ENV})
+    _save_live_gap_cache(env, out)
+    empty_reason = _live_gap_empty_reason() if not out else None
+    return jsonify({"ranking": out, "env": env or KIWOOM_ENV, "empty_reason": empty_reason})
+
+
+@stock.route("/kiwoom/live_gap_ranking/cached", methods=["GET"])
+@login_required
+def get_kiwoom_live_gap_ranking_cached():
+    """서버에 저장된 마지막 실시간gap 조회 결과를 그대로 반환(키움 API 호출 없음, 즉시 응답).
+    다른 기기/새 세션에서 패널을 열었을 때 8~9초 재조회 없이 바로 마지막 결과를 보여주는 용도."""
+    try:
+        env = _req_env()
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    cached = _load_live_gap_cache(env)
+    if not cached:
+        return jsonify({"ranking": None, "ts": None, "env": env or KIWOOM_ENV,
+                         "empty_reason": _live_gap_empty_reason()})
+    cached_ranking = cached.get('ranking')
+    empty_reason = _live_gap_empty_reason() if not cached_ranking else None
+    return jsonify({"ranking": cached_ranking, "ts": cached.get('ts'), "env": env or KIWOOM_ENV,
+                     "empty_reason": empty_reason})
+
+
+def _order_reject_message(result) -> str:
+    """키움 거부 응답의 return_msg에서 사람이 읽을 실제 사유만 뽑아낸다.
+
+    2026-09-21: manual_buy/manual_sell은 주문이 거부돼도(RC코드 있는 return_code!=0) 그 결과를
+    그대로 반환하는데, 라우트가 order_accepted()로 성공 여부를 확인하지 않고 무조건
+    {"status":"success"}로 감싸버려서 화면엔 거부된 주문도 '매수 요청 완료'로만 보였다
+    (실사고: 드림텍 530주 요청 → '매수증거금이 부족합니다. 420주 매수가능'으로 거부됐는데
+    화면엔 안 보이고 로그에만 남음). return_msg 원본은 "[2000](855056:매수증거금이
+    부족합니다. 420주 매수가능)" 형태라, 코드 앞부분을 걷어내고 실제 사유만 보여준다."""
+    msg = (result or {}).get('return_msg') if isinstance(result, dict) else None
+    if not msg:
+        return '주문이 거부되었습니다'
+    m = re.search(r'\((?:[^()]*:)?([^()]+)\)\s*$', msg)
+    return m.group(1) if m else msg
 
 
 @stock.route("/kiwoom/buy", methods=["POST"])
@@ -892,6 +1083,8 @@ def post_kiwoom_buy():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
+    if not order_accepted(result):
+        return jsonify({"status": "error", "message": _order_reject_message(result), "result": result}), 400
     return jsonify({"status": "success", "result": result})
 
 
@@ -915,6 +1108,8 @@ def post_kiwoom_sell():
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
+    if not order_accepted(result):
+        return jsonify({"status": "error", "message": _order_reject_message(result), "result": result}), 400
     return jsonify({"status": "success", "result": result})
 
 
@@ -941,5 +1136,70 @@ def post_kiwoom_cancel_order():
         print(e)
         return {"status": "error", "message": str(e)}, 500
     return jsonify({"status": "success", "result": result})
+
+
+@stock.route("/kiwoom/cancel_all_orders", methods=["POST"])
+@login_required
+def post_kiwoom_cancel_all_orders():
+    """미체결 주문 일괄 취소 (2026-09-14).
+
+    ⚠️ 자동 재주문(/kiwoom/autobuy)이 켜져 있으면 v8 이 다음 60초 주기에 같은 후보에
+       다시 주문을 건다. 화면에서 먼저 경고하지만, 여기서도 현재 스위치 상태를 응답에
+       실어 보내 "껐는데 또 생겼다"는 오해를 줄인다.
+    """
+    if _is_guest():
+        return {"status": "error", "message": "게스트는 주문을 취소할 수 없습니다"}, 403
+
+    data = request.get_json() or {}
+    side = data.get("side")            # None=전체 / 'buy' / 'sell'
+    if side not in (None, "", "buy", "sell"):
+        return {"status": "error", "message": "side는 buy/sell 또는 생략입니다"}, 400
+
+    try:
+        env = _req_env(from_json=True)
+        result = manual_cancel_all_orders(env=env, side=side or None)
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    return jsonify({"status": "success", "result": result,
+                    "autobuy": is_autobuy_enabled(env), "env": env or KIWOOM_ENV})
+
+
+@stock.route("/kiwoom/autobuy", methods=["GET", "POST"])
+@login_required
+def kiwoom_autobuy():
+    """자동 재주문(자동매수) 스위치 조회/변경 (2026-09-14).
+
+    OFF 로 두면 v8(실전 지정가 매수)과 fire(모의 매수예약)가 신규 주문을 내지 않는다 —
+    전체 취소해 둔 주문이 자동으로 되살아나지 않게 하는 용도. 청산과 수동 주문은 그대로다.
+    상태는 auto_trading/kiwoom_autobuy_{real,mock}.json 에 저장되어 **서버를 재시작해도
+    유지된다** (모의 자동매매가 별도 프로세스라서 메모리 플래그로는 전달이 안 된다).
+    """
+    try:
+        env = _req_env(from_json=(request.method == "POST"))
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}, 400
+
+    if request.method == "GET":
+        return jsonify({"enabled": is_autobuy_enabled(env), "env": env or KIWOOM_ENV})
+
+    if _is_guest():
+        return {"status": "error", "message": "게스트는 설정을 바꿀 수 없습니다"}, 403
+    data = request.get_json() or {}
+    if "enabled" not in data:
+        return {"status": "error", "message": "enabled(true/false)는 필수입니다"}, 400
+    try:
+        state = set_autobuy_enabled(bool(data.get("enabled")), env=env,
+                                    who=str(current_user.get_id() or 'dashboard'))
+    except Exception as e:
+        print(e)
+        return {"status": "error", "message": str(e)}, 500
+    legacy_exit._log.info(
+        f'[자동재주문:{env or KIWOOM_ENV}] {"ON" if state["enabled"] else "OFF"} '
+        f'(by {state["who"]})')
+    return jsonify({"status": "success", "enabled": state["enabled"],
+                    "env": env or KIWOOM_ENV})
 
 

@@ -1,6 +1,7 @@
 # 키움 자동매매 — API 레이어 & 운영 노트
 
-최종 갱신 2026-08-19 · 코드 기준 `auto_trading/`
+최종 갱신 2026-09-24(본문 곳곳의 날짜 있는 각주가 더 최신일 수 있다 — 절대값보다 날짜가
+가장 최근인 문단을 우선할 것) · 코드 기준 `auto_trading/`
 
 > **이 문서의 역할**: 키움 REST 레이어의 실사양과 이 코드를 건드릴 때 알아야 할 함정.
 > **전략 파라미터(매수/매도 조건)는 여기 없다** → `auto_trading/TRADING_RULES.md` 참고.
@@ -16,22 +17,25 @@
 auto_trading/
 ├── kiwoom_api.py               # REST 공통 호출 + 조회/주문 래퍼
 ├── renew_kiwoom_token.py       # 토큰 발급 (fn_au10001)
-├── kiwoom_fire_strategy.py     # fire 매수 — 2026-08-19 스케줄 중단(코드는 유지)
+├── kiwoom_fire_strategy_mock.py # fire 매수 — 2026-08-19 실전 스케줄 중단, 모의는 지금도 가동
+│                               #   (⚠️ 개명됨 — 구 kiwoom_fire_strategy.py, 원본은
+│                               #   backup/auto_trading_20260819_101232/)
 ├── kiwoom_trailing_stop.py     # 청산 + 거래이력/손익집계 + 수동매수/매도
 │                               #   v8 소유 종목은 건너뛴다 (v8_owned_codes)
 ├── kiwoom_v8_strategy.py       # v8 매수 — 매일 스크리닝 + 지정가 대기  (2026-08-19~)
 ├── kiwoom_v8_exit.py           # v8 청산 — ATR 샹들리에/트레일링/익절/보유상한
 ├── v8_limit_order_test.py      # 지정가 주문 1주 검증용 CLI
 ├── request_kiwoom_thema.py     # 테마 조회 (스케줄 미등록)
-├── kiwoom_fire_state.json      # 종목별 마지막 매수일, 당일 매수 건수  (gitignore)
-├── kiwoom_trailing_state.json  # 종목별 고점·분할 진행상태            (gitignore)
+├── kiwoom_fire_state_{mock,real}.json     # 종목별 마지막 매수일, 당일 매수 건수  (gitignore)
+├── kiwoom_trailing_state_{mock,real}.json # 종목별 고점·분할 진행상태            (gitignore)
+├── kiwoom_manual_owned_{mock,real}.json   # 수동매수 보호 등록 종목코드          (gitignore)
 ├── kiwoom_v8_pending_real.json # v8 대기 후보 + 소유권 원장 + 아침 캐시 (gitignore)
 ├── kiwoom_v8_positions_real.json # v8 포지션 peak/분할 진행상태        (gitignore)
+├── krx_holidays_cache.json     # KRX 휴장일 API 캐시 (gitignore, 2026-09-24 신설)
 ├── TRADING_RULES.md            # 매수/매도 조건 스펙 (0절 = v8)
 ├── V8_SWITCHOVER.md            # v8 전환 절차·차이·리스크
-└── backtest/
-    ├── fire_backtest_regen.py      # 현재 규칙으로 백테스트 CSV 재생성
-    └── fire_sizing_backtest.py     # 사이징 규칙 포트폴리오 재시뮬레이션
+└── backtest/                   # ⚠️ 2026-08-19 이후 스크립트가 30개 넘게 늘었다(파라미터
+                                 #   재검증 스크립트들 — 개별 목록은 안 적는다, ls로 확인할 것)
 ```
 
 스케줄 등록은 `job/batch_runner.py`, 잡 래퍼는 `job/batch_process.py`.
@@ -68,8 +72,15 @@ auto_trading/
 | 장 종료 후 주문 | `RC4058: 모의투자 장종료` (`return_code: 20`) |
 
 → **mock에서는 실질적으로 09:00~15:20만 청산이 작동한다.** 프리마켓 갭 하락은 09:00까지 방치된다.
-거부 메시지가 "모의투자에서는"이라고 명시하므로 실계좌에서는 NXT가 열릴 것으로 보이나
-**검증된 바 없다.** 실계좌 전환 시 동작이 달라지며, 백테스트(일봉)는 이 차이를 반영하지 못한다.
+
+⚠️ **2026-09-24 갱신 — 아래 "검증된 바 없다"는 더는 사실이 아니다, 실계좌로 이미 검증됨**
+(`aftermarket_order_test.py`, `kiwoom_api.is_krx_aftermarket_open()` docstring 참고):
+- **NXT 자체(08:00~08:50 프리 / 15:30~20:00 애프터)는 실계좌도 여전히 막힌다** — 시장가만
+  보내는 래퍼 구조 때문에 `407022: 주문이 불가능한 주문종류입니다`로 거부된다(모의의
+  RC9000과는 다른 사유). 재현하려면 지정가 분기가 먼저 필요하다(TRADING_RULES.md 3절 참고).
+- **2026-09-14 신설된 KRX 자체 애프터마켓(16:00~20:00, NXT와 별개)은 실계좌에서 지정가로
+  실제 체결됐다**(18:55~19:12, v8 트레일링 청산 3건). 모의는 이 시간대도 지정가/시장가
+  가리지 않고 전부 거부된다(`RC4058`).
 
 ---
 
@@ -141,7 +152,7 @@ auto_trading/
 
 - 평일 **20:10** 스케줄(`kiwoom_reconcile_fills`, NXT 애프터마켓 20:00 종료 후). 조회 전용이라
   `is_market_open()` 체크를 하지 않는다.
-- `ord_no` 매칭이 1순위. 없으면 (종목+구분+체결수량+시각 120초 내) 폴백 —
+- `ord_no` 매칭이 1순위. 없으면 (종목+구분+체결수량+시각 150초 내) 폴백 —
   **수량만으로는 안 된다**(2026-08-11 코칩 매도 2건이 둘 다 9주였고, 수량만 보면 어긋난다).
   그래서 `_record_trade()`가 `ord_no`를 반드시 기록한다.
 - 채우는 필드: `fill_qty` `fill_price` `unfilled` `cmsn` `tax` `slippage` `fill_pnl` `fill_src`
@@ -201,6 +212,36 @@ auto_trading/
 | `kiwoom_v8_exit.py` | **필요.** 30초 청산 잡이 캐시하고 있다 |
 | 파일 이동·이름 변경 | **반드시 필요.** 캐시된 `batch_process`가 구 경로를 참조해 `ImportError`가 나고, 매수가 조용히 스킵된다 |
 | `batch_runner.py` / `batch_process.py` | **필요** |
+| `kiwoom_autobuy_{real,mock}.json` (자동 재주문 스위치) | **불필요.** 매 주기마다 파일을 다시 읽는다 — 대시보드에서 끄면 다음 주기(v8 60초 / fire 1분)부터 바로 먹는다 |
+
+> **자동 재주문 스위치 (2026-09-14 신설)**
+> 대시보드 '주문 목록' 툴바의 [자동 재주문] 버튼이 `auto_trading/kiwoom_autobuy_{real,mock}.json`
+> 을 쓰고, `kiwoom_v8_strategy.run_v8_buy_cycle()`(real)과
+> `kiwoom_fire_strategy_mock.run_fire_buy_cycle()`(mock)이 매 주기 시작에서 읽는다.
+> 파일 기반인 이유: 모의 자동매매는 **별도 프로세스**(`run_mock.py`)라 메모리 플래그로는 안 닿고,
+> 서버를 재시작해도 유지되어야 하기 때문이다. 파일이 없으면 ON(기존 동작), 읽기 실패도 ON 폴백
+> — 스위치가 깨졌다고 자동매매가 조용히 멈추는 쪽이 더 위험하다.
+> **막는 것은 신규 매수 주문뿐이다.** 청산(`kiwoom_v8_exit` / `kiwoom_trailing_stop`)과
+> 대시보드 수동 매수/매도는 영향을 받지 않는다. v8은 체결 감지까지는 정상 수행한 뒤 멈춘다
+> (스위치를 끄기 전에 걸려 있던 주문이 체결되면 이력·소유권이 정상 기록돼야 하므로).
+> ⚠️ **코드 자체(위 두 모듈 + `kiwoom_api.py`)를 처음 반영할 때는 재시작이 필요하다.**
+
+> **상수 반영 확인은 `log_config()` 로그로 한다 (2026-09-15 도입)**
+> 위 표에서 "재시작 필요"라고 나와도, 재시작한 뒤 정말 새 값이 들어갔는지는 지금까지 로그만
+> 봐서는 알 방법이 없었다 — 실제로 `create_scheduler()`의 계좌 배너가 한동안 v9 이전 하드코딩
+> 문구(트레일링 -5%/익절 +20%/보유 10영업일)를 그대로 띄우고 있었는데, 실제 상수는 그 뒤
+> 여러 번 바뀐 채였다. 이제 스케줄러 시작 직후 아래 4개가 각자 실제 로드된 상수를 로그에
+> 한 줄씩 찍는다 — 재시작 후 **반드시 이 로그로 확인할 것**:
+>
+> | 모듈 | 함수 | 찍는 값 |
+> |---|---|---|
+> | `kiwoom_v8_strategy` | `log_config()` | DEPTH/ALLOC/SLOTS/MAX_OPEN_ORDERS/VALID_DAYS/RUN_MIN 등 (real, `create_scheduler()`에서 호출) |
+> | `kiwoom_v8_exit` | `log_config()` | ATR_MULT/TRAIL_PCT/TP_PCT/MAX_HOLD_DAYS/HARD_FLOOR_PCT 등 (real) |
+> | `kiwoom_trailing_stop` | `log_config()` | STOP_LOSS_RATE/TRAIL_GAP/MAX_HOLD_DAYS 등 — real/mock 공용이라 양쪽 스케줄러 모두 호출 |
+> | `kiwoom_fire_strategy_mock` | `log_config()` | BUY_SLOTS/COOLDOWN_DAYS/CASH_DEPLOY_RATIO 등 (mock, `create_mock_scheduler()`에서 호출) |
+>
+> ⚠️ **상수를 하나라도 추가·변경하면 해당 모듈의 `log_config()`도 같이 고칠 것.** 안 고치면
+> 이 로그가 낡은 값을 계속 보여줘서, 방금 겪었던 것과 똑같은 방식으로 다시 오판하게 된다.
 
 확인 방법: `logs/kiwoom_trading/trading.log`에서 프로세스 시작 이후 해당 잡의 로그가 찍혔는지 본다.
 찍혀 있으면 이미 캐시된 상태다.
@@ -298,11 +339,31 @@ python auto_trading/backtest/fire_sizing_backtest.py <csv> all
    참고: 8월 자동청산은 −73,232원(39건)으로 7월(−3,138,813원, 40건)보다 규모·손실이 크게
    줄었다. 7월은 파라미터를 계속 바꾸며 테스트한 기간이고 티엘비 액면분할 오인 청산
    −939,000원도 포함된다. 8월 데이터가 쌓이면 재조정 효과를 실측으로 볼 수 있다.
-2. **NXT 시간대 동작을 mock으로 검증할 수 없다.** 실계좌에서 처음 겪는다.
-3. `interest_v2` 신호는 2026-08-11 도입으로 데이터가 1일뿐이라 백테스트 불가.
+2. `interest_v2` 신호는 2026-08-11 도입으로 데이터가 1일뿐이라 백테스트 불가.
+3. **`KASI_HOLIDAY_API_KEY`(.env)가 만료되거나 data.go.kr 트래픽 한도를 넘기면** 휴장일
+   캘린더 자동 갱신이 조용히 실패한다(`refresh_krx_holidays()`가 예외 없이 False만 반환).
+   `trading.log`의 "KRX 휴장일 캘린더 갱신 실패" 로그로만 알 수 있다 — 알림 연동은 없음.
+   실패해도 `kiwoom_api.KRX_HOLIDAYS_2026`(2026년 한정 하드코딩 폴백)로 계속 동작은 하니
+   즉각적인 사고로 이어지진 않지만, 2027년 넘어가면 그 폴백도 못 믿는다.
 
 ### 해결됨
 
 - ~~체결조회 API 연동~~ → 2026-08-12 `ka10076` 연동 + `reconcile_fills()` 구현 (3·4절)
+- ~~NXT/애프터마켓 동작을 mock으로 검증할 수 없다~~ → 실계좌에서 검증됨 (2절 2026-09-24 갱신 참고):
+  NXT 자체는 실계좌도 여전히 거부(407022)되지만, 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)은
+  실계좌 지정가로 실제 체결 확인됨(18:55~19:12, v8 트레일링 3건)
 - ~~`trades.jsonl` 손익 불일치~~ → 불일치가 아니었다. 기간을 잘못 맞춰 비교한 것 (6절)
 - ~~슬리피지가 기대값을 뒤집을 수 있다~~ → 실측 ±0.03% 수준으로 무영향 (8절)
+- ~~평일 공휴일(추석 등)에 청산 사이클이 계속 돌며 RC4010/RC4058 거부 로그와 `kt10001`
+  rate-limit을 반복~~ → 2026-09-24 `kiwoom_api.is_krx_business_day()` 추가, 각 모듈의
+  `is_market_open()`류 게이트에 연결해 공휴일엔 사이클 자체가 안 돌게 막음. 보유일수 계산
+  (`_held_business_days`/`_business_days`)은 `TRADING_RULES.md` 1-2절의 백테스트 근거
+  때문에 **의도적으로 그대로 둠** — 실제 청산 시각에는 영향 없음(상세는 그 문서 참고).
+- ~~휴장일 목록을 매년 손으로 갱신해야 함~~ → 2026-09-24 한국천문연구원 "특일 정보" API
+  (공공데이터포털, `.env`의 `KASI_HOLIDAY_API_KEY`)로 자동 갱신하도록 교체
+  (`kiwoom_api.refresh_krx_holidays()`, 서버 시작 시 1회 + 매주 일요일 01:00
+  `refresh_krx_holidays_weekly` 잡). 검증 중 하드코딩 방식이었다면 2026-06-03
+  지방선거 휴장일을 놓쳤을 것도 발견함 — 선거일처럼 그때그때 공고되는 휴장일은 연초
+  캘린더에 없어서 정적 목록으로는 원천적으로 못 잡는다. API/캐시가 둘 다 실패할 때만
+  `KRX_HOLIDAYS_2026`(교차검증된 하드코딩) 최후 폴백으로 내려간다 — 절대 빈 캘린더로
+  덮어쓰지 않아 "휴장일이 하나도 없다"는 최악의 오판은 안 나게 설계함.

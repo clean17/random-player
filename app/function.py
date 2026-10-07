@@ -7,6 +7,7 @@ import io
 import json
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
+from app.image import DIR_CONFIG, clean_filename
 from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
@@ -19,7 +20,7 @@ from app.push import send_push_to_user
 from job.batch_process import run_crawl_ai_image
 from job.buy_lotto import async_buy_lotto
 from utils.common import open_folder
-from utils.fetch_url_preview import fetch_url_preview_by_selenium
+from utils.fetch_url_preview import fetch_url_preview_by_selenium, is_safe_external_url
 from job.compress_file import compress_directory, compress_directory_to_zip
 import multiprocessing
 import time
@@ -171,9 +172,17 @@ def download_all_zip():
     if not directory:
         return jsonify({"error": "Missing 'dir' parameter"}), 400
 
+    # dir은 임의의 파일시스템 경로가 아니라 DIR_CONFIG에 등록된 화이트리스트 키(또는 'temp')만 허용
     if directory == 'temp':
-        directory = os.path.join(TEMP_IMAGE_DIR, title_directory)
+        if not title_directory:
+            return jsonify({"error": "Missing 'title' parameter"}), 400
+        safe_title = clean_filename(os.path.basename(title_directory))
+        directory = os.path.join(TEMP_IMAGE_DIR, safe_title)
         print('download_all_zip - directory', directory)
+    elif directory in DIR_CONFIG:
+        directory = DIR_CONFIG[directory].base_dir
+    else:
+        return jsonify({"error": "Invalid 'dir' parameter"}), 400
 
     zip_filename = f"compressed_{os.path.basename(directory)}_.zip"
     zip_filepath = os.path.join(directory, zip_filename)
@@ -240,6 +249,7 @@ def get_logs_by_date(date):
     # return jsonify({"logs": logs})
 
 @func.route("/logs/stream")
+@login_required
 def stream_logs():
     """SSE를 사용하여 실시간 로그 스트리밍"""
     def generate():
@@ -782,11 +792,15 @@ def handle_last_chat_id():
 ################################# PREVIEW ####################################
 
 @func.route('/api/url-preview', methods=['POST'])
+@login_required
 def render_preview():
     data = request.get_json()
     url = data.get('url')
     chat_id = data.get('chat_id')
     # return fetch_url_preview(url)
+
+    if not url or not is_safe_external_url(url):
+        return jsonify({'error': 'Invalid or disallowed url'}), 400
 
     # chat_id 로 검색한 결과가 없으면 데이터 fetch
     result = find_chat_url_preview(url)

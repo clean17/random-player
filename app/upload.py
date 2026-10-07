@@ -7,6 +7,7 @@ from config.config import settings
 from zipfile import ZipFile
 from utils.ffmpeg.generate_thumbnail import convert_file
 from utils.ffmpeg.webm_to_mp4 import convert_webm_to_mp4
+from .image import clean_filename
 import uuid
 import time
 from mimetypes import guess_type
@@ -17,6 +18,13 @@ upload = Blueprint('upload', __name__)
 TEMP_IMAGE_DIR = settings['TEMP_IMAGE_DIR']
 HTM_DIRECTORY = settings['HTM_DIRECTORY']
 TT_DIRECTORY = settings['TT_DIRECTORY']
+
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.jfif'}
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm'}
+ARCHIVE_EXTENSIONS = {'.zip'}
+# title='htm' 버킷은 웹페이지 스냅샷 저장용으로 html 업로드가 의도된 기능이라 별도 허용
+HTML_EXTENSIONS = {'.html', '.htm', '.mhtml'}
+ALLOWED_UPLOAD_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | ARCHIVE_EXTENSIONS
 
 @upload.route('/', methods=['GET'])
 @login_required
@@ -36,6 +44,7 @@ def upload_file():
         title = request.form.get("title", "no_title")  # 'title' 데이터 받기
         if title == "":
             title = "no_title"
+        title = clean_filename(os.path.basename(title))  # 경로 이동(../) 및 구분자 제거
         saved_files = []
 
         # 지정한 타이틀로 하위 디렉토리 생성
@@ -50,15 +59,21 @@ def upload_file():
         total_files = len(uploaded_files)
         for index, file in enumerate(uploaded_files, start=1):
             if file and file.filename:  # 파일명이 있는 경우 저장
-                # filename = secure_filename(file.filename)
-                filename = file.filename
+                # 경로 이동(../) 및 구분자 제거: 클라이언트가 보낸 filename은 전적으로 신뢰 불가
+                filename = clean_filename(os.path.basename(file.filename))
                 name, ext = os.path.splitext(filename)
                 # UUID 생성
+                name = name[:50]  # 원본 파일명이 과도하게 길면 경로 제한(260자)에 걸림 — 앞부분만 유지
                 uuid_filename = f"{name}_{uuid.uuid4().hex}{ext.lower()}"
                 file_ext = os.path.splitext(filename)[1].lower()
+                allowed_extensions = ALLOWED_UPLOAD_EXTENSIONS | (HTML_EXTENSIONS if title == 'htm' else set())
+
+                if file_ext not in allowed_extensions:
+                    print(f"업로드 거부(허용되지 않은 확장자): {filename}")
+                    continue
 
                 # 압축 파일인 경우
-                if file_ext in ['.zip']:
+                if file_ext in ARCHIVE_EXTENSIONS:
                     # 임시로 업로드된 압축파일 저장
                     archive_path = os.path.join(target_dir, filename)
                     file.save(archive_path)
@@ -67,12 +82,16 @@ def upload_file():
                     try:
                         with ZipFile(archive_path, 'r') as zip_ref:
                             zip_ref.extractall(target_dir)
-                            # zip 파일 내 모든 파일 경로 추가 (디렉터리 구조 유지)
-                            extracted_paths = [
-                                os.path.join(target_dir, extracted_file)
-                                for extracted_file in zip_ref.namelist()
-                                if os.path.isfile(os.path.join(target_dir, extracted_file))
-                            ]
+                            # zip 내부 파일도 확장자 화이트리스트 재검증(허용 안 된 파일은 즉시 삭제)
+                            extracted_paths = []
+                            for extracted_file in zip_ref.namelist():
+                                full_extracted_path = os.path.join(target_dir, extracted_file)
+                                if not os.path.isfile(full_extracted_path):
+                                    continue
+                                if os.path.splitext(extracted_file)[1].lower() not in allowed_extensions:
+                                    os.remove(full_extracted_path)
+                                    continue
+                                extracted_paths.append(full_extracted_path)
                             zip_total = len(extracted_paths)
                             for zip_index, extracted_path in enumerate(extracted_paths, start=1):
                                 convert_file(extracted_path, zip_index, zip_total)

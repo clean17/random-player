@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import requests
-from datetime import datetime
+from datetime import datetime, date, timedelta, time as _dtime
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv, find_dotenv
 
@@ -61,6 +61,172 @@ def get_account_credentials(env: Optional[str] = None) -> tuple:
     return os.environ.get(c['acnt_no_env']), os.environ.get(c['acnt_pwd_env'])
 
 
+# KRX 공식 휴장일(주말 제외, 평일인데 장이 안 열리는 날). 대체공휴일·임시공휴일·선거일 포함.
+# 2026-09-24 사고 계기로 추가 — is_market_open() 계열 함수가 전부 "월~금이면 영업일"로만
+# 보고 있어서, 추석 등 평일 공휴일에 청산 주문을 거부(RC4010/RC4058)당할 때까지 30초/60초마다
+# 계속 시도했다. (보유일수 계산 자체는 TRADING_RULES.md 1-2절 백테스트 근거로 일부러 그대로 둠.)
+#
+# 최초엔 이 목록을 하드코딩했으나(교차검증한 15일), 검증 도중 2026-06-03 지방선거 휴장일이
+# 그 방식으로는 빠져있었던 걸 발견했다(선거일은 연초 시판 캘린더에 없고 그때그때 공고된다) —
+# 그래서 한국천문연구원 "특일 정보" API(공공데이터포털, .env KASI_HOLIDAY_API_KEY)로 자동
+# 갱신하도록 바꿨다. KRX 정기휴장일 규정(공휴일+근로자의날+토요일+일요일+12/31, 그 외 임시
+# 공휴일·선거일 포함)이 이 API의 isHoliday=Y 판정과 정확히 일치함을 실측 확인(2026-09-24,
+# 아래 소스 대조: 현충일 6/6은 그 해 토요일이라 무관, 제헌절 7/17은 2026년에 한시적으로 법정
+# 공휴일 재지정돼 실제로 KRX도 휴장 — API가 이걸 정확히 잡아냈다).
+KRX_HOLIDAY_API_URL = ('https://apis.data.go.kr/B090041/openapi/service/'
+                        'SpcdeInfoService/getHoliDeInfo')
+_KRX_HOLIDAY_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        'krx_holidays_cache.json')
+
+# 최후 폴백(API 키 미설정·최초 실행 시 캐시 파일도 없을 때만 씀) — 2026-09-24 교차검증.
+# ⚠️ 지방선거처럼 그때그때 공고되는 휴장일은 여기 못 담는다 — 이 목록은 어디까지나
+# API/캐시가 둘 다 실패했을 때의 안전망이지 정답이 아니다.
+KRX_HOLIDAYS_2026 = {
+    date(2026, 1, 1),
+    date(2026, 2, 16), date(2026, 2, 17), date(2026, 2, 18),
+    date(2026, 3, 2),
+    date(2026, 5, 1), date(2026, 5, 5), date(2026, 5, 25),
+    date(2026, 6, 3),  # 전국동시지방선거 (2026-09-24 API 조회로 발견 — 최초 하드코딩엔 누락돼 있었다)
+    date(2026, 7, 17),  # 제헌절 (2026년 한시적 법정공휴일 재지정, KRX도 휴장)
+    date(2026, 8, 17),
+    date(2026, 9, 24), date(2026, 9, 25),
+    date(2026, 10, 5), date(2026, 10, 9),
+    date(2026, 12, 25), date(2026, 12, 31),
+}
+KRX_HOLIDAYS = set(KRX_HOLIDAYS_2026)  # refresh_krx_holidays()가 in-place로 갱신 (재바인딩 금지 —
+                                        # 다른 모듈이 from ... import KRX_HOLIDAYS 로 참조를 들고 있다)
+
+
+def _year_end_closure(year: int) -> date:
+    """12/31 결산휴장일. 주말이면 KRX 규정대로 직전 평일로 당긴다(다른 공휴일과 겹치는
+    희귀 케이스까지는 처리하지 않음 — 실무상 거의 발생하지 않는다)."""
+    d = date(year, 12, 31)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def _fetch_krx_holidays_year(year: int) -> Optional[List[str]]:
+    """KASI 특일 정보 API로 한 해 공휴일(YYYYMMDD 문자열 리스트)을 조회. 실패하면 None —
+    호출부가 기존 값을 그대로 유지할 수 있게 예외를 던지지 않는다."""
+    api_key = os.environ.get('KASI_HOLIDAY_API_KEY')
+    if not api_key:
+        return None
+    try:
+        resp = requests.get(KRX_HOLIDAY_API_URL, params={
+            'serviceKey': api_key, 'solYear': str(year), 'numOfRows': '100', '_type': 'json',
+        }, timeout=10)
+        resp.raise_for_status()
+        body = resp.json().get('response', {}).get('body', {})
+        items = (body.get('items') or {}).get('item') or []
+        if isinstance(items, dict):
+            items = [items]
+        return [str(it['locdate']) for it in items if it.get('isHoliday') == 'Y']
+    except Exception as e:
+        print(f'[WARN] KASI 휴장일 API 조회 실패({year}년): {e}')
+        return None
+
+
+def _load_krx_holiday_cache_file() -> Dict[str, List[str]]:
+    try:
+        with open(_KRX_HOLIDAY_CACHE_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_krx_holiday_cache_file(cache: Dict[str, List[str]]) -> None:
+    tmp = _KRX_HOLIDAY_CACHE_PATH + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, _KRX_HOLIDAY_CACHE_PATH)  # 원자적 교체 — kiwoom_v8_positions 파일 손상 사고 재발 방지
+
+
+def _apply_krx_holiday_cache(cache: Dict[str, List[str]]) -> bool:
+    """cache({'2026': ['20260101', ...]})를 KRX_HOLIDAYS에 in-place 반영. 파싱 가능한 날짜가
+    하나도 없으면 아무것도 바꾸지 않고 False를 반환한다(빈 캘린더로 덮어써 전부 '거래일'로
+    오판하는 게 최악의 실패 모드라서)."""
+    new_dates = set()
+    for year_str, ymd_list in (cache or {}).items():
+        try:
+            year = int(year_str)
+        except ValueError:
+            continue
+        for ymd in ymd_list:
+            try:
+                new_dates.add(datetime.strptime(str(ymd), '%Y%m%d').date())
+            except ValueError:
+                continue
+        new_dates.add(_year_end_closure(year))
+    if not new_dates:
+        return False
+    KRX_HOLIDAYS.clear()
+    KRX_HOLIDAYS.update(new_dates)
+    return True
+
+
+# 모듈 로드 시: 캐시 파일이 있으면 그걸로 하드코딩 폴백을 즉시 덮어쓴다(로컬 파일 읽기라
+# 네트워크 호출 없이 빠르다). 캐시가 없거나 비어있으면 위 KRX_HOLIDAYS_2026 폴백을 그대로 둔다.
+_apply_krx_holiday_cache(_load_krx_holiday_cache_file())
+
+
+def refresh_krx_holidays() -> bool:
+    """올해+내년 공휴일을 API로 갱신해 캐시 파일에 저장하고 KRX_HOLIDAYS에 반영한다.
+    job/batch_runner.py에 주 1회 스케줄로 등록해서 쓸 것 — 서버가 몇 달씩 재시작 없이 떠
+    있어도 새해 캘린더가 자동으로 들어오고, 지방선거처럼 갑자기 공고되는 휴장일도 반영된다.
+    ⚠️ API 실패 시 기존 캐시/폴백을 그대로 두고 False를 반환한다 — 절대 빈 값으로 덮지 않는다."""
+    this_year = datetime.now().year
+    fetched: Dict[str, List[str]] = {}
+    for y in (this_year, this_year + 1):
+        dates = _fetch_krx_holidays_year(y)
+        if dates:
+            fetched[str(y)] = dates
+    if not fetched:
+        return False
+    cache = _load_krx_holiday_cache_file()
+    cache.update(fetched)
+    ok = _apply_krx_holiday_cache(cache)
+    if ok:
+        _save_krx_holiday_cache_file(cache)
+    return ok
+
+
+def is_krx_holiday(d: Optional[date] = None) -> bool:
+    """평일인데 KRX가 쉬는 날인지(주말 여부는 별도로 봐야 함)."""
+    d = d or datetime.now().date()
+    return d in KRX_HOLIDAYS
+
+
+def is_krx_business_day(d: Optional[date] = None) -> bool:
+    """주말도 KRX_HOLIDAYS도 아닌 실제 개장일인지."""
+    d = d or datetime.now().date()
+    return d.weekday() < 5 and d not in KRX_HOLIDAYS
+
+
+def is_krx_aftermarket_open() -> bool:
+    """2026-09-14 신설 KRX 애프터마켓(16:00~20:00) — 기존 시간외단일가 폐지하고 대체,
+    15:30~16:00 휴장 신설. NXT 애프터마켓(15:30~20:00)과는 별개의 KRX 소속 세션.
+
+    실측 결과(auto_trading/aftermarket_order_test.py):
+      · 실전(real) — 시장가는 거부(return_code 20, "[2000](521790:해당 호가유형은 주문
+        불가능한 시간입니다.)")되지만 **지정가는 정상 접수·체결**된다(2026-09-14 18:55~19:12,
+        v8 트레일링 청산이 지정가로 실제 3건 체결 확인). kiwoom_v8_exit._sell /
+        kiwoom_trailing_stop._sell 이 이 시간대엔 지정가로 자동 전환해 대응한다.
+      · **모의(mock) — 지정가/시장가 가리지 않고 전부 거부된다**(2026-09-15 19:04 실측,
+        `RC4058:모의투자 장종료`). 시세 조회(get_current_price)는 정상 동작하지만 주문
+        자체를 아예 안 받는다 — NXT 때(RC9000, "해당업무가 제공되지 않습니다")와 같은
+        패턴이다. 그래서 이 함수는 **mock이면 무조건 False**를 반환한다 — mock 프로세스에서
+        기다려봐야 되는 주문이 아니므로, 여기서 걸러 fire 매수/레거시 청산이 매 사이클
+        RC4058 거부만 반복 기록하지 않게 한다.
+    """
+    if KIWOOM_ENV != 'real':
+        return False
+    now = datetime.now()
+    if not is_krx_business_day(now.date()):
+        return False
+    return _dtime(16, 0) <= now.time() < _dtime(20, 0)
+
+
 def env_path(path: str, env: Optional[str] = None) -> str:
     """상태·이력 파일 경로에 KIWOOM_ENV를 붙여 모의/실전을 분리한다.
 
@@ -105,6 +271,54 @@ def log_event(stream: str, payload: Dict, env: Optional[str] = None) -> None:
         pass
 
 
+# ── 자동 재주문 스위치 (2026-09-14) ──────────────────────────────────────────
+# 대시보드 '주문 목록'의 [전체 주문 취소] 버튼으로 미체결을 싹 지워도, 자동매매는 다음
+# 주기(v8 60초 / fire 애프터마켓 1분)에 같은 후보에 다시 주문을 걸어버린다
+# (manual_cancel_order docstring 참고 — 취소는 '지금 이 주문' 하나만 없앤다).
+# 그래서 "취소해 둔 상태를 유지하고 싶다"는 요구를 만족시키려면 재주문 자체를 끄는
+# 스위치가 필요하다.
+#
+# 왜 파일인가: 자동매매가 두 프로세스로 갈려 있다(메인=real v8, run_mock.py=mock fire).
+# Flask가 메모리 플래그를 켜도 모의 프로세스에는 닿지 않고, 재시작하면 사라진다.
+# env_path()로 real/mock을 분리해 각 계좌의 스위치가 서로를 건드리지 않게 한다.
+#
+# ⚠️ 이 스위치는 **매수(신규 주문)만** 막는다. 청산(kiwoom_v8_exit / trailing_stop)과
+#    대시보드 수동 매수/매도는 영향을 받지 않는다 — 보유 종목 보호가 꺼지면 안 된다.
+_AUTOBUY_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kiwoom_autobuy.json')
+
+
+def autobuy_flag_path(env: Optional[str] = None) -> str:
+    return env_path(_AUTOBUY_FLAG, env)
+
+
+def is_autobuy_enabled(env: Optional[str] = None) -> bool:
+    """자동 재주문(자동매수)이 켜져 있는가. 파일이 없으면 True = 기존 동작.
+
+    읽기 실패도 True 로 폴백한다. 스위치 파일이 깨졌다는 이유로 자동매매가 조용히
+    멈추는 쪽이 더 위험하다(반대로 꺼진 걸 못 읽어 한 주기 더 주문이 나가는 건
+    사용자가 화면에서 바로 알아챌 수 있다).
+    """
+    try:
+        with open(autobuy_flag_path(env), 'r', encoding='utf-8') as f:
+            return bool(json.load(f).get('enabled', True))
+    except FileNotFoundError:
+        return True
+    except Exception:
+        return True
+
+
+def set_autobuy_enabled(enabled: bool, env: Optional[str] = None,
+                        who: str = 'dashboard') -> Dict:
+    state = {'enabled': bool(enabled), 'who': who,
+             'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    path = autobuy_flag_path(env)
+    tmp = '%s.tmp.%d' % (path, os.getpid())
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False)
+    os.replace(tmp, path)
+    return state
+
+
 def get_trading_logger(name: str) -> 'logging.Logger':
     """자동매매 모듈 공용 파일 로거. `trading.log`(real) / `trading_mock.log`(mock)에 쓴다.
 
@@ -124,7 +338,10 @@ def get_trading_logger(name: str) -> 'logging.Logger':
         return log
     log.setLevel(logging.INFO)
     log.propagate = False   # 앱 root/waitress 로거로 전파 안 함 (logs/app 쪽에 중복 기록 방지)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    # 2026-09-11: 파일이 real/mock으로 나뉘어도 로그 한 줄만 떼어보면(복사/공유 시) 어느
+    # 계좌인지 알 수 없다는 지적 — kiwoom_trailing_stop.py의 수동 로거와 동일하게 포맷 자체에
+    # 환경 태그를 박는다.
+    formatter = logging.Formatter(f'%(asctime)s [%(levelname)s][{KIWOOM_ENV.upper()}] %(message)s')
 
     # real -> trading.log (기존 파일 그대로, 180일 백업 이력 연속성 유지) / mock -> trading_mock.log
     log_name = 'trading.log' if KIWOOM_ENV == 'real' else f'trading_{KIWOOM_ENV}.log'
@@ -384,6 +601,94 @@ def get_market_index_rates(env: Optional[str] = None, force: bool = False) -> Di
     return result
 
 
+_FX_CACHE_LOCK = threading.Lock()
+_FX_CACHE: Optional[Tuple[float, float]] = None
+_FX_CACHE_TTL = 60.0  # 1분. 코스피/코스닥 지수와 같은 캐시 주기 — 계좌 무관 공통 정보.
+_FX_URL = ('https://m.search.naver.com/p/csearch/content/qapirender.nhn'
+           '?key=calculator&pkid=141&q=%ED%99%98%EC%9C%A8&where=m'
+           '&u1=keb&u6=standardUnit&u7=0&u3=USD&u4=KRW&u8=down&u2=1')
+
+
+def get_usd_krw_rate(force: bool = False) -> Optional[float]:
+    """네이버 환율계산기 API로 원/달러 현재가를 가져온다(키움 API엔 환율 조회가 없음).
+    AutoSales.py/utils.py get_usd_krw_rate()와 동일한 엔드포인트 — 그쪽에서 이미 운영 중인
+    방식을 그대로 재사용. 1분 캐시, 실패해도 예외 없이 이전 캐시(또는 None)를 반환한다
+    (표시용 부가 정보라 화면이 죽으면 안 됨)."""
+    global _FX_CACHE
+    now = time.time()
+    with _FX_CACHE_LOCK:
+        if not force and _FX_CACHE is not None and now - _FX_CACHE[0] < _FX_CACHE_TTL:
+            return _FX_CACHE[1]
+
+    try:
+        data = requests.get(_FX_URL, timeout=5).json()
+        rate = None
+        for item in data.get('country', []):
+            if item.get('currencyUnit') == '원':
+                rate = float(str(item.get('value', '0')).replace(',', ''))
+                break
+    except Exception as e:
+        print(f'[ERROR] get_usd_krw_rate: {e}')
+        with _FX_CACHE_LOCK:
+            if _FX_CACHE is not None:
+                return _FX_CACHE[1]
+        return None
+
+    if rate is not None:
+        with _FX_CACHE_LOCK:
+            _FX_CACHE = (now, rate)
+    return rate
+
+
+def get_investor_trend(stk_cd: str, env: Optional[str] = None) -> Optional[Dict[str, float]]:
+    """종목별 외국인/기관/개인 순매수(원). ka10059(종목별투자자기관별차트요청), 2026-09-08 확인.
+
+    응답의 stk_invsr_orgn[0]이 가장 최근 거래일 값(당일 장중이면 당일 누적치로 보임).
+    ⚠️ 2026-09-08 단위 정정: 처음엔 천원 단위로 보고 ×1000 했는데, 069540 실측(관심종목
+    추천 화면에서 "외국인 순매수 4백만원"으로 나온 게 이상해서 재검증)으로 틀렸다고 확인됨.
+    acc_trde_prica(누적거래대금)를 acc_trde_qty×현재가로 역산하면(삼성전자 기준
+    18,314,016주×270,000원≈4.94조 vs acc_trde_prica=4,900,114) **백만원 단위(×1,000,000)라야
+    맞는다** — 천원 단위(×1,000)로는 1000배 작게 나온다(49억원). unit_tp='1' 파라미터명이
+    "천주/천원"을 암시해서 잘못 짚었던 것으로 보인다. 실제 amt_qty_tp='1'(금액모드) 응답은
+    unit_tp 값과 무관하게 백만원 단위로 보인다. 여기선 원 단위로 환산해서 반환한다.
+    실패하면 None(표시용 부가 데이터라 호출부가 조용히 생략할 수 있게).
+
+    ⚠️ 2026-09-22: foreign/institution 개별 필드는 raw 값이 없거나 빈 문자열이면 0이 아니라
+    None을 반환한다 — 실측(관심종목 추천 이력)으로 특정 5분 사이클에서 그 순간 조회된 종목
+    전부(12종목 전수)가 수억~수백억원 → 0 → 수억~수백억원으로 동시에 튀는 현상이 확인됐다.
+    한 종목만 그런 게 아니라 그 사이클 전체가 그랬다는 건 실제 수급이 순간 0이 된 게 아니라
+    ka10059가 그 순간 빈 응답을 준 것이라는 뜻 — _to_number()가 파싱 실패를 조용히 0.0으로
+    돌려버려서(범용 헬퍼라 여기 맞춰 바꾸면 다른 호출부에 영향) '진짜 수급 0'과 '이번엔 못
+    받음'이 구분이 안 됐다. 호출부(job/interest_stock_picks.py)가 None을 직전 정상값으로
+    대체할 수 있게, 여기서부터 구분해서 넘긴다."""
+    def _num_or_none(raw):
+        if raw is None or str(raw).strip() == '':
+            return None
+        return _to_number(raw) * 1_000_000
+
+    try:
+        data = _call('ka10059', '/api/dostk/stkinfo', {
+            'dt': datetime.now().strftime('%Y%m%d'),
+            'stk_cd': stk_cd,
+            'amt_qty_tp': '1',   # 1=금액
+            'trde_tp': '0',      # 0=순매수
+            'unit_tp': '1',      # 1=천주/천원(명목상) — 실측상 금액 필드는 백만원 단위로 옴
+        }, env=env)
+        rows = data.get('stk_invsr_orgn') or []
+        if not rows:
+            return None
+        latest = rows[0]
+        return {
+            'date': latest.get('dt'),
+            'foreign': _num_or_none(latest.get('frgnr_invsr')),
+            'institution': _num_or_none(latest.get('orgn')),
+            'individual': _num_or_none(latest.get('ind_invsr')),
+        }
+    except Exception as e:
+        print(f'[WARN] get_investor_trend 실패: {stk_cd} {e}')
+        return None
+
+
 def get_intraday_range(stk_cd: str) -> Optional[Tuple[int, int, int]]:
     """(현재가, 당일 고가, 당일 저가) 반환. 실패하거나 값이 이상하면 None.
 
@@ -431,6 +736,12 @@ def get_deposit(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> Dict:
     """예수금/주문가능금액. 한국 주식은 매수대금이 T+2 에 결제되므로 세 값이 다 다르다.
 
       entr          예수금        — 결제 전 기준. 오늘 매수한 대금이 아직 안 빠져 있다
+      profa_ch      증거금현금(매수증거금) — 예수금 중 지금 당장 추가 매수엔 못 쓰는 부분.
+                    실측(2026-09-16): entr - profa_ch == ord_alow_amt 로 정확히 맞아떨어짐
+                    (932,902 - 569,674 = 363,228) — 미체결 매수 주문이 하나도 없을 때도
+                    0이 아니었다(569,674원). 즉 미체결 주문 증거금뿐 아니라 **오늘 체결된
+                    매매의 결제 전(T+2) 대금**도 여기 잡히는 것으로 보인다(2026-09-16
+                    사용자 요청으로 추가 — kt00001 원본에는 있었는데 그동안 파싱을 안 했다).
       ord_alow_amt  주문가능금액   — **지금 더 살 수 있는 돈.** 사이징·표시에 쓸 값
       pymn_alow_amt 출금가능금액   — 실제로 뺄 수 있는 돈
       d2_entra      D+2 추정예수금 — 결제 완료 후 예수금. 음수면 미수금이다
@@ -444,6 +755,7 @@ def get_deposit(acnt_no: str, acnt_pwd: str, env: Optional[str] = None) -> Dict:
                            f'(return_code={data.get("return_code")})')
     return {
         'entr': _to_number(data.get('entr')),
+        'profa_ch': _to_number(data.get('profa_ch')),
         'ord_alow_amt': _to_number(data.get('ord_alow_amt')),
         'pymn_alow_amt': _to_number(data.get('pymn_alow_amt')),
         'd1_entra': _to_number(data.get('d1_entra')),
@@ -579,6 +891,40 @@ def get_holdings_and_summary(acnt_no: str, acnt_pwd: str,
     return _parse_holdings(data), _parse_summary(data)
 
 
+# ── 보유중 배지용 종목코드 조회 (2026-09-14) ────────────────────────────────
+# 관심종목/추천종목 화면(카드뷰·표)에 "지금 실전/모의 계좌에 보유 중"을 표시하기 위한
+# 가벼운 조회. 계좌 조회(kt00018)는 API 호출이라 관심종목 화면에서 60초마다(즐겨찾기/
+# 자동매수 동기화 주기와 같이 묶임) 두 계좌씩 부르면 낭비다 — 짧게 캐시해서 같은
+# 주기 안의 중복 호출(여러 브라우저 탭 등)을 흡수한다. 실시간성이 중요한 값이 아니다
+# (실제 보유 화면인 '내 계좌' 탭은 이 함수를 쓰지 않고 3초 주기로 직접 조회한다).
+_owned_codes_cache_lock = threading.Lock()
+_owned_codes_cache: Dict[str, Tuple[float, set]] = {}
+_OWNED_CODES_CACHE_TTL = 5.0
+
+
+def get_owned_codes(env: Optional[str] = None) -> set:
+    """현재 보유 중인 종목코드 집합. 계좌 정보가 없거나 조회 실패하면 빈 집합(안전 폴백)."""
+    key = env or KIWOOM_ENV
+    now = time.time()
+    with _owned_codes_cache_lock:
+        cached = _owned_codes_cache.get(key)
+        if cached is not None and now - cached[0] < _OWNED_CODES_CACHE_TTL:
+            return cached[1]
+
+    acnt_no, acnt_pwd = get_account_credentials(env)
+    if acnt_no and acnt_pwd:
+        try:
+            codes = {h['stk_cd'] for h in get_holdings(acnt_no, acnt_pwd, env)}
+        except Exception:
+            codes = set()
+    else:
+        codes = set()
+
+    with _owned_codes_cache_lock:
+        _owned_codes_cache[key] = (now, codes)
+    return codes
+
+
 # ── 주문 ─────────────────────────────────────────────────────────────────────
 # ⚠️ 매수(kt10000)/매도(kt10001) 별도 api-id, 필드명(ord_qty/ord_uv/trde_tp/dmst_stex_tp),
 #    acnt_no/acnt_pwd 불필요(계좌는 토큰에 귀속) — 실제 매수 성공 예제(블로그)를 근거로 수정함.
@@ -631,6 +977,18 @@ def buy_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',
 def sell_market(stk_cd: str, qty: int, dmst_stex_tp: str = 'KRX',
                 env: Optional[str] = None) -> dict:
     return place_order(stk_cd, qty, 0, side='2', trde_tp='3', dmst_stex_tp=dmst_stex_tp, env=env)
+
+
+def sell_limit(stk_cd: str, qty: int, price: int, dmst_stex_tp: str = 'KRX',
+               env: Optional[str] = None) -> dict:
+    """지정가 매도. 2026-09-14 애프터마켓(16:00~20:00) 대응으로 추가.
+
+    ⚠️ 이 시간대는 시장가(trde_tp='3')를 거부한다(실측: return_code 20,
+    '[2000](521790:해당 호가유형은 주문 불가능한 시간입니다.)' — kiwoom_v8_exit.py의
+    트레일링/샹들리에/익절/보유상한 청산이 전부 이 코드로 거부됐다). 지정가만 받는다.
+    청산 로직은 즉시 체결을 원하므로 호출부(kiwoom_v8_exit._sell)가 현재가보다 살짝
+    낮은 공격적 지정가를 계산해서 넘긴다 — 이 함수 자체는 가격을 보정하지 않는다."""
+    return place_order(stk_cd, qty, price, side='2', trde_tp='0', dmst_stex_tp=dmst_stex_tp, env=env)
 
 
 # ── 체결 조회 (ka10076) ──────────────────────────────────────────────────────

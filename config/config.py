@@ -130,6 +130,7 @@ def map_runtime_config(by_section: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         'YOUR_SECRET_PASSWORD': auth.get('your_secret_password'),
 
         'FACEBOOK_APP_ID': meta.get('facebook_app_id'),
+        'FACEBOOK_APP_SECRET': meta.get('facebook_app_secret'),
         'THREADS_APP_ID': meta.get('threads_app_id'),
         'THREADS_APP_ID2': meta.get('threads_app_id2'),
         'THREADS_APP_SECRET': meta.get('threads_app_secret'),

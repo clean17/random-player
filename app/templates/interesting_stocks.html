@@ -46,6 +46,8 @@
         .ms-env-note { font-size: 12px; color: #888; }
         /* 실전을 보고 있을 때만 붉게 — 수동 매수/매도가 실계좌로 나간다는 경고 */
         .ms-env-note.is-live { color: #d93025; font-weight: 600; }
+        /* 2026-09-15: 모의투자 애프터마켓 가격 미갱신 안내 — 경고보다는 약한 톤(주황) */
+        .ms-env-note.is-stale-hint { color: #b8860b; font-weight: 600; }
         .ms-index-bar { display: flex; gap: 12px; font-size: 12px; }
         .ms-index-item { display: flex; gap: 4px; align-items: baseline; }
         .ms-index-name { color: #888; }
@@ -114,9 +116,12 @@
             font-weight: 400;
         }
         /* 종목 아이콘(회사 로고 없이 이름 첫 글자 + 코드 기반 고정 색상, 2026-08-28) —
-           보유종목 테이블만. 다른 테이블(체결이력 등)의 .ms-stock-name은 아이콘 없이
-           기존 한 줄 텍스트 그대로라 flex를 걸지 않는다. */
-        #table-mystocks-holdings .ms-stock-name {
+           아이콘 마크업(msStockNameCellHtml)을 쓰는 표에만. 다른 테이블(체결이력 등)의
+           .ms-stock-name은 아이콘 없이 기존 한 줄 텍스트 그대로라 flex를 걸지 않는다.
+           2026-09-08: 추천종목 탭(#table-picks)도 같은 컴포넌트를 쓰면서 이 규칙이
+           #table-mystocks-holdings에만 있어 아이콘 레이아웃이 깨졌었다 — 추가. */
+        #table-mystocks-holdings .ms-stock-name,
+        #table-picks .ms-stock-name {
             display: flex;
             align-items: flex-start;
             gap: 8px;
@@ -154,33 +159,35 @@
             color: #888;
             white-space: normal;
         }
-        /* 종목 상세 테이블의 평가금 밑 수익률(손익)은 요약 박스보다 조금 크게 */
+        /* 보유 목록 테이블의 평가금 밑 수익률(손익)은 요약 박스보다 조금 크게 */
         #table-mystocks-holdings .value-sub {
             font-size: 13px;
         }
-        #table-mystocks-holdings th.ms-sortable {
+        /* 2026-09-08: 원래 #table-mystocks-holdings에만 있던 정렬 화살표 스타일을 .table 전체로
+           넓혔다 — 주문목록/실시간gap 표에도 정렬을 추가하면서 그대로 재사용. */
+        .table th.ms-sortable {
             cursor: pointer;
             user-select: none;
             white-space: nowrap;
         }
-        #table-mystocks-holdings th.ms-sortable:hover {
+        .table th.ms-sortable:hover {
             color: var(--accent, #4a9eff);
         }
-        #table-mystocks-holdings th.ms-sortable::after,
+        .table th.ms-sortable::after,
         #table-mystocks-holdings .ms-sub-sort::after {
             content: '';
             display: inline-block;
             width: 0.7em;
         }
-        #table-mystocks-holdings th.ms-sorted::after,
+        .table th.ms-sorted::after,
         #table-mystocks-holdings .ms-sub-sort.ms-sorted::after {
             content: attr(data-sort-dir);
         }
-        #table-mystocks-holdings th.ms-sorted[data-sort-dir="asc"]::after,
+        .table th.ms-sorted[data-sort-dir="asc"]::after,
         #table-mystocks-holdings .ms-sub-sort.ms-sorted[data-sort-dir="asc"]::after {
             content: '▲';
         }
-        #table-mystocks-holdings th.ms-sorted[data-sort-dir="desc"]::after,
+        .table th.ms-sorted[data-sort-dir="desc"]::after,
         #table-mystocks-holdings .ms-sub-sort.ms-sorted[data-sort-dir="desc"]::after {
             content: '▼';
         }
@@ -227,12 +234,19 @@
         /* 실시간gap 순위표: 이미 보유 중인 종목 표시(2026-08-28) */
         .ms-owned-badge {
             font-size: 11px;
+            font-weight: 600;
             color: #1a7f37;
             border: 1px solid #1a7f37;
             border-radius: 3px;
             padding: 0 4px;
             white-space: nowrap;
+            margin-left: 4px;
         }
+        /* 2026-09-14: 종목명 옆 보유중 배지 확장 — 실전은 붉게(#kiwoomEnvFilter.is-real과
+           같은 톤, 실계좌라는 경고성 강조), 모의는 기존 초록, 둘 다면 별도 색으로 구분. */
+        .ms-owned-badge.ms-owned-real { color: #d93025; border-color: #d93025; }
+        .ms-owned-badge.ms-owned-mock { color: #1a7f37; border-color: #1a7f37; }
+        .ms-owned-badge.ms-owned-both { color: #b8860b; border-color: #b8860b; }
         /* 종목 상태 배지(2026-09-02, ka10099 auditInfo) — 투자경고/관리종목/거래정지 등.
            '단기과열'/'투자주의'류는 경고색, '관리종목'/'거래정지'/'투자경고'는 위험색. */
         .ms-audit-badge {
@@ -369,7 +383,58 @@
         }
         .mystocks-orders-count { font-weight: 400; font-size: 13px; color: #6b7280; }
         .mystocks-livegap-toolbar { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
-        .mystocks-livegap-toolbar .ms-refresh-status { margin-left: 0; }
+        /* 주문 목록 툴바(전체 취소 / 자동 재주문). 실시간gap 툴바와 레이아웃은 같고
+           버튼만 두 개라 flex-wrap 만 더 준다(모바일에서 두 번째 버튼이 밀려 잘리는 것 방지). */
+        .ms-orders-toolbar { flex-wrap: wrap; }
+        .ms-orders-toolbar .btn { flex-shrink: 0; white-space: nowrap; }
+        .ms-orders-toolbar .ms-refresh-status { margin-left: 0; }
+        /* 되돌릴 수 없는 동작이라 붉게 — 단건 취소 버튼(표 안의 .ms-cancel-order)과 구분한다 */
+        .ms-orders-danger { background: #fdecea; color: #b3261e; border-color: #f0a9a3; }
+        .ms-orders-danger:hover { background: #fbd9d5; border-color: #d93025; }
+        /* ON = 평소 상태(파랑), OFF = 자동매수가 멈춰 있다는 경고(주황). 색만으로 구분하지
+           않도록 버튼 글자에 ON/OFF 를 같이 적는다. */
+        .ms-autobuy-toggle.is-off { background: #fff4e5; color: #8a4b00; border-color: #f0c38e; }
+        .ms-autobuy-toggle.is-off:hover { background: #ffe8cc; border-color: #e8940c; }
+        .ms-autobuy-toggle.is-pending { opacity: .6; pointer-events: none; }
+        /* 모바일 좁은 화면에서 옆의 상태 문구(#ms-refresh-status)가 길어지면 flex가 버튼을
+           같이 줄여서 "새로고침" 글자가 두 줄로 꺾이는 문제가 있었다(2026-09-08) — 버튼은
+           절대 안 줄어들게 고정하고, 남는 압박은 상태 문구 쪽이 받도록 한다. */
+        .mystocks-livegap-toolbar #ms-livegap-refresh {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .mystocks-livegap-toolbar .ms-refresh-status {
+            margin-left: 0;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        /* 새로고침(8~9초)이 도는 동안 전체 화면(#overlay)이 아니라 이 표 영역만 흐리게 +
+           로딩 표시(2026-09-08) — 조회 중에도 다른 탭/버튼은 그대로 쓸 수 있어야 해서
+           common.js의 전역 오버레이(renderLoadingOverlay, body 전체 pointer-events 차단)는
+           그대로 재사용하지 않고 이 표 전용으로 따로 둔다. 다만 톤은 기존 #overlay와
+           맞춘다(같은 rgba(0,0,0,.4) 딤 + 같은 로딩 이미지 loading6.svg, style.css:95 참고).
+           2026-09-08: 처음엔 더 짙게(rgba(15,23,42,.72)) 했다가 "너무 어둡다"는 피드백으로
+           기존 값과 동일하게 낮췄다. */
+        .ms-livegap-scroller { position: relative; }
+        .ms-livegap-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, .4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #fff;
+            z-index: 2;
+        }
+        .ms-livegap-overlay img {
+            width: 100px;
+            height: 100px;
+        }
 
         .mystocks-pie-wrap {
             display: flex;
@@ -506,10 +571,11 @@
         <select id="tabSelect" class="tab-select" aria-label="탭 선택">
             <option value="#tab-trading" selected>실시간</option>
             <option value="#tab-summary">관심종목</option>
+            <option value="#tab-picks">추천종목</option>
             <option value="#tab-low">저점매수</option>
             <option value="#tab-predict">예측종목</option>
-            <option value="#tab-favorite">★ 즐겨찾기</option>
-            <option value="#tab-reserved">✓ 자동매수 대상</option>
+            <option value="#tab-favorite">즐겨찾기</option>
+            <option value="#tab-reserved">자동매수 대상</option>
             <option value="#tab-mystocks">내 계좌</option>
         </select>
         <span class="tab-bar-break" aria-hidden="true"></span>
@@ -529,6 +595,9 @@
         <select id="predictMarketFilter" class="rule-filter" style="display:none">
             <option value="kr" selected>국장 (KR)</option>
             <option value="us">미장 (US)</option>
+            <!-- [2026-09-21] 트랙 B. 매수 신호가 0건인 날의 상위 종목이고 매수 추천이 아니다
+                 (실측 10거래일 보유 건당 -0.79%). 카드에 빨간 배지/경고가 함께 뜬다. -->
+            <option value="kr_watch">⚠ 국장 관찰목록 (매매신호 아님)</option>
         </select>
         <!-- 내 계좌 탭 전용: 조회할 계좌(실전/모의). 조회와 수동주문이 모두 이 값을 따라간다.
              옵션은 /stocks/kiwoom/envs 응답으로 JS가 채운다(서버가 가진 환경 목록이 곧 진실). -->
@@ -546,6 +615,9 @@
 
         <div style="display:flex; align-items:center; gap:0; margin-left:auto;">
             {% if current_user.get_id() != config.GUEST_USERNAME %}
+            <button type="button" class="btn btn-secondary" id="picks-reserve-buy-btn"
+                    style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
+                           font-size:13px; font-weight:500; line-height:1; align-items:center;">추천 매수 예약</button>
             <button type="button" class="btn btn-secondary" id="reserved-clear-all-btn"
                     style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
                            font-size:13px; font-weight:500; line-height:1; align-items:center;">전체 해제</button>
@@ -683,6 +755,34 @@
         <div class="table-scroller"></div>
     </section>
 
+    <!-- 관심종목 추천(규칙기반 점수/라벨, 2026-09-08 추가). job/interest_stock_picks.py가
+         월~금 09:30~20:00 5분마다 생성해둔 결과를 그대로 읽어서 보여준다 — 이 탭 자체는 계산하지 않는다. -->
+    <section id="tab-picks" class="tab-panel" style="display:none;">
+        <div class="mystocks-livegap-toolbar">
+            <span class="ms-refresh-status" id="ms-picks-status"></span>
+        </div>
+        <p class="ms-picks-disclaimer" id="ms-picks-disclaimer"></p>
+        <div class="table-scroller">
+            <table class="table" id="table-picks">
+                <thead>
+                <tr>
+                    <th>종목명</th>
+                    <th>관리</th>
+                    <th class="ms-sortable" data-sort="label">추천</th>
+                    <th class="ms-sortable" data-sort="upside_tier">상승여력</th>
+                    <th class="right">현재가</th>
+                    <th class="right ms-sortable" data-sort="today_price_change_pct">등락률</th>
+                    <th class="right ms-sortable" data-sort="trading_value_change_pct">거래대금 증가율</th>
+                    <th class="right ms-sortable" data-sort="foreign_net">외국인 순매수</th>
+                    <th class="right ms-sortable" data-sort="institution_net">기관 순매수</th>
+                    <th>뉴스</th>
+                </tr>
+                </thead>
+                <tbody><tr><td colspan="10" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
+            </table>
+        </div>
+    </section>
+
     <section id="tab-favorite" class="tab-panel" style="display:none;">
         <div class="table-scroller"></div>
     </section>
@@ -701,13 +801,14 @@
             <span class="ms-index-bar" id="ms-index-bar">
                 <span class="ms-index-item"><span class="ms-index-name">코스피</span><span class="value" id="ms-index-kospi">-</span></span>
                 <span class="ms-index-item"><span class="ms-index-name">코스닥</span><span class="value" id="ms-index-kosdaq">-</span></span>
+                <span class="ms-index-item"><span class="ms-index-name">원/달러</span><span class="value" id="ms-index-usdkrw">-</span></span>
             </span>
             <span class="ms-refresh-status" id="ms-refresh-status"></span>
         </div>
 
         <div class="mystocks-summary" id="mystocksSummary">
             <div class="mystocks-stat"><span class="label">총자산</span><span class="value" id="ms-total-asset">-</span></div>
-            <div class="mystocks-stat"><span class="label">보유</span><span class="value" id="ms-cash">-</span><span class="value-sub" id="ms-cash-order-alloc"></span></div>
+            <div class="mystocks-stat"><span class="label">보유</span><span class="value" id="ms-cash">-</span><span class="value-sub" id="ms-cash-order-alloc"></span><span class="value-sub" id="ms-cash-margin"></span></div>
             <div class="mystocks-stat">
                 <span class="label">평가</span>
                 <span class="value" id="ms-evlt-amt">-</span>
@@ -752,7 +853,7 @@
         </div>
         {% endif %}
 
-        <h3 class="mystocks-subtitle">종목 상세</h3>
+        <h3 class="mystocks-subtitle">보유 목록</h3>
         <div class="table-scroller ms-history-scroller">
             <table class="table" id="table-mystocks-holdings">
                 <thead>
@@ -764,6 +865,8 @@
                     <th class="ms-sortable" data-sort="stk_nm">종목명</th>
                     <th class="right ms-sortable" data-sort="evlt_amt">평가금</th>
                     <th class="right ms-sortable" data-sort="day_change_rate">등락률</th>
+                    <!-- 2026-09-07: 거래대금은 kt00018에 없어 토스 캔들 API로 별도 조회(60초 캐시). -->
+                    <th class="right ms-sortable" data-sort="trde_amt">거래대금</th>
                     <!-- 2026-08-29: 손절선위(레거시 전용 지표) 정렬 추가. v8 보유종목은 stop_margin이
                          없어 항상 뒤로 밀린다(MS_HOLDINGS_SORT_GETTERS.stop_margin 참고). -->
                     <th class="ms-sortable" data-sort="stop_margin">청산상태</th>
@@ -775,12 +878,26 @@
                     {% endif %}
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="8" class="empty">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="9" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
 
         <details class="mystocks-orders-details" id="ms-orders-details">
             <summary class="mystocks-subtitle mystocks-orders-summary">주문 목록 <span class="mystocks-orders-count" id="ms-orders-count"></span></summary>
+            {% if current_user.get_id() != config.GUEST_USERNAME %}
+            <!-- 2026-09-14: 미체결을 하나씩 취소하는 건 후보가 20건 넘어가면 사실상 불가능해서
+                 일괄 취소를 추가했다. 다만 취소만으로는 소용이 없다 — v8은 60초마다 같은
+                 후보에 다시 주문을 건다(kiwoom_trailing_stop.manual_cancel_order docstring).
+                 그래서 '자동 재주문' 스위치를 나란히 둔다. OFF면 신규 매수 주문 자체가
+                 멈추므로 취소해 둔 상태가 그대로 유지된다(청산·수동주문은 계속 동작). -->
+            <div class="mystocks-livegap-toolbar ms-orders-toolbar">
+                <button type="button" class="btn btn-secondary ms-orders-danger" id="ms-cancel-all-orders">전체 주문 취소</button>
+                <button type="button" class="btn btn-secondary ms-autobuy-toggle" id="ms-autobuy-toggle" aria-pressed="true">
+                    자동 재주문 <span id="ms-autobuy-state">확인 중</span>
+                </button>
+                <span class="ms-refresh-status" id="ms-autobuy-status"></span>
+            </div>
+            {% endif %}
             <div class="table-scroller">
                 <table class="table" id="table-mystocks-orders">
                     <thead>
@@ -788,23 +905,23 @@
                          보여주고, 그 다음에 "체결까지 얼마나 남았는지" 비교군(주문가·현재가·gap류)을
                          묶었다. score는 내부 랭킹값이라 뒤로, 시간/번호는 부가정보라 맨 뒤. -->
                     <tr>
-                        <th>종목명</th>
-                        <th>구분</th>
-                        <th class="right">수량</th>
-                        <th class="right">주문금액</th>
-                        <th class="right">주문가</th>
-                        <th class="right">현재가</th>
-                        <th class="right">gap</th>
-                        <th class="right">실시간gap</th>
-                        <th class="right">score</th>
-                        <th>주문시간</th>
+                        <th class="ms-sortable" data-sort="stk_nm">종목명</th>
+                        <th class="ms-sortable" data-sort="side">구분</th>
+                        <th class="right ms-sortable" data-sort="qty">수량</th>
+                        <th class="right ms-sortable" data-sort="ord_amt">주문금액</th>
+                        <th class="right ms-sortable" data-sort="ord_pric">주문가</th>
+                        <th class="right ms-sortable" data-sort="cur_prc">현재가</th>
+                        <th class="right ms-sortable" data-sort="gap">gap</th>
+                        <th class="right ms-sortable" data-sort="live_gap">실시간gap</th>
+                        <th class="right ms-sortable" data-sort="score">score</th>
+                        <th class="ms-sortable" data-sort="ord_tm">주문시간</th>
                         <th>주문번호</th>
                         {% if current_user.get_id() != config.GUEST_USERNAME %}
                         <th>액션</th>
                         {% endif %}
                     </tr>
                     </thead>
-                    <tbody><tr><td colspan="12" class="empty">불러오는 중...</td></tr></tbody>
+                    <tbody><tr><td colspan="12" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
                 </table>
             </div>
         </details>
@@ -819,22 +936,26 @@
                 <button type="button" class="btn btn-secondary" id="ms-livegap-refresh">새로고침</button>
                 <span class="ms-refresh-status" id="ms-livegap-status">현재가를 종목마다 하나씩 조회해 8~9초 걸립니다 — 자동 새로고침되지 않습니다.</span>
             </div>
-            <div class="table-scroller">
+            <div class="table-scroller ms-livegap-scroller">
                 <table class="table" id="table-mystocks-livegap">
                     <thead>
                     <tr>
-                        <th class="right">순위</th>
-                        <th>종목명</th>
-                        <th class="right">주문가</th>
-                        <th class="right">현재가</th>
-                        <th class="right">gap</th>
-                        <th class="right">실시간gap</th>
-                        <th class="right">score</th>
-                        <th>보유</th>
+                        <th class="right ms-sortable" data-sort="rank">순위</th>
+                        <th class="ms-sortable" data-sort="stk_nm">종목명</th>
+                        <th class="right ms-sortable" data-sort="ord_px">주문가</th>
+                        <th class="right ms-sortable" data-sort="cur_px">현재가</th>
+                        <th class="right ms-sortable" data-sort="gap">gap</th>
+                        <th class="right ms-sortable" data-sort="live_gap">실시간gap</th>
+                        <th class="right ms-sortable" data-sort="score">score</th>
+                        <th class="ms-sortable" data-sort="owned">보유</th>
                     </tr>
                     </thead>
-                    <tbody><tr><td colspan="8" class="empty">펼치면 자동으로 조회합니다</td></tr></tbody>
+                    <tbody><tr><td colspan="8" class="empty" data-empty-text="펼치면 자동으로 조회합니다">펼치면 자동으로 조회합니다</td></tr></tbody>
                 </table>
+                <div class="ms-livegap-overlay" id="ms-livegap-overlay" style="display:none;">
+                    <img src="/static/svg/loading6.svg" alt="Loading...">
+                    <span>조회 중... (8~9초)</span>
+                </div>
             </div>
         </details>
 
@@ -861,7 +982,7 @@
                     <th class="right">손익</th>
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="7" class="empty">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="7" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
     </section>
@@ -881,7 +1002,13 @@
     const dd = String(today.getDate()).padStart(2, '0');
     const favoriteStocks = [];
     const reservedStocks = [];   // 자동매수 대상으로 체크한 종목코드 (stock_card.js의 reserve-btn이 참조)
+    let lastInterestPicks = [];  // 추천종목 탭 마지막 렌더 결과 — "'매수' 이상 전체 자동매수 예약" 버튼이 참조
     const viewedStocks = [];     // 카드를 한 번이라도 눌러서 확인한 종목코드 (stock_card.js의 is-viewed 배지가 참조)
+    // 2026-09-14: 지금 실전/모의 계좌에 보유 중인 종목코드 — 카드뷰(stock_card.js의
+    // is-owned-real/is-owned-mock 배지)와 추천종목 표(msStockNameCellHtml)가 함께 참조한다.
+    // msEnv(화면에 선택된 계좌)와 무관하게 항상 둘 다 채운다.
+    const ownedRealCodes = [];
+    const ownedMockCodes = [];
     const startDateInputEl = document.getElementById('dateInputStart');
     const endDateInputEl = document.getElementById('dateInputEnd');
     const ruleFilterEl = document.getElementById('ruleFilter');
@@ -966,6 +1093,8 @@
 
         // '내 종목'/즐겨찾기/자동매수 대상/예측종목 탭은 날짜 검색 UI를 노출하지 않는다.
         // 자동매수 대상은 화면에 달력만 안 보일 뿐, 내부적으로는 관심종목과 같은 기본 기간으로 조회한다.
+        // 추천종목(tab-picks)은 2026-09-21부터 startDate 하나만 노출 — 그 날짜에 마지막으로
+        // 생성된 추천을 보여준다(범위가 아니라 특정 날짜 조회라 endDate는 계속 숨김).
         startDateInputEl.style.display = (isMyStocks || isFavoriteOrReserved) ? 'none' : '';
         if (isMyStocks || isFavoriteOrReserved) endDateInputEl.style.display = 'none';
 
@@ -974,9 +1103,14 @@
         const searchHeader = document.getElementById('searchResultsHeader');
         if (searchHeader) searchHeader.style.display = isMyStocks ? 'none' : '';
 
-        // 자동매수 대상 탭에서만 '전체 해제' 버튼 노출
+        // '전체 해제' 버튼 노출 — 자동매수 대상 탭 + 추천종목 탭(2026-09-22, 계좌 전체 자동매수
+        // 대상을 해제한다. 추천탭에 안 보이는 종목도 함께 해제되니 유의 — 사용자 확인 후 결정).
         const clearAllBtn = document.getElementById('reserved-clear-all-btn');
-        if (clearAllBtn) clearAllBtn.style.display = (tabId === 'tab-reserved') ? 'inline-flex' : 'none';
+        if (clearAllBtn) clearAllBtn.style.display = (tabId === 'tab-reserved' || tabId === 'tab-picks') ? 'inline-flex' : 'none';
+
+        // 추천종목 탭에서만 "'매수' 이상 전체 자동매수 예약" 버튼 노출 — 전체 해제 버튼과 같은 자리(공용 탭바)
+        const picksReserveBtn = document.getElementById('picks-reserve-buy-btn');
+        if (picksReserveBtn) picksReserveBtn.style.display = (tabId === 'tab-picks') ? 'inline-flex' : 'none';
     }
 
     // 탭 전환 (드롭다운)
@@ -1012,6 +1146,13 @@
             // 저점매수와 동일하게 이 페이지 안에서 카드로 그린다 — 날짜 검색 없이 국장/미장만 선택.
             msStopTimer();
             loadData()
+        } else if (target.id === 'tab-picks') {
+            // 계산은 스케줄 잡(평일 09:30~20:00, 5분마다)이 미리 해두므로, 여기선 결과만 가볍게
+            // 조회한다. 2026-09-21: 날짜 검색 추가 — 기본은 오늘, loadData()가 날짜 변경 시
+            // 다시 불러온다(tab-picks 분기 참고).
+            msStopTimer();
+            setDefaultDateToday(0, startDateInputEl);
+            loadData()
         } else {
             msStopTimer();
             setDefaultDateToday(0, startDateInputEl);
@@ -1032,9 +1173,14 @@
     // "매번 요청이 끝난 시점"에 한다 — 그래야 수동 새로고침 직후 곧바로 또 자동 새로고침이
     // 겹쳐 나가지 않는다.
     const MS_REFRESH_SEC = 3;
-    // 2026-08-29: 정규장(09:00~15:30) 밖에서는 계좌/체결이 실질적으로 안 바뀌는데도 3초마다
-    // 돌려 키움 API 호출 예산(_RATE_LIMIT_SLEEP, kiwoom_api.py)을 불필요하게 갉아먹고 있었다
-    // (429 재시도 로그가 새벽에도 찍힘). 장 시간에만 3초, 그 외엔 60초로 늦춘다.
+    // 2026-08-29: 정규장 밖에서는 계좌/체결이 실질적으로 안 바뀌는데도 3초마다 돌려 키움 API
+    // 호출 예산(_RATE_LIMIT_SLEEP, kiwoom_api.py)을 불필요하게 갉아먹고 있었다(429 재시도
+    // 로그가 새벽에도 찍힘). 장 시간에만 3초, 그 외엔 60초로 늦춘다.
+    // 2026-09-14: 경계를 09:00~15:30에서 09:00~20:00으로 넓혔다 — 그 사이 KRX 애프터마켓
+    // (16:00~20:00, 정규장 폐장 15:20 이후 신설)이 열렸고 실전 v8 트레일링청산/모의 fire
+    // 매수예약이 이미 그 시간대까지 동작하도록 바뀌었다(kiwoom_trailing_stop.py
+    // is_krx_aftermarket_open). 15:30~16:00 휴장 구간도 넓은 쪽에 같이 묶여 3초로 도는데,
+    // 그 30분은 어차피 계좌가 안 바뀌니 API 호출이 약간 아깝지만 로직을 단순하게 유지한다.
     const MS_REFRESH_SEC_CLOSED = 60;
     function msIsWeekend() {
         const day = new Date().getDay(); // 0=일 6=토
@@ -1043,7 +1189,17 @@
     function msIsRegularHours() {
         if (msIsWeekend()) return false;
         const hm = new Date().getHours() * 100 + new Date().getMinutes();
-        return hm >= 900 && hm <= 1530;
+        return hm >= 900 && hm <= 2000;
+    }
+    // 2026-09-15: 모의투자는 애프터마켓(16:00~20:00) 동안 계좌 조회(kt00018)가 안 갱신된다
+    // (실측: 같은 시각 모의 25종목 중 22종목이 실시간 시세와 어긋났고 그 갭이 30초+ 그대로
+    // 였다 — 반면 실전은 전 종목 일치. kiwoom_trailing_stop.py 모듈 docstring 실측 기록
+    // 참고). 새로고침을 더 자주 해도 소용없다(서버가 그 값 자체를 안 준다) — renderMsEnvNote()
+    // 가 이 시간대엔 안내 문구를 띄운다.
+    function msIsAftermarketHours() {
+        if (msIsWeekend()) return false;
+        const hm = new Date().getHours() * 100 + new Date().getMinutes();
+        return hm >= 1600 && hm < 2000;
     }
     function msRefreshIntervalMs() {
         return (msIsRegularHours() ? MS_REFRESH_SEC : MS_REFRESH_SEC_CLOSED) * 1000;
@@ -1097,6 +1253,19 @@
     // 예측종목: 국장/미장을 고르면(ruleFilterEl과 동일한 방식) 다시 조회
     predictMarketFilterEl.addEventListener('change', loadData);
     stockSearchInputEl.addEventListener('input', applyStockSearchFilter);
+    // 2026-09-11: stock_card.js의 전역 document keydown 핸들러가 포커스와 무관하게
+    // ArrowLeft/l/o/Enter 등을 캐러셀·즐겨찾기·Toss열기 단축키로 가로챈다(예측종목 탭의
+    // 카드뷰 대상). 검색창에 종목명을 타이핑할 때(예: "lg", "ok금융") 이 글자들이 그대로
+    // 단축키로 먹혀버리는 문제 — msBuyCodeInput과 동일한 패턴으로 전파를 막는다.
+    // 2026-09-11 정정: Enter는 검색창에 포커스가 없는 한 stock_card.js의 기존 동작(현재
+    // 카드를 Toss에서 열기)이 그대로 나가야 한다 — "어디서든 Enter -> 검색창 포커스"는
+    // 오히려 그 동작을 가로채는 버그였다(제거함). 검색창에 이미 포커스가 있는 동안 타이핑할
+    // 때만 stock_card.js 단축키가 안 끼어들게 막는다.
+    stockSearchInputEl.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') { e.stopPropagation(); return; }
+        e.preventDefault();
+        e.stopPropagation();
+    });
     // 확인/미확인 필터는 카드 전체를 다시 그려서(특히 종목이 많으면) 순간 버벅일 수 있다.
     // setTimeout으로 한 틱 미뤄야 오버레이가 실제로 화면에 그려진 뒤 필터링이 시작된다
     // (동기 실행이면 오버레이가 페인트되기 전에 다 끝나 안 보일 수 있다).
@@ -1179,7 +1348,7 @@
         const tbody =    tradingTable.querySelector('tbody');
 
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1231,7 +1400,7 @@
         const thCount = changeTable.querySelectorAll("thead tr th").length;
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1277,7 +1446,7 @@
         const thCount = changeTable.querySelectorAll("thead tr th").length;
         const tbody =    changeTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1331,7 +1500,7 @@
         const thCount = lowTable.querySelectorAll("thead tr th").length;
         const tbody =    lowTable.querySelector('tbody');
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">표시할 데이터가 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="표시할 데이터가 없어요">표시할 데이터가 없어요</td></tr>`;
             document.getElementById('count').textContent = '0건';
             return;
         }
@@ -1432,10 +1601,22 @@
         if (n == null || !isFinite(Number(n))) return '-';
         return Math.round(Number(n)).toLocaleString('ko-KR') + '원';
     }
-    function msFmtPct(n) {
+    // 거래대금·외국인/기관 순매수처럼 자릿수가 큰 금액용 — 조/억/만원 단위로 줄여서 표시
+    // (12.2조 / 1249.2억 / -1,700만원). 2026-09-08: 1억 미만은 원래 원 단위 그대로였는데
+    // "기관 순매수 -17,000,000원"처럼 어색하게 나와서 만원 단위를 추가했다.
+    function msFmtEok(n) {
+        if (n == null || !isFinite(Number(n))) return '-';
+        const v = Number(n);
+        const jo = 1_0000_0000_0000, eok = 1_0000_0000, man = 1_0000;
+        if (Math.abs(v) >= jo) return (v / jo).toFixed(1) + '조';
+        if (Math.abs(v) >= eok) return (v / eok).toFixed(1) + '억';
+        if (Math.abs(v) >= man) return Math.round(v / man).toLocaleString('ko-KR') + '만원';
+        return msFmtWon(v);
+    }
+    function msFmtPct(n, decimals = 2) {
         if (n == null || !isFinite(Number(n))) return '-';
         const v = Number(n) * 100;
-        return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+        return (v >= 0 ? '+' : '') + v.toFixed(decimals) + '%';
     }
     function msPnlClass(n) {
         const v = Number(n);
@@ -1444,33 +1625,50 @@
 
     function renderMyStocksSummary(summary) {
         document.getElementById('ms-total-asset').textContent = msFmtWon(summary.total_asset);
-        // 보유 현금 = 주문가능금액(kt00001 의 ord_alow_amt) 그대로만 쓴다.
-        // 2026-08-27 이전엔 조회 실패 시 `추정예탁자산 - 총평가금액`으로 근사했는데, 추정예탁
-        // 자산은 '예수금+평가금액'이 아니라 결제·비용을 반영한 추정치라서 계좌가 거의 full
-        // 투자 상태가 되면 부호까지 뒤집혀 음수로 표시됐다(2026-08-20 모의계좌, 2026-08-27
-        // 재발 — 실제로는 미수금이 아니었다). 백엔드가 이미 1회 재시도하므로(app/stock.py),
-        // 그래도 실패하면 틀린 숫자 대신 '조회 실패'를 그대로 보여준다.
-        const dep = summary.deposit;
+
+        // 2026-09-16: "보유"는 이제 주문가능금액(kt00001 ord_alow_amt)이 아니라
+        // **총자산 - 평가금액**으로 계산한다 — "총자산 = 보유 + 평가"가 항상 정확히 맞아
+        // 떨어지게 하기 위해서다(사용자 요청). 예전엔 ord_alow_amt를 그대로 썼는데, 그러면
+        // 남는 차액(미체결 주문에 걸린 증거금 + 오늘 거래의 미정산분 등, kt00018의
+        // '추정예탁자산' 계산식이 kt00001의 개별 필드와 딱 안 맞음 — 실측으로 확인, 어느
+        // 필드 하나와도 정확히 일치하지 않았다)이 화면 어디에도 안 보였다. "보유"를
+        // 총자산-평가로 정의하면 그 차액이 자동으로 다 포함된다 — 대신 "지금 실제로 주문에
+        // 쓸 수 있는 돈이 얼마인지"는 아래 서브텍스트(주문가능/증거금/주문중)로 따로 보여준다.
+        // ⚠️ 2026-08-27 이전엔 조회 실패 시에만 이 근사식(추정예탁자산-평가금액)을 썼는데,
+        // 그때는 **주문가능금액이 메인 값**이라 이 근사식이 그 값과 달라 계좌가 거의 full
+        // 투자 상태일 때 부호가 뒤집혀 보였다(음수 미수금 오표시). 지금은 이 근사식 자체가
+        // 메인 값의 정의라 그 문제가 없다 — "음수=미수금" 표시는 아래에서 ord_alow_amt로
+        // 따로 판정한다.
         const cashEl = document.getElementById('ms-cash');
+        const cash = (summary.total_asset != null && summary.tot_evlt_amt != null)
+            ? summary.total_asset - summary.tot_evlt_amt : null;
+        cashEl.textContent = (cash != null) ? msFmtWon(cash) : '조회 실패';
+
+        const dep = summary.deposit;
         if (dep) {
-            const cash = dep.ord_alow_amt;
-            cashEl.textContent = msFmtWon(cash);
-            // 주문가능금액이 음수면 예수금 초과 주문(미수금)이다 — 눈에 띄게 표시한다
-            cashEl.classList.toggle('is-negative', cash < 0);
-            cashEl.title = `주문가능 ${msFmtWon(dep.ord_alow_amt)} / 예수금 ${msFmtWon(dep.entr)}`
-                + ` / 출금가능 ${msFmtWon(dep.pymn_alow_amt)} / D+2 추정예수금 ${msFmtWon(dep.d2_entra)}`;
+            // 미수금(예수금 초과 주문)은 "보유"가 아니라 실제 주문가능금액(ord_alow_amt)이
+            // 음수일 때만 표시한다 — 지금 더 살 수 있는지를 나타내는 진짜 신호이기 때문.
+            cashEl.classList.toggle('is-negative', dep.ord_alow_amt < 0);
+            cashEl.title = `보유 = 총자산 - 평가금액 (실제 현금 구성은 아래 참고)\n`
+                + `주문가능 ${msFmtWon(dep.ord_alow_amt)} / 예수금 ${msFmtWon(dep.entr)}`
+                + ` / 증거금(매수증거금) ${msFmtWon(dep.profa_ch)} / 출금가능 ${msFmtWon(dep.pymn_alow_amt)}`
+                + ` / D+2 추정예수금 ${msFmtWon(dep.d2_entra)}`;
         } else {
-            cashEl.textContent = '조회 실패';
             cashEl.classList.remove('is-negative');
-            cashEl.title = '예수금 조회(kt00001) 실패 — 재시도 후에도 실패했습니다. 새로고침 시 다시 시도합니다.';
+            cashEl.title = '예수금 조회(kt00001) 실패 — 아래 참고 항목이 비어 보일 수 있습니다.';
         }
 
-        // 2026-08-28: "1회 투입금(ALLOC 8%) 참고값"이 아니라 지금 실제 미체결 매수 주문에
-        // 걸려있는 진짜 금액이다 — 체결 전이라 평가금에도, 이미 차감된 보유현금(ord_alow_amt)
-        // 에도 안 보이는 돈이라 따로 보여준다.
+        // 서브텍스트 — "보유" 안에 실제로 뭐가 섞여 있는지 (작은 글씨로 여러 줄).
+        // 2026-09-16: 그동안 메인 값이었던 주문가능금액과, 어제 추가한 매수증거금(profa_ch,
+        // 예수금 중 지금 당장 못 쓰는 부분 — entr-profa_ch==ord_alow_amt로 실측 확인)을
+        // 한 줄로 합쳐서 보여준다. "주문중"(미체결 매수주문 금액, 2026-08-28 추가)은 별도 줄.
         const allocEl = document.getElementById('ms-cash-order-alloc');
         if (allocEl) {
             allocEl.textContent = summary.pending_order_amount ? `주문중 ${msFmtWon(summary.pending_order_amount)}` : '';
+        }
+        const marginEl = document.getElementById('ms-cash-margin');
+        if (marginEl) {
+            marginEl.textContent = dep ? `주문가능 ${msFmtWon(dep.ord_alow_amt)} · 증거금 ${msFmtWon(dep.profa_ch)}` : '';
         }
 
         document.getElementById('ms-evlt-amt').textContent = msFmtWon(summary.tot_evlt_amt);
@@ -1481,7 +1679,7 @@
         evltPlEl.className = 'value value-sub ' + msPnlClass(pnl);
     }
 
-    function renderMyStocksIndex(index) {
+    function renderMyStocksIndex(index, usdKrw) {
         [['kospi', 'ms-index-kospi'], ['kosdaq', 'ms-index-kosdaq']].forEach(([key, elId]) => {
             const el = document.getElementById(elId);
             const idx = index && index[key];
@@ -1489,6 +1687,9 @@
             el.textContent = `${idx.price.toLocaleString('ko-KR')} (${msFmtPct(idx.rate)})`;
             el.className = 'value ' + msPnlClass(idx.rate);
         });
+        // 원달러 환율 — 키움 API엔 없어 네이버에서 따로 가져온다(등락 정보 없이 현재가만).
+        const fxEl = document.getElementById('ms-index-usdkrw');
+        if (fxEl) fxEl.textContent = (usdKrw != null) ? usdKrw.toLocaleString('ko-KR') : '-';
     }
 
     function renderMyStocksPnl(pnlSummary) {
@@ -1567,18 +1768,29 @@
         }).join('');
     }
 
-    // 종목 상세 헤더 클릭 정렬. 평가금은 원본 필드가 아니라 cur_price*qty 계산값이라 getter로 뺐다.
+    // 보유 목록 헤더 클릭 정렬. 평가금은 원본 필드가 아니라 cur_price*qty 계산값이라 getter로 뺐다.
     const MS_HOLDINGS_SORT_GETTERS = {
         stk_nm: h => h.stk_nm ?? '',
         avg_price: h => Number(h.avg_price || 0),
         cur_price: h => Number(h.cur_price || 0),
         day_change_rate: h => Number(h.day_change_rate ?? -Infinity),
         evlt_amt: h => Number(h.cur_price || 0) * Number(h.qty || 0),
+        trde_amt: h => Number(h.trde_amt ?? -Infinity),
         qty: h => Number(h.qty || 0),
         // 2026-08-29: 수익률(평단가 기준)·손절선위 정렬 추가. stop_margin은 레거시 청산상태에만
-        // 있어(app/stock.py `_v8_holding_state()`는 안 내려줌) v8 보유종목은 -Infinity로 맨 뒤로.
+        // 있다(app/stock.py `_v8_holding_state()`는 안 내려줌).
+        // 2026-09-08: v8 보유종목은 전부 -Infinity로 묶여서 "청산상태" 헤더를 눌러도 서로
+        // 순서가 안 바뀌는 문제가 있었다(현재 실계좌 보유가 거의 다 v8이라 눈에 띔) — v8은
+        // 고점대비(pullback_from_peak, 트레일링 트리거까지 남은 정도)로 대신 정렬한다.
+        // 레거시 stop_margin(손절선까지 여유)과 스케일은 다르지만, 둘 다 "0에 가까울수록
+        // 청산 임박"이라는 방향성은 같다.
         profit_rate: h => Number(h.profit_rate ?? -Infinity),
-        stop_margin: h => (h.v8 && h.v8.type === 'legacy' && h.v8.stop_margin != null) ? Number(h.v8.stop_margin) : -Infinity,
+        stop_margin: h => {
+            if (!h.v8) return -Infinity;
+            if (h.v8.type === 'legacy' && h.v8.stop_margin != null) return Number(h.v8.stop_margin);
+            if (h.v8.type === 'v8' && h.v8.pullback_from_peak != null) return Number(h.v8.pullback_from_peak);
+            return -Infinity;
+        },
     };
     let msHoldingsSort = { key: 'evlt_amt', dir: 'desc' };  // 기존 기본 정렬(평가금 내림차순)과 동일
     let msLastHoldings = [];
@@ -1651,8 +1863,12 @@
         // 익절까지는 대부분 음수로만 나와 오히려 헷갈렸다. 지금 실제로 상태가 바뀌는
         // 트레일링(무장/해제)과 익절 '완료' 여부만 남긴다.
         const armTxt = state.trail_armed ? '무장' : '해제(재무장 대기)';
+        const peakTxt = state.peak ? `고점${msFmtWon(state.peak)} · ` : '';
         const parts = [holdBadge,
-            `고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${(state.trail_pct * 100).toFixed(0)}%, ${armTxt})`];
+            // 2026-09-11: toFixed(0)이 1.5%를 "2%"로 반올림해버리는 버그 — TRAIL_PCT가
+            // 5%처럼 정수였을 땐 안 드러났다가 1.5%로 바뀌면서 노출됨. 소수점 1자리로 두되
+            // 정수면(5.0 등) ".0"을 떼서 자연스럽게 보이도록 Number()로 다시 파싱한다.
+            `${peakTxt}고점대비 ${msFmtPct(state.pullback_from_peak)}(트리거 -${Number((state.trail_pct * 100).toFixed(1))}%, ${armTxt})`];
         if (state.tp_done) parts.push('익절 1차 완료');
         return parts.join(' · ');
     }
@@ -1704,11 +1920,25 @@
         return `<span class="ms-audit-badge ${cls}">${auditInfo}</span>`;
     }
 
-    function msStockNameCellHtml(name, code, logoUrl, auditInfo) {
+    // 2026-09-14: 실전/모의 계좌 보유중 배지. ownedRealCodes/ownedMockCodes는 위쪽에서
+    // getOwnedCodes()가 채운다 — 카드뷰(stock_card.js)의 종목명 배지와 같은 데이터를 쓴다.
+    // suppressEnv: '내 계좌' 탭처럼 이미 그 계좌 보유종목만 나열하는 표에서는 지금 보고
+    // 있는 계좌의 배지가 매 행마다 뜨는 게 당연하고 불필요하다 — 그 env만 숨긴다(다른
+    // 계좌에도 있으면 그쪽 배지는 그대로 보여준다. 예: 모의 탭인데 실전에도 있으면 표시).
+    function msOwnedBadgeHtml(code, suppressEnv) {
+        const real = ownedRealCodes.indexOf(code) !== -1 && suppressEnv !== 'real';
+        const mock = ownedMockCodes.indexOf(code) !== -1 && suppressEnv !== 'mock';
+        if (!real && !mock) return '';
+        const cls = real && mock ? 'ms-owned-both' : real ? 'ms-owned-real' : 'ms-owned-mock';
+        const label = real && mock ? '보유(실전+모의)' : real ? '보유(실전)' : '보유(모의)';
+        return `<span class="ms-owned-badge ${cls}">${label}</span>`;
+    }
+
+    function msStockNameCellHtml(name, code, logoUrl, auditInfo, suppressOwnedEnv) {
         return `<span class="ms-stock-name" data-stk-cd="${code}">
             ${msStockIconHtml(name, code, logoUrl)}
             <span class="ms-stock-info">
-                <span class="ms-stock-nm">${name ?? ''}${msAuditBadgeHtml(auditInfo)}</span>
+                <span class="ms-stock-nm">${name ?? ''}${msAuditBadgeHtml(auditInfo)}${msOwnedBadgeHtml(code, suppressOwnedEnv)}</span>
                 <span class="ms-stock-code">${code ?? ''}</span>
             </span>
         </span>`;
@@ -1720,7 +1950,7 @@
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         if (!holdings || !holdings.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">보유 종목이 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="보유 종목이 없어요">보유 종목이 없어요</td></tr>`;
             renderMyStocksHoldingsSortIndicators();
             return;
         }
@@ -1733,9 +1963,10 @@
             const pnlSubText = `${pnl >= 0 ? '+' : ''}${msFmtWon(pnl)} (${msFmtPct(h.profit_rate)})`;
             return `
         <tr>
-          <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url, h.audit_info)}</td>
+          <td>${msStockNameCellHtml(h.stk_nm, h.stk_cd, h.logo_url, h.audit_info, msEnv || msEnvDefault)}</td>
           <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ms-sub-sort ${msPnlClass(pnl)}" data-sort="profit_rate">${pnlSubText}</span></td>
           <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
+          <td class="right">${msFmtEok(h.trde_amt)}</td>
           <td class="ms-holding-v8-state">${msV8StateText(h.v8)}</td>
           <td class="right">${h.qty ?? 0}주</td>
           <td class="right">${msFmtWon(h.avg_price)}</td>
@@ -1749,17 +1980,69 @@
         renderMyStocksHoldingsSortIndicators();
     }
 
+    // 2026-09-08: 보유종목 표(MS_HOLDINGS_SORT_GETTERS)와 같은 방식으로 주문목록에도 정렬 추가.
+    const MS_ORDERS_SORT_GETTERS = {
+        stk_nm: o => o.stk_nm ?? '',
+        side: o => o.side ?? '',
+        qty: o => Number(o.oso_qty ?? o.ord_qty ?? 0),
+        ord_amt: o => Number(o.ord_pric || 0) * Number(o.ord_qty || 0),
+        ord_pric: o => Number(o.ord_pric ?? -Infinity),
+        cur_prc: o => Number(o.cur_prc ?? -Infinity),
+        gap: o => Number(o.gap ?? -Infinity),
+        live_gap: o => (o.cur_prc != null && Number(o.cur_prc) > 0)
+            ? Number(o.ord_pric) / Number(o.cur_prc) - 1.0 : -Infinity,
+        score: o => Number(o.score ?? -Infinity),
+        ord_tm: o => o.ord_tm ?? '',
+    };
+    let msOrdersSort = { key: 'ord_tm', dir: 'desc' };   // 기존 기본 정렬(주문시간 최신순)과 동일
+    let msLastOrders = [];
+
+    function msSortOrders(orders) {
+        const get = MS_ORDERS_SORT_GETTERS[msOrdersSort.key] || MS_ORDERS_SORT_GETTERS.ord_tm;
+        const sign = msOrdersSort.dir === 'asc' ? 1 : -1;
+        return orders.slice().sort((a, b) => {
+            const va = get(a), vb = get(b);
+            if (typeof va === 'string' || typeof vb === 'string') {
+                return sign * String(va).localeCompare(String(vb), 'ko');
+            }
+            return sign * (va - vb);
+        });
+    }
+
+    function renderMyStocksOrdersSortIndicators() {
+        document.querySelectorAll('#table-mystocks-orders [data-sort]').forEach(el => {
+            const active = el.dataset.sort === msOrdersSort.key;
+            el.classList.toggle('ms-sorted', active);
+            el.dataset.sortDir = active ? msOrdersSort.dir : '';
+        });
+    }
+
+    document.getElementById('table-mystocks-orders')?.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-sort]');
+        if (!el) return;
+        const key = el.dataset.sort;
+        if (msOrdersSort.key === key) {
+            msOrdersSort.dir = msOrdersSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            msOrdersSort = { key, dir: (key === 'stk_nm' || key === 'side' || key === 'ord_tm') ? 'asc' : 'desc' };
+        }
+        renderMyStocksOrders(msLastOrders);
+    });
+
     function renderMyStocksOrders(orders) {
+        msLastOrders = orders || [];
         const table = document.getElementById('table-mystocks-orders');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         const countEl = document.getElementById('ms-orders-count');
         if (countEl) countEl.textContent = orders && orders.length ? `(${orders.length}건)` : '';
         if (!orders || !orders.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">미체결 주문이 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="미체결 주문이 없어요">미체결 주문이 없어요</td></tr>`;
+            renderMyStocksOrdersSortIndicators();
             return;
         }
-        tbody.innerHTML = orders.map(o => {
+        const sorted = msSortOrders(orders);
+        tbody.innerHTML = sorted.map(o => {
             const qtyText = o.oso_qty != null && o.oso_qty !== o.ord_qty
                 ? `${o.oso_qty ?? 0}/${o.ord_qty ?? 0}주` : `${o.ord_qty ?? 0}주`;
             // 실시간gap: v8_strategy.run_v8_buy_cycle()의 live_gap과 같은 식(주문가/현재가 - 1).
@@ -1786,19 +2069,225 @@
           </td>`}
         </tr>`;
         }).join('');
+        renderMyStocksOrdersSortIndicators();
     }
 
-    function renderMyStocksLiveGap(ranking) {
+    async function loadInterestPicks(dateStr) {
+        // dateStr: yyyymmdd (startDateInputEl에서 옴). 비우면 지금까지의 최신 결과(latest.json).
+        const statusEl = document.getElementById('ms-picks-status');
+        if (statusEl) statusEl.textContent = '불러오는 중...';
+        try {
+            const url = dateStr ? `/stocks/interest/data/picks?date=${dateStr}` : '/stocks/interest/data/picks';
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('요청 실패');
+            const data = await res.json();
+            renderInterestPicks(data, dateStr);
+        } catch (e) {
+            console.error(e);
+            if (statusEl) statusEl.textContent = '조회 실패 — 다시 탭을 눌러보세요';
+        }
+    }
+
+    // 추천종목 헤더 클릭 정렬. '추천'/'상승여력'은 둘 다 같은 score 구간 경계로 갈리는
+    // 파생 라벨이라(_label/_upside_tier, job/interest_stock_picks.py), 문자열로 정렬하면
+    // 순서가 뒤죽박죽이라 원본 score로 정렬한다 — 2026-09-22 헤더 정렬 추가.
+    const MS_PICKS_SORT_GETTERS = {
+        label: p => Number(p.score ?? -Infinity),
+        upside_tier: p => Number(p.score ?? -Infinity),
+        today_price_change_pct: p => Number(p.today_price_change_pct ?? -Infinity),
+        trading_value_change_pct: p => Number(p.trading_value_change_pct ?? -Infinity),
+        foreign_net: p => Number(p.foreign_net ?? -Infinity),
+        institution_net: p => Number(p.institution_net ?? -Infinity),
+    };
+    let msPicksSort = { key: null, dir: 'desc' };  // key=null이면 서버가 준 순서(점수 내림차순) 그대로
+
+    function msSortPicks(picks) {
+        const get = msPicksSort.key && MS_PICKS_SORT_GETTERS[msPicksSort.key];
+        if (!get) return picks;
+        const sign = msPicksSort.dir === 'asc' ? 1 : -1;
+        return picks.slice().sort((a, b) => sign * (get(a) - get(b)));
+    }
+
+    function renderInterestPicksSortIndicators() {
+        document.querySelectorAll('#table-picks [data-sort]').forEach(el => {
+            const active = el.dataset.sort === msPicksSort.key;
+            el.classList.toggle('ms-sorted', active);
+            el.dataset.sortDir = active ? msPicksSort.dir : '';
+        });
+    }
+
+    function renderInterestPicks(data, requestedDate) {
+        const statusEl = document.getElementById('ms-picks-status');
+        const discEl = document.getElementById('ms-picks-disclaimer');
+        const countEl = document.getElementById('count');
+        const picks = data.picks || [];
+        lastInterestPicks = picks;   // "'매수' 이상 전체 자동매수 예약" 버튼 + 헤더 정렬이 참조하는 원본(정렬 전) 목록
+
+        // "검색 결과" 헤더의 건수 배지 — 관심종목/예측종목 등 다른 탭이 마지막으로 남겨둔
+        // 값이 그대로 보이던 문제(2026-09-08) — 이 탭은 항상 top 10이라 픽 개수로 갱신한다.
+        if (countEl) countEl.textContent = `${picks.length}건`;
+
+        if (statusEl) {
+            // requestedDate(yyyymmdd)가 오늘이 아니면 "그 날짜 기준"임을 밝혀서, 최신 결과로
+            // 착각하지 않게 한다(2026-09-21 날짜 검색 추가).
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+            const isPastDate = requestedDate && requestedDate !== todayStr;
+            const dateLabel = isPastDate
+                ? `${requestedDate.slice(0, 4)}-${requestedDate.slice(4, 6)}-${requestedDate.slice(6, 8)} `
+                : '';
+            statusEl.textContent = data.generated_at
+                ? `${dateLabel}생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 09:30~20:00, 5분마다 자동 갱신)`
+                : (isPastDate ? `${dateLabel}에 생성된 추천이 없어요` : '아직 생성된 추천이 없어요 (평일 09:30~20:00, 5분마다 자동 생성됩니다)');
+        }
+        if (discEl) discEl.textContent = data.disclaimer || '';
+
+        renderInterestPicksRows(msSortPicks(picks));
+    }
+
+    function renderInterestPicksRows(picks) {
+        const table = document.getElementById('table-picks');
+        const tbody = table.querySelector('tbody');
+        const thCount = table.querySelectorAll('thead tr th').length;
+
+        if (!picks.length) {
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="추천 결과가 없어요">추천 결과가 없어요</td></tr>`;
+            renderInterestPicksSortIndicators();
+            return;
+        }
+
+        tbody.innerHTML = picks.map(p => {
+            // 2026-09-08: 토스 뉴스 원문(매체) URL이 없어(title/source/created_at/id만 옴)
+            // "토스 자체 리더 페이지(tossinvest.com/news/{id})"로 보내봤는데 실제로는
+            // 404였다(직접 fetch로 확인 — 리다이렉트만 있고 실제 문서는 없음). 원문에
+            // 직접 갈 방법이 없어 최선책으로 네이버 뉴스 검색(일반 웹검색보다 실제 기사가
+            // 위에 뜰 확률이 높음)으로 보낸다 — 완벽한 원문 링크는 아니라는 한계는 남는다.
+            const newsHtml = (p.news || []).slice(0, 2).map(n => {
+                const title = n.title ?? '';
+                const url = `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(title)}`;
+                const d = n.created_at ? new Date(n.created_at) : null;
+                const dateText = d && !isNaN(d) ? d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                return `<div class="ms-pick-news-item"><a href="${url}" target="_blank" rel="noopener">${title}</a> <span class="ms-pick-news-source">${n.source ?? ''} · ${dateText}</span></div>`;
+            }).join('') || '-';
+            const labelClass = (p.label === '적극매수' || p.label === '매수') ? 'ms-positive' : '';
+            return `
+        <tr>
+          <td>${msStockNameCellHtml(p.stock_name, p.stock_code, p.logo_url, p.audit_info)}</td>
+          <td>
+            <div class="fav-toggle">
+              <button class="fav-btn" data-stock-code="${p.stock_code ?? ''}" data-favorited="false" data-shape="star"
+                      aria-pressed="false" aria-label="즐겨찾기 추가"></button>
+              <button class="reserve-btn" data-stock-code="${p.stock_code ?? ''}" data-reserved="false"
+                      aria-pressed="false" aria-label="자동매수 대상 추가"></button>
+            </div>
+          </td>
+          <td class="${labelClass}">${p.label ?? ''}</td>
+          <td>${p.upside_tier ?? ''}</td>
+          <td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>
+          <td class="right ${msPnlClass(p.today_price_change_pct)}">${msFmtPct((p.today_price_change_pct || 0) / 100)}</td>
+          <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100, 0)}</td>
+          <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
+          <td class="right ${msPnlClass(p.institution_net)}">${p.institution_net != null ? msFmtEok(p.institution_net) : '-'}</td>
+          <td>${newsHtml}</td>
+        </tr>`;
+        }).join('');
+        // 즐겨찾기/자동매수 버튼 바인딩 + 현재 상태 반영(다른 탭의 카드와 동일한 방식, stock_card.js)
+        initFavoriteButtons();
+        initReserveButtons();
+        applyStockFlagState();
+        syncStockFlagsFromServer();
+        renderInterestPicksSortIndicators();
+    }
+
+    document.getElementById('table-picks')?.addEventListener('click', (e) => {
+        const nameCell = e.target.closest('.ms-stock-name');
+        if (!nameCell) return;
+        const stkCd = nameCell.dataset.stkCd;
+        if (stkCd) window.open(`https://m.stock.naver.com/domestic/stock/${stkCd}/total`, '_blank');
+    });
+
+    // 헤더 클릭 정렬 — 같은 헤더를 다시 누르면 방향 반전, 다른 헤더면 내림차순부터(전부 숫자
+    // 지표라 '큰 값 먼저'가 자연스럽다). thead는 고정이라 위임 없이 바로 걸어도 되지만, 다른
+    // 표들과 같은 위임 패턴을 맞춰 tbody 재생성과 무관하게 계속 동작하도록 한다.
+    document.getElementById('table-picks')?.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-sort]');
+        if (!el) return;
+        const key = el.dataset.sort;
+        if (msPicksSort.key === key) {
+            msPicksSort.dir = msPicksSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            msPicksSort = { key, dir: 'desc' };
+        }
+        renderInterestPicksRows(msSortPicks(lastInterestPicks));
+    });
+
+    // 2026-09-08: 보유종목/주문목록 표와 같은 방식으로 실시간gap 표에도 정렬 추가.
+    const MS_LIVEGAP_SORT_GETTERS = {
+        rank: c => Number(c.rank ?? Infinity),
+        stk_nm: c => c.stk_nm ?? '',
+        ord_px: c => Number(c.ord_px ?? -Infinity),
+        cur_px: c => Number(c.cur_px ?? -Infinity),
+        gap: c => Number(c.gap ?? -Infinity),
+        live_gap: c => Number(c.live_gap ?? -Infinity),
+        score: c => Number(c.score ?? -Infinity),
+        owned: c => c.owned ? 1 : 0,
+    };
+    let msLiveGapSort = { key: 'rank', dir: 'asc' };   // 기존 기본 정렬(서버가 live_gap 내림차순으로 매긴 순위)과 동일
+    let msLiveGapRows = [];
+
+    function msSortLiveGap(rows) {
+        const get = MS_LIVEGAP_SORT_GETTERS[msLiveGapSort.key] || MS_LIVEGAP_SORT_GETTERS.rank;
+        const sign = msLiveGapSort.dir === 'asc' ? 1 : -1;
+        return rows.slice().sort((a, b) => {
+            const va = get(a), vb = get(b);
+            if (typeof va === 'string' || typeof vb === 'string') {
+                return sign * String(va).localeCompare(String(vb), 'ko');
+            }
+            return sign * (va - vb);
+        });
+    }
+
+    function renderMyStocksLiveGapSortIndicators() {
+        document.querySelectorAll('#table-mystocks-livegap [data-sort]').forEach(el => {
+            const active = el.dataset.sort === msLiveGapSort.key;
+            el.classList.toggle('ms-sorted', active);
+            el.dataset.sortDir = active ? msLiveGapSort.dir : '';
+        });
+    }
+
+    document.getElementById('table-mystocks-livegap')?.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-sort]');
+        if (!el) return;
+        const key = el.dataset.sort;
+        if (msLiveGapSort.key === key) {
+            msLiveGapSort.dir = msLiveGapSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            msLiveGapSort = { key, dir: key === 'stk_nm' ? 'asc' : (key === 'rank' ? 'asc' : 'desc') };
+        }
+        renderMyStocksLiveGap(msLiveGapRows, msLiveGapLastEmptyReason);
+    });
+
+    let msLiveGapLastEmptyReason = null;
+
+    function renderMyStocksLiveGap(ranking, emptyReason) {
+        msLiveGapRows = ranking || [];
+        msLiveGapLastEmptyReason = emptyReason;
         const table = document.getElementById('table-mystocks-livegap');
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         const countEl = document.getElementById('ms-livegap-count');
         if (countEl) countEl.textContent = ranking && ranking.length ? `(${ranking.length}건)` : '';
         if (!ranking || !ranking.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">오늘자 후보 캐시가 없어요(장 시작 전 등)</td></tr>`;
+            // 2026-09-07: 스크리닝(15:55) 직후 서버가 오늘자 후보 캐시를 지우므로 장 마감~다음
+            // 개장 사이엔 항상 빈다 — 이유를 서버가 실제 장 시간 기준으로 계산해서 보내준다
+            // (empty_reason). 없으면(구버전 응답 등) 예전 안내문으로 폴백.
+            const msg = emptyReason || '오늘자 후보 캐시가 없어요(장 시작 전 등)';
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="${msg}">${msg}</td></tr>`;
+            renderMyStocksLiveGapSortIndicators();
             return;
         }
-        tbody.innerHTML = ranking.map(c => `
+        const sorted = msSortLiveGap(ranking);
+        tbody.innerHTML = sorted.map(c => `
         <tr>
           <td class="right">${c.rank}</td>
           <td><span class="ms-stock-name" data-stk-cd="${c.stk_cd}">${c.stk_nm ?? ''}${msAuditBadgeHtml(c.audit_info)} <span class="ms-stock-code">${c.stk_cd ?? ''}</span></span></td>
@@ -1809,6 +2298,7 @@
           <td class="right">${c.score != null ? Number(c.score).toFixed(3) : '-'}</td>
           <td>${c.owned ? `<span class="ms-owned-badge">보유중</span> ${msFmtWon(c.holding_value)}` : '-'}</td>
         </tr>`).join('');
+        renderMyStocksLiveGapSortIndicators();
     }
 
     let msLiveGapLoaded = false;
@@ -1819,37 +2309,24 @@
     // — 여기 저장/복원 로직은 재조회를 트리거하지 않는다. env(실전/모의)가 다르면 다른 계좌
     // 데이터라 복원하지 않는다. 탭 닫으면 사라지는 sessionStorage를 써서 며칠 지난 스냅샷을
     // 마치 최신인 것처럼 계속 보여주는 일은 없게 한다.
-    const MS_LIVEGAP_CACHE_KEY = 'ms-livegap-cache-v1';
-
-    function saveMsLiveGapCache(env, ranking) {
-        try {
-            sessionStorage.setItem(MS_LIVEGAP_CACHE_KEY,
-                JSON.stringify({ env, ranking, ts: new Date().toISOString() }));
-        } catch (e) { /* 저장 불가(용량/프라이빗모드 등) 무시 — 캐싱은 부가기능일 뿐 */ }
-    }
-
-    function loadMsLiveGapCache() {
-        try {
-            const raw = sessionStorage.getItem(MS_LIVEGAP_CACHE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        } catch (e) { return null; }
-    }
-
     async function loadMyStocksLiveGap() {
         if (msLiveGapLoading) return;   // 8~9초 걸리는 조회라 중복 클릭 방지
         msLiveGapLoading = true;
         const statusEl = document.getElementById('ms-livegap-status');
         const btn = document.getElementById('ms-livegap-refresh');
+        const overlayEl = document.getElementById('ms-livegap-overlay');
         if (btn) btn.disabled = true;
+        if (overlayEl) overlayEl.style.display = 'flex';   // 표 영역만 dim + 로딩 표시(전체화면 오버레이 안 씀)
         if (statusEl) statusEl.textContent = '조회 중... (종목당 하나씩, 8~9초 소요)';
         try {
             await initMsEnv();
             const res = await fetch(`/stocks/kiwoom/live_gap_ranking?top=60${msEnvQuery('&')}`);
             if (!res.ok) throw new Error('요청 실패');
             const data = await res.json();
-            renderMyStocksLiveGap(data.ranking || []);
+            renderMyStocksLiveGap(data.ranking || [], data.empty_reason);
             msLiveGapLoaded = true;
-            saveMsLiveGapCache(msEnv, data.ranking || []);
+            // 2026-09-07: 서버가 이 결과를 저장해두므로(app/stock.py _save_live_gap_cache),
+            // 다른 기기/세션에서도 재조회 없이 이 결과를 바로 볼 수 있다.
             // 2026-08-28: '~시 기준'만 쓰면 페이지를 나중에 열어봤을 때 "방금 자동으로 갱신됐나?"
             // 오해가 생긴다 — 이 시각이 정확히 "새로고침 버튼을 마지막으로 누른 시각"이라고 못박는다.
             if (statusEl) statusEl.textContent = `마지막 새로고침: ${new Date().toLocaleTimeString('ko-KR')} (수동으로 다시 누르기 전까진 안 바뀜)`;
@@ -1859,24 +2336,31 @@
         } finally {
             msLiveGapLoading = false;
             if (btn) btn.disabled = false;
+            if (overlayEl) overlayEl.style.display = 'none';
         }
     }
 
-    // 페이지 새로고침 직후 호출 — 이전 세션에서 조회해둔 결과가 있으면(같은 env) 표 내용만
-    // 미리 채워둔다. 2026-08-28: 섹션 자체는 항상 접힌 채로 시작해야 한다(펼치기 전엔 안 보여야
-    // 함) — 데이터만 준비해두면 사용자가 펼치는 순간 8~9초 재조회 없이 바로 보인다.
+    // 페이지 새로고침 직후 호출 — 서버에 저장된 마지막 조회 결과(어느 기기에서 새로고침했든)를
+    // 가져와 표 내용만 미리 채운다(2026-09-07, 예전엔 sessionStorage라 브라우저별로 갇혀 있어서
+    // 다른 기기에서는 항상 빈 상태였다 — 서버 캐시로 바꿔서 기기 간에 공유되게 했다).
+    // 2026-08-28: 섹션 자체는 항상 접힌 채로 시작해야 한다(펼치기 전엔 안 보여야 함) — 데이터만
+    // 준비해두면 사용자가 펼치는 순간 8~9초 재조회 없이 바로 보인다.
     async function restoreMsLiveGapCache() {
         if (msLiveGapLoaded) return;   // 이미 이번 페이지에서 로드/복원됨 — 탭 재방문마다 다시 안 함
         await initMsEnv();
-        const cached = loadMsLiveGapCache();
-        if (!cached || cached.env !== msEnv || !Array.isArray(cached.ranking)) return;
-        renderMyStocksLiveGap(cached.ranking);
-        msLiveGapLoaded = true;
-        const statusEl = document.getElementById('ms-livegap-status');
-        if (statusEl) {
-            const t = new Date(cached.ts);
-            statusEl.textContent = `마지막 새로고침: ${isNaN(t) ? cached.ts : t.toLocaleTimeString('ko-KR')} (페이지 새로고침 전 저장된 결과 — 지금 다시 조회하려면 새로고침 버튼)`;
-        }
+        try {
+            const res = await fetch(`/stocks/kiwoom/live_gap_ranking/cached${msEnvQuery()}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!Array.isArray(data.ranking)) return;
+            renderMyStocksLiveGap(data.ranking, data.empty_reason);
+            msLiveGapLoaded = true;
+            const statusEl = document.getElementById('ms-livegap-status');
+            if (statusEl) {
+                const t = new Date(data.ts);
+                statusEl.textContent = `마지막 새로고침: ${isNaN(t) ? data.ts : t.toLocaleTimeString('ko-KR')} (다른 기기 포함, 저장된 마지막 결과 — 지금 다시 조회하려면 새로고침 버튼)`;
+            }
+        } catch (e) { /* 서버 캐시 복원은 부가기능 — 실패해도 조용히 무시 */ }
     }
 
     document.getElementById('ms-livegap-refresh')?.addEventListener('click', loadMyStocksLiveGap);
@@ -1898,7 +2382,7 @@
         const tbody = table.querySelector('tbody');
         const thCount = table.querySelectorAll('thead tr th').length;
         if (!history || !history.length) {
-            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty">체결 이력이 없어요</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${thCount}" class="empty" data-empty-text="체결 이력이 없어요">체결 이력이 없어요</td></tr>`;
             return;
         }
         // _record_trade()는 '체결 확인'이 아니라 '주문 접수' 시점에 기록된다(가격/수량도 주문 시점
@@ -1956,6 +2440,11 @@
         //     ? `${label} 계좌 — 이 서버에 자동매매가 붙어 있습니다`
         //     : `${label} 계좌 — 별도 프로세스에서 자동매매가 돕니다`;
         note.classList.toggle('is-live', msEnv === 'real');
+        // 2026-09-15: 모의투자 애프터마켓 가격 미갱신 안내(위 msIsAftermarketHours 주석 참고).
+        note.classList.toggle('is-stale-hint', msEnv === 'mock' && msIsAftermarketHours());
+        note.textContent = (msEnv === 'mock' && msIsAftermarketHours())
+            ? '모의투자는 애프터마켓(16:00~20:00) 동안 계좌 현재가가 갱신되지 않아요 — 정규장 마감 시점 가격 그대로예요'
+            : '';
     }
 
     async function initMsEnv() {
@@ -1979,6 +2468,7 @@
                 kiwoomEnvFilterEl.value = msEnv;
             }
             renderMsEnvNote();
+            loadMsAutobuy();            // 자동 재주문 스위치 현재 상태 (await 하지 않음 — 조회를 막지 않는다)
         } catch (e) {
             console.error(e);
         }
@@ -1990,6 +2480,10 @@
         msEnv = next;
         try { localStorage.setItem(MS_ENV_KEY, msEnv); } catch (e) { /* 저장 불가 무시 */ }
         renderMsEnvNote();
+        // 스위치는 계좌별(real/mock)로 따로 저장된다 — 계좌를 바꾸면 그쪽 상태를 다시 읽는다.
+        msAutobuyEnabled = null;
+        renderMsAutobuy();
+        loadMsAutobuy();
         loadMyStocksData(true);      // 계좌가 바뀌었으니 즉시 다시 조회
         // 실시간gap 순위는 자동 재조회 대상이 아니므로(비용), 계좌가 바뀌면 캐시만 무효화해
         // 다음에 열거나 새로고침을 누를 때 새 계좌 기준으로 다시 받게 한다. 이미 펼쳐져 있으면
@@ -2026,13 +2520,14 @@
 
             if (seq !== msLoadSeq) return;   // 그 사이 더 최신 조회가 시작됨 — 이 응답은 버린다
 
+            renderMsEnvNote();   // 시간대가 바뀌었을 수 있으므로(애프터마켓 진입/이탈) 매 갱신마다 다시 판정
             renderMyStocksSummary(holdingsData.summary || {});
             renderMyStocksHoldings(holdingsData.holdings || []);
             renderMyStocksPieChart(holdingsData.holdings || []);
             renderMyStocksPnl(historyData.pnl_summary || {});
             renderMyStocksHistory(historyData.history || [], ordersData.orders || []);
             renderMyStocksOrders(ordersData.orders || []);
-            renderMyStocksIndex(indexData.index || {});
+            renderMyStocksIndex(indexData.index || {}, indexData.usd_krw);
         } catch (e) {
             console.error(e);
             if (seq === msLoadSeq) showDebugToast('내 종목 데이터를 불러오지 못했습니다');
@@ -2289,6 +2784,100 @@
         }
     });
 
+    // ── 전체 주문 취소 / 자동 재주문 스위치 (2026-09-14) ─────────────────────
+    // 두 버튼은 한 쌍이다. 전체 취소만 하면 v8이 다음 60초 주기에 같은 후보에 다시 주문을
+    // 걸어 "취소가 안 먹는다"처럼 보인다(서버: kiwoom_trailing_stop.manual_cancel_all_orders
+    // docstring). 스위치를 OFF로 두면 그 재주문이 멈춘다 — 청산과 수동 주문은 그대로다.
+    //
+    // 스위치 상태는 서버 파일(auto_trading/kiwoom_autobuy_{real,mock}.json)에 있다.
+    // localStorage에 두지 않는 이유: 실제로 주문을 내는 건 브라우저가 아니라 스케줄러
+    // 프로세스이고(모의는 아예 다른 프로세스다), 브라우저를 닫아도 유지되어야 한다.
+    let msAutobuyEnabled = null;   // null = 아직 모름
+
+    function renderMsAutobuy() {
+        const btn = document.getElementById('ms-autobuy-toggle');
+        const stateEl = document.getElementById('ms-autobuy-state');
+        const statusEl = document.getElementById('ms-autobuy-status');
+        if (!btn || !stateEl) return;
+        if (msAutobuyEnabled === null) {
+            stateEl.textContent = '확인 중';
+            btn.classList.remove('is-off');
+            if (statusEl) statusEl.textContent = '';
+            return;
+        }
+        stateEl.textContent = msAutobuyEnabled ? 'ON' : 'OFF';
+        btn.classList.toggle('is-off', !msAutobuyEnabled);
+        btn.setAttribute('aria-pressed', msAutobuyEnabled ? 'true' : 'false');
+        if (statusEl) {
+            statusEl.textContent = msAutobuyEnabled
+                ? '자동매매가 조건에 맞으면 계속 새 주문을 냅니다 (취소해도 다시 걸릴 수 있음)'
+                : '자동 매수 주문이 멈춰 있습니다 — 취소한 주문은 다시 걸리지 않습니다 (청산·수동주문은 정상)';
+        }
+    }
+
+    async function loadMsAutobuy() {
+        if (isGuestUser) return;          // 게스트에겐 툴바 자체가 렌더되지 않는다
+        try {
+            const res = await fetch(`/stocks/kiwoom/autobuy${msEnvQuery()}`);
+            const d = await res.json();
+            msAutobuyEnabled = !!d.enabled;
+        } catch (e) {
+            console.error(e);
+            msAutobuyEnabled = null;
+        }
+        renderMsAutobuy();
+    }
+
+    document.getElementById('ms-autobuy-toggle')?.addEventListener('click', async () => {
+        const btn = document.getElementById('ms-autobuy-toggle');
+        const next = !(msAutobuyEnabled === true);   // 상태를 모르면(null) 일단 켜는 쪽으로
+        const envLabel = MS_ENV_LABEL[msEnv] || msEnv || '';
+        const msg = next
+            ? `[${envLabel}] 자동 재주문을 다시 켤까요?\n\n다음 주기부터 자동매매가 조건에 맞는 종목에 새로 주문을 냅니다.`
+            : `[${envLabel}] 자동 재주문을 끌까요?\n\n· 새 매수 주문이 나가지 않습니다 (취소한 주문이 되살아나지 않음)\n· 이미 걸려 있는 주문은 그대로 남습니다 — 필요하면 '전체 주문 취소'를 같이 쓰세요\n· 청산(손절/트레일링/익절)과 수동 매수/매도는 계속 동작합니다`;
+        if (!confirm(msg)) return;
+        btn?.classList.add('is-pending');
+        try {
+            const res = await axios.post('/stocks/kiwoom/autobuy', { enabled: next, env: msEnv });
+            msAutobuyEnabled = !!res.data.enabled;
+            showDebugToast(`자동 재주문 ${msAutobuyEnabled ? 'ON' : 'OFF'}`);
+        } catch (e) {
+            alert('자동 재주문 설정 실패: ' + (e.response?.data?.message || e.message));
+        } finally {
+            btn?.classList.remove('is-pending');
+            renderMsAutobuy();
+        }
+    });
+
+    document.getElementById('ms-cancel-all-orders')?.addEventListener('click', async () => {
+        const orders = msLastOrders || [];
+        if (!orders.length) { alert('취소할 미체결 주문이 없습니다.'); return; }
+        const buys = orders.filter(o => o.side === 'buy').length;
+        const sells = orders.length - buys;
+        const envLabel = MS_ENV_LABEL[msEnv] || msEnv || '';
+        // 자동 재주문이 켜져 있으면 취소가 무의미해질 수 있다 — 확인 창에서 먼저 알린다.
+        const warn = msAutobuyEnabled === false ? ''
+            : '\n\n⚠️ 자동 재주문이 켜져 있습니다 — 자동매매가 다음 주기에 같은 종목에 다시 주문을 걸 수 있습니다.\n   유지하려면 옆의 [자동 재주문] 버튼을 먼저 OFF로 두세요.';
+        if (!confirm(`[${envLabel}] 미체결 주문 ${orders.length}건(매수 ${buys} / 매도 ${sells})을 전부 취소할까요?${warn}`)) return;
+        const btn = document.getElementById('ms-cancel-all-orders');
+        if (btn) btn.disabled = true;
+        try {
+            const res = await axios.post('/stocks/kiwoom/cancel_all_orders', { env: msEnv });
+            const r = res.data.result || {};
+            showDebugToast(`전체 취소 — 성공 ${r.cancelled ?? 0} / 실패 ${r.failed ?? 0}`);
+            if (r.failed) {
+                const lines = (r.results || []).filter(x => !x.ok)
+                    .map(x => `· ${x.stk_nm || x.stk_cd}: ${x.msg || '실패'}`).join('\n');
+                alert(`취소 실패 ${r.failed}건\n${lines}`);
+            }
+            msRefreshAfterOrder();
+        } catch (e) {
+            alert('전체 취소 실패: ' + (e.response?.data?.message || e.message));
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    });
+
 
     // 실시간 가격 업데이트 표시
     function updateTdWithBlink(td, newValue) {
@@ -2428,6 +3017,12 @@
                     searchableDataFull = data6 || [];
                     applyStockSearchFilter();
                 }
+            }
+
+            if (target === 'tab-picks') {
+                // 2026-09-21: 날짜 검색 추가 — 선택한 날짜(yyyymmdd)에 마지막으로 생성된 추천을 본다.
+                if (seq === dataLoadSeq) await loadInterestPicks(yyyymmdd);
+                removeLoadingOverlay();
             }
 
             if (target !== 'tab-summary') {
@@ -2610,8 +3205,23 @@
     // stock_card.js가 카드를 그릴 때/탭에 다시 돌아올 때 서버 목록을 다시 받아 별·체크 표기를
     // 검증하는 훅. (목록 조회는 여기서만 하므로 window에 얹어 stock_card.js에 주입한다)
     window.refreshStockFlagCaches = function () {
-        return Promise.all([getFavoriteStocks(), getReservedStocks(), getViewedStocks()]);
+        return Promise.all([getFavoriteStocks(), getReservedStocks(), getViewedStocks(), getOwnedCodes()]);
     };
+
+    // 2026-09-14: 실전/모의 계좌 보유중 배지용. 다른 목록(즐겨찾기/자동매수/확인함)과 같은
+    // 60초 동기화 주기(flagSyncTimer)에 얹혀 간다 — 계좌 조회(kt00018)라 너무 자주 부르지
+    // 않는다(서버도 5초 캐시로 한 번 더 막아준다. kiwoom_api.get_owned_codes 참고).
+    function getOwnedCodes() {
+        return axios.get('/stocks/kiwoom/owned_codes').then(res => {
+            ownedRealCodes.length = 0;
+            ownedMockCodes.length = 0;
+            (res.data?.real || []).forEach(code => ownedRealCodes.push(code));
+            (res.data?.mock || []).forEach(code => ownedMockCodes.push(code));
+        }).catch(error => {
+            // 조회 실패해도 화면 나머지는 정상 동작해야 함 (보유중 배지만 안 보임)
+            console.error('보유중 종목코드 조회 실패', error);
+        });
+    }
 
     function getReservedStocks() {
         return axios.get('/stocks/reserved').then(res => {
@@ -2660,6 +3270,44 @@
         } catch (e) {
             console.error(e);
             alert('자동매수 대상 해제에 실패했어요. 다시 시도해주세요.');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // 추천종목 탭: 추천상태 '매수' 이상('매수'·'적극매수')인 종목 전부를 자동매수 대상으로
+    // 일괄 체크. 이미 예약된 종목은 건드리지 않는다(/stocks/reserved가 토글이라, 이미 true인
+    // 걸 다시 부르면 꺼져버림 — 2026-09-22 추가).
+    document.getElementById('picks-reserve-buy-btn')?.addEventListener('click', async () => {
+        const targets = lastInterestPicks.filter(p =>
+            (p.label === '매수' || p.label === '적극매수') && !flagCacheHas(reservedStocks, p.stock_code));
+        if (!targets.length) {
+            showDebugToast("추가할 종목이 없어요 ('매수' 이상이 없거나 이미 전부 예약됨)");
+            return;
+        }
+        if (!confirm(`'매수' 이상 ${targets.length}종목을 자동매수 대상으로 추가할까요?`)) return;
+
+        const btn = document.getElementById('picks-reserve-buy-btn');
+        btn.disabled = true;
+        try {
+            const results = await Promise.allSettled(
+                targets.map(p => requestToggleReserved({ stockCode: p.stock_code })));
+            let okCount = 0;
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled' && (typeof r.value.flag !== 'boolean' || r.value.flag)) {
+                    updateFlagCache(reservedStocks, targets[i].stock_code, true);
+                    okCount++;
+                } else {
+                    console.error('자동매수 대상 추가 실패', targets[i].stock_code, r.reason || r.value);
+                }
+            });
+            applyStockFlagState();
+            showDebugToast(okCount === targets.length
+                ? `${okCount}종목을 자동매수 대상으로 추가했습니다`
+                : `${okCount}/${targets.length}종목만 추가됐습니다 — 일부 실패, 다시 시도해주세요`);
+        } catch (e) {
+            console.error(e);
+            alert('자동매수 대상 일괄 추가에 실패했어요. 다시 시도해주세요.');
         } finally {
             btn.disabled = false;
         }
@@ -2717,7 +3365,7 @@
 
         setDefaultDateToday(0, startDateInputEl);
         setDefaultDateToday(0, endDateInputEl);
-        await Promise.all([getFavoriteStocks(), getReservedStocks(), getViewedStocks()]);
+        await Promise.all([getFavoriteStocks(), getReservedStocks(), getViewedStocks(), getOwnedCodes()]);
         // activateTab이 탭별 패널 표시/부가 UI/데이터 로드를 전부 처리한다 —
         // 수동으로 탭을 바꿀 때와 완전히 같은 경로를 타야 tab-mystocks 등에서 어긋나지 않는다.
         activateTab(tabSelectEl ? tabSelectEl.value : getActiveTabTarget());

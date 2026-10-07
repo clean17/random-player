@@ -10,16 +10,19 @@ from apscheduler.triggers.interval import IntervalTrigger
 from job.batch_process import predict_stock_graph, find_stocks, find_stocks_advanced, find_low_stocks, \
     update_interest_stocks, \
     renew_kiwoom_token_job, renew_kiwoom_mock_token_job, run_crawl_ai_image, update_stocks_daily, run_crawl_ig_image, \
-    update_stock_data_daily, \
+    update_stock_data_daily, update_stock_data_us_weekly, \
     update_summary_stock_graph_daily, find_low_stocks_us, generate_fullchain_pem_daily, fetch_stock_data, \
+    fetch_held_stock_data_priority, \
     find_low_stocks_v2, run_kiwoom_trailing_stop, log_kiwoom_account_summary, run_kiwoom_fire_buy, \
-    reconcile_kiwoom_fills, \
+    reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
-    predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters
+    predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters, \
+    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery, collect_investor_flow, refresh_krx_holidays_job
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
 from job.renew_stock_close import renew_interest_stocks_close, verify_low_stock_data, update_product_code
+from job.interest_stock_picks import run_interest_stock_picks
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
 
@@ -204,6 +207,12 @@ def create_mock_scheduler():
             f'create_mock_scheduler()는 KIWOOM_ENV=mock 에서만 실행해야 한다 (현재 {KIWOOM_ENV!r}). '
             'run_mock.py 로 띄우거나 프로세스 환경변수에 KIWOOM_ENV=mock 을 주고 실행할 것.')
     print('🕒 Mock scheduler start.... (KIWOOM_ENV=mock, fire 전략)')
+    # 2026-09-15: 실계좌 배너와 같은 이유로 — 파일을 고쳐도 재시작 전까진 반영 안 될 수 있다는
+    # 게 반복된 사고 원인이었다. 재시작 직후 실제 로드된 상수를 로그에 남겨서 눈으로 바로
+    # 확인할 수 있게 한다(kiwoom_fire_strategy_mock.log_config / kiwoom_trailing_stop.log_config).
+    from auto_trading import kiwoom_fire_strategy_mock, kiwoom_trailing_stop
+    kiwoom_fire_strategy_mock.log_config()
+    kiwoom_trailing_stop.log_config()
 
     executors = {"io": ThreadPoolExecutor(max_workers=4)}
     scheduler = BackgroundScheduler(
@@ -241,6 +250,19 @@ def create_mock_scheduler():
         trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=21),
         id="mock_fire_buy", executor="io", replace_existing=True,
     )
+    # 2026-09-12: 2026-09-14 신설 KRX 애프터마켓(16:00~20:00)에서도 매수예약을 시도해보려던
+    # 잡. ⚠️ 2026-09-15 실측: 모의투자 서버는 이 시간대 주문을 지정가/시장가 가리지 않고
+    # 전부 거부한다(RC4058:모의투자 장종료, auto_trading/aftermarket_order_test.py로 확인 —
+    # 상세는 kiwoom_trailing_stop.py 모듈 docstring). kiwoom_api.is_krx_aftermarket_open()이
+    # mock이면 False를 반환하도록 막아둬서, 이 잡은 이제 매분 호출되긴 해도
+    # run_kiwoom_fire_buy() 내부의 is_closing_auction_open() 게이트에서 즉시 반환된다(API
+    # 호출 없음) — 지우진 않았지만 사실상 무동작이다. 실전에만 있는 v8은 지정가로 정상
+    # 동작하므로 이 잡을 건드릴 필요는 없다.
+    scheduler.add_job(
+        run_kiwoom_fire_buy,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="16-19", minute="*"),
+        id="mock_fire_buy_aftermarket", executor="io", replace_existing=True,
+    )
 
     # fire 청산 (손절 -6% / 보유 5영업일) — 30초. v8 소유권 집합이 모의에서는 비어 있으므로
     # 모의 보유 종목 전부를 이 잡이 담당한다.
@@ -257,7 +279,7 @@ def create_mock_scheduler():
         id="mock_account_summary", executor="io", replace_existing=True,
     )
     scheduler.add_job(
-        reconcile_kiwoom_fills,
+        reconcile_kiwoom_fills_final,
         trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=10),
         id="mock_reconcile_fills", executor="io", replace_existing=True,
     )
@@ -267,7 +289,7 @@ def create_mock_scheduler():
     # 잠정가가 그대로 avg_price로 남는다 — buy_market() 응답에서 실체결가를 안 받아오기
     # 때문. 20:10 하루 1번만 정산하면 그 사이(15:30~20:10) 화면에 이 잠정가 vs 진짜 종가
     # 갭(실측 -0.9%류)이 그대로 노출된다. 15:30 마감 직후 정산되도록 15분 간격을 추가한다
-    # — 20:10 잡을 대체하지 않는다(NXT 애프터마켓 20:00까지 체결은 이 잡으로 못 잡음).
+    # — 20:10 잡을 대체하지 않는다(NXT/KRX 애프터마켓 20:00까지 체결은 이 잡으로 못 잡음).
     scheduler.add_job(
         reconcile_kiwoom_fills,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/15"),
@@ -284,20 +306,43 @@ def create_scheduler():
     global scheduler, executors
     # 2026-08-28: run_mock.py는 계좌/전략 배너 + 잡 목록을 찍는데 실계좌 쪽엔 없어서 뭐가 뜬
     # 프로세스인지 콘솔만 보고 확인할 방법이 없었다 — 같은 형식으로 맞춘다.
+    # 2026-09-15: 이 배너의 '전략' 줄이 한동안 하드코딩된 문구(트레일링 -5%/익절 +20%/보유
+    # 10영업일 — v9 이전 값)였는데, 실제 상수는 v10/v11을 거치며 여러 번 바뀌었지만 이 문구는
+    # 안 바뀌어서 "재시작했는데 새 값이 들어갔나?"를 콘솔만 보고는 확인할 수 없었다(사용자
+    # 지적). 하드코딩 문구 대신 각 모듈이 자기 상수를 직접 읽어 찍는 log_config()로 바꿨다 —
+    # 값을 또 바꿔도 이 배너가 저절로 최신을 따라간다.
     from auto_trading.kiwoom_api import KIWOOM_ENV, get_account_credentials, _cfg_for
+    from auto_trading import kiwoom_v8_strategy, kiwoom_v8_exit, kiwoom_trailing_stop
     acnt_no, _ = get_account_credentials()
     print('=' * 68)
     print(f' 실계좌 자동매매 프로세스')
     print(f'   KIWOOM_ENV : {KIWOOM_ENV}')
     print(f'   API host   : {_cfg_for()["base_url"]}')
     print(f'   계좌번호    : {acnt_no}')
-    print(f'   전략        : v8 (15:55 스크리닝 + 장중 지정가 대기 / ATR 샹들리에 손절 '
-          f'+ 트레일링 -5%(절반) + 익절 +20%(절반) + 보유 10영업일)')
+    print(f'   전략        : v8 (15:55 스크리닝 + 장중 지정가 대기) — 실제 상수는 아래 로그 참고')
     print('=' * 68)
+    # KRX 휴장일 캘린더 시작 시 1회 갱신(2026-09-24) — log_config()가 찍는 '거래일=' 값이
+    # 최신 상태를 보여주도록 log_config() 호출보다 먼저 갱신한다. 실패해도 기존 캐시/
+    # 하드코딩 폴백을 그대로 쓰므로 아래 로그 호출들이 실패하지 않는다.
+    from auto_trading.kiwoom_api import refresh_krx_holidays
+    refresh_krx_holidays()
+
+    kiwoom_v8_strategy.log_config()
+    kiwoom_v8_exit.log_config()
+    kiwoom_trailing_stop.log_config()   # v8 미소유 잔존 종목의 청산 상수(실계좌에도 여전히 쓰인다)
 
     # I/O는 스레드, CPU는 프로세스
+    # "trading" 전용 풀(2026-09-07): v8 매수/청산·레거시 트레일링청산은 실계좌 자금이 걸린
+    # 30~60초 주기 잡인데, 예전엔 다른 배치(스크랩/이미지/관심종목 갱신 등)와 "io" 풀 8개를
+    # 같이 썼다. 그중 하나(AutoSales.py 서브프로세스 호출, update_interest_stocks)가 10분 가까이
+    # 걸린 날 "io" 스레드가 전부 그쪽에 묶여 run_kiwoom_trailing_stop/run_v8_exit/run_v8_buy가
+    # 2분 넘게 스킵됐다(2026-09-07 관측 — apscheduler "maximum number of running instances
+    # reached" 경고 연발). 그 2분 동안은 보유종목 손절/트레일링/익절 체크가 전혀 안 돈 것과
+    # 같아서 실손실로 이어질 수 있는 문제였다. 배치 잡이 아무리 오래 걸려도 매수/청산 잡은
+    # 항상 즉시 실행되도록 전용 풀로 분리한다.
     executors = {
         "io": ThreadPoolExecutor(max_workers=8),
+        "trading": ThreadPoolExecutor(max_workers=4),
         "cpu": ProcessPoolExecutor(max_workers=2),  # CPU 작업 성격/서버 코어에 맞게 조절
     }
     job_defaults = {
@@ -391,16 +436,18 @@ def create_scheduler():
         run_kiwoom_trailing_stop,
         trigger=IntervalTrigger(seconds=30),
         id="kiwoom_trailing_stop_30s",
-        executor="io",
+        executor="trading",
         replace_existing=True,
     )
 
     # 2-0-0) 체결 정산 — 거래이력에 실제 체결가/체결수량/수수료/세금/슬리피지를 채워넣는다.
-    #        ka10076이 '당일분'만 주므로 같은 날 안에 돌려야 한다. NXT 애프터마켓(20:00) 종료 후
-    #        20:10에 한 번 돌려 그날 모든 체결을 잡는다. 조회 전용이라 장 시간 체크를 하지 않는다.
+    #        ka10076이 '당일분'만 주므로 같은 날 안에 돌려야 한다. NXT 애프터마켓(20:00)과
+    #        2026-09-14 신설된 KRX 자체 애프터마켓(16:00~20:00, 기존 시간외단일가 폐지하고 대체)
+    #        둘 다 우리가 주문을 넣진 않지만, 조회는 20:00까지의 체결을 전부 잡아야 하므로
+    #        종료 후 20:10에 한 번 돌려 그날 모든 체결을 잡는다. 조회 전용이라 장 시간 체크를 하지 않는다.
     #        이미 정산된 건은 건너뛰므로 여러 번 돌아도 안전하다(idempotent).
     scheduler.add_job(
-        reconcile_kiwoom_fills,
+        reconcile_kiwoom_fills_final,
         trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=10),
         id="kiwoom_reconcile_fills",
         executor="io",
@@ -410,10 +457,10 @@ def create_scheduler():
     # 2-0-0-2) 체결 정산 — 장중 15분 간격 (2026-08-27 추가). 20:10 1회만으로는 매도 직후
     #          trades.jsonl에 조회가(px)만 남아 실제 체결가와 다를 때(예: kt00018이 개장 직후
     #          전일 종가를 잠깐 그대로 주는 지연) 하루 종일 잘못된 가격/손익이 노출된다.
-    #          20:10 잡을 대체하지 않는다 — NXT 애프터마켓(20:00)까지의 체결은 이 잡으로 못 잡는다.
+    #          20:10 잡을 대체하지 않는다 — NXT/KRX 애프터마켓(20:00)까지의 체결은 이 잡으로 못 잡는다.
     # 2026-08-28: IntervalTrigger는 시간대 제한이 없어 새벽에도 15분마다 돌며 API만 낭비했다
     # (그 시각엔 오늘자 거래이력이 없으니 매칭 0건으로 항상 헛수행). 정규장 시작(09:00)부터
-    # NXT 애프터마켓 종료(20:00)까지만 돌게 CronTrigger로 바꾼다.
+    # 애프터마켓 종료(20:00, NXT/KRX 공통)까지만 돌게 CronTrigger로 바꾼다.
     scheduler.add_job(
         reconcile_kiwoom_fills,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/15"),
@@ -472,30 +519,58 @@ def create_scheduler():
     scheduler.add_job(
         run_v8_screen,
         trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=55),
-        id="v8_screen", executor="io", replace_existing=True,
+        id="v8_screen", executor="trading", replace_existing=True,
     )
     scheduler.add_job(
         run_v8_buy,
         trigger=IntervalTrigger(seconds=60),
-        id="v8_buy", executor="io", replace_existing=True,
+        id="v8_buy", executor="trading", replace_existing=True,
     )
     scheduler.add_job(
         run_v8_exit,
         trigger=IntervalTrigger(seconds=30),
-        id="v8_exit", executor="io", replace_existing=True,
+        id="v8_exit", executor="trading", replace_existing=True,
     )
     # peak 갱신도 당일 확정 고가가 필요하므로 15:50 갱신분 뒤에 둔다(스크리닝보다 먼저).
     scheduler.add_job(
         run_v8_eod,
         trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=52),
-        id="v8_eod", executor="io", replace_existing=True,
+        id="v8_eod", executor="trading", replace_existing=True,
     )
 
-    # 2-1) 데이터 파일 (pkl) 전체 갱신 (월~금 새벽 2시 전체 종목 데이터 fetch)
+    # 2-1) 국장 pkl 전체 갱신 (토요일 새벽 2시, 1200일치 전 종목)
+    # [2026-09-09] 매일(월~금) -> 주 1회로 변경. 전 종목 1200일치를 통째로 다시 받는 무거운
+    # 작업이라 장 없는 주말에 돌린다(1500 -> 1200일은 AutoSales.py utils.FULL_REFETCH_DAYS
+    # 2026-09-10 변경 반영, 2026-09-28 검증). 분할/역분할로 어긋난 가격 기준이 여기서 정리되고,
+    # 평일에는 0_periodically_fetch_stock_data.py의 불일치 감지가 그날그날 잡는다.
     scheduler.add_job(
         update_stock_data_daily,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=2, minute=0),
+        trigger=CronTrigger(day_of_week="sat", hour=2, minute=0),
         id="update_stock_data_daily",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-0-1) KRX 휴장일 캘린더 주 1회 갱신 (일요일 새벽 1시) — 서버가 재시작 없이 몇 달씩
+    # 떠 있어도 새해 캘린더·지방선거 같은 새 휴장 공고가 자동으로 반영되게 한다(2026-09-24).
+    scheduler.add_job(
+        refresh_krx_holidays_job,
+        trigger=CronTrigger(day_of_week="sun", hour=1, minute=0),
+        id="refresh_krx_holidays_weekly",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-1-1) 미장 pkl 전체 갱신 (일요일 새벽 2시, 1200일치 전 종목)
+    # [2026-09-09] 신설. 그동안 미장엔 전체 갱신이 없어 최근 5일 병합만 반복됐고, 가격 오염이
+    # 미장 65% vs 국장 1.9%로 벌어졌다. 국장과 하루 띄워 배치해 부하가 겹치지 않게 한다
+    # (미장은 3,280종목 x yfinance라 2~3시간 걸린다 — 2026-09-11 AutoSales.py
+    # get_nasdaq_symbols()에 보통주만 남기는 필터가 추가되며 5,100 -> 3,280으로 줄었다.
+    # 1500 -> 1200일치도 AutoSales.py utils.FULL_REFETCH_DAYS 2026-09-10 변경 반영, 2026-09-28 검증).
+    scheduler.add_job(
+        update_stock_data_us_weekly,
+        trigger=CronTrigger(day_of_week="sun", hour=2, minute=0),
+        id="update_stock_data_us_weekly",
         executor="io",
         replace_existing=True,
     )
@@ -518,10 +593,25 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 2-3-1) 미장 데이터 파일 (pkl) 전체 갱신 - 1시간 간격
+    # 2-3-0) 보유 종목(실계좌+모의계좌) 우선 pkl 갱신 — 장 시작 직후 09:01, 위 09:10 정기
+    # 갱신보다 먼저 돈다. 2026-09-18 033640 사고(09:00~09:10 사이 pkl에 '오늘' 행이 없어
+    # kt00018 pred_close_pric 결함 폴백이 전날치 등락률을 노출) 대응 — 자세한 내용은
+    # fetch_held_stock_data_priority() docstring 참고.
+    scheduler.add_job(
+        fetch_held_stock_data_priority,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=1),
+        id="priority_fetch_held_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 2-3-1) 미장 데이터 파일 (pkl) 갱신 - 하루 1회 11:00
+    # [2026-09-09] 장중 매시간(12~21시) -> 하루 1회로 변경. 최근 5일치만 받아 병합하되,
+    # 겹치는 날짜의 종가가 어긋나면(분할/역분할) 그 종목만 전 구간을 다시 받는다
+    # (job/0-1_periodically_fetch_stock_data_us.py의 detect_scale_shift).
     scheduler.add_job(
         fetch_us_stock_data,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="12-21", minute="10"),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=11, minute=0),
         id="minutely_60_fetch_us_stock_data",
         executor="io",
         replace_existing=True,
@@ -559,10 +649,15 @@ def create_scheduler():
     # )
 
     # 4-1) 국장 LightGBM 예측 (전 종목 공용 모델, 위 predict_stock_graph_scheduled와 별개 트랙).
-    #      일~목 17:30 — 각 요일 장마감 후 다음 거래일(월~금)을 예측한다.
+    #      월~금 17:30 — KRX 마감(15:30) 후에 돌아 그날 종가 봉으로 예측한다.
+    # [2026-09-21] 일~목 -> 월~금으로 변경. 기존 일요일 런은 마지막 봉이 금요일인데 결과물
+    #      날짜가 일요일(거래일도 아닌 날짜)이 됐고, 금요일 종가는 제 날짜로 잡히지 않았다.
+    #      월~금으로 바꾸면 매 거래일이 자기 날짜로 잡힌다. 휴장일(연 11~15일)에는 여전히
+    #      마지막 봉이 전 거래일이지만, job/multi_kor_stocks_lgbm.py가 날짜를 데이터에서
+    #      읽도록 같이 고쳤으므로(signal_date) 파일명은 항상 옳다.
     scheduler.add_job(
         predict_kr_stocks_lgbm,
-        trigger=CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=17, minute=30),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=17, minute=30),
         id="predict_kr_stocks_lgbm_1730",
         executor="cpu",
         replace_existing=True,
@@ -574,6 +669,39 @@ def create_scheduler():
         trigger=CronTrigger(day_of_week="mon-fri", hour=14, minute=30),
         id="predict_us_stocks_lgbm_1230",
         executor="cpu",
+        replace_existing=True,
+    )
+
+    # 4-3) LGBM 갤러리 차트 이어 그리기. 신호 당시엔 이후 주가를 알 수 없어 차트가 신호일에서
+    #      끊기므로, 매일 다시 그려 "이어지는 마지막 신호 + 20거래일"까지 채운다. 이미 채워둔
+    #      차트는 사이드카의 chart_end를 보고 건너뛴다. 각 시장 예측 잡 직후에 돈다.
+    scheduler.add_job(
+        refresh_us_lgbm_gallery,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=30),
+        id="refresh_us_lgbm_gallery_1530",
+        executor="cpu",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        refresh_kr_lgbm_gallery,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30),  # 예측 잡과 동일하게 월~금
+        id="refresh_kr_lgbm_gallery_1830",
+        executor="cpu",
+        replace_existing=True,
+    )
+
+    # 4-4) 국장 투자자별 수급(외국인/기관/개인 순매수) 수집. 월~금 18:40.
+    #      거래일 당일 데이터를 모으는 잡이라 거래일 기준(mon-fri)이다 — 예측 잡(sun~thu,
+    #      "다음 거래일 전날 저녁")과 요일 축이 다르니 주의.
+    #      ⚠️ 과거 백필이 불가능하다(KRX API 사망, 네이버는 최근 50거래일만). 이 잡이 멈추면
+    #      그 기간 데이터는 영구히 사라진다 — 함부로 끄지 말 것.
+    #      네트워크 I/O 위주(2,600여 종목 HTTP 요청, 약 10분)라 cpu 풀이 아닌 io 풀에 둔다.
+    scheduler.add_job(
+        collect_investor_flow,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=40),
+        id="collect_investor_flow_1840",
+        executor="io",
         replace_existing=True,
     )
 
@@ -649,6 +777,7 @@ def create_scheduler():
         replace_existing=True,
     )
 
+    # 3-0-2) find_stocks_with_increased_volume(v1)의 변동성 필터(ATR14_norm/오늘 고저폭) 컷
     # 3-0-2) find_stocks_with_increased_volume(v1)의 변동성 필터(ATR14_norm/오늘 고저폭) 컷
     # 분기별 재보정 (2026-09-03). v2와 같은 새벽 시간대지만 같은 pkl 전체를 훑는 무거운 작업
     # 두 개가 동시에 돌지 않도록 분을 15분 띄운다.
@@ -731,6 +860,28 @@ def create_scheduler():
         verify_low_stock_data,
         trigger=CronTrigger(day_of_week="mon-fri", hour="9-19", minute="*/1"),
         id="verify_low_stock_data",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 18) 관심종목 추천 top15 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 09:30~20:00, 5분마다.
+    #     회당 예선 20종목 외국인/기관 조회(키움 ka10059, 실계좌 자동매매와 같은 API 예산 공유)
+    #     + 최종 최대 15종목 뉴스 조회(토스)가 들어간다 — 트레이딩 쪽에서 429가 잦아지면 이
+    #     주기부터 의심할 것.
+    #     2026-09-22: 시작 시각을 10:00 -> 09:30으로 당겼다. CronTrigger는 minute 필드가 시(hour)
+    #     전체에 공통 적용돼 "9:30부터, 10시부터는 매 5분"을 한 트리거로 못 써서 잡을 둘로 쪼갰다
+    #     (9시대는 30,35,...,55분만, 10시부터는 기존과 동일하게 */5).
+    scheduler.add_job(
+        run_interest_stock_picks,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute="30-55/5"),
+        id="interest_stock_picks_early",
+        executor="io",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_interest_stock_picks,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute="*/5"),
+        id="interest_stock_picks",
         executor="io",
         replace_existing=True,
     )

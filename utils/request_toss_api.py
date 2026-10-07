@@ -1,5 +1,8 @@
 import requests
 import json
+import time
+import threading
+from typing import Dict, List
 from flask import current_app, jsonify
 
 INFO_URL = "https://wts-info-api.tossinvest.com/api/v3/search-all/wts-auto-complete"
@@ -96,6 +99,82 @@ def request_stock_volume_and_amount(product_code):
         timeout_code="TOSS_TIMEOUT",
         error_code="TOSS_REQUEST_ERROR",
     )
+
+
+# ── 보유종목 오늘 거래대금 (2026-09-07, 내 계좌 탭 표시용) ──────────────────────
+# kt00018(계좌평가잔고내역)엔 거래대금 필드가 없어 종목당 별도 조회가 필요하다.
+# 키움 쪽엔 거래대금을 직접 주는 필드가 없어(ka10001엔 거래량만 있음, 거래대금은
+# 가격×거래량 근사가 필요) 이미 붙어 있는 토스 캔들 API(amount 필드, 원 단위 그대로 옴)를
+# 그대로 쓴다. 종목코드로 productCode를 바로 만들 수 있어(KRX 보통주는 'A'+6자리코드)
+# 검색 단계 없이 바로 조회한다.
+# 60초 캐시 — 3초 자동새로고침(장중)에 맞춰 매번 부르면 renew_interest_stocks_close에서
+# 겪은 것과 같은 Toss 쪽 속도제한(TLS handshake 거부)을 다시 겪는다.
+_AMOUNT_CACHE_LOCK = threading.Lock()
+_AMOUNT_CACHE: Dict[str, tuple] = {}   # stk_cd -> (timestamp, amount)
+_AMOUNT_CACHE_TTL = 60.0
+
+
+def get_trading_amounts(stk_cds: List[str]) -> Dict[str, float]:
+    """종목코드 리스트 -> {종목코드: 오늘 거래대금(원)}. 조회 실패한 종목은 결과에서 빠진다
+    (표시용 부가 정보라 실패해도 화면이 죽으면 안 됨)."""
+    now = time.time()
+    result: Dict[str, float] = {}
+    to_fetch = []
+    with _AMOUNT_CACHE_LOCK:
+        for code in stk_cds:
+            cached = _AMOUNT_CACHE.get(code)
+            if cached and now - cached[0] < _AMOUNT_CACHE_TTL:
+                result[code] = cached[1]
+            else:
+                to_fetch.append(code)
+
+    for code in to_fetch:
+        try:
+            url = AMOUNT_URL.replace("PRODUCTCODE", f"A{code}")
+            res = requests.get(url, headers=DEFAULT_HEADERS, timeout=5)
+            res.raise_for_status()
+            amount = res.json()["result"]["candles"][0]["amount"]
+            result[code] = amount
+            with _AMOUNT_CACHE_LOCK:
+                _AMOUNT_CACHE[code] = (now, amount)
+        except Exception as e:
+            print(f"[WARN] get_trading_amounts 실패: {code} {e}")
+
+    return result
+
+
+# ── 종목 뉴스 (2026-09-08, 관심종목 추천 리포트용) ───────────────────────────
+# request_stock_info_with_toss_api()는 Flask 요청 컨텍스트(current_app.logger)에 의존해서
+# 스케줄러 잡(요청 컨텍스트 밖)에서 그대로 못 쓴다 — get_trading_amounts()와 같은 이유로
+# Flask에 의존하지 않는 별도 함수로 둔다.
+def get_stock_news(stock_name: str, limit: int = 3) -> List[Dict]:
+    """종목명으로 최근 뉴스 최대 limit건을 [{id, title, source, created_at}, ...]로 반환.
+    실패하면 빈 리스트(표시용 부가 데이터라 화면/리포트가 죽으면 안 됨).
+
+    2026-09-08: id를 추가했다 — 토스 NEWS 섹션 응답엔 기사 원문 URL이 없어서(title/source/
+    createdAt만 옴), 대신 이 id로 토스 자체 리더 페이지(https://tossinvest.com/news/{id})를
+    만들 수 있다(실측: /api/v1/news/{id}가 200으로 본문 전체를 반환 — 웹 페이지도 같은 id로
+    떠 있는 걸 리다이렉트로 확인). 원문 매체 URL은 여전히 못 얻지만 전체 기사 내용을 보여주는
+    페이지라 검색 링크보다 훨씬 낫다."""
+    try:
+        res = requests.post(
+            INFO_URL,
+            json={"query": stock_name, "sections": [{"type": "NEWS"}]},
+            headers=DEFAULT_HEADERS,
+            timeout=10,
+        )
+        res.raise_for_status()
+        result = res.json().get("result") or []
+        items = (result[0].get("data", {}).get("items") or []) if result else []
+        return [{
+            "id": it.get("id"),
+            "title": it.get("title"),
+            "source": it.get("source"),
+            "created_at": it.get("createdAt"),
+        } for it in items[:limit]]
+    except Exception as e:
+        print(f"[WARN] get_stock_news 실패: {stock_name} {e}")
+        return []
 
 
 def request_stock_category(company_code):

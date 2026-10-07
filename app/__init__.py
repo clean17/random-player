@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from collections import defaultdict, deque
 from flask import Flask, session, send_file, render_template, render_template_string, jsonify, request, redirect, url_for, send_from_directory, abort
 from flask_login import LoginManager, current_user, logout_user, login_required
-from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 
 # from job.batch_runner import create_scheduler
 from .auth import auth, User, users, SESSION_EXPIRATION_TIME, GUEST_SESSION_EXPIRATION_TIME, SECOND_PASSWORD_SESSION_KEY, check_active_session, save_verified_time, get_verified_time
@@ -32,7 +31,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import uuid
 from config.config import settings
 from redis import Redis
-from flask_wtf.csrf import CSRFProtect
 from urllib.parse import urlparse, urljoin
 
 # 허용할 엔드포인트 경로 - 추가될수록 유지보수가 힘들어진다 > 블랙리스트로 전환 필요
@@ -116,8 +114,6 @@ BLOCK_DURATION = timedelta(days=99999)                # 차단 기간
 # BLOCKED_IP_PREFIXES = ['43', '3', '222', '139', '49', '66', '51', '34', '104', '124', '45', '167', '185', '64', '65', '162', '172', '170']
 BLOCKED_IP_PREFIXES = ['222.239.104']
 
-# csrf = CSRFProtect()
-
 def get_client_ip(request):
     # 1. X-Real-IP (Nginx에서 주로 세팅, 프록시 뒤에 있을 경우)
     ip = request.environ.get("HTTP_X_REAL_IP")
@@ -154,6 +150,12 @@ def create_app():
 
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50GB
     app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # 매 요청마다 세션 갱신 (원하지 않으면 False)
+    # 세션 쿠키 보안 속성: HTTPONLY(JS로 쿠키 접근 차단, XSS 시 쿠키 탈취 방지),
+    # SECURE(HTTPS로만 전송 — ReverseProxied 미들웨어로 항상 https 스킴이라 안전),
+    # SAMESITE=Lax(크로스사이트 요청에 쿠키를 안 실어 CSRF 보완)
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.secret_key = app.config['SECRET_KEY'] # app.config.update(load_config()) 에서 키를 통해 가져온다
     # app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_EXPIRATION_TIME # 전역 세션 만료 설정, Flask 공식 설정값 >>> 25.05.13 Redis로 TTL을 체크하기 위해 주석
     # app.permanent_session_lifetime = SESSION_EXPIRATION_TIME  # 기본 유효기간 설정 (기본값: timedelta(days=31), property 접근 방식; 위와 동일; 내부적으로 app.config['PERMANENT_SESSION_LIFETIME']를 읽고 쓴다
@@ -161,8 +163,6 @@ def create_app():
     # 세션을 Redis에 저장하도록 >>> Flask가 자동으로 Redis에 해당 세션을 JSON 직렬화하여 저장
     app.config['SESSION_TYPE'] = 'redis'
     app.config['SESSION_REDIS'] = Redis(host='localhost', port=6379)
-
-    app.config["JWT_SECRET_KEY"] = app.config['SECRET_KEY'] # jwt 테스트 한다고 추가했음, 사용안함
 
     app.register_blueprint(main, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/auth')
@@ -199,11 +199,6 @@ def create_app():
     # Flask 앱에 WebSocket 기능을 추가
     socketio.init_app(app)
 
-    # jwt test
-    jwt = JWTManager(app)
-
-    # csrf.init_app(app)  # 앱에 CSRF 보호 적용
-
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
@@ -212,6 +207,15 @@ def create_app():
     # 서버 시작 시 호출 (순서대로 핸들러 호출, 하나라도 return 또는 abort() 시 다음 필터링 실행안됨)
     @app.before_request
     def before_request():
+        # CSRF 완화: 상태변경 요청(POST/PUT/DELETE/PATCH)의 Origin/Referer가
+        # 있는데 이 서버 host와 다르면 차단 (크로스사이트 위조 요청 방어).
+        # 헤더 자체가 없으면(서버-서버 웹훅 등) 통과시킨다 — flask_wtf
+        # CSRFProtect처럼 토큰을 전부 심어야 하는 방식 대신 최소 침습적으로 적용.
+        if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
+            origin = request.headers.get('Origin') or request.headers.get('Referer')
+            if origin and urlparse(origin).netloc != request.host:
+                return abort(403, description="Cross-site request blocked.")
+
         ip = get_client_ip(request)
 
         if ip and any(ip.startswith(prefix + '.') for prefix in BLOCKED_IP_PREFIXES):
@@ -379,12 +383,6 @@ def create_app():
     @app.route("/htmltest")
     def get_test():
         return render_template('test.html', version=int(time.time()))
-
-    @app.route("/protected")
-    @jwt_required()
-    def protected():
-        user_id = get_jwt_identity()
-        return f"Hello {user_id}"
 
     @app.after_request
     def track_404(response):

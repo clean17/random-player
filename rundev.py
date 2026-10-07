@@ -19,7 +19,9 @@ if __name__ == '__main__':
         logger.info("############################### Starting server.... ####################################")
         from app import create_app # Flask, # create_app 에서 WebSocket 기능을 추가함
         app = create_app()
-        app.run(debug=True, host='0.0.0.0', port=8099, use_reloader=False, threaded=True)
+        # debug=True + host=0.0.0.0 조합은 Werkzeug 디버거 콘솔(임의 코드 실행)이
+        # 네트워크 전체에 열리는 것과 같다. 로컬 개발은 127.0.0.1로만 붙는다.
+        app.run(debug=False, host='127.0.0.1', port=8099, use_reloader=False, threaded=True)
         # app.run(debug=True, host='0.0.0.0', port=443, ssl_context=('cert.pem', 'key.pem'), threaded=True)
 
     if select_server == 1: # waitress 서버

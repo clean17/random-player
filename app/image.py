@@ -481,26 +481,31 @@ def move_image():
 
     # send2trash(os.path.join(IMAGE_DIR2, new_path)) # 휴지통으로 보낸다
 
-    if imagepath in DIR_CONFIG:
-        cfg = DIR_CONFIG[imagepath]
-        src_path = os.path.join(cfg.base_dir, filename)
-        thumb_dir = os.path.join(cfg.base_dir, "thumb")
-        if imagepath == "move":
-            dest_path = ref_dest_path
-    elif imagepath == "refine":
-        src_path = os.path.join(REF_IMAGE_DIR, filename)
-        thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
-    elif imagepath == "trip":
-        src_path = os.path.join(TRIP_IMAGE_DIR, filename)
-        thumb_dir = os.path.join(TRIP_IMAGE_DIR, "thumb")
-    elif imagepath == "temp":
-        dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
-        src_path = os.path.join(TEMP_IMAGE_DIR, subpath, filename)
-        thumb_dir = os.path.join(TEMP_IMAGE_DIR, subpath, "thumb")
-    else:
-        return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
+    # filename의 os.path.dirname 부분은 clean_filename을 거치지 않으므로(하위 폴더 구조 보존 목적),
+    # 실제 파일 경로는 반드시 safe_path_join으로 base_dir 밖 탈출 여부를 검증한다.
+    try:
+        if imagepath in DIR_CONFIG:
+            cfg = DIR_CONFIG[imagepath]
+            src_path = safe_path_join(cfg.base_dir, filename)
+            thumb_dir = os.path.join(cfg.base_dir, "thumb")
+            if imagepath == "move":
+                dest_path = ref_dest_path
+        elif imagepath == "refine":
+            src_path = safe_path_join(REF_IMAGE_DIR, filename)
+            thumb_dir = os.path.join(REF_IMAGE_DIR, "thumb")
+        elif imagepath == "trip":
+            src_path = safe_path_join(TRIP_IMAGE_DIR, filename)
+            thumb_dir = os.path.join(TRIP_IMAGE_DIR, "thumb")
+        elif imagepath == "temp":
+            dest_path = os.path.join(DEL_TEMP_IMAGE_DIR, filename)
+            src_path = safe_path_join(TEMP_IMAGE_DIR, os.path.join(subpath, filename))
+            thumb_dir = os.path.join(TEMP_IMAGE_DIR, subpath, "thumb")
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
 
-    webp_file = os.path.join(thumb_dir, name_without_ext + ".webp")
+        webp_file = safe_path_join(thumb_dir, name_without_ext + ".webp")
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
 
     # 존재하면 휴지통으로 이동
     if os.path.exists(webp_file):
@@ -699,7 +704,10 @@ def move_stock_image(market, filename):
     if directory is None:
         return jsonify({'status': 'error', 'message': 'Invalid market specified'}), 400
 
-    src_path = os.path.join(directory, filename)
+    try:
+        src_path = safe_path_join(directory, filename)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
     # dest_path = os.path.join(MOVE_DIR, filename)
     if os.path.exists(src_path):
         try:
@@ -716,9 +724,14 @@ def move_stock_image(market, filename):
 # job/multi_kor_stocks_lgbm.py, job/multi_us_stocks_lgbm.py (AutoSales.py) 결과.
 # 시장당 폴더 1개(F:\lgbm_stocks, F:\lgbm_stocks_us)에 파일이 그대로 쌓인다 — 위 kospi/nasdaq와
 # 같은 방식. 날짜 조회는 폴더가 아니라 파일명 앞의 YYYYMMDD를 파싱해서 한다.
+# [2026-09-21] kr_watch = 트랙 B(관찰 목록). ⚠️ 매수 신호가 아니다 —
+# AutoSales.py의 job/multi_kor_stocks_lgbm.py는 매수 신호(트랙 A)가 0건인 날에만
+# raw 상위 2개를 이 폴더에 넣는다. 실측 실행 건당 -0.79%로 사면 평균적으로 손해다.
+# 사이드카 json의 "track" 필드가 "alert"/"watch"로 구분되므로 화면에서 반드시 구분해 렌더할 것.
 LGBM_DIR_MAP = {
     'kr': r'F:\lgbm_stocks',
     'us': r'F:\lgbm_stocks_us',
+    'kr_watch': r'F:\lgbm_stocks_watch',
 }
 LGBM_FILENAME_DATE_RE = re.compile(r'^(\d{8})')
 

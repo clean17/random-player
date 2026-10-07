@@ -1,9 +1,9 @@
+import hmac
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, make_response
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from utils.wsgi_midleware import logger
-from utils.my_jwt import create_access_token
 from .rds import redis_client
 import time
 import pytz
@@ -69,18 +69,6 @@ def is_safe_url(target):
             and urlparse(redirect_url).netloc == urlparse(host_url).netloc
     )
 
-
-@auth.route('/api/token', methods=['POST'])
-def issue_token():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-
-    if username in users and check_password_hash(users[username]['password'], password):
-        token = create_access_token({"sub": username})
-        return jsonify(access_token=token)
-
-    return jsonify(error="Invalid credentials"), 401
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
@@ -226,7 +214,7 @@ def verify_password():
     if request.method == "POST":
         password = request.form.get("password")
 
-        if password == YOUR_SECRET_PASSWORD:
+        if password and hmac.compare_digest(password, YOUR_SECRET_PASSWORD):
             session[SECOND_PASSWORD_SESSION_KEY] = True # session.get(SECOND_PASSWORD_SESSION_KEY)
             # session['second_password_verified_at'] = datetime.now().isoformat()
             save_verified_time(current_user.get_id()) # redis 동기화

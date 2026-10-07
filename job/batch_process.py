@@ -3,6 +3,8 @@ import subprocess
 import signal
 import threading
 import time
+import logging
+from collections import deque
 
 try:
     import win32api
@@ -17,6 +19,34 @@ _active_processes_lock = threading.Lock()
 
 _job = None
 _job_lock = threading.Lock()
+
+_BATCH_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'job')
+
+
+def _get_batch_logger() -> 'logging.Logger':
+    """_run_subprocess 로 도는 배치 잡(엑셀 갱신 등)의 시작/성공/실패를 파일로 남긴다.
+
+    2026-09-09: 이 헬퍼가 생기기 전엔 print()만 해서 서버 콘솔이 안 보이면(백그라운드
+    실행) 어떤 잡이 언제 성공/실패했는지 사후에 확인할 방법이 없었다 — 187660(현대ADM->
+    페니트리움바이오) 종목명이 몇 달째 안 바뀌었는데도 주간 엑셀 갱신(update_stocks_daily)
+    잡이 실제로 도는지 로그로 확인이 안 됐던 사고 참고. kiwoom_api.get_trading_logger()와
+    동일한 idempotent 파일 로거 패턴(logger.handlers 비었을 때만 부착)을 따른다.
+    """
+    os.makedirs(_BATCH_LOG_DIR, exist_ok=True)
+    log = logging.getLogger('batch_subprocess')
+    if log.handlers:
+        return log
+    log.setLevel(logging.INFO)
+    log.propagate = False  # 앱 root/waitress 로거로 전파 안 함(logs/app 쪽 중복 기록 방지)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
+    file_handler = ConcurrentTimedRotatingFileHandler(
+        os.path.join(_BATCH_LOG_DIR, 'batch_subprocess.log'),
+        when='midnight', backupCount=90, encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+    log.addHandler(file_handler)
+    return log
 
 
 def _get_job():
@@ -56,6 +86,12 @@ def _assign_to_job(pid):
 # _active_processes에 등록해두면 kill_all_active_processes()가 서버 종료 시 이걸 정리하고,
 # Job Object에도 등록해 서버가 비정상 종료돼도 OS가 정리한다(이중 안전장치).
 def _run_subprocess(argv, cwd=None):
+    log = _get_batch_logger()
+    script_label = argv[-1] if argv else str(argv)
+    log.info(f'시작: {script_label}')
+    tail = deque(maxlen=50)
+    line_count = 0
+
     process = subprocess.Popen(
         argv,
         cwd=cwd,                               # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
@@ -78,6 +114,8 @@ def _run_subprocess(argv, cwd=None):
             line = process.stdout.readline()
             if line:
                 print(line, end="")
+                tail.append(line)
+                line_count += 1
             elif process.poll() is not None:
                 break
             else:
@@ -99,6 +137,10 @@ def _run_subprocess(argv, cwd=None):
 
     if process.returncode != 0:
         print("returncode =", process.returncode)
+        log.error(f'실패: {script_label} returncode={process.returncode} '
+                  f'(총 {line_count}줄, 마지막 {len(tail)}줄)\n' + ''.join(tail))
+    else:
+        log.info(f'완료: {script_label} returncode=0 (총 {line_count}줄 출력)')
 
     return process
 
@@ -282,6 +324,48 @@ def predict_us_stocks_lgbm():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+def collect_investor_flow():
+    """국장 투자자별 수급(외국인/기관/개인 순매수)을 매일 이어붙인다.
+
+    왜 매일 돌려야 하나 — 과거 백필이 불가능하다(2026-09-19 확인).
+      * KRX(pykrx) 투자자별 거래실적 API: HTTP 400 "LOGOUT"으로 죽었다(펀더멘털 API와 동일).
+      * 네이버 데스크톱 frgn 페이지: JS 렌더링으로 바뀌어 HTML 파싱 불가.
+      * 네이버 모바일 API: 살아있으나 page=1·pageSize<=50 — 최근 50거래일만 받을 수 있다.
+    즉 오늘 안 모으면 그날 데이터는 영구히 사라진다. 자세한 내용은 AutoSales.py 쪽
+    job/12_collect_investor_flow.py docstring과 KR_SELECTION_ROADMAP.md 참고.
+
+    --page-size 20: 매일 돌리므로 4주치면 충분하다(네트워크 부담 감소).
+    --overwrite: 같은 날짜를 다시 받으면 새 값으로 갱신한다. 장 마감 직후 값이 잠정치일
+    수 있어 다음 날 확정치로 정정되게 하려는 것이다. 소스가 날짜별 실측값이라 2026-09-05
+    PER/PBR 사고(현재 스냅샷을 과거 전체에 방송)와는 성격이 다르고, API가 최근 50일만
+    돌려주므로 덮어쓰기 범위도 그 안으로 제한된다.
+    """
+    print('    ############################### collect_investor_flow ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\12_collect_investor_flow.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script,
+                     "--page-size", "20", "--overwrite"],
+                    cwd=r"C:\my-project\AutoSales.py")
+
+
+def refresh_kr_lgbm_gallery():
+    """국장 LGBM 갤러리 차트를 신호일 이후까지 이어 그린다(파일 대체)."""
+    print('    ############################### refresh_kr_lgbm_gallery ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\refresh_lgbm_gallery.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--market", "kr"],
+                    cwd=r"C:\my-project\AutoSales.py")
+
+
+def refresh_us_lgbm_gallery():
+    """미장 LGBM 갤러리 차트를 신호일 이후까지 이어 그린다(파일 대체)."""
+    print('    ############################### refresh_us_lgbm_gallery ###############################')
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\refresh_lgbm_gallery.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--market", "us"],
+                    cwd=r"C:\my-project\AutoSales.py")
+
+
 def update_interest_stocks():
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\1_periodically_update_today_interest_stocks.py"
@@ -369,6 +453,43 @@ def fetch_us_stock_data():
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
+def fetch_held_stock_data_priority():
+    """실계좌+모의계좌 보유 종목만 09:01에 우선 pkl 갱신 (2026-09-18 033640 사고 대응).
+
+    정기 전체 갱신(fetch_stock_data, 09~15시 :10/:30/:50)이 돌기 전인 09:00~09:10 구간엔
+    보유 종목 pkl에 아직 '오늘' 행이 없다 — 이 틈에 kt00018의 pred_close_pric 결함으로
+    app/stock.py의 등락률 계산이 pkl 폴백(_day_change_rate_from_pkl)을 타면, 마지막 두 행이
+    '어제 vs 그제'가 되어 실제로는 0%인데 전날치 등락률이 그대로 노출된다. 보유 종목만
+    먼저 갱신해서 그 틈을 없앤다. 보유 종목이 없으면(계좌 조회 실패 포함) 아무것도 안 한다."""
+    from auto_trading.kiwoom_api import get_account_credentials, get_holdings
+
+    codes = set()
+    for env in ('real', 'mock'):
+        try:
+            acnt_no, acnt_pwd = get_account_credentials(env)
+            if acnt_no and acnt_pwd:
+                codes.update(h['stk_cd'] for h in get_holdings(acnt_no, acnt_pwd, env))
+        except Exception as e:
+            _get_batch_logger().error(f'fetch_held_stock_data_priority: {env} 계좌 조회 실패: {e}')
+
+    if not codes:
+        return
+
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\0-2_priority_fetch_held_stock_data.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, *sorted(codes)],
+                     cwd=r"C:\my-project\AutoSales.py")
+
+
+# 미장 pkl 주 1회 전체 갱신(1500일). 국장 update_stock_data_daily에 대응하는 미국판 —
+# 지금까지 미장엔 전체 갱신이 없어 최근 5일 병합만 반복됐고, 그 결과 가격 오염이
+# 미장 65% vs 국장 1.9%로 벌어졌다(2026-09-09 점검).
+def update_stock_data_us_weekly():
+    venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
+    py_script = r"C:\my-project\AutoSales.py\job\10-1_update_stock_data_us.py"
+    _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
+
+
 
 def generate_fullchain_pem_daily():
     print('    ############################### generate_fullchain_pem_daily ###############################')
@@ -388,6 +509,18 @@ def run_kiwoom_trailing_stop():
         _log.error(f'run_kiwoom_trailing_stop 실패: {e}')
 
 
+def refresh_krx_holidays_job():
+    """KASI 특일 정보 API로 KRX 휴장일 캘린더 갱신 (2026-09-24 추가). 주 1회면 충분 —
+    실패해도 kiwoom_api.KRX_HOLIDAYS는 기존 캐시/하드코딩 폴백을 그대로 유지한다."""
+    from auto_trading.kiwoom_api import refresh_krx_holidays
+    from auto_trading.kiwoom_trailing_stop import _log
+    try:
+        ok = refresh_krx_holidays()
+        _log.info('KRX 휴장일 캘린더 갱신 %s', '성공' if ok else '실패(기존 값 유지)')
+    except Exception as e:
+        _log.error(f'refresh_krx_holidays_job 실패: {e}')
+
+
 def log_kiwoom_account_summary():
     from auto_trading.kiwoom_trailing_stop import log_account_summary, is_market_open, _log
     if not is_market_open():
@@ -401,12 +534,36 @@ def log_kiwoom_account_summary():
 def reconcile_kiwoom_fills():
     """당일 거래이력에 실제 체결 데이터(체결가/체결수량/수수료/세금/슬리피지)를 채워넣는다.
     ka10076이 '당일분'만 주므로 반드시 같은 날 장 마감 후에 돌려야 한다.
-    is_market_open() 체크를 하지 않는다 — 조회 전용이고, 장 마감 후에 도는 것이 목적이다."""
+    is_market_open() 체크를 하지 않는다 — 조회 전용이고, 장 마감 후에 도는 것이 목적이다.
+    ⚠️ 2026-09-24: 다만 휴장일(공휴일)엔 '당일분'이 원천적으로 있을 수 없으므로
+    is_krx_business_day()로만 걸러 헛조회를 막는다 — 시간대 체크(장중/마감후)는 그대로 안 함.
+    장중 15분 간격 잡 전용 — finalize 안 함(그날 아직 안 끝났으니 '확정 미체결' 판단은
+    reconcile_kiwoom_fills_final()의 몫)."""
+    from auto_trading.kiwoom_api import is_krx_business_day
     from auto_trading.kiwoom_trailing_stop import reconcile_fills, _log
+    if not is_krx_business_day():
+        return
     try:
         reconcile_fills()
     except Exception as e:
         _log.error(f'reconcile_kiwoom_fills 실패: {e}')
+
+
+def reconcile_kiwoom_fills_final():
+    """그날의 마지막 정산(20:10 전용). 2026-09-08 069540 사고로 추가 — 이 시점까지도
+    ka10076 체결내역에서 못 찾은 매수는 '아직 체결 안 들어옴'이 아니라 '끝내 체결 안 됨'
+    (상한가 등)으로 보고 거래이력/보유상태를 되돌린다. 자세한 배경은
+    auto_trading/kiwoom_trailing_stop.py의 reconcile_fills/_reverse_unfilled_buys 참고.
+    ⚠️ 2026-09-24: 휴장일엔 '당일분' 체결이 있을 수 없어 되돌릴 것도 없으므로
+    is_krx_business_day()로 건너뛴다(게이트 덕에 애초에 오늘 새 주문 자체가 없었을 것)."""
+    from auto_trading.kiwoom_api import is_krx_business_day
+    from auto_trading.kiwoom_trailing_stop import reconcile_fills, _log
+    if not is_krx_business_day():
+        return
+    try:
+        reconcile_fills(finalize=True)
+    except Exception as e:
+        _log.error(f'reconcile_kiwoom_fills_final 실패: {e}')
 
 
 def run_kiwoom_fire_buy():
@@ -436,8 +593,17 @@ def run_v8_screen():
 
 
 def run_v8_buy():
-    from auto_trading.kiwoom_v8_strategy import run_v8_buy_cycle as _f
-    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
+    # ⚠️ kiwoom_trailing_stop.is_market_open()이 아니라 kiwoom_v8_strategy.is_market_open()을
+    # 쓴다. 두 함수는 이름이 같지만 다른 것이다 — trailing_stop 쪽은 "시장가 주문이 체결될
+    # 수 있는 구간"만 의도적으로 좁게(09:00~15:20) 잡아놓은 함수고(레거시 fire 손절용),
+    # v8_strategy 쪽은 2026-09-12부터 KRX 애프터마켓(16:00~20:00)도 포함하도록 넓어졌다.
+    # 2026-09-14 사고: 여기서 좁은 쪽을 그대로 썼더니 run_v8_buy_cycle() 자체는 이미
+    # 애프터마켓을 지원하는데(내부에서 v8_strategy.is_market_open() 재확인) 이 바깥 게이트가
+    # 먼저 막아서 애프터마켓엔 호출조차 안 됐다 — daily_candidates()가 재계산되지 않아
+    # 15:55 스크리닝이 비운 state['day'] 캐시가 그대로 남고, 그 결과 대시보드 실시간gap/
+    # 주문목록의 gap·score가 애프터마켓 내내 빈 채로 보였다.
+    from auto_trading.kiwoom_v8_strategy import run_v8_buy_cycle as _f, is_market_open
+    from auto_trading.kiwoom_trailing_stop import _log
     try:
         if is_market_open():
             _f()
@@ -446,8 +612,12 @@ def run_v8_buy():
 
 
 def run_v8_exit():
+    # 위 run_v8_buy()와 같은 이유로 kiwoom_v8_strategy.is_market_open()을 쓴다.
+    # kiwoom_v8_exit.run_v8_exit_cycle() 내부도 이미 v8.is_market_open()으로 재확인하므로
+    # (kiwoom_v8_exit.py 참고) 이 바깥 게이트만 좁은 쪽이면 청산도 애프터마켓엔 전혀 안 돌았다.
     from auto_trading.kiwoom_v8_exit import run_v8_exit_cycle as _f
-    from auto_trading.kiwoom_trailing_stop import is_market_open, _log
+    from auto_trading.kiwoom_v8_strategy import is_market_open
+    from auto_trading.kiwoom_trailing_stop import _log
     try:
         if is_market_open():
             _f()
