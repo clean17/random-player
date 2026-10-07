@@ -296,7 +296,7 @@ category는 가능한 한 아래 중 선택하세요.
         ],
         "options": {
             "temperature": 0.1,
-            "num_ctx": 32768
+            "num_ctx": 8192
         }
     }
 
@@ -331,7 +331,7 @@ category는 가능한 한 아래 중 선택하세요.
 # 긴 통화 분할
 # =========================================================
 
-def split_transcript(text, max_chars=14000):
+def split_transcript(text, max_chars=8000):
 
     if len(text) <= max_chars:
         return [text]
