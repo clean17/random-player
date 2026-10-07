@@ -8,7 +8,9 @@ from playwright.async_api import async_playwright
 import subprocess
 import shutil
 import asyncio
+import io
 import requests
+from PIL import Image
 from datetime import datetime
 
 today = datetime.now().strftime("%Y%m%d")
@@ -1015,6 +1017,9 @@ def safe_open_exclusive(path: str):
     # 존재 충돌 시 에러로 실패시키는 전용 오픈 (덮어쓰기 방지)
     return open(path, "xb")
 
+MIN_IMAGE_SIDE = 150   # 이 값 이하(가로 또는 세로)인 이미지는 썸네일로 간주해 건너뜀
+SKIPPED_SMALL = ""     # download_one이 작은 이미지를 의도적으로 건너뛴 경우의 반환값
+
 class _RetryViaBrowser(Exception):
     """aiohttp → page.request 재시도 신호"""
     pass
@@ -1066,6 +1071,18 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
 
     if not data:
         return None
+
+    # 가로/세로 중 하나라도 MIN_IMAGE_SIDE 이하인 이미지는 썸네일로 보고 저장하지 않음
+    if "_img" in prefix:
+        try:
+            with Image.open(io.BytesIO(data)) as im:
+                w, h = im.size
+            if min(w, h) <= MIN_IMAGE_SIDE:
+                print(f"[INFO] 작은 이미지 건너뜀 ({w}x{h}): {url[:80]}")
+                return SKIPPED_SMALL
+        except Exception:
+            pass  # 크기 판독 실패 시 판단 불가 → 기존대로 저장
+
     try:
         ts = now_ms()
         seq = await next_seq()
@@ -1110,7 +1127,8 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         ok_paths = [p for p in results if isinstance(p, str) and p]
-        download_failed = len(tasks) - len(ok_paths)
+        skipped_small = sum(1 for p in results if p == SKIPPED_SMALL)
+        download_failed = len(tasks) - len(ok_paths) - skipped_small
 
         # 🔥 비디오 길이가 1초 미만이거나(0 포함) 길이 판독 실패(None)면 삭제
         deleted = []
