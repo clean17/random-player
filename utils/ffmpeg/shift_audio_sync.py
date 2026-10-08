@@ -51,7 +51,7 @@ def shift_audio_sync(input_path: str, output_path: str, shift_sec: float,
 
 # ---------------- 사용 예시 ----------------
 if __name__ == "__main__":
-    input_path = r"X:\찐120\2025-09-27_01-14-46.SVP.mp4"
+    input_path = r"X:\찐120\이지각_2025-07-06_01-41-39.SVP.SVP.mp4"
     # split_arr = input_path.split('\\')
     # file = split_arr[-1]
     # input_dir_path = input_path.replace(file, '')
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     # print(str(p.parent))   # input_dir_path
     # print(p.stem + "_s")   # output_filename (확장자 제외)
     # print(output_path)
-    shift_sec = -0.2        # +0.1: 오디오 늦춤 / -0.1: 오디오 당김
+    shift_sec = -0.11        # +0.1: 오디오 늦춤 / -0.1: 오디오 당김
 
     shift_audio_sync(input_path, output_path, shift_sec)
     print("완료:", output_path)
