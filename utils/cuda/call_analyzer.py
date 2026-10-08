@@ -58,7 +58,8 @@ WHISPER_DEVICE = "cuda"
 WHISPER_COMPUTE_TYPE = "float16"
 
 # OLLAMA_MODEL = "qwen3:4b"
-OLLAMA_MODEL = "qwen2.5:1.5b"
+# OLLAMA_MODEL = "qwen2.5:1.5b"  # 통화 내용을 너무 잘게 쪼개거나 없는 답변을 만들어낸다
+OLLAMA_MODEL = "qwen2.5:3b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
 OUTPUT_FILE = CALL_DIR / "통화문의내역.xlsx"
