@@ -887,6 +887,8 @@
                     <th class="right ms-sortable" data-sort="trde_amt">거래대금</th>
                     <!-- 2026-08-29: 손절선위(레거시 전용 지표) 정렬 추가. v8 보유종목은 stop_margin이
                          없어 항상 뒤로 밀린다(MS_HOLDINGS_SORT_GETTERS.stop_margin 참고). -->
+                    <!-- 2026-10-07: 청산상태에 같이 있던 보유일(D+n/max)을 별도 헤더로 분리하고 정렬 추가. -->
+                    <th class="ms-sortable" data-sort="hold_days">보유일</th>
                     <th class="ms-sortable" data-sort="stop_margin">청산상태</th>
                     <th class="right ms-sortable" data-sort="qty">수량</th>
                     <th class="right ms-sortable" data-sort="avg_price">매수가</th>
@@ -896,7 +898,7 @@
                     {% endif %}
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="9" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="10" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
 
@@ -1807,6 +1809,8 @@
         // 레거시 stop_margin(손절선까지 여유)과 스케일은 다르지만, 둘 다 "0에 가까울수록
         // 청산 임박"이라는 방향성은 같다.
         profit_rate: h => Number(h.profit_rate ?? -Infinity),
+        // 2026-10-07: 보유일(D+n) 정렬 — v8/legacy 공통으로 state.hold_days를 쓴다.
+        hold_days: h => (h.v8 && h.v8.hold_days != null) ? Number(h.v8.hold_days) : -Infinity,
         stop_margin: h => {
             if (!h.v8) return -Infinity;
             if (h.v8.type === 'legacy' && h.v8.stop_margin != null) return Number(h.v8.stop_margin);
@@ -1869,14 +1873,19 @@
         return `<span class="ms-hold-badge ${cls}">D+${holdDays}/${maxHoldDays}</span>`;
     }
 
+    // 2026-10-07: 보유일 배지는 청산상태 텍스트에서 떼어 별도 컬럼(보유일)으로 분리했다.
+    function msHoldCellHtml(state) {
+        if (!state || state.hold_days == null) return '-';
+        return msHoldBadgeHtml(state.hold_days, state.max_hold_days);
+    }
+
     function msV8StateText(state) {
         if (!state) return '-';
-        const holdBadge = msHoldBadgeHtml(state.hold_days, state.max_hold_days);
         if (state.type === 'legacy') {
             // 2026-08-28: TRAILING_ENABLED=False라 트레일링/목표가는 표시할 게 없다 — 실제로
             // 동작 중인 손절(-6%, 재확인 대기)과 보유상한만 보여준다. 손절선 자체(-6%)는 고정값이라
             // 매번 안 보여주고, "그 선 대비 지금이 얼마나 위냐"만 간결하게 표기한다.
-            const parts = [holdBadge, `손절선 위 ${msFmtPct(state.stop_margin)}`];
+            const parts = [`손절선 위 ${msFmtPct(state.stop_margin)}`];
             if (state.watching) parts.push('손절 재확인 대기중');
             return parts.join(' · ');
         }
@@ -1886,7 +1895,7 @@
         // 트레일링(무장/해제)과 익절 '완료' 여부만 남긴다.
         const armTxt = state.trail_armed ? '무장' : '해제(재무장 대기)';
         const peakTxt = state.peak ? `고점${msFmtWon(state.peak)} · ` : '';
-        const parts = [holdBadge,
+        const parts = [
             // 2026-09-11: toFixed(0)이 1.5%를 "2%"로 반올림해버리는 버그 — TRAIL_PCT가
             // 5%처럼 정수였을 땐 안 드러났다가 1.5%로 바뀌면서 노출됨. 소수점 1자리로 두되
             // 정수면(5.0 등) ".0"을 떼서 자연스럽게 보이도록 Number()로 다시 파싱한다.
@@ -1989,6 +1998,7 @@
           <td class="right">${msFmtWon(evltAmt)}<br><span class="value-sub ms-sub-sort ${msPnlClass(pnl)}" data-sort="profit_rate">${pnlSubText}</span></td>
           <td class="right ${msPnlClass(h.day_change_rate)}">${msFmtPct(h.day_change_rate)}</td>
           <td class="right">${msFmtEok(h.trde_amt)}</td>
+          <td>${msHoldCellHtml(h.v8)}</td>
           <td class="ms-holding-v8-state">${msV8StateText(h.v8)}</td>
           <td class="right">${h.qty ?? 0}주</td>
           <td class="right">${msFmtWon(h.avg_price)}</td>
