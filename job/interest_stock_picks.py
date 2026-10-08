@@ -23,6 +23,7 @@
 import os
 import re
 import json
+import time
 import datetime
 from typing import Dict, List, Optional
 
@@ -145,6 +146,7 @@ def _upside_tier(label: str) -> str:
 def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
     from app.repository.stocks.stocks import get_interest_stocks  # 지연 import(위 주석 참고)
 
+    started = time.perf_counter()
     today = datetime.date.today().strftime('%Y%m%d')
     rows = get_interest_stocks(today, today, mode='normal', target_value='interest')
 
@@ -237,8 +239,9 @@ def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
     with open(os.path.join(_OUT_DIR, 'latest.json'), 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    _log.info('관심종목 추천 생성: 후보 %d건 -> 예선 %d건 -> 점수 %.2f 이상 %d건(상한 %d건) -> 최종 %d건',
-              len(candidates), len(prescreened), min_score, len(qualified), max_n, len(picks))
+    _log.info('관심종목 추천 생성: 후보 %d건 -> 예선 %d건 -> 점수 %.2f 이상 %d건(상한 %d건) -> 최종 %d건 (총 소요 %.1f초)',
+              len(candidates), len(prescreened), min_score, len(qualified), max_n, len(picks),
+              time.perf_counter() - started)
     return result
 
 
