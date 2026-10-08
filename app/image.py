@@ -1226,11 +1226,22 @@ def lgbm_stock_list(market):
         images, images_length = [], 0
     total_pages = max(1, (images_length + LIMIT_PAGE_NUM - 1) // LIMIT_PAGE_NUM)
 
+    # [2026-10-08] 국장 시장 국면 상태 — AutoSales.py job/multi_kor_stocks_lgbm.py가 매 실행마다
+    # F:\lgbm_stocks\_status_kr.json에 남긴다. 매수 신호가 없는 날 "고장인지, 국면 때문인지"를
+    # 화면에서 바로 보이게 한다(최고 점수 vs 임계값, 변동성/추세). 없거나 깨져도 화면은 정상 렌더.
+    regime = None
+    if market in ('kr', 'kr_watch'):
+        try:
+            with open(os.path.join(LGBM_DIR_MAP['kr'], '_status_kr.json'), encoding='utf-8') as f:
+                regime = json.load(f)
+        except Exception:
+            regime = None
+
     return render_template(
         'lgbm_stock_list.html',
         market=market, date=date_str, dates=dates,
         images=images, page=page, total_pages=total_pages,
-        images_length=images_length,
+        images_length=images_length, regime=regime,
         version=int(time.time()),
     )
 

@@ -39,6 +39,16 @@
             line-height: 1.6;
         }
         .lgbm-watch-warn strong { font-size: 15px; }
+        /* [2026-10-08] 국장 시장 국면 상태 — 매수 신호가 없는 이유를 보여준다 */
+        .lgbm-regime { margin: 10px 12px; padding: 10px 14px; border-radius: 8px;
+                       border: 1px solid #c9d6e8; background: #f3f7fc; color: #24364d;
+                       font-size: 13px; line-height: 1.6; }
+        .lgbm-regime.alert { border-color: #2e7d32; background: #edf7ee; color: #1b5e20; }
+        .lgbm-regime .meter { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .lgbm-regime .bar { position: relative; flex: 1; height: 8px; border-radius: 4px; background: #dde5ef; }
+        .lgbm-regime .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: #5b8def; }
+        .lgbm-regime .bar .th { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #d93025; }
+        .lgbm-regime small { color: #6b7a8c; }
         .lgbm-watch-warn ul { margin: 8px 0 0; padding-left: 18px; }
         .lgbm-watch-badge {
             display: inline-block;
@@ -94,6 +104,25 @@
 
         <span class="lgbm-count">{{ images_length }}건</span>
     </div>
+
+    {% if regime %}
+    {# 국면 상태: AutoSales.py job/multi_kor_stocks_lgbm.py가 매 실행마다 _status_kr.json에 남긴다 #}
+    {% set pct = ((regime.max_raw / regime.threshold) * 100) if regime.threshold else 0 %}
+    <div class="lgbm-regime {{ 'alert' if regime.alert_count > 0 else '' }}">
+        <strong>오늘 국장 상태</strong> <small>({{ regime.signal_date[0:4] }}-{{ regime.signal_date[4:6] }}-{{ regime.signal_date[6:8] }} 봉 · {{ regime.run_at }} 실행)</small><br>
+        {{ regime.message }}
+        <div class="meter">
+            <small>최고 점수 {{ '%.3f'|format(regime.max_raw) }}</small>
+            <div class="bar" title="빨간 선 = 임계값 {{ regime.threshold }}">
+                <div class="fill" style="width: {{ [pct, 100]|min }}%;"></div>
+                <div class="th" style="left: 100%; margin-left: -2px;"></div>
+            </div>
+            <small>임계값 {{ '%.4f'|format(regime.threshold) }}</small>
+        </div>
+        <small>적격 {{ regime.eligible }}종목 · 평균 변동성 {{ '%.3f'|format(regime.mean_atr) }} · 평균 60일 수익 {{ '%+.1f'|format(regime.mean_ret_60d * 100) }}%
+        · 이 모델은 '크게 빠진 고변동 종목의 반등 직전'을 잡도록 만들어져, 조용한 상승장에선 신호가 없는 게 정상입니다.</small>
+    </div>
+    {% endif %}
 
     {% if is_watch %}
     {# 실측 근거는 AutoSales.py job/multi_kor_stocks_lgbm.py 상단 WATCH_DIR 주석 #}
