@@ -350,6 +350,7 @@
            예전엔 여기서 10px로 눌러놔서 이 버튼만 유독 좁고 납작해 보였다. */
         .mystocks-buy-row button { flex: 0 0 auto; white-space: nowrap; }
         .ms-positive { color: #d32f2f; }
+        .ms-picks-score { color: #888; font-size: 0.9em; }   /* 상승여력 칸의 점수 */
         .ms-negative { color: #1565c0; }
         /* interest_stocks.css의 .table td { color: #111827 }가 특이도(요소+클래스)로 이겨버려서 별도 지정 */
         .table td.ms-positive { color: #d32f2f; }
@@ -2109,23 +2110,26 @@
         }
     }
 
-    // 추천종목 헤더 클릭 정렬. '추천'/'상승여력'은 둘 다 같은 score 구간 경계로 갈리는
-    // 파생 라벨이라(_label/_upside_tier, job/interest_stock_picks.py), 문자열로 정렬하면
-    // 순서가 뒤죽박죽이라 원본 score로 정렬한다 — 2026-09-22 헤더 정렬 추가.
+    // 추천종목 헤더 클릭 정렬. '추천'/'상승여력'은 파생 라벨이라(_label/_upside_tier,
+    // job/interest_stock_picks.py) 문자열로 정렬하면 순서가 뒤죽박죽이다 — 2026-09-22 헤더 정렬 추가.
+    // 2026-10-06: 적극매수에 수급 조건이 붙어 '점수 0.70 이상인데 매수'가 생겼다. 점수만으로 정렬하면
+    // 그런 종목이 적극매수 사이에 끼어 보이므로, 등급(적극매수>매수>관심) 먼저 묶고 그 안에서 점수순으로 한다.
+    // 기본 정렬(서버가 준 순서 = 점수순)도 같은 규칙을 적용한다.
+    const MS_LABEL_RANK = { '적극매수': 2, '매수': 1 };
+    const msLabelScore = p => (MS_LABEL_RANK[p.label] ?? 0) * 100 + Number(p.score ?? -Infinity);
     const MS_PICKS_SORT_GETTERS = {
-        label: p => Number(p.score ?? -Infinity),
-        upside_tier: p => Number(p.score ?? -Infinity),
+        label: msLabelScore,
+        upside_tier: msLabelScore,
         today_price_change_pct: p => Number(p.today_price_change_pct ?? -Infinity),
         trading_value_change_pct: p => Number(p.trading_value_change_pct ?? -Infinity),
         foreign_net: p => Number(p.foreign_net ?? -Infinity),
         institution_net: p => Number(p.institution_net ?? -Infinity),
     };
-    let msPicksSort = { key: null, dir: 'desc' };  // key=null이면 서버가 준 순서(점수 내림차순) 그대로
+    let msPicksSort = { key: null, dir: 'desc' };  // key=null이면 기본 정렬(등급 → 점수 내림차순)
 
     function msSortPicks(picks) {
-        const get = msPicksSort.key && MS_PICKS_SORT_GETTERS[msPicksSort.key];
-        if (!get) return picks;
-        const sign = msPicksSort.dir === 'asc' ? 1 : -1;
+        const get = (msPicksSort.key && MS_PICKS_SORT_GETTERS[msPicksSort.key]) || msLabelScore;
+        const sign = (msPicksSort.key && msPicksSort.dir === 'asc') ? 1 : -1;
         return picks.slice().sort((a, b) => sign * (get(a) - get(b)));
     }
 
@@ -2214,6 +2218,19 @@
         }
     }
 
+    // 상승여력 칸: '상승여력 높음' → '높음'(추천 헤더와 같은 의미라 접두어 생략) + 점수. 과거 날짜 파일엔
+    // 접두어가 붙은 옛 문구가 그대로 있어서 화면에서 떼어 쓴다.
+    // 점수 0.70 이상인데 '매수'면 수급 조건(STRONG_FLOW_MIN)에서 한 단계 내려간 것 — 툴팁으로 알린다.
+    function msUpsideCellHtml(p) {
+        const tier = String(p.upside_tier ?? '').replace(/^상승여력\s*/, '');
+        if (!tier) return '';
+        const sc = Number(p.score);
+        if (!Number.isFinite(sc)) return tier;
+        const note = (sc >= 0.70 && p.label === '매수')
+            ? ' title="점수는 적극매수 구간이지만 외국인·기관 순매수가 거래대금의 3% 미만이라 매수로 표시"' : '';
+        return `${tier} <span class="ms-picks-score"${note}>(${sc.toFixed(2)})</span>`;
+    }
+
     function renderInterestPicksRows(picks) {
         const table = document.getElementById('table-picks');
         const tbody = table.querySelector('tbody');
@@ -2251,7 +2268,7 @@
             </div>
           </td>
           <td class="${labelClass}">${p.label ?? ''}</td>
-          <td>${p.upside_tier ?? ''}</td>
+          <td>${msUpsideCellHtml(p)}</td>
           ${msPicksShowLive
             ? `<td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>
           <td class="right picks-live" data-stock-code="${p.stock_code ?? ''}">${msPicksLiveCellHtml(p)}</td>`
