@@ -3453,14 +3453,24 @@
     // 추천종목 탭: 추천상태 '매수' 이상('매수'·'적극매수')인 종목 전부를 자동매수 대상으로
     // 일괄 체크. 이미 예약된 종목은 건드리지 않는다(/stocks/reserved가 토글이라, 이미 true인
     // 걸 다시 부르면 꺼져버림 — 2026-09-22 추가).
+    // 외국인·기관 순매수가 둘 다 음수(매도 우위)인 종목은 제외한다. 값이 없는(null, 예: 장중
+    // 기관 집계 전) 쪽이 있으면 판단 불가 → 제외하지 않는다.
+    const isBothNetNegative = p =>
+        p.foreign_net != null && p.institution_net != null &&
+        Number(p.foreign_net) < 0 && Number(p.institution_net) < 0;
     document.getElementById('picks-reserve-buy-btn')?.addEventListener('click', async () => {
-        const targets = lastInterestPicks.filter(p =>
+        const buyable = lastInterestPicks.filter(p =>
             (p.label === '매수' || p.label === '적극매수') && !flagCacheHas(reservedStocks, p.stock_code));
+        const targets = buyable.filter(p => !isBothNetNegative(p));
+        const excluded = buyable.length - targets.length;
         if (!targets.length) {
-            showDebugToast("추가할 종목이 없어요 ('매수' 이상이 없거나 이미 전부 예약됨)");
+            showDebugToast(excluded
+                ? `추가할 종목이 없어요 (외국인·기관 순매수 모두 음수인 ${excluded}종목 제외)`
+                : "추가할 종목이 없어요 ('매수' 이상이 없거나 이미 전부 예약됨)");
             return;
         }
-        if (!confirm(`'매수' 이상 ${targets.length}종목을 자동매수 대상으로 추가할까요?`)) return;
+        const excludedNote = excluded ? `\n(외국인·기관 순매수 모두 음수인 ${excluded}종목 제외)` : '';
+        if (!confirm(`'매수' 이상 ${targets.length}종목을 자동매수 대상으로 추가할까요?${excludedNote}`)) return;
 
         const btn = document.getElementById('picks-reserve-buy-btn');
         btn.disabled = true;
