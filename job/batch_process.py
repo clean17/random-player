@@ -325,14 +325,14 @@ def predict_stock_graph(stock):
 # (구버전 multi_kor_stocks.py/new_nasdaq_multi.py)와는 별개 트랙. 결과는 F:\lgbm_stocks\<YYYYMMDD>\
 # <kr|us>\ 에 저장되고 /image/lgbm-stocks/<kr|us> 로 조회한다(app/image.py 참고).
 def predict_kr_stocks_lgbm():
-    print('    ############################### predict_kr_stocks_lgbm ###############################')
+    # print('    ############################### predict_kr_stocks_lgbm ###############################')
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\multi_kor_stocks_lgbm.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
 def predict_us_stocks_lgbm():
-    print('    ############################### predict_us_stocks_lgbm ###############################')
+    # print('    ############################### predict_us_stocks_lgbm ###############################')
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\multi_us_stocks_lgbm.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
@@ -354,7 +354,7 @@ def collect_investor_flow():
     PER/PBR 사고(현재 스냅샷을 과거 전체에 방송)와는 성격이 다르고, API가 최근 50일만
     돌려주므로 덮어쓰기 범위도 그 안으로 제한된다.
     """
-    print('    ############################### collect_investor_flow ###############################')
+    # print('    ############################### collect_investor_flow ###############################')
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\12_collect_investor_flow.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script,
@@ -364,7 +364,7 @@ def collect_investor_flow():
 
 def refresh_kr_lgbm_gallery():
     """국장 LGBM 갤러리 차트를 신호일 이후까지 이어 그린다(파일 대체)."""
-    print('    ############################### refresh_kr_lgbm_gallery ###############################')
+    # print('    ############################### refresh_kr_lgbm_gallery ###############################')
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\refresh_lgbm_gallery.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--market", "kr"],
@@ -373,7 +373,7 @@ def refresh_kr_lgbm_gallery():
 
 def refresh_us_lgbm_gallery():
     """미장 LGBM 갤러리 차트를 신호일 이후까지 이어 그린다(파일 대체)."""
-    print('    ############################### refresh_us_lgbm_gallery ###############################')
+    # print('    ############################### refresh_us_lgbm_gallery ###############################')
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\refresh_lgbm_gallery.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, "--market", "us"],
