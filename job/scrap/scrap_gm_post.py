@@ -15,10 +15,10 @@ HEADLESS = False
 USERNAME = settings['SCRAP_USERNAME']
 PASSWORD = settings['SCRAP_PASSWORD']
 
-ACCOUNT = ""
+ACCOUNT = "ace.beauty_"
 
 POST_URLS = [
-    "",   # 테스트할 포스트 URI
+    "https://www.instagram.com/p/DdGL8OyE5US/?img_index=1",   # 테스트할 포스트 URI
 ]
 
 
