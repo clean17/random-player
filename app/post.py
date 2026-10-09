@@ -54,6 +54,7 @@ def post_list():
         , bookmarked_ids=bookmarked_ids
         , page=page
         , max_page=max_page
+        , total=total
         , search=search
         , search_type=search_type
         , version=int(time.time())
