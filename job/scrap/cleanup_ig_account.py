@@ -21,7 +21,7 @@ SCRAP_USERNAME = config['settings']['scrap_username']
 SCRAP_PASSWORD = config['settings']['scrap_password']
 
 ACCOUNTS = [
-    'vina_009i', '_s0ng_s2_',
+    'vina_009i', '_s0ng_s2_', 's0zzzi', 'julia_yang01', 'yunxvly',
 ]
 
 # USER_DATA_DIR = str(Path("./data/ig_profile-14").resolve())  # 세션 저장 (2회차부터 자동 로그인)  # fx014
