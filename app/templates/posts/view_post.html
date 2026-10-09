@@ -11,6 +11,9 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
     <style>
+        body.page-post-view .post-content.ql-editor.is-plain-text {
+            white-space: pre-wrap !important;
+        }
         body.page-post .post-action-btn.post-mark-btn.is-on {
             background: #fef3c7 !important;
             color: #92400e !important;
@@ -59,7 +62,9 @@
         <div class="post-content-wrapper">
             <button type="button" class="copy-btn" id="copy-post-text">내용 복사</button>
 <!--        <pre name="content" id="content" readonly>{{ post.content or ''}}</pre>-->
-            <div class="post-content ql-editor">{{ post.content|safe }}</div>
+            {# Quill 도입 전 글은 평문(또는 <p> 하나) 안에 \r\n 으로 줄을 나눠 저장돼 있어서, 뷰 화면의 white-space: normal 에
+               줄바꿈이 먹힌다. Quill 이 저장한 HTML 에는 원시 \n 이 없으므로(<pre> 내부 제외) \n 유무로 구분한다. #}
+            <div class="post-content ql-editor{{ ' is-plain-text' if '\n' in (post.content or '') else '' }}">{{ post.content|safe }}</div>
         </div>
 
     </div>
