@@ -85,6 +85,19 @@ except Exception:
 - 상태 파일(`auto_trading/kiwoom_*_state.json`)은 `dirname(__file__)` 기준이다. 코드를 옮기면
   같이 옮겨야 한다 — 잃으면 쿨다운과 트레일링 진행상태가 초기화된다.
 
+## IDE `no-commit` 변경 목록은 커밋·푸시 금지
+
+JetBrains IDE의 `no-commit` changelist에 들어 있는 파일은 **커밋도 푸시도 하지 않는다.**
+git은 changelist를 모르기 때문에 `git status`에는 일반 수정 파일로 보인다 — 커밋 전에 매번 확인할 것.
+
+```bash
+# no-commit 목록의 파일 확인 (.idea/workspace.xml 은 gitignore 대상, 로컬에만 있음)
+grep -A50 'name="no-commit"' .idea/workspace.xml | sed '/<\/list>/q' | grep -o 'afterPath="[^"]*"'
+```
+
+- 커밋할 파일만 경로를 지정해서 `git add`한다. `git add -A` / `git add .` / `git commit -a` 금지.
+- 같은 파일에 커밋할 변경과 no-commit 변경이 섞여 있으면 임의로 판단하지 말고 사용자에게 물어본다.
+
 ## logs/ 는 gitignore 대상
 
 백테스트 결과 CSV처럼 추적해야 하는 산출물은 `git add -f`가 필요하다(갱신할 때도 매번).
