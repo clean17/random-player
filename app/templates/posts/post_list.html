@@ -125,7 +125,7 @@
         }
     </style>
 </head>
-<body class="page-post app-page">
+<body class="page-post app-page" data-post-list-page>
 <div class="top-bar" data-auto-hide="true">
     <div class="back app-header__left">
         <a href="{{ url_for('main.home') }}" class="app-back">Back</a>
@@ -219,6 +219,7 @@
     </div>
 </div>
 <script src="/static/js/ui_chrome.js?v={{ version }}"></script>
+<script src="/static/js/post_list_nav.js?v={{ version }}"></script>
 </body>
 <script>
     const postBoxes = document.querySelectorAll(".post-box");

@@ -30,7 +30,7 @@
 
 <div class="top-bar" data-auto-hide="true">
     <div class="back app-header__left">
-        <a href="/posts" class="app-back">Back</a>
+        <a href="/posts" class="app-back" data-post-list-link>Back</a>
     </div>
     <div class="app-title">Post</div>
     <div class="logout app-user-menu app-header__right post-view-actions">
@@ -69,7 +69,7 @@
 
     </div>
     <div class="form-actions post-bottom-actions">
-        <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
+        <button type="button" class="btn-secondary" onclick="goPostList()">목록으로</button>
         <button type="button" class="post-action-btn post-mark-btn{{ ' is-on' if is_bookmarked else '' }}" id="bookmark-post"
                 data-on="{{ '1' if is_bookmarked else '0' }}" aria-label="즐겨찾기" aria-pressed="{{ 'true' if is_bookmarked else 'false' }}">{{ '★' if is_bookmarked else '☆' }}</button>
         {% if is_admin %}
@@ -83,6 +83,7 @@
     </div>
 </div>
 <script src="/static/js/ui_chrome.js?v={{ version }}"></script>
+<script src="/static/js/post_list_nav.js?v={{ version }}"></script>
 </body>
 <script>
     const deletePostBtn = document.getElementById('delete-post');
@@ -183,7 +184,7 @@
                     timeout: 3000 // 3초 초과시 자동 reject
                 }).then(async res => {
                     if ("true" === res.data.result) {
-                        window.location.replace("/posts");
+                        goPostList(true);
                     }
                 }).catch(error => {
                     throw error; // 기타 에러는 그대로 던짐
