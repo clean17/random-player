@@ -2,7 +2,7 @@ import psycopg
 
 from app.repository.posts.PostDTO import PostDTO
 from config.db_connect import db_transaction
-from typing import List, Tuple
+from typing import List, Set, Tuple
 
 # 공지(post_pins) / 개인 즐겨찾기(post_bookmarks). 스키마: schema_pins_bookmarks.sql
 
@@ -43,6 +43,21 @@ def get_post_marks(post_id: int, user_id: int, conn=None) -> Tuple[bool, bool]:
         )
         pinned, bookmarked = cur.fetchone()
         return bool(pinned), bool(bookmarked)
+
+@db_transaction
+def find_marked_post_ids(post_ids: List[int], user_id: int, conn=None) -> Tuple[Set[int], Set[int]]:
+    """목록 한 페이지 분량 post_ids 중 (공지인 id, 이 사용자가 즐겨찾기한 id)"""
+    if not post_ids:
+        return set(), set()
+    with conn.cursor() as cur:
+        cur.execute("SELECT post_id FROM post_pins WHERE post_id = ANY(%s);", (post_ids,))
+        pinned = {row[0] for row in cur.fetchall()}
+        cur.execute(
+            "SELECT post_id FROM post_bookmarks WHERE user_id = %s AND post_id = ANY(%s);",
+            (user_id, post_ids)
+        )
+        bookmarked = {row[0] for row in cur.fetchall()}
+    return pinned, bookmarked
 
 @db_transaction
 def set_post_pinned(post_id: int, user_id: int, pinned: bool, conn=None) -> None:

@@ -117,6 +117,17 @@
         .post-bookmarks .post-mark-row:hover {
             background: #f1f5f9;
         }
+        .post-row-badge {
+            display: inline-block;
+            margin-right: 6px;
+            padding: 3px 9px;
+            font-size: 13.5px;
+            vertical-align: 1px;
+        }
+        .post-row-star {
+            margin-right: 4px;
+            color: #f59e0b;
+        }
         .post-list-empty {
             text-align: center;
             padding: 40px 0;
@@ -191,7 +202,10 @@
                     <img src={{ post.thumbnail }}>
                 </div>
                 <div class="post-info">
-                    <div class="post-title">{{ post.title }}</div>
+                    <div class="post-title">
+                        {%- if post.id in (pinned_ids | default([])) %}<span class="post-mark-badge post-row-badge">공지</span>{% endif -%}
+                        {%- if post.id in (bookmarked_ids | default([])) %}<span class="post-row-star" title="즐겨찾기" aria-label="즐겨찾기">★</span>{% endif -%}
+                        {{ post.title }}</div>
                     <div class="post-meta">{{ post.realname or '이름 없음' }} &nbsp;|&nbsp; {{ post.updated_at }}</div>
                 </div>
             </div>

@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 
 from app.repository.posts.PostDTO import PostDTO
 from app.repository.posts.posts import find_post, find_post_list, get_posts_count, insert_post, update_post, delete_post
-from app.repository.posts.post_marks import find_pinned_posts, find_bookmarked_posts, get_post_marks, set_post_pinned, set_post_bookmarked
+from app.repository.posts.post_marks import find_pinned_posts, find_bookmarked_posts, find_marked_post_ids, get_post_marks, set_post_pinned, set_post_bookmarked
 from app.repository.users.users import find_user_by_username
 from config.config import settings
 import time
@@ -35,10 +35,13 @@ def post_list():
 
     max_page = (total - 1) // per_page + 1 if total else 1
 
-    # 공지/즐겨찾기는 첫 페이지의 일반 목록에서만 노출 (검색 결과·2페이지 이후엔 방해만 됨)
+    user = find_user_by_username(current_user.get_id())
+    # 목록 각 행의 공지/즐겨찾기 배지용 (모든 페이지·검색 결과)
+    pinned_ids, bookmarked_ids = find_marked_post_ids([post.id for post in page_posts], user.id)
+
+    # 상단 공지/즐겨찾기 영역은 첫 페이지의 일반 목록에서만 노출 (검색 결과·2페이지 이후엔 방해만 됨)
     pinned_posts, bookmarked_posts = [], []
     if page == 1 and not search:
-        user = find_user_by_username(current_user.get_id())
         pinned_posts = find_pinned_posts()
         bookmarked_posts = find_bookmarked_posts(user.id)
 
@@ -47,6 +50,8 @@ def post_list():
         , posts=page_posts
         , pinned_posts=pinned_posts
         , bookmarked_posts=bookmarked_posts
+        , pinned_ids=pinned_ids
+        , bookmarked_ids=bookmarked_ids
         , page=page
         , max_page=max_page
         , search=search
