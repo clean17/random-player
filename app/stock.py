@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import threading
 import pandas as pd
 from datetime import datetime
 
@@ -682,6 +683,50 @@ def _req_env(from_json: bool = False):
     return raw
 
 
+# ── 대시보드 조회 공유 캐시 (2026-10-09) ─────────────────────────────────────
+# '내 계좌' 화면은 브라우저마다 3초(장외 60초)마다 holdings/orders를 부르고, 그때마다 캐시 없는
+# 키움 호출(kt00018·ka10075·kt00001·ka10075)이 4건씩 나간다. 브라우저 수에 비례해 늘어나는데,
+# kiwoom_api의 레이트리밋은 실전/모의 구분 없는 프로세스 전역 예산이라 모의 화면을 여러 개 띄워도
+# 실전 v8_exit/트레일링 청산 호출이 그 대기열 뒤로 밀린다. 같은 env 결과를 TTL 동안 공유하고
+# 만료 시엔 한 스레드만 조회하게 해서(나머지는 그 결과를 기다려 씀) 브라우저 수와 무관하게
+# 호출량을 브라우저 1개 수준으로 고정한다. TTL을 새로고침 주기(3초)보다 짧게 둬서 화면이 1개면
+# 지금과 똑같이 매번 새로 받는다. 주문/취소 직후엔 _dash_cache_invalidate()로 바로 비운다.
+# ⚠️ 대시보드 전용이다 — 매매 로직(kiwoom_api 함수 직접 호출)에는 캐시가 끼지 않는다.
+_DASH_CACHE_TTL = 2.0
+_DASH_CACHE = {}           # (name, env) -> (ts, value)
+_DASH_CACHE_LOCKS = {}     # (name, env) -> Lock (조회 single-flight)
+_DASH_CACHE_GUARD = threading.Lock()
+
+
+def _dash_key(name, env):
+    return (name, env or KIWOOM_ENV)
+
+
+def _dash_cached(name, env, fetch):
+    key = _dash_key(name, env)
+    with _DASH_CACHE_GUARD:
+        hit = _DASH_CACHE.get(key)
+        if hit and time.time() - hit[0] < _DASH_CACHE_TTL:
+            return hit[1]
+        lock = _DASH_CACHE_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        with _DASH_CACHE_GUARD:   # 기다리는 동안 다른 스레드가 받아왔으면 그걸 쓴다
+            hit = _DASH_CACHE.get(key)
+            if hit and time.time() - hit[0] < _DASH_CACHE_TTL:
+                return hit[1]
+        value = fetch()           # 예외는 캐시하지 않고 그대로 올린다
+        with _DASH_CACHE_GUARD:
+            _DASH_CACHE[key] = (time.time(), value)
+        return value
+
+
+def _dash_cache_invalidate(env):
+    env_key = env or KIWOOM_ENV
+    with _DASH_CACHE_GUARD:
+        for key in [k for k in _DASH_CACHE if k[1] == env_key]:
+            del _DASH_CACHE[key]
+
+
 @stock.route("/kiwoom/envs", methods=["GET"])
 @login_required
 def get_kiwoom_envs():
@@ -925,88 +970,94 @@ def get_kiwoom_holdings():
         return {"status": "error",
                 "message": f"계좌 정보가 설정되지 않음 (env={env or KIWOOM_ENV})"}, 500
     try:
-        holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
-        # 청산상태(보유일/트리거까지 남은 정도) — v8이 산 종목은 v8 규칙, 그 외(모의 fire 전량 +
-        # 실전에서 v8이 안 산 잔존 종목)는 레거시 트레일링 엔진 규칙을 쓴다(2026-08-28, 모의투자엔
-        # 이게 전부라 이걸 안 붙이면 청산상태 칸이 항상 비어 있었다). 둘 다 상태 파일에 없으면 None.
-        v8pos = _load_v8_positions(env)
-        legacy_pos = _load_legacy_positions(env)
-        # 종목 아이콘용 로고 — stocks 테이블에 있으면 그걸 쓰고, 없으면 프론트에서
-        # 토스 증권 아이콘(https://static.toss.im/png-icons/securities/icn-sec-fill-{code}.png)으로
-        # 폴백한다(2026-08-28). DB 조회 1건으로 일괄 처리.
-        logo_urls = get_logo_urls_by_codes([h.get('stk_cd') for h in holdings if h.get('stk_cd')])
-        # 투자경고/관리종목/거래정지 등 배지 표시용 (2026-09-02, ka10099 실측 — 실계좌
-        # 011090/057540 관리종목, 모의계좌 417840 투자주의로 확인됨). '정상'이면 표시 안 함.
-        audit_map = get_stock_audit_info_map(env)
-        # 오늘 거래대금 (2026-09-07) — kt00018엔 없는 값이라 토스 캔들 API에서 따로 받아온다.
-        # 60초 캐시라 실패해도(get()이 빈 dict 반환) 화면은 그대로 '-'로 표시될 뿐 안 죽는다.
-        trde_amt_map = get_trading_amounts(
-            [h.get('stk_cd') for h in holdings if h.get('stk_cd')])
-        for h in holdings:
-            code = h.get('stk_cd')
-            v8p = v8pos.get(code)
-            exit_state = _v8_holding_state(v8p, h.get('cur_price')) if v8p else None
-            if exit_state is None:
-                lp = legacy_pos.get(code)
-                if lp:
-                    exit_state = _legacy_holding_state(lp, h.get('avg_price'), h.get('cur_price'), env)
-            h['v8'] = exit_state
-            h['logo_url'] = logo_urls.get(code)
-            h['audit_info'] = _audit_badge(code, audit_map)
-            h['trde_amt'] = trde_amt_map.get(code)
-            # 2026-08-28: kt00018의 pred_close_pric(전일종가)이 cur_prc와 항상 똑같이 와서
-            # (실측 확인 — 키움 API 쪽 결함으로 보임) day_change_rate가 매번 0%로 나왔다.
-            # 2026-09-02 재확인: 지금은 pred_close_pric이 실제 전일종가와 정확히 일치하고
-            # cur_prc와도 정상적으로 다르다 — 그 결함이 지금은 재현 안 됨(개장 직후 특정
-            # 종목의 "전일종가 고착" 현상과 관련됐을 가능성). API 값을 쓰면 3초 새로고침마다
-            # 실시간으로 갱신되는 장점이 있으니, pred_close가 cur_prc와 실제로 다를 때만
-            # (=결함이 없을 때만) API 값을 쓰고, 혹시 둘이 같아지면(결함 재발 의심) pkl
-            # 기반 계산으로 자동 폴백한다.
-            # 2026-09-23 추가: 192650 실사고 — pred_close_pric이 cur_prc와 "완전히 같지는
-            # 않지만"(8530 vs 8540) 실제 전일종가(8140)와도 다른, 그냥 틀린 값을 준 사례가
-            # 나왔다. 위 동일 비교로는 못 잡는 변종 결함이라, 아예 장이 열려있지 않을 때는
-            # (가격이 안 움직이니 API 실시간성의 이점도 없다) pred_close_pric을 안 믿고
-            # 무조건 pkl 기준으로 계산한다. 장중에는 기존 로직(완전 일치일 때만 폴백) 유지 —
-            # 그때는 3초 새로고침 실시간성이 더 중요하고, 이 변종이 장중에도 나타나는지는
-            # 아직 확인된 바 없다.
-            pred_close = h.get('pred_close')
-            cur_price = h.get('cur_price')
-            if not v8_strategy.is_market_open() or not (pred_close and cur_price and pred_close != cur_price):
-                h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
-        asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
-        # 2026-08-28: 원래 "1회 투입금(ALLOC=8%) 참고값"으로 넣었었는데, 사용자가 원한 건
-        # 그게 아니라 "지금 실제 미체결 매수 주문에 얼마가 걸려있는지"였다 — 그 돈은 평가금(체결
-        # 전이라 안 잡힘)에도 보유현금(ord_alow_amt는 이미 이만큼 빼고 남은 값)에도 안 보여서
-        # 따로 보여줘야 한다. 매수 주문만 카운트(매도 미체결은 종목을 묶지 현금을 안 묶는다).
-        try:
-            unfilled = get_unfilled_orders(acnt_no, acnt_pwd, env=env)
-            summary['pending_order_amount'] = sum(
-                float(o.get('ord_pric_num') or 0) * int(o.get('oso_qty_num') or 0)
-                for o in unfilled if '매수' in str(o.get('io_tp_nm') or '')
-            )
-        except Exception as e:
-            print(f'미체결 매수주문 금액 계산 실패: {e}')
-            summary['pending_order_amount'] = None
-        # 예수금은 kt00018 에 없어서 별도 조회(kt00001). 없으면 화면이 죽지 않게 None 으로 넘긴다.
-        # 2026-08-27: 실패 시 1회 재시도 — 순간적인 레이트리밋/타임아웃이면 이걸로 대부분
-        # 넘어간다. 재시도까지 실패하면 프론트가 '총자산-평가금액' 근사식으로 대체 표시하던
-        # 시절이 있었는데, 그 근사식은 계좌가 거의 풀 투자 상태일 때 부호가 뒤집혀 없던
-        # 미수금처럼(오늘 모의계좌 -50만원 오표시) 보이는 게 이미 확인된 결함이라 지금은
-        # 프론트에서 그 폴백을 쓰지 않는다(interesting_stocks.html renderMyStocksSummary 참고).
-        try:
-            summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)
-        except Exception as de:
-            print(f'예수금 조회 실패, 재시도: {de}')
-            try:
-                summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)
-            except Exception as de2:
-                print(f'예수금 조회 재시도도 실패: {de2}')
-                summary['deposit'] = None
+        payload = _dash_cached('holdings', env, lambda: _build_holdings_payload(env, acnt_no, acnt_pwd))
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
-    return jsonify({"holdings": holdings, "summary": summary, "asset_pnl": asset_pnl,
-                    "env": env or KIWOOM_ENV})
+    return jsonify(payload)
+
+
+def _build_holdings_payload(env, acnt_no, acnt_pwd):
+    """/kiwoom/holdings 응답 본문. 예외는 그대로 올린다(라우트가 500으로 변환, 캐시 안 됨)."""
+    holdings, summary = get_holdings_and_summary(acnt_no, acnt_pwd, env)
+    # 청산상태(보유일/트리거까지 남은 정도) — v8이 산 종목은 v8 규칙, 그 외(모의 fire 전량 +
+    # 실전에서 v8이 안 산 잔존 종목)는 레거시 트레일링 엔진 규칙을 쓴다(2026-08-28, 모의투자엔
+    # 이게 전부라 이걸 안 붙이면 청산상태 칸이 항상 비어 있었다). 둘 다 상태 파일에 없으면 None.
+    v8pos = _load_v8_positions(env)
+    legacy_pos = _load_legacy_positions(env)
+    # 종목 아이콘용 로고 — stocks 테이블에 있으면 그걸 쓰고, 없으면 프론트에서
+    # 토스 증권 아이콘(https://static.toss.im/png-icons/securities/icn-sec-fill-{code}.png)으로
+    # 폴백한다(2026-08-28). DB 조회 1건으로 일괄 처리.
+    logo_urls = get_logo_urls_by_codes([h.get('stk_cd') for h in holdings if h.get('stk_cd')])
+    # 투자경고/관리종목/거래정지 등 배지 표시용 (2026-09-02, ka10099 실측 — 실계좌
+    # 011090/057540 관리종목, 모의계좌 417840 투자주의로 확인됨). '정상'이면 표시 안 함.
+    audit_map = get_stock_audit_info_map(env)
+    # 오늘 거래대금 (2026-09-07) — kt00018엔 없는 값이라 토스 캔들 API에서 따로 받아온다.
+    # 60초 캐시라 실패해도(get()이 빈 dict 반환) 화면은 그대로 '-'로 표시될 뿐 안 죽는다.
+    trde_amt_map = get_trading_amounts(
+        [h.get('stk_cd') for h in holdings if h.get('stk_cd')])
+    for h in holdings:
+        code = h.get('stk_cd')
+        v8p = v8pos.get(code)
+        exit_state = _v8_holding_state(v8p, h.get('cur_price')) if v8p else None
+        if exit_state is None:
+            lp = legacy_pos.get(code)
+            if lp:
+                exit_state = _legacy_holding_state(lp, h.get('avg_price'), h.get('cur_price'), env)
+        h['v8'] = exit_state
+        h['logo_url'] = logo_urls.get(code)
+        h['audit_info'] = _audit_badge(code, audit_map)
+        h['trde_amt'] = trde_amt_map.get(code)
+        # 2026-08-28: kt00018의 pred_close_pric(전일종가)이 cur_prc와 항상 똑같이 와서
+        # (실측 확인 — 키움 API 쪽 결함으로 보임) day_change_rate가 매번 0%로 나왔다.
+        # 2026-09-02 재확인: 지금은 pred_close_pric이 실제 전일종가와 정확히 일치하고
+        # cur_prc와도 정상적으로 다르다 — 그 결함이 지금은 재현 안 됨(개장 직후 특정
+        # 종목의 "전일종가 고착" 현상과 관련됐을 가능성). API 값을 쓰면 3초 새로고침마다
+        # 실시간으로 갱신되는 장점이 있으니, pred_close가 cur_prc와 실제로 다를 때만
+        # (=결함이 없을 때만) API 값을 쓰고, 혹시 둘이 같아지면(결함 재발 의심) pkl
+        # 기반 계산으로 자동 폴백한다.
+        # 2026-09-23 추가: 192650 실사고 — pred_close_pric이 cur_prc와 "완전히 같지는
+        # 않지만"(8530 vs 8540) 실제 전일종가(8140)와도 다른, 그냥 틀린 값을 준 사례가
+        # 나왔다. 위 동일 비교로는 못 잡는 변종 결함이라, 아예 장이 열려있지 않을 때는
+        # (가격이 안 움직이니 API 실시간성의 이점도 없다) pred_close_pric을 안 믿고
+        # 무조건 pkl 기준으로 계산한다. 장중에는 기존 로직(완전 일치일 때만 폴백) 유지 —
+        # 그때는 3초 새로고침 실시간성이 더 중요하고, 이 변종이 장중에도 나타나는지는
+        # 아직 확인된 바 없다.
+        pred_close = h.get('pred_close')
+        cur_price = h.get('cur_price')
+        if not v8_strategy.is_market_open() or not (pred_close and cur_price and pred_close != cur_price):
+            h['day_change_rate'] = _day_change_rate_from_pkl(h.get('stk_cd'))
+    asset_pnl = get_asset_based_pnl(summary['total_asset'], env)
+    # 2026-08-28: 원래 "1회 투입금(ALLOC=8%) 참고값"으로 넣었었는데, 사용자가 원한 건
+    # 그게 아니라 "지금 실제 미체결 매수 주문에 얼마가 걸려있는지"였다 — 그 돈은 평가금(체결
+    # 전이라 안 잡힘)에도 보유현금(ord_alow_amt는 이미 이만큼 빼고 남은 값)에도 안 보여서
+    # 따로 보여줘야 한다. 매수 주문만 카운트(매도 미체결은 종목을 묶지 현금을 안 묶는다).
+    try:
+        unfilled = _dash_cached('unfilled', env, lambda: get_unfilled_orders(acnt_no, acnt_pwd, env=env))
+        summary['pending_order_amount'] = sum(
+            float(o.get('ord_pric_num') or 0) * int(o.get('oso_qty_num') or 0)
+            for o in unfilled if '매수' in str(o.get('io_tp_nm') or '')
+        )
+    except Exception as e:
+        print(f'미체결 매수주문 금액 계산 실패: {e}')
+        summary['pending_order_amount'] = None
+    # 예수금은 kt00018 에 없어서 별도 조회(kt00001). 없으면 화면이 죽지 않게 None 으로 넘긴다.
+    # 2026-08-27: 실패 시 1회 재시도 — 순간적인 레이트리밋/타임아웃이면 이걸로 대부분
+    # 넘어간다. 재시도까지 실패하면 프론트가 '총자산-평가금액' 근사식으로 대체 표시하던
+    # 시절이 있었는데, 그 근사식은 계좌가 거의 풀 투자 상태일 때 부호가 뒤집혀 없던
+    # 미수금처럼(오늘 모의계좌 -50만원 오표시) 보이는 게 이미 확인된 결함이라 지금은
+    # 프론트에서 그 폴백을 쓰지 않는다(interesting_stocks.html renderMyStocksSummary 참고).
+    try:
+        summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)
+    except Exception as de:
+        print(f'예수금 조회 실패, 재시도: {de}')
+        try:
+            summary['deposit'] = get_deposit(acnt_no, acnt_pwd, env)
+        except Exception as de2:
+            print(f'예수금 조회 재시도도 실패: {de2}')
+            summary['deposit'] = None
+    return {"holdings": holdings, "summary": summary, "asset_pnl": asset_pnl,
+            "env": env or KIWOOM_ENV}
 
 
 @stock.route("/kiwoom/history", methods=["GET"])
@@ -1059,7 +1110,8 @@ def get_kiwoom_orders():
         return {"status": "error",
                 "message": f"계좌 정보가 설정되지 않음 (env={env or KIWOOM_ENV})"}, 500
     try:
-        raw = get_unfilled_orders(acnt_no, acnt_pwd, env=env)
+        # holdings와 같은 미체결 조회(ka10075)를 공유한다 — _DASH_CACHE 주석 참고
+        raw = _dash_cached('unfilled', env, lambda: get_unfilled_orders(acnt_no, acnt_pwd, env=env))
     except Exception as e:
         print(e)
         return {"status": "error", "message": str(e)}, 500
@@ -1227,6 +1279,7 @@ def post_kiwoom_buy():
     try:
         env = _req_env(from_json=True)
         result = manual_buy(stk_cd, int(qty) if qty else None, env=env)
+        _dash_cache_invalidate(env)   # 주문 직후 새로고침이 2초 묵은 보유/미체결을 받지 않게
     except ValueError as e:
         return {"status": "error", "message": str(e)}, 400
     except Exception as e:
@@ -1252,6 +1305,7 @@ def post_kiwoom_sell():
     try:
         env = _req_env(from_json=True)
         result = manual_sell(stk_cd, int(qty), env=env)
+        _dash_cache_invalidate(env)
     except ValueError as e:
         return {"status": "error", "message": str(e)}, 400
     except Exception as e:
@@ -1279,6 +1333,7 @@ def post_kiwoom_cancel_order():
     try:
         env = _req_env(from_json=True)
         result = manual_cancel_order(stk_cd, ord_no, side, int(qty), env=env)
+        _dash_cache_invalidate(env)
     except ValueError as e:
         return {"status": "error", "message": str(e)}, 400
     except Exception as e:
@@ -1307,6 +1362,7 @@ def post_kiwoom_cancel_all_orders():
     try:
         env = _req_env(from_json=True)
         result = manual_cancel_all_orders(env=env, side=side or None)
+        _dash_cache_invalidate(env)
     except ValueError as e:
         return {"status": "error", "message": str(e)}, 400
     except Exception as e:
