@@ -255,11 +255,7 @@ function slideShowDeleteCurrent() {
     // 찾으므로(app/image.py move_image 참고) 같이 보낸다 — refine에서는 백엔드가 무시하니 무해하다.
     const activeDir = (typeof dir !== 'undefined' && dir) ? dir : 'refine';
     const selDir = (typeof selected_dir !== 'undefined' && selected_dir && selected_dir !== 'None') ? selected_dir : '';
-    fetch('/image/move-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagepath: activeDir, subpath: selDir, filename })
-    }).catch(err => console.error('slideShowDelete:', err));
+    requestMoveImage({ imagepath: activeDir, subpath: selDir, filename });
 
     slideShowImgs.splice(slideShowIdx, 1);
     if (!slideShowImgs.length) {
@@ -335,46 +331,49 @@ function clickCenterImage(target) {
     }
 }
 
+/**
+ * /image/move-image 를 백그라운드로 보내고 실패했을 때만 알린다.
+ * 서버 처리는 1초 안에 끝나는데, 갤러리가 같은 HTTP/2 연결로 큰 이미지(썸네일 없는 애니메이션 gif 등)를
+ * 받는 중이면 작은 응답이 그 뒤에서 수 초~10초 대기한다(개발자도구 Content Download). 그래서 화면은 응답을
+ * 기다리지 않고 먼저 지운다. 실패하면 서버 파일과 목록 캐시는 그대로라 새로고침하면 이미지가 다시 보인다.
+ * 404 는 원본이 이미 없는 경우(이중 요청 등)라 실패로 보지 않는다.
+ */
+function requestMoveImage(body) {
+    const name = String(body.filename || '').split(/[\\/]/).pop();
+    return fetch('/image/move-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+        .then(res => {
+            if (res.status === 404) return;
+            return res.json().then(
+                data => {
+                    if (data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+                },
+                // JSON 이 아니면 로그인 페이지로 리다이렉트된 경우 등
+                () => { throw new Error(`HTTP ${res.status}${res.redirected ? ' (로그인 만료?)' : ''}`); }
+            );
+        })
+        .catch(err => {
+            console.error('move-image 실패:', body.filename, err);
+            showDebugToast(`이동 실패: ${name} (${err.message}) — 새로고침하면 다시 보입니다`, 6000);
+        });
+}
+
 function moveImage(filename, index) {
     // console.log('filename', filename);
     if (dir === 'stock' || dir === 'temp') return;
 
-    renderLoadingOverlay();
+    // 응답을 기다리지 않고 화면에서 먼저 지운다 (masonry 는 호출 전에 이미 지웠으므로 여기선 null)
+    const imageElement = document.getElementById(`image-${index}`);
+    if (imageElement) {
+        nextImage(imageElement.nextElementSibling);
+        imageElement.remove();
+    }
+    isDelRunning = false;
 
-    // console.log(filename, index)
-    fetch(`/image/move-image`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            imagepath: dir,
-            subpath: dirText,
-            filename: filename
-        })
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                const imageElement = document.getElementById(`image-${index}`);
-                const nextImageElement = imageElement?.nextElementSibling;
-                if (imageElement) {
-                    nextImage(nextImageElement);
-                    imageElement.remove();
-                    // if (nextImageElement) {
-                    //     nextImageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    // }
-                }
-                // const total = document.getElementById('total_count').textContent
-                // document.getElementById('total_count').textContent = Number(total) - 1;
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        }).finally(()=>{
-        isDelRunning = false;
-        removeLoadingOverlay();
-    });
+    requestMoveImage({ imagepath: dir, subpath: dirText, filename: filename });
 }
 
 nextBtn?.addEventListener('click', () => nextImage());
@@ -494,27 +493,19 @@ function moveImageToPreviousStep(imageItem) {
         idx = imageItem.id.split('-')[1];
     }
 
-    renderLoadingOverlay();
-    fetch(`/image/move-image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            imagepath: 'refine',
-            filename: decodeURIComponent(filename)
-        })
-    })
-        .then(response => response.status === 404 ? { status: '404' } : response.json())
-        .then(data => {
-            removeLoadingOverlay();
-            if (data.status === 'success' || data.status === '404') {
-                const nextImageElement = imageItem.nextElementSibling;
-                imageItem.remove();
-                nextImage(nextImageElement);
-                decrementTotalCount();
-                if (typeof adjustColumnsIfNeeded === 'function') adjustColumnsIfNeeded();
-            }
-        })
-        .catch(error => console.error('Error:', error));
+    // 응답을 기다리지 않고 화면에서 먼저 지운다 (실패 알림은 requestMoveImage)
+    const nextImageElement = imageItem.nextElementSibling;
+    imageItem.remove();
+    // masonry 는 숨김 #image-data 의 원본을 복제해 그린다. 원본(안의 images[] 입력)도 지워야 이동이 실패한
+    // 이미지가 '페이지 삭제'(/delete-images) 목록에 들어가 삭제되지 않고, 열 재배치 때 되살아나지도 않는다.
+    if (imageItem.id) {
+        document.querySelectorAll(`#image-data > [id="${imageItem.id}"]`).forEach(el => el.remove());
+    }
+    nextImage(nextImageElement);
+    decrementTotalCount();
+    if (typeof adjustColumnsIfNeeded === 'function') adjustColumnsIfNeeded();
+
+    requestMoveImage({ imagepath: 'refine', filename: decodeURIComponent(filename) });
 
     isDelRunning = false;
 }
