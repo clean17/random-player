@@ -506,7 +506,9 @@ def _call_raw(api_id: str, endpoint: str, body: dict,
         if resp.status_code == 429 and attempt < _max_429_retries:
             wait_s = 0.5 * (attempt + 1)
             ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]  # 밀리초 포함 (2026-09-03: time.strftime엔 밀리초가 없어서 누락돼 있었다)
-            print(f'{ts} [WARN] 429 rate limit ({api_id}), {wait_s:.1f}s 후 재시도 ({attempt + 1}/{_max_429_retries})')
+            # 2026-10-09: env 표기 추가 — run_mock.py가 같은 콘솔에 찍어서 실전/모의 구분이 안 됐다
+            print(f'{ts} [WARN] 429 rate limit ({api_id}, {(env or KIWOOM_ENV).upper()}), '
+                  f'{wait_s:.1f}s 후 재시도 ({attempt + 1}/{_max_429_retries})')
             time.sleep(wait_s)
             continue
 
@@ -587,18 +589,30 @@ def get_current_prices(stk_cds: List[str], env: Optional[str] = None) -> Dict[st
 _AUDIT_INFO_CACHE_LOCK = threading.Lock()
 _AUDIT_INFO_CACHE: Optional[Tuple[float, Dict[str, str]]] = None
 _AUDIT_INFO_CACHE_TTL = 300.0  # 5분. 계좌별이 아니라 시장 전체 공통 정보라 env 무관하게 캐시.
+# 2026-10-09: 캐시 만료 순간 v8_buy(:15)와 대시보드 holdings/history/orders 스레드가 동시에
+# "캐시 없음"으로 보고 각자 ka10099를 불러 429가 연발했다(14:11:15에 1/3 재시도 3건 동시).
+# 조회 자체를 이 락으로 직렬화하고, 락을 잡은 뒤 캐시를 다시 확인해 먼저 받은 결과를 재사용한다.
+_AUDIT_INFO_FETCH_LOCK = threading.Lock()
 
 
 def get_stock_audit_info_map(env: Optional[str] = None, force: bool = False) -> Dict[str, str]:
     """전 종목 {종목코드: auditInfo} 맵. 5분 캐시(프로세스 전역, env 무관 — 시장 데이터는
     계좌와 상관없이 동일하다). 실패해도 예외를 던지지 않고 빈 dict를 돌려준다(호출부가
     보유종목 배지 표시용으로만 쓰므로, 실패해도 화면이 죽지 않는 쪽이 안전하다)."""
+    with _AUDIT_INFO_CACHE_LOCK:
+        if not force and _AUDIT_INFO_CACHE is not None and time.time() - _AUDIT_INFO_CACHE[0] < _AUDIT_INFO_CACHE_TTL:
+            return _AUDIT_INFO_CACHE[1]
+    with _AUDIT_INFO_FETCH_LOCK:
+        # 기다리는 동안 다른 스레드가 이미 받아왔으면 그걸 쓴다
+        with _AUDIT_INFO_CACHE_LOCK:
+            if not force and _AUDIT_INFO_CACHE is not None and time.time() - _AUDIT_INFO_CACHE[0] < _AUDIT_INFO_CACHE_TTL:
+                return _AUDIT_INFO_CACHE[1]
+        return _fetch_stock_audit_info_map(env)
+
+
+def _fetch_stock_audit_info_map(env: Optional[str]) -> Dict[str, str]:
     global _AUDIT_INFO_CACHE
     now = time.time()
-    with _AUDIT_INFO_CACHE_LOCK:
-        if not force and _AUDIT_INFO_CACHE is not None and now - _AUDIT_INFO_CACHE[0] < _AUDIT_INFO_CACHE_TTL:
-            return _AUDIT_INFO_CACHE[1]
-
     result: Dict[str, str] = {}
     try:
         for mrkt_tp in ('0', '10'):  # 0=코스피, 10=코스닥
@@ -624,6 +638,7 @@ _INDEX_CACHE_LOCK = threading.Lock()
 _INDEX_CACHE: Optional[Tuple[float, Dict[str, Dict]]] = None
 _INDEX_CACHE_TTL = 60.0  # 1분. 계좌별이 아니라 시장 전체 공통 정보라 env 무관하게 캐시.
 _INDEX_CODES = {'kospi': '001', 'kosdaq': '101'}  # ka20001 inds_cd. mrkt_tp는 실측상 결과에 영향 없어 '0' 고정.
+_INDEX_FETCH_LOCK = threading.Lock()   # 캐시 만료 시 동시 조회 방지 — _AUDIT_INFO_FETCH_LOCK 주석 참고
 
 
 def get_market_index_rates(env: Optional[str] = None, force: bool = False) -> Dict[str, Dict]:
@@ -631,12 +646,19 @@ def get_market_index_rates(env: Optional[str] = None, force: bool = False) -> Di
     2026-09-04 mock 실응답으로 endpoint/파라미터 확인: ka20001 /api/dostk/sect,
     {'mrkt_tp': '0', 'inds_cd': '001'|'101'} → {cur_prc, pred_pre, flu_rt, ...}(부호 포함 문자열).
     실패해도 예외를 던지지 않고 이전 캐시(또는 빈 dict)를 반환한다(표시용이라 화면이 죽으면 안 됨)."""
+    with _INDEX_CACHE_LOCK:
+        if not force and _INDEX_CACHE is not None and time.time() - _INDEX_CACHE[0] < _INDEX_CACHE_TTL:
+            return _INDEX_CACHE[1]
+    with _INDEX_FETCH_LOCK:
+        with _INDEX_CACHE_LOCK:
+            if not force and _INDEX_CACHE is not None and time.time() - _INDEX_CACHE[0] < _INDEX_CACHE_TTL:
+                return _INDEX_CACHE[1]
+        return _fetch_market_index_rates(env)
+
+
+def _fetch_market_index_rates(env: Optional[str]) -> Dict[str, Dict]:
     global _INDEX_CACHE
     now = time.time()
-    with _INDEX_CACHE_LOCK:
-        if not force and _INDEX_CACHE is not None and now - _INDEX_CACHE[0] < _INDEX_CACHE_TTL:
-            return _INDEX_CACHE[1]
-
     result: Dict[str, Dict] = {}
     try:
         for name, inds_cd in _INDEX_CODES.items():
