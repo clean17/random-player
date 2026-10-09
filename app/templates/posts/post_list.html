@@ -45,6 +45,78 @@
             cursor: pointer;
             white-space: nowrap;
         }
+        .post-marks {
+            margin-bottom: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #f8fafc;
+            overflow: hidden;
+        }
+        .post-mark-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 12px;
+            font-size: 14px;
+            color: #1e293b;
+            text-decoration: none;
+            min-width: 0;
+        }
+        .post-mark-row + .post-mark-row,
+        .post-mark-row + .post-bookmarks {
+            border-top: 1px solid #e2e8f0;
+        }
+        .post-mark-row:hover {
+            background: #eef2f7;
+        }
+        .post-mark-badge {
+            flex: 0 0 auto;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+        .post-mark-title {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .post-mark-date {
+            flex: 0 0 auto;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .post-bookmarks > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 9px 12px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            user-select: none;
+        }
+        .post-bookmarks > summary::-webkit-details-marker {
+            display: none;
+        }
+        .post-bookmarks > summary::after {
+            content: '▾';
+            float: right;
+            color: #94a3b8;
+        }
+        .post-bookmarks[open] > summary::after {
+            content: '▴';
+        }
+        .post-bookmarks .post-mark-row {
+            border-top: 1px solid #e2e8f0;
+            background: #fff;
+        }
+        .post-bookmarks .post-mark-row:hover {
+            background: #f1f5f9;
+        }
         .post-list-empty {
             text-align: center;
             padding: 40px 0;
@@ -87,6 +159,29 @@
         <input type="text" id="post-search-input" placeholder="검색어를 입력하세요" value="{{ search or '' }}">
         <button type="button" id="post-search-btn">검색</button>
     </div>
+
+    {% if pinned_posts or bookmarked_posts %}
+    <div class="post-marks">
+        {% for p in pinned_posts %}
+        <a class="post-mark-row" href="/posts/{{ p.public_id }}">
+            <span class="post-mark-badge">공지</span>
+            <span class="post-mark-title">{{ p.title }}</span>
+            <span class="post-mark-date">{{ (p.updated_at or '')[5:10] }}</span>
+        </a>
+        {% endfor %}
+        {% if bookmarked_posts %}
+        <details class="post-bookmarks" id="post-bookmarks">
+            <summary>★ 즐겨찾기 ({{ bookmarked_posts | length }})</summary>
+            {% for p in bookmarked_posts %}
+            <a class="post-mark-row" href="/posts/{{ p.public_id }}">
+                <span class="post-mark-title">{{ p.title }}</span>
+                <span class="post-mark-date">{{ p.realname or '' }}</span>
+            </a>
+            {% endfor %}
+        </details>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <div class="post-list">
         {% for post in posts %}
@@ -147,6 +242,17 @@
         if (q) url.searchParams.set('search', q);
         location.href = url.toString();
     }
+    // 즐겨찾기 펼침 상태 기억 (기본 접힘)
+    const bookmarksEl = document.getElementById('post-bookmarks');
+    if (bookmarksEl) {
+        try {
+            if (localStorage.getItem('postBookmarksOpen') === '1') bookmarksEl.open = true;
+        } catch (e) {}
+        bookmarksEl.addEventListener('toggle', () => {
+            try { localStorage.setItem('postBookmarksOpen', bookmarksEl.open ? '1' : '0'); } catch (e) {}
+        });
+    }
+
     document.getElementById('post-search-btn')?.addEventListener('click', doPostSearch);
     document.getElementById('post-search-input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') doPostSearch();

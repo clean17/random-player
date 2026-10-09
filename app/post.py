@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 
 from app.repository.posts.PostDTO import PostDTO
 from app.repository.posts.posts import find_post, find_post_list, get_posts_count, insert_post, update_post, delete_post
+from app.repository.posts.post_marks import find_pinned_posts, find_bookmarked_posts, get_post_marks, set_post_pinned, set_post_bookmarked
 from app.repository.users.users import find_user_by_username
 from config.config import settings
 import time
@@ -33,9 +34,19 @@ def post_list():
             post.thumbnail = '/static/no-image.png'
 
     max_page = (total - 1) // per_page + 1 if total else 1
+
+    # 공지/즐겨찾기는 첫 페이지의 일반 목록에서만 노출 (검색 결과·2페이지 이후엔 방해만 됨)
+    pinned_posts, bookmarked_posts = [], []
+    if page == 1 and not search:
+        user = find_user_by_username(current_user.get_id())
+        pinned_posts = find_pinned_posts()
+        bookmarked_posts = find_bookmarked_posts(user.id)
+
     return render_template(
         "posts/post_list.html"
         , posts=page_posts
+        , pinned_posts=pinned_posts
+        , bookmarked_posts=bookmarked_posts
         , page=page
         , max_page=max_page
         , search=search
@@ -51,12 +62,48 @@ def view_post(post_id):
 
     if not post:
         return "존재하지 않는 게시글", 404
+    is_pinned, is_bookmarked = get_post_marks(post.id, user.id)
     return render_template(
         "posts/view_post.html"
         , post=post
         , user=user
+        , is_admin=user.role == 'ADMIN'
+        , is_pinned=is_pinned
+        , is_bookmarked=is_bookmarked
         , version=int(time.time())
     )
+
+def _mark_on_from_request() -> bool:
+    data = request.get_json(silent=True) or {}
+    return bool(data.get('on'))
+
+@posts.route('/<string:post_id>/pin', methods=['POST'])
+@login_required
+def pin_post(post_id):
+    post = find_post(post_id)
+    user = find_user_by_username(current_user.get_id())
+
+    if not post:
+        return jsonify({"result": "false", "comment": "존재하지 않는 게시글"}), 404
+    if user.role != 'ADMIN':
+        return jsonify({"result": "false", "comment": "권한이 없습니다"}), 403
+
+    on = _mark_on_from_request()
+    set_post_pinned(post.id, user.id, on)
+    return jsonify({"result": "true", "on": on}), 200
+
+@posts.route('/<string:post_id>/bookmark', methods=['POST'])
+@login_required
+def bookmark_post(post_id):
+    post = find_post(post_id)
+    user = find_user_by_username(current_user.get_id())
+
+    if not post:
+        return jsonify({"result": "false", "comment": "존재하지 않는 게시글"}), 404
+
+    on = _mark_on_from_request()
+    set_post_bookmarked(post.id, user.id, on)
+    return jsonify({"result": "true", "on": on}), 200
 
 @posts.route('/create', methods=['GET', 'POST'])
 @login_required

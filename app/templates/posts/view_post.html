@@ -10,6 +10,18 @@
     <script src="/static/js/common.js?v={{ version }}"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
+    <style>
+        body.page-post .post-action-btn.post-mark-btn.is-on {
+            background: #fef3c7 !important;
+            color: #92400e !important;
+            border-color: #fcd34d !important;
+        }
+        body.page-post .post-action-btn.post-pin-btn.is-on {
+            background: #fee2e2 !important;
+            color: #b91c1c !important;
+            border-color: #fca5a5 !important;
+        }
+    </style>
 </head>
 <body class="page-post app-page page-post-view">
 
@@ -53,6 +65,12 @@
     </div>
     <div class="form-actions post-bottom-actions">
         <button type="button" class="btn-secondary" onclick="window.location.href='/posts'">목록으로</button>
+        <button type="button" class="post-action-btn post-mark-btn{{ ' is-on' if is_bookmarked else '' }}" id="bookmark-post"
+                data-on="{{ '1' if is_bookmarked else '0' }}" aria-label="즐겨찾기" aria-pressed="{{ 'true' if is_bookmarked else 'false' }}">{{ '★' if is_bookmarked else '☆' }}</button>
+        {% if is_admin %}
+        <button type="button" class="post-action-btn post-mark-btn post-pin-btn{{ ' is-on' if is_pinned else '' }}" id="pin-post"
+                data-on="{{ '1' if is_pinned else '0' }}" aria-pressed="{{ 'true' if is_pinned else 'false' }}">{{ '공지 해제' if is_pinned else '공지' }}</button>
+        {% endif %}
         {% if post.user_id == user.id %}
         <button type="button" class="post-action-btn post-action-edit" onclick="window.location.href='/posts/{{ post.public_id }}/edit'">수정</button>
         <button type="button" class="post-action-btn post-action-delete" id="delete-post">삭제</button>
@@ -167,6 +185,33 @@
                 });
             }
         })
+
+        // 즐겨찾기/공지 토글: 서버 응답의 on 값으로만 버튼 상태를 갱신
+        function bindMarkToggle(btn, url, render) {
+            btn?.addEventListener('click', () => {
+                if (btn.disabled) return;
+                btn.disabled = true;
+                const next = btn.dataset.on !== '1';
+                axios.post(url, {on: next}, {
+                    headers: {"Content-Type": "application/json"},
+                    timeout: 3000
+                }).then(res => {
+                    if ("true" !== res.data.result) return;
+                    const on = !!res.data.on;
+                    btn.dataset.on = on ? '1' : '0';
+                    btn.classList.toggle('is-on', on);
+                    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                    btn.textContent = render(on);
+                }).catch(err => {
+                    console.error(err);
+                    showDebugToast(err.response?.data?.comment || '처리에 실패했습니다.');
+                }).finally(() => {
+                    btn.disabled = false;
+                });
+            });
+        }
+        bindMarkToggle(document.getElementById('bookmark-post'), "/posts/{{ post.public_id }}/bookmark", on => on ? '★' : '☆');
+        bindMarkToggle(document.getElementById('pin-post'), "/posts/{{ post.public_id }}/pin", on => on ? '공지 해제' : '공지');
 
         copyBtn?.addEventListener('click', async () => {
             // editor가 HTML을 갖고 있는 경우 (DB 원본을 editor.innerHTML로 넣었다면)
