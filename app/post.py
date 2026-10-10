@@ -1,5 +1,13 @@
-from flask import Blueprint, render_template, session, Flask, send_from_directory, request, redirect, url_for, jsonify
+from flask import Blueprint, render_template, session, Flask, send_from_directory, request, redirect, url_for, jsonify, abort
 from flask_login import login_required, current_user
+from werkzeug.security import safe_join
+from urllib.parse import quote
+from datetime import datetime
+import os
+import uuid
+
+from app.accel import send_file_accel, guess_mimetype, POST_FILE_DIR
+from app.image import clean_filename, IMAGE_CACHE_SECONDS
 
 from app.repository.posts.PostDTO import PostDTO
 from app.repository.posts.posts import find_post, find_post_list, get_posts_count, insert_post, update_post, delete_post
@@ -192,5 +200,79 @@ def delete_posts(post_id):
             "comment": "삭제되었습니다."
         }
     ), 200
+
+
+# ── 게시글 첨부파일(영상·일반 파일) ─────────────────────────────────────────────
+# 편집 화면에서 붙여넣은 파일(static/js/post_attach.js). 이미지는 기존대로 /upload(갤러리 temp)로 가고,
+# 그 외 파일은 갤러리와 섞이지 않게 별도 폴더 <POST_FILE_DIR>/<YYYYMM>/<uuid>__<원래이름> 에 둔다.
+# 확장자 제한은 없다 — 대신 서빙할 때 영상·오디오·이미지(svg 제외)만 inline 으로 열고 나머지는 항상
+# 다운로드(attachment)로 보낸다. html/svg 를 브라우저가 열어 스크립트가 실행되는 것을 막기 위해서다.
+_POST_FILE_SEP = '__'
+
+
+def _post_file_kind(mimetype):
+    if mimetype.startswith('video/'):
+        return 'video'
+    if mimetype.startswith('audio/'):
+        return 'audio'
+    if mimetype.startswith('image/') and mimetype != 'image/svg+xml':
+        return 'image'
+    return 'file'
+
+
+@posts.route('/files', methods=['POST'])
+@login_required
+def upload_post_files():
+    files = request.files.getlist('files[]')
+    if not files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    sub = datetime.now().strftime('%Y%m')
+    target_dir = os.path.join(POST_FILE_DIR, sub)
+    os.makedirs(target_dir, exist_ok=True)
+
+    saved = []
+    for f in files:
+        if not f or not f.filename:
+            continue
+        # 클라이언트가 보낸 이름은 신뢰하지 않는다 — 경로·금지문자 제거, 경로 길이(260자) 때문에 앞부분만
+        original = clean_filename(os.path.basename(f.filename)).strip() or 'file'
+        name, ext = os.path.splitext(original)
+        original = name[:80] + ext.lower()[:20]
+        stored = f"{uuid.uuid4().hex}{_POST_FILE_SEP}{original}"
+        path = os.path.join(target_dir, stored)
+        f.save(path)
+
+        mimetype = guess_mimetype(original)
+        saved.append({
+            "name": original,
+            "size": os.path.getsize(path),
+            "type": mimetype,
+            "kind": _post_file_kind(mimetype),
+            "url": f"/posts/files/{sub}/{quote(stored)}",
+        })
+    return jsonify({"status": "success", "files": saved})
+
+
+@posts.route('/files/<path:rel>', methods=['GET'])
+@login_required
+def get_post_file(rel):
+    path = safe_join(POST_FILE_DIR, rel)
+    if path is None or not os.path.isfile(path):
+        abort(404)
+    stored = os.path.basename(path)
+    original = stored.split(_POST_FILE_SEP, 1)[1] if _POST_FILE_SEP in stored else stored
+    mimetype = guess_mimetype(original)
+    if _post_file_kind(mimetype) == 'file':
+        mimetype = 'application/octet-stream'   # html 등은 타입부터 실행 불가로 — attachment·nosniff 와 함께 이중 방어
+    inline = _post_file_kind(mimetype) != 'file' and request.args.get('download') != '1'
+
+    # 본문은 nginx 가 보낸다(app/accel.py) — 큰 영상도 waitress I/O 스레드를 붙잡지 않는다
+    resp = send_file_accel(path, max_age=IMAGE_CACHE_SECONDS, private=True, mimetype=mimetype)
+    # RFC 5987(filename*) 로 한글 파일명도 그대로 저장되게 한다
+    resp.headers['Content-Disposition'] = "%s; filename*=UTF-8''%s" % (
+        'inline' if inline else 'attachment', quote(original))
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
 
 

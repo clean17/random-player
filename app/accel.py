@@ -14,6 +14,7 @@ If-None-Match/If-Modified-Since(304)·ETag 는 nginx 가 처리한다. Cache-Con
 nginx.conf(443 server)와 짝:
     location /_files/igdata/ { internal; alias "//wsl.localhost/.../igdata/_data/"; }   ← settings['UNC_DIR']
     location /_files/temp/   { internal; alias "F:/merci_server_file_dir/"; }           ← settings['TEMP_IMAGE_DIR']
+    location /_files/post/   { internal; alias "F:/merci_server_post_files/"; ... }     ← POST_FILE_DIR
     location / { ... proxy_set_header X-Accel-Enabled 1; }
 _ACCEL_ROOTS 를 바꾸면 nginx.conf 도 같이 바꿔야 한다.
 
@@ -29,9 +30,14 @@ from werkzeug.security import safe_join
 
 from config.config import settings
 
+# 게시글 첨부파일(app/post.py) — 갤러리 temp 와 섞이지 않게 별도 폴더. 기본값은 TEMP_IMAGE_DIR 옆.
+POST_FILE_DIR = settings.get('POST_FILE_DIR') or os.path.join(
+    os.path.dirname(os.path.normpath(settings['TEMP_IMAGE_DIR'])), 'merci_server_post_files')
+
 _ACCEL_ROOTS = [
     (settings['UNC_DIR'], '/_files/igdata/'),
     (settings['TEMP_IMAGE_DIR'], '/_files/temp/'),
+    (POST_FILE_DIR, '/_files/post/'),
 ]
 _ROOTS_NORM = [(os.path.normcase(os.path.abspath(root)), prefix) for root, prefix in _ACCEL_ROOTS]
 
@@ -52,7 +58,7 @@ def _accel_uri(path):
     return None
 
 
-def _mimetype(path):
+def guess_mimetype(path):
     ext = os.path.splitext(path)[1].lower()
     return mimetypes.guess_type(path)[0] or _EXTRA_TYPES.get(ext) or 'application/octet-stream'
 
@@ -63,7 +69,7 @@ def send_file_accel(path, max_age=None, private=False, mimetype=None):
     if uri is None:
         resp = send_file(path, mimetype=mimetype, conditional=True, max_age=max_age)
     else:
-        resp = Response(status=200, mimetype=mimetype or _mimetype(path))
+        resp = Response(status=200, mimetype=mimetype or guess_mimetype(path))
         resp.headers['X-Accel-Redirect'] = uri
         # werkzeug send_file 과 같은 캐시 헤더: max_age 없으면 no-cache(조건부 재검증), 있으면 public + max-age
         if max_age:

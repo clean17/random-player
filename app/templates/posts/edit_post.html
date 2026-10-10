@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
     <script src="/static/js/common.js?v={{ version }}"></script>
+    <script src="/static/js/post_attach.js?v={{ version }}"></script>
 </head>
 <body class="page-post app-page page-post-edit {% if type == 'C' %}page-post-create{% else %}page-post-update{% endif %}">
 
@@ -94,6 +95,8 @@
         ['link', 'image', /*'video'*/],                    // 하이퍼링크, 이미지, 비디오
         ['clean']                                      // 포맷 제거 버튼 (Clear formatting) > 순수 텍스트로
     ];
+    // 영상/첨부파일 블롯 등록 — 아래 수정 모드 초기값(innerHTML)에 있는 영상·첨부 카드를 Quill 이 인식하려면 먼저 등록돼야 한다
+    PostAttach.register();
     const quill = new Quill('#editor', {
         theme: 'snow',
         placeholder: '내용을 입력하세요...',
@@ -169,9 +172,11 @@
     // 바로 이전 스크롤 위치로 되돌려 페인트 전에 눈에 보이는 튐 자체를 없애고(rAF까지 기다리면
     // 이미 한 프레임 튄 게 그려진 뒤라 깜빡임으로 보인다), 이미지가 아직 로드 전이라 레이아웃이
     // 나중에 또 바뀌는 경우를 대비해 rAF와 이미지 load 시점에도 한 번 더 보정한다.
-    function insertQuillImage(url, range) {
+    // 이미지뿐 아니라 영상(postVideo)·첨부파일 카드(postFile) 삽입에도 같은 보정을 쓴다.
+    // 영상은 메타데이터를 받아 크기가 정해질 때 레이아웃이 한 번 더 바뀌므로 loadedmetadata 에서도 보정한다.
+    function insertQuillEmbed(blotName, value, range) {
         const beforeScroll = { x: window.scrollX, y: window.scrollY };
-        quill.insertEmbed(range.index, 'image', url);
+        quill.insertEmbed(range.index, blotName, value);
         const insertedIndex = range.index;
         range.index += 1;
         quill.setSelection(range.index);
@@ -187,61 +192,18 @@
         const node = leaf && leaf[0] && leaf[0].domNode;
         if (node && node.tagName === 'IMG' && !node.complete) {
             node.addEventListener('load', restoreScroll, { once: true });
+        } else if (node && node.tagName === 'VIDEO') {
+            node.addEventListener('loadedmetadata', restoreScroll, { once: true });
         }
     }
 
-    // Quill 초기화 뒤쪽에 붙이면 됨
-    // capture: true로 등록 — Quill 자체 clipboard 모듈도 같은 root에 paste 리스너를 붙여두기 때문에,
-    // 버블 단계(기본값)에서 등록하면 Quill 기본 붙여넣기가 먼저 실행되어(이미지 1장만 처리하는 등)
-    // 우리 로직과 충돌한다. capture로 먼저 가로채서 이미지가 있으면 Quill 쪽 핸들러 자체를 막는다.
-    quill.root.addEventListener('paste', async (e) => {
-        const clipboardData = e.clipboardData || window.clipboardData;
-        if (!clipboardData) return;
+    function insertQuillImage(url, range) {
+        insertQuillEmbed('image', url, range);
+    }
 
-        const imageFiles = [];
-
-        // 1) files에 이미지가 여러 개 들어온 경우 (탐색기에서 파일 복사 등)
-        if (clipboardData.files && clipboardData.files.length > 0) {
-            for (let i = 0; i < clipboardData.files.length; i++) {
-                const file = clipboardData.files[i];
-                if (file.type && file.type.startsWith('image/')) {
-                    imageFiles.push(file);
-                }
-            }
-        } else {
-            // 2) files가 비어있을 때만 items에서 이미지 찾기 (캡처/그림판 등)
-            const items = clipboardData.items;
-            if (items && items.length > 0) {
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    if (item.kind === 'file' && item.type.startsWith('image/')) {
-                        const file = item.getAsFile();
-                        if (file) imageFiles.push(file);
-                    }
-                }
-            }
-        }
-
-        // 이미지가 아예 없으면 기본 붙여넣기 그대로 (Quill 기본 동작에 맡김)
-        if (imageFiles.length === 0) return;
-
-        // 이미지 있으면 Quill 기본 paste 동작(및 Quill 자체 리스너 실행) 모두 막고 우리가 처리
-        e.preventDefault();
-        e.stopImmediatePropagation();
-
-        let range = quill.getSelection(true);
-        if (!range) {
-            range = { index: quill.getLength(), length: 0 };
-        }
-
-        // 여러 장이어도 각각 순서대로 업로드 후 삽입 (병렬 업로드는 삽입 순서가 꼬일 수 있어 순차 처리)
-        for (const file of imageFiles) {
-            const imageUrl = await uploadImage(file);
-            if (!imageUrl) continue;
-
-            insertQuillImage(imageUrl, range);
-        }
-    }, { capture: true });
+    // 붙여넣기(Ctrl+V): 클립보드의 모든 파일을 처리한다 — 이미지는 기존 uploadImage(/upload),
+    // 영상은 <video>, 그 외 파일은 첨부파일 카드(다운로드 버튼). 구현은 static/js/post_attach.js.
+    PostAttach.bindPaste(quill, { uploadImage, insertEmbed: insertQuillEmbed });
 
 
     async function uploadImage(file) {

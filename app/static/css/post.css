@@ -3840,3 +3840,74 @@ body.page-post .thumbnail {
 body.page-post .post-box {
     padding: 8px 0 !important;
 }
+
+/* ── 게시글 첨부 컴포넌트 (static/js/post_attach.js) — 편집(.ql-editor)·보기(.post-content.ql-editor) 공용 ── */
+.ql-editor video.post-video {
+    display: block;
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 8px 0;
+    border-radius: 8px;
+    background: #000;
+}
+.ql-editor .post-file {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 520px !important;
+    margin: 8px 0;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    border: 1px solid #dcdfe4;
+    border-radius: 10px;
+    background: #f7f8fa;
+    white-space: normal !important;
+    user-select: none;
+    cursor: default;
+}
+/* 조회 화면은 `body.page-post-view .post-content.ql-editor * { max-width: 100% !important }` 가 위 520px 을
+   이겨서 카드가 본문 폭 전체로 늘어났다 — 편집 화면과 같은 폭이 되게 더 구체적인 선택자로 다시 지정 */
+body.page-post-view .post-content.ql-editor .post-file {
+    max-width: 520px !important;
+}
+.ql-editor .post-file__icon {
+    flex: none;
+    font-size: 20px;
+    line-height: 1;
+}
+.ql-editor .post-file__meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.ql-editor .post-file__name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap !important;
+}
+.ql-editor .post-file__size {
+    font-size: 12px;
+    color: #6b7280;
+}
+.ql-editor .post-file__download {
+    flex: none;
+    margin-left: auto;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff !important;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none !important;
+    white-space: nowrap !important;
+    cursor: pointer;
+}
+.ql-editor .post-file__download:hover {
+    background: #1d4ed8;
+}
