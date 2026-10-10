@@ -493,12 +493,7 @@ def get_video(filepath):
         abort(404)
 
 
-# 이미지 리스트, 채팅 페이지에서 임시로 사용할 엔드포인트
-@video.route('/temp-video/<path:filename>', methods=['GET'])
-@login_required
-def get_temp_video(filename):
-    filename = filename.replace("\\", "/")
-
+def _temp_video_base_dir():
     dir_type = request.args.get('dir')
     selected_dir = request.args.get('selected_dir')
 
@@ -518,6 +513,83 @@ def get_temp_video(filename):
         base_dir = COS_DIR
     else:
         abort(400)
+    return base_dir
+
+
+# 영상 포스터(첫 화면 정지 이미지) — 갤러리(image_list_masonry.html)에서 영상이 로딩되는 동안 보여준다.
+# <base_dir>/thumb/video_poster/<상대경로(확장자 뺌)>.jpg 에 캐시하고, 원본이 더 새로우면 다시 만든다.
+# thumb/ 은 갤러리 목록·utils/image_thumbs.py 가 건너뛰는 폴더라 목록에 섞이지 않고, get_image 가 찾는
+# thumb/<이름>.webp 와도 경로가 겹치지 않는다. 이미지 썸네일 생성기(image_thumbs.py)는 영상을 만들지 않는다.
+# 경로를 /temp-video 로 시작하게 둔 건 ALLOWED_PATHS('/video/temp-video', 앞부분 일치) 를 그대로 타기 위해서다.
+_POSTER_SEEK_SEC = 1.0            # 0초 프레임은 검은 화면인 경우가 많다
+_POSTER_MAX_WIDTH = 720
+_poster_sem = threading.Semaphore(2)   # ffmpeg 동시 실행 제한 — waitress 스레드를 포스터 생성이 다 잡아먹지 않게
+_poster_locks = {}
+_poster_locks_guard = threading.Lock()
+
+
+def _make_poster(src, dst):
+    tmp = dst + '.tmp.jpg'
+    # 영상이 SEEK 보다 짧으면 프레임이 안 나오므로 0초로 한 번 더 시도한다
+    for ss in (_POSTER_SEEK_SEC, 0):
+        cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-ss', str(ss), '-i', src,
+               '-frames:v', '1', '-vf', "scale='min(%d,iw)':-2" % _POSTER_MAX_WIDTH, '-q:v', '4', tmp]
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+        except Exception as e:
+            print(f"[video-poster] ffmpeg failed: {src} -> {e}")
+            break
+        if os.path.exists(tmp) and os.path.getsize(tmp) > 0:
+            os.replace(tmp, dst)   # 중간에 끊겨도 깨진 jpg 를 보내지 않게 임시 파일에 쓴 뒤 교체
+            return True
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    return False
+
+
+@video.route('/temp-video-poster/<path:filename>', methods=['GET'])
+@login_required
+def get_temp_video_poster(filename):
+    filename = filename.replace("\\", "/")
+    base_dir = _temp_video_base_dir()
+    try:
+        src = safe_path_join(base_dir, filename)
+        dst = safe_path_join(os.path.join(base_dir, 'thumb', 'video_poster'),
+                             os.path.splitext(filename)[0] + '.jpg')
+    except ValueError:
+        abort(400)
+    if not os.path.isfile(src):
+        abort(404)
+
+    def fresh():
+        return os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src)
+
+    if not fresh():
+        with _poster_locks_guard:
+            lock = _poster_locks.setdefault(dst, threading.Lock())
+        with lock:   # 같은 영상 포스터를 여러 요청이 동시에 만들지 않게
+            if not fresh():
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                # 자리가 안 나면 기다리지 말고 포기한다 — 대기하는 요청이 waitress 스레드(24개)를 붙잡고 있으면
+                # 그동안 이미지 요청까지 줄줄이 pending 이 된다. 포스터는 없어도 영상은 그대로 나온다.
+                if not _poster_sem.acquire(timeout=3):
+                    abort(503)
+                try:
+                    ok = _make_poster(src, dst)
+                finally:
+                    _poster_sem.release()
+                if not ok:
+                    abort(404)
+
+    return send_file(dst, mimetype='image/jpeg', conditional=True, max_age=3600)
+
+
+# 이미지 리스트, 채팅 페이지에서 임시로 사용할 엔드포인트
+@video.route('/temp-video/<path:filename>', methods=['GET'])
+@login_required
+def get_temp_video(filename):
+    filename = filename.replace("\\", "/")
+    base_dir = _temp_video_base_dir()
 
     # send_file보다 send_from_directory사용하는게 안전
     return send_from_directory(
