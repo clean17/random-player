@@ -8,6 +8,7 @@
     <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
     <script src="https://unpkg.com/quill-markdown-shortcuts/dist/quill.markdown-shortcuts.js"></script>
     <script src="/static/js/common.js?v={{ version }}"></script>
+    <script src="/static/js/post_markdown.js?v={{ version }}"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/post.css?v={{ version }}">
     <style>
@@ -60,7 +61,10 @@
     </div>-->
     <div class="form-group textarea-wrapper">
         <div class="post-content-wrapper">
-            <button type="button" class="copy-btn" id="copy-post-text">내용 복사</button>
+            <div class="post-content-tools">
+                <button type="button" class="copy-btn md-toggle-btn" id="toggle-post-md" aria-pressed="false">MD 보기</button>
+                <button type="button" class="copy-btn" id="copy-post-text">내용 복사</button>
+            </div>
 <!--        <pre name="content" id="content" readonly>{{ post.content or ''}}</pre>-->
             {# Quill 도입 전 글은 평문(또는 <p> 하나) 안에 \r\n 으로 줄을 나눠 저장돼 있어서, 뷰 화면의 white-space: normal 에
                줄바꿈이 먹힌다. Quill 이 저장한 HTML 에는 원시 \n 이 없으므로(<pre> 내부 제외) \n 유무로 구분한다. #}
@@ -219,7 +223,26 @@
         bindMarkToggle(document.getElementById('bookmark-post'), "/posts/{{ post.public_id }}/bookmark", on => on ? '★' : '☆');
         bindMarkToggle(document.getElementById('pin-post'), "/posts/{{ post.public_id }}/pin", on => on ? '공지 해제' : '공지');
 
+        // 마크다운으로 작성한 글은 버튼으로 렌더링해서 본다(글마다 선택을 기억) — static/js/post_markdown.js
+        PostMarkdown.init({
+            content: editor,
+            button: document.getElementById('toggle-post-md'),
+            postId: '{{ post.public_id }}',
+        });
+
         copyBtn?.addEventListener('click', async () => {
+            // MD 보기 중이면 렌더링 결과가 아니라 마크다운 원문을 복사한다
+            if (PostMarkdown.isOn()) {
+                try {
+                    await navigator.clipboard.writeText(PostMarkdown.source());
+                    copyBtn.textContent = '복사됨!';
+                    setTimeout(() => (copyBtn.textContent = '내용 복사'), 1000);
+                } catch (err) {
+                    console.error(err);
+                    showDebugToast('복사에 실패했습니다.');
+                }
+                return;
+            }
             // editor가 HTML을 갖고 있는 경우 (DB 원본을 editor.innerHTML로 넣었다면)
             const html = editor.innerHTML || editor.innerText || editor.textContent || '';
             const text = htmlToPlainCode(html);
