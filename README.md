@@ -305,6 +305,15 @@ location ^~ /_files/temp/ {
     internal;
     alias "F:/merci_server_file_dir/";                                               # settings['TEMP_IMAGE_DIR']
 }
+# 게시글 첨부파일 — 아무 확장자나 올라오므로 nosniff. X-Accel 응답에서는 백엔드의 X-Content-Type-Options 가
+# 전달되지 않아 여기서 붙인다. location 에 add_header 를 쓰면 server 의 add_header 가 상속되지 않아 CORP/COOP 도 다시 적는다.
+location ^~ /_files/post/ {
+    internal;
+    alias "F:/merci_server_post_files/";                                             # app/accel.py POST_FILE_DIR
+    add_header X-Content-Type-Options nosniff;
+    add_header Cross-Origin-Resource-Policy same-origin;
+    add_header Cross-Origin-Opener-Policy same-origin;
+}
 
 location / {
     include snippets/proxy-params.conf;
@@ -323,6 +332,7 @@ location / {
 _ACCEL_ROOTS = [
     (settings['UNC_DIR'], '/_files/igdata/'),          # nginx.conf 의 internal location 과 짝
     (settings['TEMP_IMAGE_DIR'], '/_files/temp/'),
+    (POST_FILE_DIR, '/_files/post/'),                  # 게시글 첨부파일
 ]
 
 def send_file_accel(path, max_age=None, private=False, mimetype=None):
@@ -348,6 +358,10 @@ def send_file_accel(path, max_age=None, private=False, mimetype=None):
 | `/video/temp-video` | `app/video.py` `get_temp_video` |
 | `/video/temp-video-poster` | `app/video.py` `get_temp_video_poster` |
 | `/video/videos` | `app/video.py` `get_video` (루트 안의 폴더만) |
+| `/posts/files/<YYYYMM>/<파일>` | `app/post.py` `get_post_file` (게시글 첨부 — 영상·이미지만 inline, 나머지는 항상 다운로드) |
+
+X-Accel 응답에서 nginx 가 백엔드 헤더 중 `Content-Type`·`Cache-Control`·`Content-Disposition` 은 그대로 전달하지만,
+`X-Content-Type-Options` 같은 그 밖의 헤더는 버린다(실측). 필요한 헤더는 해당 internal location 에 `add_header` 로 붙인다.
 
 폴더를 추가할 때는 `_ACCEL_ROOTS` 와 nginx `location ^~ /_files/...` 를 **같이** 추가한다.
 
