@@ -3924,6 +3924,9 @@ body.page-post-view .post-content-tools {
 body.page-post-view .post-content-tools .copy-btn {
     position: static !important;
 }
+body.page-post-view .post-content-tools .copy-btn[hidden] {
+    display: none !important;
+}
 body.page-post-view .post-content-tools .md-toggle-btn[aria-pressed="true"] {
     background: #e9f1ff;
     border-color: #93b4f5;

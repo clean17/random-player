@@ -62,7 +62,8 @@
     <div class="form-group textarea-wrapper">
         <div class="post-content-wrapper">
             <div class="post-content-tools">
-                <button type="button" class="copy-btn md-toggle-btn" id="toggle-post-md" aria-pressed="false">MD 보기</button>
+                {# 마크다운으로 판별된 글에서만 post_markdown.js 가 보이게 한다 #}
+                <button type="button" class="copy-btn md-toggle-btn" id="toggle-post-md" aria-pressed="false" hidden>MD 보기</button>
                 <button type="button" class="copy-btn" id="copy-post-text">내용 복사</button>
             </div>
 <!--        <pre name="content" id="content" readonly>{{ post.content or ''}}</pre>-->
@@ -223,7 +224,7 @@
         bindMarkToggle(document.getElementById('bookmark-post'), "/posts/{{ post.public_id }}/bookmark", on => on ? '★' : '☆');
         bindMarkToggle(document.getElementById('pin-post'), "/posts/{{ post.public_id }}/pin", on => on ? '공지 해제' : '공지');
 
-        // 마크다운으로 작성한 글은 버튼으로 렌더링해서 본다(글마다 선택을 기억) — static/js/post_markdown.js
+        // 마크다운으로 판별된 글은 처음부터 렌더링해서 보여주고 원문 보기 버튼을 띄운다(원문 선택은 글마다 기억) — static/js/post_markdown.js
         PostMarkdown.init({
             content: editor,
             button: document.getElementById('toggle-post-md'),
