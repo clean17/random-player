@@ -1034,6 +1034,10 @@ def _send_cached(directory, filename):
 @_log_slow()
 def get_image():
     filename = request.args.get('filename')
+    if not filename:
+        # 잘린 URL(예: 'filenam…_xxx.png' 처럼 말줄임표가 들어간 주소를 붙여넣은 경우)로 filename 파라미터가
+        # 없으면 unquote_plus(None) 에서 500 이 났다 — 잘못된 요청이므로 400 으로 답한다.
+        abort(400, 'filename required')
     filename = urllib.parse.unquote_plus(filename)
     dir = request.args.get('dir')
     selected_dir = request.args.get('selected_dir', '')
