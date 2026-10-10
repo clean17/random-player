@@ -405,6 +405,36 @@ button.delete-button:hover {
     box-shadow: none !important;
     filter: none !important;
 }
+/* 원본/현재 토글(static/js/image.js toggleSlideOrigin) — 회전 버튼 바로 아래. 원본 보는 중엔 강조 */
+#slideshow-modal .origin-toggle {
+    position: absolute;
+    top: 132px;
+    right: 14px;
+    width: auto;
+    height: auto;
+    padding: 6px 12px;
+    font-size: 14px;
+    line-height: 1.2;
+    color: #fff;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+    box-shadow: none;
+    z-index: 100000;
+    opacity: 0.8;
+}
+#slideshow-modal .origin-toggle:hover {
+    opacity: 1;
+    box-shadow: none !important;
+    filter: none !important;
+}
+#slideshow-modal .origin-toggle.is-on {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    color: #111;
+    opacity: 1;
+}
 #slideshow-modal .slide-prev,
 #slideshow-modal .slide-next {
     position: absolute;

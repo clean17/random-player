@@ -593,6 +593,18 @@ def move_image():
         with _timed('move'):
             shutil.move(src_path, dest_path) # src_path > dest_path 이동
 
+        # 자른 이미지면 원본 백업(origin/)·자르기 기록도 같이 옮긴다 — move → refine, refine → move 등
+        dst_dir = 'refine' if imagepath == 'move' else ('move' if imagepath != 'temp' else None)
+        if dst_dir:
+            src_dir = imagepath if imagepath in DIR_CONFIG else None
+            src_rel = (os.path.relpath(src_path, os.path.realpath(DIR_CONFIG[src_dir].base_dir)).replace(os.sep, '/')
+                       if src_dir else os.path.basename(src_path))
+            try:
+                with _timed('origin'):
+                    _carry_crop_origin(src_dir, src_rel, dst_dir, os.path.basename(dest_path))
+            except OSError as e:
+                print(f'[WARN] crop origin carry failed: {src_rel} -> {dst_dir}: {e}')
+
         raw_filename = urllib.parse.unquote(payload.get('filename', ''))
         if imagepath in DIR_CONFIG:
             arr = DIR_CONFIG[imagepath].image_arr
@@ -614,7 +626,9 @@ def move_image():
 #    그래서 브라우저 캐시(1일) 회피용 버전값은 수정시각이 아니라 '편집한 시각'을 따로 기록해 쓴다(img_v).
 #  - 저장 즉시 썸네일(thumb/<이름>.webp)도 새로 만든다.
 CROP_RATIO = (3, 4)            # 1440x1920 = 3:4 (최대공약수 480). 2026-10-02 53:72(1060x1440)에서 변경
-CROP_DIRS = ('move',)
+# refine(야짤2024) 추가 2026-10-10 — move 에서 자른 이미지를 refine 으로 옮겨도 원본 백업(origin/)이 같이 따라가므로
+# (move_image → _carry_crop_origin) refine 에서도 다시 자르기·원본으로 되돌리기·원본 보기가 된다.
+CROP_DIRS = ('move', 'refine')
 CROP_MAX_UNIT = 2000           # 출력 최대 6000 x 8000
 _CROP_FORMATS = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.jfif': 'JPEG', '.png': 'PNG', '.webp': 'WEBP'}
 _EDIT_VER_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -894,6 +908,11 @@ def _bump_edit_version(dir_, filename):
     key = f'{dir_}/{filename}'
     ver = max(int(time.time() * 1000), int(_edit_versions.get(key) or 0) + 1)
     _edit_versions[key] = ver
+    _save_edit_versions()
+    return ver
+
+
+def _save_edit_versions():
     try:
         os.makedirs(os.path.dirname(_EDIT_VER_PATH), exist_ok=True)
         with open(_EDIT_VER_PATH + '.tmp', 'w', encoding='utf-8') as f:
@@ -901,7 +920,45 @@ def _bump_edit_version(dir_, filename):
         os.replace(_EDIT_VER_PATH + '.tmp', _EDIT_VER_PATH)
     except OSError as e:
         print(f'[WARN] edit version save failed: {e}')
-    return ver
+
+
+def _origin_path(dir_, rel):
+    return os.path.normpath(os.path.join(DIR_CONFIG[dir_].base_dir, 'origin', rel))
+
+
+def _carry_crop_origin(src_dir, src_rel, dst_dir, dst_rel):
+    """이미지를 다른 갤러리로 옮길 때(move ↔ refine 등) 그 이미지의 원본 백업(origin/)·자르기 기록·편집 버전도
+    같이 옮긴다(2026-10-10). 예전엔 잘린 파일만 옮겨져 원본이 move/origin/ 에 남았고, refine 에서는 원본을 볼 방법이
+    없었다. 옮겨오는 파일에 원본이 없는데 도착지에 같은 이름의 백업이 있으면 그건 다른(예전) 파일의 원본이다 —
+    그대로 두면 '원본으로 되돌리기'가 엉뚱한 이미지를 되살리므로 origin/_orphan/ 으로 비켜 둔다
+    (UNC 경로는 휴지통이 없어 send2trash 가 영구 삭제될 수 있어 지우지 않는다)."""
+    if dst_dir not in CROP_DIRS:
+        return
+    src_bk = _origin_path(src_dir, src_rel) if src_dir in CROP_DIRS else None
+    dst_bk = _origin_path(dst_dir, dst_rel)
+    if src_bk and os.path.isfile(src_bk):
+        os.makedirs(os.path.dirname(dst_bk), exist_ok=True)
+        try:
+            os.replace(src_bk, dst_bk)        # 같은 볼륨이면 이름만 바뀐다(도착지에 옛 백업이 있으면 덮는다)
+        except OSError:
+            shutil.move(src_bk, dst_bk)
+    elif os.path.isfile(dst_bk):
+        orphan = os.path.normpath(os.path.join(DIR_CONFIG[dst_dir].base_dir, 'origin', '_orphan',
+                                               f'{int(time.time())}_{os.path.basename(dst_rel)}'))
+        os.makedirs(os.path.dirname(orphan), exist_ok=True)
+        os.replace(dst_bk, orphan)
+
+    sk, dk = f'{src_dir}/{src_rel}', f'{dst_dir}/{dst_rel}'
+    hist = _crop_history.pop(sk, None)
+    stale = _crop_history.pop(dk, None)
+    if hist is not None:
+        _crop_history[dk] = hist
+    if hist is not None or stale is not None:
+        _save_crop_history()
+    # 편집 버전(캐시 회피용 v)은 새로 올린다 — 도착지 URL 로 예전에 본 같은 이름의 다른 이미지가 브라우저 캐시에서 나오지 않게
+    had_ver = _edit_versions.pop(sk, None) is not None
+    if had_ver or dk in _edit_versions:
+        _bump_edit_version(dst_dir, dst_rel)   # 저장까지 한다
 
 
 def _crop_paths(dir_, filename):
@@ -923,7 +980,12 @@ def crop_info():
         _, _, _, backup = _crop_paths(request.args.get('dir'), urllib.parse.unquote(request.args.get('filename') or ''))
     except ValueError:
         return jsonify({'status': 'error', 'message': 'invalid dir/filename'}), 400
-    return jsonify({'status': 'success', 'has_origin': os.path.isfile(backup)})
+    # ov: 원본 백업의 수정시각 — 원본 보기 URL 의 캐시 회피용(같은 이름에 다른 원본이 들어오면 값이 바뀐다)
+    try:
+        ov = int(os.path.getmtime(backup))
+    except OSError:
+        return jsonify({'status': 'success', 'has_origin': False})
+    return jsonify({'status': 'success', 'has_origin': True, 'ov': ov})
 
 
 @image_bp.route('/crop-restore', methods=['POST'], endpoint='crop-restore')
@@ -1064,6 +1126,10 @@ def get_image():
             abort(404)  # 유효하지 않은 market 값에 대해 404 에러 반환
     else:
         abort(400, 'Invalid dir')
+
+    if request.args.get('origin') == '1' and dir in CROP_DIRS:
+        # 자르기 전 원본 백업(<base>/origin/<파일명>) — 슬라이드쇼의 원본/현재 토글(static/js/image.js)
+        return _send_cached(os.path.join(base_dir, 'origin'), filename)
 
     if original:
         # 원본 요청 시 썸네일을 건너뛰고 원본 파일을 바로 반환

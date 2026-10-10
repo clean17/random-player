@@ -58,6 +58,11 @@ function computeVideoSlideDurationMs(durationSec) {
 }
 let pendingMasonryScrollY = null;
 let slideRotation = 0;   // 0 / 90 / 180 / 270, rotate-modal 버튼으로 -90도씩 누적
+// 원본/현재 토글 — 자른 이미지(move·refine)에 origin/ 백업이 있으면 슬라이드쇼에서 원본을 볼 수 있다(2026-10-10)
+const SLIDE_ORIGIN_DIRS = ['move', 'refine'];
+let slideOrigin = null;        // { filename, ov } — 지금 슬라이드에 원본 백업이 있을 때만
+let slideShowingOrigin = false;
+let slideOriginToken = 0;
 
 function applyRotation() {
     const rotator = document.getElementById('slideshow-rotator');
@@ -161,6 +166,54 @@ function stopSlideCountdown() {
     if (el) el.textContent = '';
 }
 
+function slideImageUrl(filename) {
+    const enc = encodeURIComponent(filename);
+    const activeDir = (typeof dir !== 'undefined' && dir) ? dir : 'refine';
+    const selDir = (typeof selected_dir !== 'undefined' && selected_dir && selected_dir !== 'None') ? selected_dir : '';
+    return activeDir === 'refine'
+        ? `https://chickchick.kr/image/images?filename=${enc}&dir=refine&original=1`
+        : `/image/images?filename=${enc}&dir=${encodeURIComponent(activeDir)}&selected_dir=${encodeURIComponent(selDir)}&original=1`;
+}
+
+// 슬라이드가 바뀔 때마다 현재 보기로 되돌리고, 원본 백업이 있으면 토글 버튼을 띄운다
+function updateSlideOrigin(filename, isVid, activeDir) {
+    const btn = document.querySelector('#slideshow-modal .origin-toggle');
+    const token = ++slideOriginToken;
+    slideOrigin = null;
+    slideShowingOrigin = false;
+    if (btn) {
+        btn.style.display = 'none';
+        btn.textContent = '원본';
+        btn.classList.remove('is-on');
+    }
+    if (isVid || !btn || !SLIDE_ORIGIN_DIRS.includes(activeDir)) return;
+    fetch(`/image/crop-info?dir=${encodeURIComponent(activeDir)}&filename=${encodeURIComponent(filename)}`)
+        .then(r => r.json())
+        .then(d => {
+            if (token !== slideOriginToken || !d.has_origin) return;   // 그사이 다른 슬라이드로 넘어갔으면 무시
+            slideOrigin = { filename, ov: d.ov };
+            btn.style.display = '';
+        })
+        .catch(() => {});
+}
+
+function toggleSlideOrigin() {
+    if (!slideOrigin) return;
+    const imgEl = document.getElementById('slideshow-img');
+    const btn = document.querySelector('#slideshow-modal .origin-toggle');
+    const labelEl = document.getElementById('slideshow-label');
+    const activeDir = (typeof dir !== 'undefined' && dir) ? dir : 'refine';
+    slideShowingOrigin = !slideShowingOrigin;
+    imgEl.src = slideShowingOrigin
+        ? `/image/images?filename=${encodeURIComponent(slideOrigin.filename)}&dir=${encodeURIComponent(activeDir)}&origin=1&v=${slideOrigin.ov}`
+        : slideImageUrl(slideOrigin.filename);
+    if (btn) {
+        btn.textContent = slideShowingOrigin ? '현재' : '원본';   // 누르면 바뀔 보기 이름
+        btn.classList.toggle('is-on', slideShowingOrigin);
+    }
+    if (labelEl) labelEl.textContent = (slideShowingOrigin ? '[원본] ' : '') + slideOrigin.filename;
+}
+
 function setSlide(filename) {
     const imgEl = document.getElementById('slideshow-img');
     const videoEl = document.getElementById('slideshow-video');
@@ -188,10 +241,9 @@ function setSlide(filename) {
         videoEl.pause();
         videoEl.style.display = "none";
         imgEl.style.display = "block";
-        imgEl.src = activeDir === 'refine'
-            ? `https://chickchick.kr/image/images?filename=${enc}&dir=refine&original=1`
-            : `/image/images?filename=${enc}&dir=${encodeURIComponent(activeDir)}&selected_dir=${encodeURIComponent(selDir)}&original=1`;
+        imgEl.src = slideImageUrl(filename);
     }
+    updateSlideOrigin(filename, isVid, activeDir);
 
     // 라벨: 파일명 전체(확장자·하위 경로 포함). 2026-10-03 사용자 요청 — 예전엔 '_img_'/'_reel_' 앞 계정명만 40자까지 보였다.
     const labelEl = document.getElementById('slideshow-label');
@@ -895,6 +947,7 @@ function showSlideshowModal(fileList, startIdx = 0) {
             <div id="slideshow-rotator">
                 <button class="close-modal" title="닫기"><i class="fas fa-times" style="color:white"></i></button>
                 <button class="rotate-modal" title="회전"><i class="fas fa-rotate-left" style="color:white"></i></button>
+                <button class="origin-toggle" title="원본/현재 전환 (O)" style="display:none">원본</button>
                 <button class="slide-prev" title="이전">&#8249;</button>
                 <img src="" alt="슬라이드" id="slideshow-img" style="display:none;">
                 <video id="slideshow-video" class="slideshow-video" style="display:none;"
@@ -928,6 +981,8 @@ function showSlideshowModal(fileList, startIdx = 0) {
             slideRotation = (slideRotation - 90 + 360) % 360;
             applyRotation();
         };
+
+        modal.querySelector('.origin-toggle').onclick = toggleSlideOrigin;
 
         modal.querySelector('.slide-prev').onclick = () => {
             slideShowIdx = (slideShowIdx - 1 + slideShowImgs.length) % slideShowImgs.length;
@@ -964,6 +1019,11 @@ function showSlideshowModal(fileList, startIdx = 0) {
                 case 'Delete':
                 case '`':
                     slideShowDeleteCurrent();
+                    break;
+                case 'o':
+                case 'O':
+                case 'ㅐ':   // 한글 자판 상태의 o
+                    toggleSlideOrigin();
                     break;
             }
         }, true); // capture: true → 기존 bubble 핸들러보다 먼저 실행

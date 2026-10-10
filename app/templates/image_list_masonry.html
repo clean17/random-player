@@ -349,7 +349,7 @@
                 {% if dir in ['trip', 'temp', 'refine'] %}
                 <button class="delete-btn" type="button">×</button>
                 {% endif %}
-                {% if dir == 'move' and current_user.get_id() != config.GUEST_USERNAME %}
+                {% if dir in ['move', 'refine'] and current_user.get_id() != config.GUEST_USERNAME %}
                 <button class="crop-btn" type="button" title="자르기">✂</button>
                 {% endif %}
                 <!-- 이미지를 스켈레톤으로 변경 filename='no-image.png' >> filename='svg/image_skeleton.svg' -->
@@ -1353,7 +1353,7 @@
 
     document.addEventListener("DOMContentLoaded", initPage)
 </script>
-{% if dir == 'move' %}
+{% if dir in ['move', 'refine'] %}
 <!-- 이미지 자르기(3:4) — 영역 선택은 Cropper.js, 실제 리샘플(LANCZOS+언샤프)·저장은 서버(/image/crop-image) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
@@ -1503,7 +1503,7 @@
     }
     function payload(preview, ai) {
         const d = cropper.getData(true);    // 원본(회전 반영) 픽셀 좌표
-        return { dir: 'move', filename: state.filename, box: { x: d.x, y: d.y, w: d.width, h: d.height },
+        return { dir, filename: state.filename, box: { x: d.x, y: d.y, w: d.width, h: d.height },
                  unit: outUnit(), preview: !!preview, ai: !!ai };
     }
     // 화살표·버튼 패널을 지금 틀 위치에 맞춰 배치한다(틀이 움직이거나 크기가 바뀔 때마다 = updateInfo 때마다).
@@ -1599,7 +1599,7 @@
         const enc = thumb.dataset.filename || thumb.alt;     // urlencode 된 상대경로
         let v = '';
         try { v = new URL(thumb.dataset.src || thumb.src, location.href).searchParams.get('v') || ''; } catch (e) { /* noop */ }
-        return `/image/images?filename=${enc}&dir=move&original=1` + (v ? `&v=${v}` : '');
+        return `/image/images?filename=${enc}&dir=${dir}&original=1` + (v ? `&v=${v}` : '');
     }
     // 다음/이전 원본을 미리 받아 둔다(최근 몇 장만 유지) → 넘길 때 기다림 없이 바로 뜬다
     const preloaded = new Map();
@@ -1630,7 +1630,7 @@
         state = { item: imageItem, filename: decodeURIComponent(enc), enc };
         // 이 이미지에 origin/ 백업(= 한 번 이상 잘린 적 있음)이 있을 때만 '원본으로 되돌리기'를 보인다
         restoreBtn.style.visibility = 'hidden';   // 자리는 남겨 둔다(패널 크기 고정)
-        fetch(`/image/crop-info?dir=move&filename=${enc}`)
+        fetch(`/image/crop-info?dir=${dir}&filename=${enc}`)
             .then(r => r.json())
             .then(d => { if (token === openToken && d.has_origin) restoreBtn.style.visibility = 'visible'; })
             .catch(() => {});
@@ -1918,11 +1918,11 @@
         info.textContent = '원본으로 되돌리는 중...';
         try {
             const res = await fetch('/image/crop-restore', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                           body: JSON.stringify({ dir: 'move', filename: state.filename }) });
+                                                           body: JSON.stringify({ dir, filename: state.filename }) });
             const data = await res.json();
             if (!res.ok || data.status !== 'success') throw new Error(data.message || res.status);
             const thumb = state.item.querySelector('img.thumbnail');
-            const url = `/image/images?filename=${state.enc}&dir=move&v=${data.v}`;   // 새 버전값으로 캐시 회피
+            const url = `/image/images?filename=${state.enc}&dir=${dir}&v=${data.v}`;   // 새 버전값으로 캐시 회피
             if (thumb) { thumb.src = url; thumb.dataset.src = url; }
             await open(state.item);                // 새 v 가 붙은 원본 주소로 다시 불러온다
             // 마지막으로 확정했던 틀이 기록돼 있으면 같은 위치·크기·확대로 다시 씌운다 → 그 틀에서 조금만 움직여 다시 확정
@@ -1953,7 +1953,7 @@
             if (!res.ok || data.status !== 'success') throw new Error(data.message || res.status);
             if (tick) clearInterval(tick);
             const thumb = state.item.querySelector('img.thumbnail');
-            const url = `/image/images?filename=${state.enc}&dir=move&v=${data.v}`;   // 새 버전값으로 캐시 회피
+            const url = `/image/images?filename=${state.enc}&dir=${dir}&v=${data.v}`;   // 새 버전값으로 캐시 회피
             if (thumb) { thumb.src = url; thumb.dataset.src = url; }
             // 저장된 새 파일(새 v)로 편집기를 바로 다시 연다 — 같은 창에서 바뀐 이미지를 불러온 것처럼 보이고,
             // 이어서 다시 자르면 저장된 파일 기준 좌표라 어긋나지 않는다. 새 편집기가 준비될 때까지는 지금 편집기가
