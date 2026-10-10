@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 from send2trash import send2trash
 from jinja2 import Environment
 from config.config import settings
+from .accel import send_from_directory_accel
 import random
 import time
 import io
@@ -1023,11 +1024,9 @@ IMAGE_CACHE_SECONDS = 60 * 60 * 24   # 갤러리 이미지 브라우저 캐시(1
 
 def _send_cached(directory, filename):
     """send_from_directory + 브라우저 캐시. 로그인이 필요한 이미지라 공용(프록시) 캐시는 막고 private으로만 둔다.
-    ETag/Last-Modified는 그대로라 만료 후에는 304로 재검증된다."""
-    resp = send_from_directory(directory, filename, max_age=IMAGE_CACHE_SECONDS)
-    resp.cache_control.public = None
-    resp.cache_control.private = True
-    return resp
+    ETag/Last-Modified는 그대로라 만료 후에는 304로 재검증된다.
+    본문은 nginx 가 보낸다(X-Accel-Redirect) — 이유는 app/accel.py."""
+    return send_from_directory_accel(directory, filename, max_age=IMAGE_CACHE_SECONDS, private=True)
 
 
 @image_bp.route('/images')

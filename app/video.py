@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 from config.config import settings
 from .image import safe_path_join
+from .accel import send_file_accel, send_from_directory_accel
 
 video = Blueprint('video', __name__)
 
@@ -484,7 +485,7 @@ def get_video(filepath):
         abort(404)
 
     try:
-        return send_file(full_path, conditional=True)
+        return send_file_accel(full_path)   # 본문은 nginx 가 보낸다(app/accel.py) — 루트 밖 폴더는 send_file
     except FileNotFoundError:
         # os.path.exists() 확인과 send_file() 내부 open() 사이의 TOCTOU 레이스 — 경로가
         # \\wsl.localhost\...(Docker Desktop 볼륨)라 네트워크 순단이나 삭제 버튼과의 경합으로
@@ -581,7 +582,7 @@ def get_temp_video_poster(filename):
                 if not ok:
                     abort(404)
 
-    return send_file(dst, mimetype='image/jpeg', conditional=True, max_age=3600)
+    return send_file_accel(dst, max_age=3600, mimetype='image/jpeg')
 
 
 # 이미지 리스트, 채팅 페이지에서 임시로 사용할 엔드포인트
@@ -591,12 +592,8 @@ def get_temp_video(filename):
     filename = filename.replace("\\", "/")
     base_dir = _temp_video_base_dir()
 
-    # send_file보다 send_from_directory사용하는게 안전
-    return send_from_directory(
-        base_dir,
-        filename,
-        conditional=True  # 영상의 필요한 구간만
-    )
+    # send_file보다 send_from_directory사용하는게 안전 — 경로 검증은 같고, 본문(Range 구간 포함)은 nginx 가 보낸다(app/accel.py)
+    return send_from_directory_accel(base_dir, filename)
 
 
 def try_trash_with_backoff(path, attempts=5, base=0.2):
