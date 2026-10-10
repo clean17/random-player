@@ -2,6 +2,8 @@ import os
 import shutil
 
 DEL_CNT = 5
+# 썸네일(thumb)·자르기 전 원본 백업(origin) 폴더 — 계정 디렉토리로 보지 않고, 안에 든 파일도 "파일 있음"으로 치지 않는다
+SKIP_DIRS = {'origin', 'thumb'}
 
 def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
     empty_dirs = []
@@ -65,10 +67,13 @@ def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
 
     # 1. a_dir의 자식 디렉토리 중, 내부에 파일이 하나도 없는 디렉토리 찾기
     for name in os.listdir(a_dir):
+        if name in SKIP_DIRS:
+            continue
         path = os.path.join(a_dir, name)
         if os.path.isdir(path):
             has_file = False
             for root, dirs, files in os.walk(path):
+                dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
                 if files:
                     has_file = True
                     break
