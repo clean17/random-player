@@ -268,6 +268,120 @@ $ copy chickchick.kr-crt.pem + chickchick.kr-chain.pem chickchick.kr-fullchain.p
 
 ---
 
+## X-Accel-Redirect: 파일 전송을 nginx 에 맡기기
+갤러리 이미지·영상은 Flask 가 **어떤 파일을 보낼지만 정하고**, 실제 파일 읽기·전송은 **nginx 가 직접** 한다. (2026-10-10 도입)
+
+### 왜 필요한가
+스크롤 중 이미지 15개가 한꺼번에 pending 되는 증상이 있었다. 원인은 waitress 구조다.
+
+- waitress 는 Flask 코드를 작업 스레드(`threads=24`)에서 실행하지만, **소켓 입출력은 이벤트 루프 스레드 1개**가 전부 처리한다.
+- `send_file` 응답은 작업 스레드를 바로 풀어주고, **파일을 읽어 보내는 일을 이 1개 스레드에 넘긴다** (`waitress/task.py` 의 `write_soon` → `channel._flush_some`).
+- 갤러리 파일 대부분이 `\\wsl.localhost\...`(Docker Desktop 볼륨)라 읽기가 가끔 멈춘다. 그동안 **모든 응답 전송이 같이 멈춘다.**
+- `_log_slow` 는 `send_file` 이 응답 객체를 돌려주는 순간까지만 재기 때문에 이 지연이 잡히지 않는다.
+
+참고로 톰캣은 Poller 스레드 1개가 감시만 하고 실제 읽기·쓰기는 워커 스레드(기본 200개)가 하므로, 파일 하나가 느려도 그 요청만 막힌다.
+nginx 는 워커 프로세스 여러 개 + 커널 `sendfile` 로 파일을 보내므로 같은 문제가 없다.
+
+### 동작 흐름
+```
+1. 브라우저 → GET /image/images?filename=abc.png&dir=move
+2. nginx    → Flask(8090) 로 전달 (+ X-Accel-Enabled: 1 헤더)
+3. Flask    : 로그인 확인 → thumb/abc.webp 있나 확인 → 경로 결정
+              응답: 본문 0바이트 + "X-Accel-Redirect: /_files/igdata/move/thumb/abc.webp"
+4. nginx    : 이 헤더를 보고 응답을 브라우저에 보내지 않고 internal location 으로 내부 이동
+              → \\wsl.localhost\...\_data\move\thumb\abc.webp 를 직접 읽음
+5. nginx    → 브라우저 : 파일 전송 (Range 206, ETag/304 도 nginx 가 처리)
+```
+브라우저 입장에서는 그대로 `/image/images?...` 를 요청하고 이미지를 받는다. `/_files/...` 주소는 밖으로 드러나지 않는다.
+
+### nginx 설정 (`conf/nginx.conf`, 443 server)
+```bash
+# Flask 가 돌려준 X-Accel-Redirect 의 목적지. 디스크에 이런 폴더가 있는 게 아니라 "주소 → 실제 폴더" 연결이다.
+location ^~ /_files/igdata/ {
+    internal;      # 브라우저가 직접 요청하면 404 — Flask 가 허락한 경우에만 열린다 (로그인 우회 방지)
+    alias "//wsl.localhost/docker-desktop-data/data/docker/volumes/igdata/_data/";   # settings['UNC_DIR']
+}
+location ^~ /_files/temp/ {
+    internal;
+    alias "F:/merci_server_file_dir/";                                               # settings['TEMP_IMAGE_DIR']
+}
+
+location / {
+    include snippets/proxy-params.conf;
+    proxy_set_header X-Accel-Enabled 1;   # Flask 에 "nginx 뒤에 있으니 X-Accel-Redirect 써도 된다" 고 알림
+    proxy_pass http://127.0.0.1:8090;
+    ...
+}
+```
+- `internal` : nginx 내부 이동(X-Accel-Redirect)으로만 열린다. 주소창에 `/_files/...` 를 치면 404.
+- `^~` : 위의 정규식 location(`location ~ /\.`)보다 먼저 잡히게 한다.
+- `alias` 경로는 슬래시(`/`)로 쓴다. UNC 경로·한글 폴더명 모두 동작한다.
+- **nginx 가 사용자 계정으로 돌아야 한다.** Windows 서비스(SYSTEM 계정)로 돌리면 `\\wsl.localhost` 를 못 읽어 404 가 날 수 있다.
+
+### Flask 코드 (`app/accel.py`)
+```python
+_ACCEL_ROOTS = [
+    (settings['UNC_DIR'], '/_files/igdata/'),          # nginx.conf 의 internal location 과 짝
+    (settings['TEMP_IMAGE_DIR'], '/_files/temp/'),
+]
+
+def send_file_accel(path, max_age=None, private=False, mimetype=None):
+    uri = _accel_uri(path) if request.headers.get('X-Accel-Enabled') == '1' else None
+    if uri is None:
+        return send_file(path, conditional=True, max_age=max_age)   # 기존 방식으로 폴백
+    resp = Response(status=200, mimetype=mimetype or _mimetype(path))
+    resp.headers['X-Accel-Redirect'] = uri
+    ...
+```
+- 경로는 `quote(rel, safe='/')` 로 퍼센트 인코딩한다. 한글·공백·`#`·`%`·`?`·`+` 가 들어간 파일명도 이래야 nginx 가 제대로 찾는다 (헤더는 latin-1 만 허용).
+- **`Content-Type` 은 Flask 가 준 값이 그대로 나간다** (nginx 가 확장자로 다시 정하지 않음). 그래서 직접 넣는다. Python 3.8 `mimetypes` 는 `.webp` 를 몰라서 따로 매핑한다.
+- `Cache-Control` 도 Flask 가 준 값이 그대로 나간다. 기존 `send_file` 과 같게 맞췄다 (이미지 `private, max-age=86400`, 영상 `no-cache`).
+- 아래 경우는 기존 `send_file` 로 보낸다
+  - `X-Accel-Enabled` 헤더가 없는 요청 (nginx 를 안 거친 개발 서버 직접 접속)
+  - `_ACCEL_ROOTS` 밖의 파일 (`G:\`, `X:\` 영상 폴더, 주식 그래프 등)
+
+적용된 곳
+
+| 엔드포인트 | 함수 |
+|---|---|
+| `/image/images` | `app/image.py` `_send_cached` |
+| `/video/temp-video` | `app/video.py` `get_temp_video` |
+| `/video/temp-video-poster` | `app/video.py` `get_temp_video_poster` |
+| `/video/videos` | `app/video.py` `get_video` (루트 안의 폴더만) |
+
+폴더를 추가할 때는 `_ACCEL_ROOTS` 와 nginx `location ^~ /_files/...` 를 **같이** 추가한다.
+
+### 동작 확인
+nginx 접속 로그 끝에 응답 시간이 찍힌다 (`log_format timed`).
+```
+"GET /image/images?...&dir=move HTTP/2.0" 200 117402 ... rt=0.064 uct=0.004 uht=0.052 urt=0.055
+```
+| 값 | 의미 |
+|---|---|
+| `rt` | 요청 전체 시간 (브라우저로 보내기까지) |
+| `uct` | 백엔드(waitress) 연결 |
+| `uht` | 백엔드가 응답 헤더를 줄 때까지 |
+| `urt` | 백엔드 응답 본문을 다 받을 때까지 |
+
+- X-Accel 이 적용되면 Flask 는 헤더만 주므로 `uht` ≈ `urt` 이고 짧다.
+- `uht` 가 길면 Flask 처리·waitress 대기열(작업 스레드 24개가 다 참)에서 막힌 것이다.
+- `urt` 는 짧은데 `rt` 만 길면 nginx → 브라우저 구간(네트워크·디스크 읽기)이다.
+
+백엔드가 실제로 X-Accel 을 쓰는지 직접 확인
+```bash
+curl -s -D - -o /dev/null -H "X-Accel-Enabled: 1" -b "<로그인 쿠키>" \
+  "http://127.0.0.1:8090/image/images?filename=<파일명>&dir=move"
+# Content-Length: 0 + X-Accel-Redirect: /_files/igdata/move/... 가 보이면 정상
+```
+
+### 되돌리기
+nginx 의 `proxy_set_header X-Accel-Enabled 1;` 한 줄을 지우고 `./nginx.exe -s reload` 만 하면 된다.
+Flask 가 자동으로 기존 `send_file` 방식으로 돌아가므로 **`run.py` 재시작이 필요 없다** (자동매매와 같은 프로세스라 재시작 없이 끌 수 있게 해 둠).
+
+<br>
+
+---
+
 ## 병렬 작업 비교
 ![img_6.png](app/static/readme/img_6.png)
 ![img_11.png](app/static/readme/img_11.png)
