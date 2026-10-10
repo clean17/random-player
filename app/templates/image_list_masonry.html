@@ -296,6 +296,10 @@
         </div>
         <input type="hidden" name="page" value="{{ page }}">
 
+        <div>
+            total_count : <span id="total_count">{{ images_length }}</span>
+        </div>
+
         <!-- JS가 column 생성 -->
         <div id="image-data" style="display:none;">
             {% for image in images %}
