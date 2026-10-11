@@ -73,6 +73,33 @@ function applyRotation() {
 
 function _preventTouchScroll(e) { e.preventDefault(); }
 
+// 슬라이드쇼·자르기 창을 열면 F11 처럼 전체화면(Fullscreen API)으로, 닫으면 원래대로(2026-10-11).
+// - 브라우저는 클릭·키 입력 직후에만 전체화면을 허락하므로 창을 여는 그 동작 안에서 부른다.
+// - 이미 전체화면이면(F11 포함 아님 — F11 은 API 로 알 수 없다) 건드리지 않고, 닫을 때도 우리가 켠 것만 끈다.
+// - 전체화면에선 브라우저가 Esc 를 페이지에 넘기지 않고 전체화면만 푼다 → 그때 창도 같이 닫는다(onExit).
+// - 아이폰 사파리는 이미지 화면의 전체화면을 지원하지 않아 아무 일도 일어나지 않는다.
+let modalFullscreen = null;   // { owner, onExit } — 지금 전체화면을 켠 창
+
+function enterModalFullscreen(owner, onExit) {
+    const el = document.documentElement;
+    if (document.fullscreenElement || modalFullscreen || !el.requestFullscreen) return;
+    modalFullscreen = { owner, onExit };
+    el.requestFullscreen({ navigationUI: 'hide' }).catch(() => { modalFullscreen = null; });
+}
+
+function exitModalFullscreen(owner) {
+    if (!modalFullscreen || modalFullscreen.owner !== owner) return;
+    modalFullscreen = null;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
+document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement || !modalFullscreen) return;
+    const { onExit } = modalFullscreen;
+    modalFullscreen = null;
+    if (onExit) onExit();
+});
+
 // masonry에 새로 렌더된 항목을 slideShowImgs에 추가 (data-index 순)
 // 원래 refine 전용이라 [data-filename]만 봤다 — temp/trip 이미지는 data-filename이 없어서
 // (image_list_masonry.html의 #image-data 템플릿 참고) alt 속성으로 대체한다.
@@ -214,6 +241,62 @@ function toggleSlideOrigin() {
     if (labelEl) labelEl.textContent = (slideShowingOrigin ? '[원본] ' : '') + slideOrigin.filename;
 }
 
+// 갤럭시 모션포토(2026-10-11): 슬라이드가 열리면 내장 영상을 사진 위에 한 번 재생하고, 끝나면 사진으로
+// 돌아간다(갤럭시 갤러리 뷰어와 같은 동작). '모션' 버튼이나 M 키로 다시 재생. 영상은 /image/motion(app/motion_photo.py).
+let slideMotionFile = null;
+
+function motionVideoUrl(filename) {
+    const activeDir = (typeof dir !== 'undefined' && dir) ? dir : 'refine';
+    const selDir = (typeof selected_dir !== 'undefined' && selected_dir && selected_dir !== 'None') ? selected_dir : '';
+    // av=1: 소리 포함으로 바꾼 뒤의 영상(2026-10-11). 그 전 무음 영상이 브라우저 캐시(1일)에서 나오지 않게 주소를 바꿨다
+    return `/image/motion?filename=${encodeURIComponent(filename)}&dir=${encodeURIComponent(activeDir)}&selected_dir=${encodeURIComponent(selDir)}&av=1`;
+}
+
+// 소리와 함께 재생한다. 브라우저는 사용자가 이 페이지를 한 번도 클릭·탭하지 않았으면 소리 있는 자동재생을 막는다
+// (NotAllowedError) — 그때는 소리 없이라도 재생한다.
+function playWithSound(v) {
+    v.muted = false;
+    return v.play().catch(err => {
+        if (err && err.name === 'NotAllowedError') {
+            v.muted = true;
+            return v.play().catch(() => {});
+        }
+    });
+}
+
+// 서버가 모션포토로 판별한 이미지에만 data-motion 이 붙는다(image_list_masonry.html)
+function isMotionPhoto(filename) {
+    return Array.from(document.querySelectorAll('img.thumbnail[data-motion]'))
+        .some(el => decodeURIComponent(el.dataset.filename || el.getAttribute('alt') || '') === filename);
+}
+
+function playSlideMotion() {
+    const v = document.getElementById('slideshow-motion');
+    if (!v || !slideMotionFile) return;
+    const url = motionVideoUrl(slideMotionFile);
+    if (v.dataset.src !== url) {
+        v.dataset.src = url;
+        v.src = url;
+    }
+    v.currentTime = 0;
+    playWithSound(v);   // 첫 요청은 서버 변환(약 1초) 후 시작 — 'playing' 이벤트에서 보이게 한다
+}
+
+function stopSlideMotion() {
+    const v = document.getElementById('slideshow-motion');
+    if (!v) return;
+    v.pause();
+    v.classList.remove('is-on');
+}
+
+function updateSlideMotion(filename, isVid) {
+    const btn = document.querySelector('#slideshow-modal .motion-toggle');
+    stopSlideMotion();
+    slideMotionFile = (!isVid && isMotionPhoto(filename)) ? filename : null;
+    if (btn) btn.style.display = slideMotionFile ? '' : 'none';
+    if (slideMotionFile) playSlideMotion();
+}
+
 function setSlide(filename) {
     const imgEl = document.getElementById('slideshow-img');
     const videoEl = document.getElementById('slideshow-video');
@@ -244,6 +327,7 @@ function setSlide(filename) {
         imgEl.src = slideImageUrl(filename);
     }
     updateSlideOrigin(filename, isVid, activeDir);
+    updateSlideMotion(filename, isVid);
 
     // 라벨: 파일명 전체(확장자·하위 경로 포함). 2026-10-03 사용자 요청 — 예전엔 '_img_'/'_reel_' 앞 계정명만 40자까지 보였다.
     const labelEl = document.getElementById('slideshow-label');
@@ -945,9 +1029,11 @@ function showSlideshowModal(fileList, startIdx = 0) {
         modal.style.display = "flex";
         modal.innerHTML = `
             <div id="slideshow-rotator">
+                <video id="slideshow-motion" muted playsinline preload="none"></video>
                 <button class="close-modal" title="닫기"><i class="fas fa-times" style="color:white"></i></button>
                 <button class="rotate-modal" title="회전"><i class="fas fa-rotate-left" style="color:white"></i></button>
                 <button class="origin-toggle" title="원본/현재 전환 (O)" style="display:none">원본</button>
+                <button class="motion-toggle" title="모션 다시 재생 (M)" style="display:none">모션 ▶</button>
                 <button class="slide-prev" title="이전">&#8249;</button>
                 <img src="" alt="슬라이드" id="slideshow-img" style="display:none;">
                 <video id="slideshow-video" class="slideshow-video" style="display:none;"
@@ -968,6 +1054,8 @@ function showSlideshowModal(fileList, startIdx = 0) {
             const v = modal.querySelector("#slideshow-video");
             v.pause();
             v.currentTime = 0;
+            stopSlideMotion();
+            exitModalFullscreen('slideshow');
             modal.style.display = "none";
             document.removeEventListener('touchmove', _preventTouchScroll);
             document.body.classList.remove('slideshow-active');
@@ -983,6 +1071,13 @@ function showSlideshowModal(fileList, startIdx = 0) {
         };
 
         modal.querySelector('.origin-toggle').onclick = toggleSlideOrigin;
+        modal.querySelector('.motion-toggle').onclick = playSlideMotion;
+
+        // 모션 영상은 실제로 재생이 시작돼야 보이게(변환 대기 중 검은 화면 방지), 끝나면 사진으로 되돌린다
+        const motionEl = modal.querySelector('#slideshow-motion');
+        motionEl.addEventListener('playing', () => { if (slideMotionFile) motionEl.classList.add('is-on'); });
+        motionEl.addEventListener('ended', () => motionEl.classList.remove('is-on'));
+        motionEl.addEventListener('error', () => motionEl.classList.remove('is-on'));
 
         modal.querySelector('.slide-prev').onclick = () => {
             slideShowIdx = (slideShowIdx - 1 + slideShowImgs.length) % slideShowImgs.length;
@@ -1025,10 +1120,18 @@ function showSlideshowModal(fileList, startIdx = 0) {
                 case 'ㅐ':   // 한글 자판 상태의 o
                     toggleSlideOrigin();
                     break;
+                case 'm':
+                case 'M':
+                case 'ㅡ':   // 한글 자판 상태의 m
+                    playSlideMotion();
+                    break;
             }
         }, true); // capture: true → 기존 bubble 핸들러보다 먼저 실행
     }
     modal.style.display = "flex";
+    enterModalFullscreen('slideshow', () => {
+        if (modal.style.display !== 'none') modal.querySelector('.close-modal').click();
+    });
     document.addEventListener('touchmove', _preventTouchScroll, { passive: false });
     document.body.classList.add('slideshow-active');
 

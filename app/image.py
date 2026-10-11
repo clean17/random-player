@@ -8,6 +8,7 @@ from send2trash import send2trash
 from jinja2 import Environment
 from config.config import settings
 from .accel import send_from_directory_accel
+from .motion_photo import is_motion_photo, ensure_motion_video, MOTION_SUFFIX, OLD_MOTION_SUFFIXES
 import random
 import time
 import io
@@ -427,6 +428,7 @@ def image_list():
     subdir_list = []
     images = []
     images_length = 0
+    motion_images = set()
     page = int(request.args.get('page', 1))
     start = (page - 1) * LIMIT_PAGE_NUM
 
@@ -453,6 +455,8 @@ def image_list():
             tmp_arr = []
             images, page = get_images(start, LIMIT_PAGE_NUM, page, target_dir, tmp_arr)
             images_length = len(tmp_arr)
+            # 갤럭시 모션포토 — 갤러리에 배지를 달고 슬라이드쇼에서 내장 영상을 재생한다(/image/motion)
+            motion_images = {img for img in images if is_motion_photo(os.path.join(target_dir, img))}
         dir = 'temp'
 
     # elif dir == 'trip':
@@ -490,7 +494,7 @@ def image_list():
     return render_template(template_html, images=images, page=page,
                            total_pages=total_pages, images_length=images_length, dir=dir,
                            selected_dir=selected_dir, subdir_list=subdir_list,
-                           search=search, version=int(time.time()))
+                           search=search, motion_images=motion_images, version=int(time.time()))
 
 
 @image_bp.route('/fetch', methods=['GET'])
@@ -577,6 +581,8 @@ def move_image():
             return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
 
         webp_file = safe_path_join(thumb_dir, name_without_ext + ".webp")
+        motion_files = [safe_path_join(thumb_dir, name_without_ext + sfx)   # 모션포토 영상 캐시(옛 무음 캐시 포함)
+                        for sfx in (MOTION_SUFFIX,) + OLD_MOTION_SUFFIXES]
     except ValueError:
         return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
 
@@ -584,6 +590,9 @@ def move_image():
     with _timed('thumb_trash'):
         if os.path.exists(webp_file):
             send2trash(webp_file)
+        for motion_file in motion_files:
+            if os.path.exists(motion_file):
+                os.remove(motion_file)   # 원본에서 언제든 다시 만들 수 있는 캐시라 휴지통을 거치지 않는다
 
     # print('src_path', src_path)
     with _timed('src_exists'):
@@ -677,6 +686,29 @@ def _origin_box(key, used_box, cur_size, had_backup):
     px, py, pw, ph = prev['box']
     sx, sy = pw / cur_size[0], ph / cur_size[1]
     return [px + x * sx, py + y * sy, w * sx, h * sy]
+
+
+def _adopt_moved_history(dir_, filename):
+    """다른 갤러리 키에 남은 자르기 기록을 지금 갤러리 키로 가져온다.
+    기록을 같이 옮기는 _carry_crop_origin 은 2026-10-10 에 생겼는데, 그 전에 move → refine 으로 옮겨진 이미지는
+    원본 백업만 refine/origin/ 에 있고 기록은 'move/<이름>' 에 남아 있었다(2026-10-11 실측: refine 원본 백업
+    2,160개 중 1,912개). 그래서 refine 에서 '원본으로 되돌리기'를 하면 이전 틀을 못 찾아 처음 연 것처럼 열렸다.
+    자르기·되돌리기 때 그 자리에서 옮긴다 — 기록 파일은 서버가 통째로 다시 쓰므로 밖에서 일괄 수정하면 덮인다.
+    반대편 갤러리에 같은 이름 파일이 지금 있으면 그 파일의 기록이라 건드리지 않는다."""
+    key = f'{dir_}/{filename}'
+    other = {'refine': 'move', 'move': 'refine'}.get(dir_)
+    if key in _crop_history or not other:
+        return
+    okey = f'{other}/{filename}'
+    if okey not in _crop_history:
+        return
+    try:
+        if os.path.exists(safe_path_join(DIR_CONFIG[other].base_dir, filename)):
+            return
+    except ValueError:
+        return
+    _crop_history[key] = _crop_history.pop(okey)
+    _save_crop_history()
 
 
 @image_bp.app_template_global('img_v')
@@ -805,7 +837,7 @@ def _save_image(img, path, fmt, icc=None):
 
 @image_bp.route('/crop-image', methods=['POST'], endpoint='crop-image')
 @login_required
-@_log_slow()
+# @_log_slow()   # 2026-10-11 끔 — 확대 렌더(특히 AI)는 원래 수 초~10초 걸려 매번 [느린요청] 경고가 찍혔다
 def crop_image():
     """payload: dir, filename, box{x,y,w,h}(원본 픽셀, EXIF 회전 반영 후 좌표), unit(출력 = CROP_RATIO 각 항 × unit),
     preview(true면 결과 이미지만 돌려주고 파일은 건드리지 않는다)."""
@@ -871,6 +903,7 @@ def crop_image():
     with _timed('thumb'):
         _rebuild_thumb(base, rel, src)
     hist_key = f'{dir_}/{filename}'
+    _adopt_moved_history(dir_, filename)   # 다시 자를 때도 최초 원본 좌표로 환산하려면 직전 기록이 필요하다
     obox = _origin_box(hist_key, used_box, orig_size, had_backup)
     if obox is None:
         _crop_history.pop(hist_key, None)
@@ -1019,6 +1052,7 @@ def crop_restore():
     ver = _bump_edit_version(dir_, filename)
     # 마지막 확정 틀(원본 좌표)을 돌려줘서 편집 창이 같은 틀을 다시 씌우게 한다. 원본으로 돌아갔으니 기록은 지운다
     # (다음 확정은 원본에서 새로 시작 → 그때 다시 기록된다).
+    _adopt_moved_history(dir_, filename)
     last = _crop_history.pop(f'{dir_}/{filename}', None)
     _save_crop_history()
     return jsonify({'status': 'success', 'v': ver, 'has_origin': False,
@@ -1147,6 +1181,38 @@ def get_image():
         return _send_cached(thumb_dir, name_without_ext + '.webp')
 
     return _send_cached(base_dir, filename)
+
+@image_bp.route('/motion')
+@login_required
+@_log_slow()
+def get_motion_video():
+    """갤럭시 모션포토에 들어 있는 영상(H.264 로 변환해 캐시한 mp4). 모션포토가 아니면 404.
+    처음 요청 때만 추출·변환(약 1초)하고 이후엔 thumb/<이름>.motion-av.mp4 를 바로 보낸다 — app/motion_photo.py"""
+    filename = request.args.get('filename')
+    if not filename:
+        abort(400, 'filename required')
+    filename = urllib.parse.unquote_plus(filename)
+    dir = request.args.get('dir')
+    selected_dir = request.args.get('selected_dir', '')
+    try:
+        if dir == 'temp':
+            base_dir = safe_path_join(TEMP_IMAGE_DIR, selected_dir) if selected_dir else TEMP_IMAGE_DIR
+        elif dir == 'trip':
+            base_dir = TRIP_IMAGE_DIR
+        elif dir in DIR_CONFIG:
+            base_dir = DIR_CONFIG[dir].base_dir
+        else:
+            abort(400, 'Invalid dir')
+        src_path = safe_path_join(base_dir, filename)
+    except ValueError:
+        abort(400, 'Invalid filename')
+    if not os.path.isfile(src_path):
+        abort(404)
+    out = ensure_motion_video(src_path)
+    if not out:
+        abort(404)
+    return _send_cached(os.path.dirname(out), os.path.basename(out))
+
 
 @image_bp.route('/shuffle/ref-images', methods=['POST'], endpoint='shuffle/ref-images')
 @login_required

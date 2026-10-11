@@ -83,6 +83,32 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        /* 갤럭시 모션포토 배지(좌하단)와 마우스오버 재생 영상 */
+        .motion-badge {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.45);
+            color: #fff;
+            pointer-events: none;
+        }
+        .image-item.motion-playing .motion-badge { background: #f59e0b; color: #111; }
+        .motion-hover-video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            z-index: 5;
+        }
 
         .top-menu-panel {
             position: fixed;
@@ -365,7 +391,14 @@
                      {% if dir not in ['trip', 'temp'] %}
                 data-filename="{{ image|urlencode }}" data-index="{{ loop.index }}"
                 {% endif %}
+                {% if image in motion_images %}data-motion="1"{% endif %}
                 data-index="{{ loop.index }}">
+                {% if image in motion_images %}
+                <!-- 갤럭시 모션포토: 마우스를 올리면 내장 영상 재생, 슬라이드쇼에선 열릴 때 한 번 재생 -->
+                <span class="motion-badge" title="모션포토">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="10" stroke-dasharray="2 2.6"/></svg>
+                </span>
+                {% endif %}
                 {% endif %}
             </div>
             {% endfor %}
@@ -1267,6 +1300,38 @@
             showSlideshowModal(list, startIdx >= 0 ? startIdx : 0);
         });
 
+        // 갤럭시 모션포토: 마우스를 올리고 잠깐 머물면 내장 영상을 겹쳐 반복 재생한다.
+        // 터치 기기는 hover 가 없으니 탭 → 슬라이드쇼에서 재생(image.js setSlide).
+        if (window.matchMedia('(hover: hover)').matches) {
+            let motionHoverTimer = null;
+            msr_container.addEventListener('mouseover', function (e) {
+                const item = e.target.closest('.image-item');
+                if (!item || item.contains(e.relatedTarget)) return;
+                const img = item.querySelector('img.thumbnail[data-motion]');
+                if (!img) return;
+                clearTimeout(motionHoverTimer);
+                motionHoverTimer = setTimeout(function () {
+                    if (item.querySelector('.motion-hover-video')) return;
+                    const v = document.createElement('video');
+                    v.className = 'motion-hover-video';
+                    v.playsInline = true;
+                    v.loop = true;
+                    v.onerror = function () { v.remove(); item.classList.remove('motion-playing'); };
+                    v.src = motionVideoUrl(decodeURIComponent(img.dataset.filename || img.alt));
+                    item.appendChild(v);
+                    item.classList.add('motion-playing');
+                    playWithSound(v);   // 소리 포함(image.js) — 페이지를 아직 클릭 안 했으면 브라우저 정책상 무음으로 재생
+                }, 250);
+            });
+            msr_container.addEventListener('mouseout', function (e) {
+                const item = e.target.closest('.image-item');
+                if (!item || item.contains(e.relatedTarget)) return;
+                clearTimeout(motionHoverTimer);
+                item.querySelector('.motion-hover-video')?.remove();
+                item.classList.remove('motion-playing');
+            });
+        }
+
         // 이미지 클릭 (수정)
         document.addEventListener('click', function (e) {
             const img = e.target.closest('img.thumbnail');
@@ -1366,6 +1431,14 @@
         background: rgba(0, 0, 0, 0.35); color: #fff; font-size: 19px; cursor: pointer;
     }
     .masonry-column .image-item .crop-btn:hover { background: rgba(0, 0, 0, 0.6); }
+    /* refine 은 X(.delete-btn)도 있어 겹친다 — X 를 자르기 버튼과 같은 36px 로 맞추고 자르기는 X 왼쪽에 나란히.
+       좌상단은 계정명 라벨(.item-label) 자리라 피한다. move 는 X 가 없어 위 기본 위치 그대로 */
+    .masonry-column .image-item .delete-btn:has(~ .crop-btn) {
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        padding: 0; margin: 0; line-height: 1;
+    }
+    .masonry-column .image-item .delete-btn ~ .crop-btn { right: 48px; }
     #crop-modal { display: none; position: fixed; inset: 0; z-index: 10000; background: #0b0b0b;   /* 불투명: 뒤 갤러리가 비쳐 깜빡여 보이지 않게 */
                   flex-direction: column; padding: 0; box-sizing: border-box; color: #eee; }
     #crop-modal.open { display: flex; }
@@ -1453,11 +1526,18 @@
     #crop-modal .crop-edit .crop-layer { position: absolute; inset: 0; }
     #crop-modal .crop-edit .crop-layer.pending { visibility: hidden; pointer-events: none; }
     #crop-modal .crop-edit .crop-layer > img { display: block; max-width: 100%; }
+    /* 원본/현재 토글 — 버튼 패널의 '원본으로 되돌리기' 바로 위. 원본 보는 중엔 슬라이드쇼 토글처럼 주황 강조.
+       원본 보기는 편집 영역 위에 원본 백업 이미지를 덮어 보여주기만 한다(편집기는 그대로 뒤에 있다) */
+    #crop-modal .crop-bar button.crop-origin-toggle.is-on { background: #f59e0b; border-color: #f59e0b; color: #111; }
+    #crop-modal .crop-origin-view { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%;
+                                    object-fit: contain; background: #0b0b0b; display: none; }
+    #crop-modal .crop-origin-view.on { display: block; }
 </style>
 <div id="crop-modal" aria-hidden="true">
   <div class="crop-panel">
     <div class="crop-stage">
         <div class="crop-edit" id="crop-edit"></div>
+        <img class="crop-origin-view" id="crop-origin-view" alt="원본">
     </div>
     <button type="button" class="crop-x" id="crop-x-btn" title="닫기 (Esc)"><i class="fas fa-times"></i></button>
     <button type="button" class="crop-nav" id="crop-prev-btn" title="이전 이미지 (←)">&#8249;</button>
@@ -1469,6 +1549,7 @@
         <div class="crop-btns">
             <button type="button" class="primary" id="crop-save-btn" disabled title="Space / Enter">확정(덮어쓰기)</button>
             <button type="button" class="ai" id="crop-ai-btn" disabled title="Shift+Space / Shift+Enter — AI(Real-ESRGAN)로 깨끗하게 정리해 저장(확대·축소 모두), 약 5~10초">AI로 확정</button>
+            <button type="button" class="crop-origin-toggle" id="crop-origin-toggle" style="visibility:hidden;" title="원본/현재 전환 (O)">원본 보기</button>
             <button type="button" id="crop-restore-btn" style="visibility:hidden;" title="백스페이스">원본으로 되돌리기</button>
             <button type="button" id="crop-move-btn" title="이미지 클릭과 같은 동작">refine으로 이동 ›</button>
         </div>
@@ -1494,7 +1575,35 @@
     const saveBtn = document.getElementById('crop-save-btn');
     const aiBtn = document.getElementById('crop-ai-btn');
     const restoreBtn = document.getElementById('crop-restore-btn');
+    const originToggle = document.getElementById('crop-origin-toggle');
+    const originView = document.getElementById('crop-origin-view');
     let cropper = null, state = null, saving = false;
+
+    // 원본/현재 토글(2026-10-11) — 슬라이드쇼의 원본 보기(image.js toggleSlideOrigin)와 같은 동작을 편집 창에서도.
+    // origin/ 백업이 있을 때만 버튼이 보이고, 원본을 보는 동안엔 틀이 가려지므로 확정 버튼을 잠근다.
+    function setOriginView(on) {
+        on = !!(on && state && state.ov);
+        originView.classList.toggle('on', on);
+        if (on) originView.src = `/image/images?filename=${state.enc}&dir=${dir}&origin=1&v=${state.ov}`;
+        originToggle.textContent = on ? '현재 보기' : '원본 보기';   // 누르면 바뀔 보기 이름
+        originToggle.classList.toggle('is-on', on);
+        labelEl.textContent = state ? (on ? '[원본] ' : '') + state.filename : '';
+        const ready = !!cropper && !on;
+        saveBtn.disabled = !ready;
+        aiBtn.disabled = !ready;
+    }
+    function toggleOriginView() {
+        if (originToggle.style.visibility !== 'visible') return;
+        setOriginView(!originView.classList.contains('on'));
+    }
+    function resetOriginView() {
+        originView.classList.remove('on');
+        originView.removeAttribute('src');
+        originToggle.style.visibility = 'hidden';   // 자리는 남겨 둔다(패널 크기 고정)
+        originToggle.textContent = '원본 보기';
+        originToggle.classList.remove('is-on');
+    }
+    originToggle.onclick = toggleOriginView;
 
     // 출력 크기 = 화면에 보이는 자르기 틀의 실제 픽셀 크기(CSS px × 화면 배율)를 3:4 배수로 맞춘 값
     function outUnit() {
@@ -1568,6 +1677,8 @@
     let chromeWasVisible = null;
     function hideChromeForEdit() {
         if (document.body.classList.contains('crop-editing')) return;   // 다음/이전 이미지로 넘어갈 때는 이미 숨김 상태
+        // 처음 열 때만 전체화면(image.js enterModalFullscreen) — 버튼 클릭 직후 동기 구간이라 브라우저가 허락한다
+        if (typeof enterModalFullscreen === 'function') enterModalFullscreen('crop', () => { if (modal.classList.contains('open')) close(); });
         const bar = document.querySelector('[data-auto-hide="true"]');
         chromeWasVisible = bar ? !bar.classList.contains('chrome-hidden') : null;
         if (bar) { bar.classList.add('chrome-hidden'); bar.classList.remove('chrome-visible'); }
@@ -1587,8 +1698,10 @@
     }
     function close() {
         modal.classList.remove('open');
+        if (typeof exitModalFullscreen === 'function') exitModalFullscreen('crop');
         [bar, prevBtn, nextBtn].forEach(el => el.classList.remove('placed'));
         restoreChrome();
+        resetOriginView();
         teardown();
         state = null;
     }
@@ -1620,6 +1733,16 @@
         [findNext(item), findPrev(item)].forEach(it => { if (it) preload(originalUrl(it)).catch(() => {}); });
     }
 
+    // 편집 중인 이미지를 뒤 갤러리(메인 스크롤) 화면 가운데로 옮겨 둔다 — 슬라이드쇼(image.js setSlide)와 같은 방식.
+    // 이전/다음·Del 로 넘어갈 때마다 따라가서, 편집 창을 닫으면 마지막에 편집한 이미지가 바로 보인다.
+    // 편집 중엔 페이지 스크롤을 잠그지만(overflow:hidden) 코드로 옮기는 스크롤은 그대로 된다.
+    function centerInGallery(item) {
+        if (!item.isConnected || item.offsetParent === null) return;   // 숨김 #image-data 원본 등은 제외
+        const r = item.getBoundingClientRect();
+        const top = Math.max(0, window.scrollY + r.top - window.innerHeight / 2 + r.height / 2);
+        window.scrollTo({ top, behavior: 'instant' });
+    }
+
     let openToken = 0;
     async function open(imageItem, opts = {}) {
         const thumb = imageItem.querySelector('img.thumbnail');
@@ -1628,11 +1751,18 @@
         const enc = thumb.dataset.filename || thumb.alt;
         const url = originalUrl(imageItem);
         state = { item: imageItem, filename: decodeURIComponent(enc), enc };
+        centerInGallery(imageItem);
         // 이 이미지에 origin/ 백업(= 한 번 이상 잘린 적 있음)이 있을 때만 '원본으로 되돌리기'를 보인다
         restoreBtn.style.visibility = 'hidden';   // 자리는 남겨 둔다(패널 크기 고정)
+        resetOriginView();
         fetch(`/image/crop-info?dir=${dir}&filename=${enc}`)
             .then(r => r.json())
-            .then(d => { if (token === openToken && d.has_origin) restoreBtn.style.visibility = 'visible'; })
+            .then(d => {
+                if (token !== openToken || !d.has_origin) return;
+                restoreBtn.style.visibility = 'visible';
+                state.ov = d.ov;                    // 원본 보기 URL 캐시 회피값
+                originToggle.style.visibility = 'visible';
+            })
             .catch(() => {});
         // 비교 화면·미리보기 결과만 정리하고 편집기(cropper)는 남겨 둔다 — 이미지를 바꾸는 동안 화면이 비지 않게
         saveBtn.disabled = true;               // 새 편집기가 준비되면 바로 확정할 수 있다
@@ -1666,8 +1796,8 @@
         if (opts.notice) state.notice = opts.notice;
         updateIndex();
         updateInfo();
-        saveBtn.disabled = false;
-        aiBtn.disabled = false;
+        // 확정 버튼 활성화 — 편집기가 준비되는 사이 원본 보기를 켰으면 잠근 채로 둔다(라벨의 [원본] 표시도 유지)
+        setOriginView(originView.classList.contains('on'));
         prefetchNeighbors(imageItem);
     }
 
@@ -1863,14 +1993,22 @@
                 e.preventDefault();
                 close();
                 break;
+            case 'o':
+            case 'O':
+            case 'ㅐ':   // 한글 자판 상태의 o
+                e.preventDefault();
+                if (!e.repeat) toggleOriginView();
+                break;
             case ' ':
             case 'Enter':
                 e.preventDefault();
                 if (e.repeat) break;              // 누르고 있어도 1번만
+                // 원본을 보는 중엔 틀이 가려져 있으니 저장·이동하지 않고 현재 보기로만 돌아온다
+                if (originView.classList.contains('on')) { setOriginView(false); break; }
                 // 스페이스·엔터 = 확정(덮어쓰기). 단 틀이 이미지 전체와 같으면(자를 게 없음 — 이미 3:4 로 맞춰진 이미지 등)
-                // 갤러리 클릭과 같은 'refine 으로 이동'을 한다.
+                // 갤러리 클릭과 같은 'refine 으로 이동'을 한다. refine 에선 이동 버튼이 없으니 다음 이미지로만 넘어간다.
                 if (e.shiftKey) { if (!aiBtn.disabled) aiBtn.click(); break; }   // Shift = AI로 확정
-                if (frameCoversImage()) moveBtn.click();
+                if (frameCoversImage()) { if (dir === 'refine') goNext(); else moveBtn.click(); }
                 else if (!saveBtn.disabled) saveBtn.click();
                 break;
             case 'Backspace':
@@ -1878,12 +2016,27 @@
                 // 백스페이스 = 원본으로 되돌리기(버튼이 보일 때 = origin/ 백업이 있을 때만). 누르고 있어도 1번만
                 if (!e.repeat && !restoreBtn.disabled && restoreBtn.style.visibility === 'visible') restoreBtn.click();
                 break;
+            case 'Delete':
+                e.preventDefault();
+                // refine 에서 Del = 갤러리 X 버튼과 같은 move 로 되돌리기(moveImageToPreviousStep). 누르고 있어도 1번만
+                if (!e.repeat && dir === 'refine') moveBackToMove();
+                break;
             case 'ArrowUp':
             case 'ArrowDown':
                 e.preventDefault();       // 페이지 스크롤·가운데 이미지 이동 방지
                 break;
         }
     }, true);
+
+    // 지금 이미지가 목록에서 빠지므로, 옮기기 전에 다음(없으면 이전) 이미지를 찾아 두었다가 바로 연다
+    function moveBackToMove() {
+        if (!state || typeof moveImageToPreviousStep !== 'function') return;
+        const item = state.item;
+        const target = findNext(item) || findPrev(item);
+        moveImageToPreviousStep(item);
+        if (target) open(target, { notice: 'move로 옮겼어요 ✓' });
+        else close();
+    }
 
     document.addEventListener('click', (e) => {
         const btn = e.target.closest('.crop-btn');
@@ -1900,6 +2053,9 @@
     // 갤러리에서 이미지를 클릭했을 때와 같은 동작(moveAndRemove: refine 폴더로 이동 + 목록에서 제거)을 편집 창에서 한다.
     // 지금 이미지가 목록에서 빠지므로, 이동 전에 다음(없으면 이전) 이미지를 찾아 두었다가 바로 연다.
     const moveBtn = document.getElementById('crop-move-btn');
+    // refine 에서 이 버튼은 move_image(imagepath='refine') 라 이름과 반대로 refine → move 로 되돌린다.
+    // 되돌리기는 갤러리의 X 버튼으로 하므로 refine 에선 숨긴다(2026-10-11)
+    if (dir === 'refine') moveBtn.style.display = 'none';
     moveBtn.onclick = () => {
         if (!state || typeof moveAndRemove !== 'function') return;
         const item = state.item;
@@ -1938,7 +2094,7 @@
 
     // 확정(덮어쓰기). ai=true 면 서버가 Real-ESRGAN 으로 확대해 저장한다(확대일 때만, 실패하면 일반 방식으로 저장 후 사유를 알려줌).
     async function doSave(ai) {
-        if (!cropper || saving) return;     // 확인창 없이 바로 저장(원본은 move/origin 에 보관된다)
+        if (!cropper || saving || originView.classList.contains('on')) return;     // 확인창 없이 바로 저장(원본은 move/origin 에 보관된다). 원본 보는 중엔 틀이 가려져 있어 막는다
         saving = true;
         saveBtn.disabled = true;
         aiBtn.disabled = true;
