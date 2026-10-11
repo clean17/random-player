@@ -20,6 +20,8 @@ _active_processes_lock = threading.Lock()
 _job = None
 _job_lock = threading.Lock()
 
+_batch_logger_lock = threading.Lock()
+
 _BATCH_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'job')
 
 
@@ -32,10 +34,19 @@ def _get_batch_logger() -> 'logging.Logger':
     잡이 실제로 도는지 로그로 확인이 안 됐던 사고 참고. kiwoom_api.get_trading_logger()와
     동일한 idempotent 파일 로거 패턴(logger.handlers 비었을 때만 부착)을 따른다.
     """
-    os.makedirs(_BATCH_LOG_DIR, exist_ok=True)
     log = logging.getLogger('batch_subprocess')
     if log.handlers:
         return log
+    # 2026-10-11: 서버 기동 직후 여러 잡이 동시에 처음 호출하면 두 스레드가 모두 위 검사를 통과해 파일 핸들러가
+    # 2개 붙을 수 있다 — 10/05·10/10·10/11 로그의 모든 줄이 같은 시각(ms)으로 두 번씩 기록된 원인으로 추정. 잠금 안에서 다시 확인한다.
+    with _batch_logger_lock:
+        if log.handlers:
+            return log
+        return _init_batch_logger(log)
+
+
+def _init_batch_logger(log):
+    os.makedirs(_BATCH_LOG_DIR, exist_ok=True)
     log.setLevel(logging.INFO)
     log.propagate = False  # 앱 root/waitress 로거로 전파 안 함(logs/app 쪽 중복 기록 방지)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
@@ -97,6 +108,9 @@ def _run_subprocess(argv, cwd=None):
         cwd=cwd,                               # 자식 프로세스의 현재 작업 디렉토리(working directory) 를 지정
         stdout=subprocess.PIPE,                # 주석하면 자식 프로세스의 출력이 파이프로 캡처되지 않고 기본 출력 스트림으로 흘러간다
         stderr=subprocess.STDOUT,              # stderr도 stdout으로 합치기(편함)
+        # 입력은 막는다(EOF). 안 막으면 서버 콘솔을 물려받아, 배치 파일 끝의 pause 가 키 입력을 기다리며 영영 멈췄다
+        # (2026-10-11 확인: 10시 renew_chickchick_cert.bat 이 매일 다음 재시작까지 23시간 넘게 io 스레드를 붙잡음).
+        stdin=subprocess.DEVNULL,
         text=True,                             # stdout에서 읽히는 값이 bytes가 아니라 str(문자열)로
         encoding="utf-8",                      # 부모도 UTF-8로 읽기
         errors="replace",                      # ignore 대신 replace 추천(문제 보이게)
