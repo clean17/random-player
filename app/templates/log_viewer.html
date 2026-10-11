@@ -171,6 +171,10 @@
     }
 
     // 날짜별 로그 가져오기
+    // 화면을 비우고 그 날짜 로그만 다시 그린다. 예전엔 비우지 않아서 다른 날짜를 고르면 처음 불러온 오늘 로그
+    // 아래에 덧붙었다(맨 위로 올리면 오늘 로그가 이어서 보이던 버그). 날짜를 빠르게 바꾸거나 탭 복귀 새로고침과
+    // 겹쳐 응답이 둘 이상 오면 마지막 요청 것만 그린다(loadToken).
+    let loadToken = 0;
     function loadLogs() {
         const dateInput = datePicker.value;
         if (!dateInput) {
@@ -180,16 +184,19 @@
 
         // YYYY-MM-DD → YYMMDD 변환
         const formattedDate = dateInput.replace(/-/g, "").slice(2);
+        const token = ++loadToken;
 
         // 이전 로그 호출
         fetch(`/func/logs/${formattedDate}`,
               { cache: "no-cache" }, // 🔥 캐싱 방지 추가
             )
-            .then(response => response.text()) // json -> text
+            .then(response => response.ok
+                ? response.text()
+                : response.json().then(d => `[${d.error || response.status}]`, () => `[로그를 불러오지 못했습니다 (${response.status})]`))
             .then(data => {
+                if (token !== loadToken) return;
                 showDebugToast("데이터 로딩 성공");
-                // logContainer.textContent = data;
-                // logContainer.scrollTop = logContainer.scrollHeight; // ✅ 자동 스크롤 아래로
+                logContainer.innerText = '';
                 appendLog(data)
             })
             .then(() => {

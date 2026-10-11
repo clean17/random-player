@@ -5,6 +5,7 @@ import zipfile
 import os
 import io
 import json
+import re
 from app.image import get_images
 from app.image import LIMIT_PAGE_NUM
 from app.image import DIR_CONFIG, clean_filename
@@ -208,7 +209,8 @@ def get_log_filename(date=None):
     """주어진 날짜(yyMMdd)의 로그 파일 경로 반환. 날짜가 없으면 오늘 날짜 사용"""
     if date is None:
         date = datetime.now().strftime("%y%m%d")
-    month_str = datetime.now().strftime("%y%m")
+    # 월 폴더는 요청 날짜 기준(yyMMdd 앞 4자리). 예전엔 오늘 기준이라 지난달 날짜를 고르면 404 였다
+    month_str = date[:4]
     return os.path.join(LOG_DIR, f"{month_str}/app_{date}.log")
 
 @func.route("/logs/view")
@@ -227,6 +229,8 @@ def get_latest_logs():
 @login_required
 def get_logs_by_date(date):
     """특정 날짜의 로그 파일 가져오기"""
+    if not re.fullmatch(r"\d{6}", date):
+        return jsonify({"error": "날짜 형식은 yyMMdd 입니다."}), 400
     log_file = get_log_filename(date)  # 클라이언트 요청 날짜의 로그 파일 읽기
     if not os.path.exists(log_file):
         return jsonify({"error": f"{date} 로그 파일이 없습니다."}), 404
