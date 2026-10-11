@@ -1,0 +1,17 @@
+# 음성 분석 워커 전용 venv (app/audio.py 가 venv_audio/Scripts/python.exe 로 worker.py 를 실행한다)
+# torch/whisper/pyannote 는 Python 3.9+ 라 앱 venv(3.8)와 분리한다.
+#
+#   C:\Python312\python.exe -m venv venv_audio
+#   venv_audio\Scripts\python.exe -m pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+#   venv_audio\Scripts\python.exe -m pip install -r tools\audio_analysis\requirements.txt
+#
+# 화자분리: .env 에 HF_TOKEN=... (huggingface.co 에서 pyannote/speaker-diarization-3.1, pyannote/segmentation-3.0 약관 동의 필요)
+# 요약: 로컬 Ollama + `ollama pull exaone3.5:7.8b` (없으면 요약만 생략)
+faster-whisper==1.2.1
+ctranslate2==4.8.2
+pyannote.audio==3.3.2
+# pyannote 3.3.2 는 use_auth_token 인자를 쓴다 — 0.26+ 에서 제거됨
+huggingface_hub==0.25.2
+numpy==1.26.4
+soundfile
+requests

@@ -1,0 +1,296 @@
+/* 음성 분석 페이지 (templates/audio_analysis.html, static/js/audio_analysis.js) */
+body.page-audio { background: var(--app-bg); }
+/* display:flex 를 준 요소(키워드 이동 바, 타임라인 행, 탭, 재생 바)는 hidden 속성이 먹지 않는다 — 항상 숨김이 이기게 */
+.page-audio [hidden] { display: none !important; }
+/* body 가 가운데 정렬 flex(style.css) 라 폭을 명시하지 않으면 내용 폭만큼 줄었다 늘었다 한다 — 탭 전환 시 영역이 출렁이던 원인 */
+.va-shell { width: 100%; max-width: 1100px; margin: 0 auto; padding: calc(var(--app-header-height) + 16px) 16px 96px; box-sizing: border-box; }
+.va-card { background: var(--app-surface-solid); border: 1px solid var(--app-border); border-radius: 16px; box-shadow: var(--app-shadow); padding: 18px; margin-bottom: 16px; }
+.va-card h2 { font-size: 16px; margin: 0 0 12px; }
+.va-muted { color: var(--app-muted); font-weight: 400; font-size: 12px; }
+
+/* 업로드 */
+.va-drop { display: block; border: 2px dashed var(--app-border); border-radius: 12px; padding: 28px 16px; text-align: center; color: var(--app-muted); cursor: pointer; transition: border-color .15s, background .15s; }
+.va-drop.is-over { border-color: var(--app-accent); background: rgba(37, 99, 235, .05); }
+.va-drop strong { color: var(--app-text); }
+.va-drop input { display: none; }
+.va-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.va-row label { font-size: 14px; color: var(--app-muted); }
+.va-row select { padding: 0 8px; border-radius: 8px; border: 1px solid var(--app-border); background: var(--app-surface-solid); }
+.va-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--app-border); background: var(--app-surface-solid); color: var(--app-text); cursor: pointer; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.va-btn:hover { background: #f8fafc; }
+/* style.css 의 전역 button { margin-bottom: 10px; line-height: 1; font-size: 18px } 을 끊는다 —
+   남겨 두면 가운데 정렬한 줄(화자 수 select 옆 '분석 시작')에서 버튼만 위로 튄다 */
+.page-audio .va-btn, .page-audio .va-kw, .page-audio .va-ts, .page-audio .va-tab { margin: 0; line-height: 1.3; }
+.page-audio .va-tab { margin-bottom: -1px; }
+/* style.css 의 button:hover { background-color: #007BFF } 와 전역 hover 그림자가 탭·칩을 파란 버튼으로 만든다 */
+.page-audio .va-tab:hover, .page-audio .va-tab:focus-visible { background: none; color: var(--app-text); box-shadow: none !important; filter: none !important; }
+.page-audio .va-btn:hover { background: #f8fafc; }
+.page-audio .va-btn-primary:hover { background: var(--app-primary); }
+.page-audio .va-kw:hover { background: var(--app-surface-solid); }
+.page-audio .va-kw.is-active, .page-audio .va-kw.is-active:hover { background: #fef3c7; }
+.page-audio .va-ts:hover { background: var(--app-surface-solid); }
+.va-row select { height: 32px; margin: 0; font-size: 14px; }
+.va-row select.va-spk-select { height: 26px; font-size: 12px; padding: 0 4px; border-radius: 6px; }
+.va-btn-primary { background: var(--app-primary); color: #fff; border-color: var(--app-primary); }
+.va-btn-primary:hover { background: var(--app-primary); opacity: .9; }
+.va-btn:disabled { opacity: .5; cursor: default; }
+.va-btn-sm { padding: 4px 9px; font-size: 12px; }
+.va-hint { font-size: 12px; color: var(--app-muted); margin-top: 8px; line-height: 1.5; }
+.va-info { background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 10px; line-height: 1.8; }
+.va-fix { display: inline-block; background: #fff; border: 1px solid #bbf7d0; border-radius: 6px; padding: 0 6px; margin-right: 2px; white-space: nowrap; }
+.va-warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 10px; }
+.va-input { flex: 1; min-width: 220px; height: 32px; padding: 0 10px; border: 1px solid var(--app-border); border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+
+/* 단어장 */
+.va-dict summary { cursor: pointer; list-style: none; }
+.va-dict summary::-webkit-details-marker { display: none; }
+.va-dict summary h2 { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.va-dict summary h2::after { content: '▾'; color: var(--app-muted); font-size: 12px; }
+.va-dict[open] summary h2::after { content: '▴'; }
+.va-dict[open] summary { margin-bottom: 12px; }
+.va-dict-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.va-dict-grid label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--app-text); }
+.va-dict-grid textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--app-border); border-radius: 8px; padding: 8px 10px; font-size: 14px; line-height: 1.5; resize: vertical; font-family: inherit; }
+.va-dict-grid code { background: #f1f5f9; padding: 0 4px; border-radius: 4px; }
+@media (max-width: 640px) { .va-dict-grid { grid-template-columns: 1fr; } }
+
+.va-upload-bar { height: 6px; background: var(--app-border); border-radius: 3px; overflow: hidden; margin-top: 10px; display: none; }
+.va-upload-bar > div { height: 100%; width: 0; background: var(--app-accent); transition: width .2s; }
+
+/* 작업 목록 */
+.va-jobs { display: flex; flex-direction: column; gap: 8px; }
+.va-job { border: 1px solid var(--app-border); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.va-job.is-active { border-color: var(--app-accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, .15); }
+.va-job-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.va-job-name { font-weight: 600; font-size: 14px; word-break: break-all; }
+.va-job-meta { font-size: 12px; color: var(--app-muted); margin-top: 4px; }
+.va-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.va-badge.queued { background: #f1f5f9; color: #475569; }
+.va-badge.running { background: #dbeafe; color: #1d4ed8; }
+.va-badge.done { background: #dcfce7; color: #15803d; }
+.va-badge.error { background: #fee2e2; color: #b91c1c; }
+.va-progress { height: 4px; background: var(--app-border); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+.va-progress > div { height: 100%; background: var(--app-accent); transition: width .5s; }
+.va-empty { color: var(--app-muted); font-size: 14px; text-align: center; padding: 12px; }
+
+/* 화자 색 — .spk-N 에서 --spk(진한 색), --spk-bg(옅은 배경) 를 정하고 아래 요소들이 가져다 쓴다 */
+.spk-0 { --spk: #475569; --spk-bg: #f1f5f9; }
+.spk-1 { --spk: #2563eb; --spk-bg: #eff6ff; }
+.spk-2 { --spk: #db2777; --spk-bg: #fdf2f8; }
+.spk-3 { --spk: #059669; --spk-bg: #ecfdf5; }
+.spk-4 { --spk: #d97706; --spk-bg: #fffbeb; }
+.spk-5 { --spk: #7c3aed; --spk-bg: #f5f3ff; }
+.spk-6 { --spk: #0891b2; --spk-bg: #ecfeff; }
+.spk-7 { --spk: #dc2626; --spk-bg: #fef2f2; }
+.spk-8 { --spk: #65a30d; --spk-bg: #f7fee7; }
+.spk-9 { --spk: #c026d3; --spk-bg: #fdf4ff; }
+.spk-10 { --spk: #0f766e; --spk-bg: #f0fdfa; }
+
+.va-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--spk, #475569); background: var(--spk-bg, #f1f5f9); white-space: nowrap; }
+.va-chip::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--spk, #475569); }
+.va-chip-role { font-weight: 400; color: #475569; margin-left: 2px; }
+.va-chip-role::before { content: '· '; color: var(--spk); }
+/* 요약·회의록 본문 속 '화자 N' — 화자 색 + 추정 역할 */
+.va-spk-ref { color: var(--spk); font-weight: 700; white-space: nowrap; }
+.va-spk-ref small { font-weight: 500; font-size: .82em; color: #475569; background: var(--spk-bg); border-radius: 4px; padding: 0 4px; margin-left: 3px; }
+
+/* 결과 헤더 */
+.va-result-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.va-result-titles h2 { font-size: 19px; margin: 0 0 4px; line-height: 1.35; }
+.va-sub { font-size: 13px; color: var(--app-muted); }
+.va-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.va-block-title { font-size: 13px; font-weight: 700; margin: 16px 0 8px; }
+
+/* 발화 비율 막대 */
+.va-share { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--app-border); }
+.va-share > div { background: var(--spk); min-width: 2px; }
+/* 화자 목록: 이름 · 역할 · 비율을 칸으로 나눠 한눈에 */
+.va-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; margin-top: 10px; }
+.va-spk-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: var(--spk-bg); font-size: 13px; min-width: 0; }
+.va-spk-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--spk); }
+.va-spk-name { flex: 0 0 auto; font-weight: 700; color: var(--spk); }
+.va-spk-role { flex: 1; min-width: 0; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.va-spk-pct { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: #0f172a; font-weight: 600; }
+.va-kw-search { flex: 0 1 200px; min-width: 150px; height: 30px; font-size: 13px; border-radius: 999px; }
+
+/* 타임라인 */
+.va-timeline { position: relative; user-select: none; }
+.va-tl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* 폭은 JS 가 주제 수에 맞춰 정한다(주제당 ~48px) — 16개면 모바일에서 가로 스크롤 */
+.va-tl-inner { position: relative; min-width: 560px; }
+/* 옆으로 더 있으면 오른쪽 끝을 흐리게 — 밀어서 볼 수 있다는 표시 */
+.va-tl-scroll.is-scrollable:not(.at-end) { -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); mask-image: linear-gradient(to right, #000 88%, transparent); }
+.va-tl-row { display: flex; align-items: center; height: 22px; margin-bottom: 3px; }
+.va-tl-row.is-topic { height: 34px; }
+.va-tl-label { flex: 0 0 64px; font-size: 11px; color: var(--app-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; position: sticky; left: 0; z-index: 2; background: var(--app-surface-solid); align-self: stretch; display: flex; align-items: center; }
+.va-tl-track { position: relative; flex: 1; height: 100%; background: #f8fafc; border-radius: 4px; cursor: pointer; }
+.va-tl-seg { position: absolute; top: 3px; bottom: 3px; border-radius: 2px; background: var(--spk); opacity: .85; }
+.va-tl-topic { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; padding: 0; font-size: 12px; font-weight: 700; line-height: 30px; text-align: center; color: #1e293b; overflow: hidden; white-space: nowrap; border-left: 2px solid #fff; box-sizing: border-box; cursor: pointer; }
+.va-tl-topic:nth-child(4n+1) { background: #dbeafe; }
+.va-tl-topic:nth-child(4n+2) { background: #e0e7ff; }
+.va-tl-topic:nth-child(4n+3) { background: #dcfce7; }
+.va-tl-topic:nth-child(4n+4) { background: #fef3c7; }
+.va-tl-topic:hover, .va-tl-topic.is-hover { filter: brightness(.9); box-shadow: inset 0 0 0 2px #1e293b; }
+/* 주제 목록 — 막대에는 번호만 넣고 제목·시간은 여기서 (모바일에서도 잘리지 않게) */
+.va-tl-topics { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 12px; }
+.va-tl-topics li { display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; line-height: 1.45; }
+.va-tl-topics li:hover, .va-tl-topics li.is-hover { background: #f1f5f9; }
+.va-tl-no { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: #1e293b; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; align-self: center; }
+.va-tl-title { flex: 1; min-width: 0; color: #1e293b; }
+.va-tl-time { flex: 0 0 auto; color: var(--app-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.va-tl-kw { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: #f59e0b; border-radius: 1px; }
+.va-tl-axis { position: relative; height: 16px; margin-left: 64px; font-size: 10px; color: var(--app-muted); }
+.va-tl-axis span { position: absolute; transform: translateX(-50%); }
+.va-tl-cursor { position: absolute; top: 0; bottom: 16px; width: 2px; background: #ef4444; pointer-events: none; display: none; }
+
+/* 키워드 */
+.va-keywords { display: flex; flex-wrap: wrap; gap: 6px; }
+.va-kw { border: 1px solid var(--app-border); background: var(--app-surface-solid); border-radius: 999px; padding: 4px 11px; font-size: 13px; cursor: pointer; color: var(--app-text); }
+.va-kw small { color: var(--app-muted); margin-left: 3px; }
+.va-kw:hover { border-color: #f59e0b; }
+.va-kw.is-active { background: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 700; }
+.va-kw-nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; padding: 8px 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; font-size: 13px; color: #92400e; position: sticky; top: calc(var(--app-header-height) + 4px); z-index: 5; }
+.va-kw-nav span { flex: 1; min-width: 140px; }
+mark.va-hl { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
+mark.va-hl.is-current { background: #f59e0b; color: #fff; box-shadow: 0 0 0 2px #f59e0b; }
+
+/* 탭 */
+.va-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--app-border); margin-top: 20px; overflow-x: auto; }
+.va-tab { border: 0; background: none; padding: 10px 14px; font-size: 14px; color: var(--app-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.va-tab.is-active { color: var(--app-text); font-weight: 700; border-bottom-color: var(--app-text); }
+/* 탭마다 내용 길이가 달라 페이지 높이가 바뀌지 않게 높이를 고정하고 안에서 스크롤 */
+.va-panel { height: 70vh; min-height: 360px; overflow-y: auto; padding: 14px 4px 14px 0; box-sizing: border-box; overscroll-behavior: contain; }
+.va-panel.va-raw { padding: 12px; max-height: none; }
+
+/* 요약 탭 */
+.va-sec { margin-bottom: 22px; }
+.va-sec > h3 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+.va-sec p, .va-sec li { line-height: 1.7; font-size: 14.5px; }
+.va-sec ul, .va-sec ol { margin: 0; padding-left: 20px; }
+.va-sec li + li { margin-top: 4px; }
+.va-overview { font-size: 15px; line-height: 1.75; color: #334155; margin: 0; }
+.va-conclusion { background: #f0f9ff; border: 1px solid #bae6fd; border-left: 4px solid #0284c7; border-radius: 10px; padding: 12px 14px 12px 12px; }
+.va-conclusion h3 { color: #075985; }
+.va-conclusion li { color: #0c4a6e; font-weight: 500; }
+.va-topics { display: flex; flex-direction: column; gap: 10px; }
+.va-topic { border: 1px solid var(--app-border); border-radius: 12px; padding: 12px 14px; }
+.va-topic-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.va-topic-no { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; background: var(--app-text); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.va-topic-title { font-weight: 700; font-size: 15px; flex: 1; min-width: 160px; }
+.va-topic-spk { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.va-topic-spk .va-chip { font-size: 11px; padding: 1px 7px; font-weight: 500; }
+.va-topic-result { margin-top: 8px; padding: 7px 10px; background: #f8fafc; border-radius: 8px; font-size: 14px; line-height: 1.6; }
+.va-topic-result b { color: #0284c7; margin-right: 4px; }
+.va-ts { border: 1px solid var(--app-border); background: var(--app-surface-solid); border-radius: 6px; padding: 1px 6px; font-size: 12px; color: var(--app-muted); cursor: pointer; font-variant-numeric: tabular-nums; }
+.va-ts:hover { color: var(--app-accent); border-color: var(--app-accent); }
+.va-decisions { list-style: none; padding-left: 0 !important; }
+.va-decisions li { padding-left: 24px; position: relative; }
+.va-decisions li::before { content: '✓'; position: absolute; left: 4px; color: #16a34a; font-weight: 700; }
+.va-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.va-table th, .va-table td { border-bottom: 1px solid var(--app-border); padding: 8px 6px; text-align: left; vertical-align: top; line-height: 1.55; }
+.va-table th { font-size: 12px; color: var(--app-muted); font-weight: 600; }
+.va-table-wrap { overflow-x: auto; }
+/* 할 일 표 — 담당·기한은 좁게 두 줄로, 내용 칸이 폭을 가져간다 */
+.va-actions-table .va-owner-cell { width: 120px; }
+.va-actions-table .va-due-cell { width: 84px; white-space: nowrap; color: #334155; }
+.va-actions-table td.va-owner-cell .va-chip { font-size: 12px; }
+.va-owner-role { display: block; margin-top: 3px; font-size: 12px; line-height: 1.35; color: #475569; word-break: keep-all; }
+
+/* 대화록 탭 */
+.va-utts { display: flex; flex-direction: column; gap: 6px; }
+.va-topic-divider { margin: 16px 0 6px; padding: 6px 10px; border-radius: 8px; background: #f1f5f9; font-size: 13px; font-weight: 700; color: #334155; display: flex; gap: 8px; align-items: center; }
+.va-topic-divider:first-child { margin-top: 0; }
+.va-utt { border-left: 3px solid var(--spk); background: var(--spk-bg); border-radius: 0 10px 10px 0; padding: 8px 12px; }
+.va-utt.is-cont { margin-top: -4px; }
+.va-utt.is-playing { box-shadow: 0 0 0 2px var(--spk); }
+.va-utt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.va-utt-name { color: var(--spk); font-weight: 700; font-size: 13px; }
+.va-utt-role { color: var(--app-muted); font-size: 12px; }
+.va-utt-body p { margin: 0; font-size: 15px; line-height: 1.7; color: #1e293b; word-break: keep-all; overflow-wrap: anywhere; }
+.va-utt-body p + p { margin-top: 1px; }
+
+/* 회의록 / 원문 탭 */
+.va-md { line-height: 1.75; font-size: 15px; color: var(--app-text); word-break: keep-all; overflow-wrap: anywhere; }
+.va-md h1 { font-size: 22px; border-bottom: 2px solid var(--app-text); padding-bottom: 6px; }
+.va-md h2 { font-size: 17px; margin-top: 26px; border-bottom: 1px solid var(--app-border); padding-bottom: 4px; }
+.va-md h3 { font-size: 15px; margin-top: 18px; }
+.va-md table { border-collapse: collapse; margin: 8px 0; display: block; overflow-x: auto; }
+.va-md th, .va-md td { border: 1px solid var(--app-border); padding: 6px 10px; font-size: 14px; vertical-align: top; }
+.va-md th { background: #f8fafc; }
+/* 회의록 머리 표('항목 | 내용') 첫 칸이 좁아져 '소/요/시/간' 처럼 한 글자씩 쪼개지지 않게 */
+.va-md table:not(.va-md-grid) td:first-child, .va-md table:not(.va-md-grid) th:first-child { white-space: nowrap; }
+.va-md blockquote { margin: 8px 0; padding: 6px 12px; border-left: 4px solid #0284c7; background: #f0f9ff; }
+.va-md blockquote p { margin: 0; }
+/* 회의록 향후 조치 표: No | 내용 | 담당(화자 + 역할 두 줄) | 기한(두 줄) */
+/* 회의록 표(요청·조치·일정) — 사람·날짜 칸은 좁게 두 줄로, 내용 칸이 폭을 가져간다 */
+.va-md table.va-md-grid { display: table; width: 100%; table-layout: fixed; }
+.va-md-grid .va-col-no { width: 34px; text-align: center; }
+.va-md-grid .va-col-narrow { width: 110px; word-break: keep-all; font-size: 13px; }
+/* 요약 탭 6개 항목 */
+.va-overview-list { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14.5px; line-height: 1.6; }
+.va-overview-list dt { color: var(--app-muted); font-weight: 600; white-space: nowrap; }
+.va-overview-list dd { margin: 0; }
+.va-overview-list dd .va-chip { margin: 0 2px 3px 0; }
+.va-summary-text { margin: 0; font-size: 15px; line-height: 1.8; color: #0c4a6e; }
+.va-issue-list { list-style: none; padding-left: 0 !important; margin: 0; }
+.va-issue-list li { position: relative; padding: 6px 0 6px 26px; border-bottom: 1px solid var(--app-border); line-height: 1.6; font-size: 14.5px; }
+.va-issue-list li:last-child { border-bottom: 0; }
+.va-issue-list li::before { position: absolute; left: 2px; top: 6px; }
+.va-issue-list li.va-risk::before { content: '⚠️'; }
+.va-issue-list li.va-open::before { content: '❓'; }
+.va-risk-line { display: block; font-size: 13px; color: #475569; }
+.va-status-cell { width: 76px; text-align: center; white-space: nowrap; }
+.va-status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.va-status.done { background: #dcfce7; color: #15803d; }
+.va-status.doing { background: #dbeafe; color: #1d4ed8; }
+.va-status.late { background: #fee2e2; color: #b91c1c; }
+.va-status.changed { background: #fef3c7; color: #92400e; }
+.va-status.none { background: #f1f5f9; color: #475569; }
+.va-change-list { list-style: none; padding-left: 0 !important; margin: 10px 0 0; }
+.va-change-list li { padding: 4px 0; font-size: 14px; line-height: 1.6; }
+.va-change-list s { color: #94a3b8; }
+.va-change-cat { display: inline-block; font-size: 11px; font-weight: 700; color: #fff; background: #64748b; border-radius: 4px; padding: 0 6px; margin-right: 4px; }
+.va-compare-target { margin: 0 0 8px; font-size: 14px; }
+.va-compare-pick select { flex: 1; min-width: 0; }
+/* 아래에 떠 있는 재생 바가 각 탭의 마지막 내용을 가리지 않게 */
+.has-player .va-panel { padding-bottom: 84px; }
+.va-raw { white-space: pre-wrap; font-size: 12.5px; line-height: 1.6; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 10px; max-height: 70vh; overflow: auto; }
+
+/* 재생 바 (화면 아래 고정) */
+.va-player { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(720px, calc(100% - 32px)); display: flex; align-items: center; gap: 10px; background: var(--app-surface-solid); border: 1px solid var(--app-border); border-radius: 14px; box-shadow: var(--app-shadow); padding: 6px 12px; z-index: 20; box-sizing: border-box; }
+.va-player audio { display: none; }
+.page-audio .va-play { flex: 0 0 auto; width: 38px; height: 38px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: var(--app-primary); color: #fff; font-size: 14px; line-height: 38px; text-align: center; cursor: pointer; }
+.page-audio .va-play:hover { background: var(--app-primary); }
+.va-ptime { flex: 0 0 auto; font-size: 12px; color: #334155; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.va-pseek { flex: 1; min-width: 60px; margin: 0; accent-color: var(--app-accent); height: 20px; }
+.page-audio .va-prate { flex: 0 0 auto; margin: 0; padding: 4px 8px; border: 1px solid var(--app-border); border-radius: 999px; background: var(--app-surface-solid); color: #334155; font-size: 12px; line-height: 1.2; cursor: pointer; font-variant-numeric: tabular-nums; }
+.page-audio .va-prate:hover { background: #f8fafc; }
+.va-player-now { font-size: 12px; color: var(--app-muted); max-width: 40%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+@media (max-width: 640px) {
+    /* 주식 메뉴처럼 화면 폭을 다 쓴다 — 카드 테두리·둥근 모서리·바깥 여백을 없애 내용 칸을 넓힌다 */
+    .va-shell { padding: calc(var(--app-header-height) + 6px) 0 88px; }
+    .va-card { margin: 0 0 8px; padding: 14px 12px; border: 0; border-radius: 0; box-shadow: none; }
+    /* 모바일은 탭 안쪽 스크롤을 없애고 페이지 스크롤 하나로 — 높이 고정 패널 + 페이지 스크롤이 겹치면
+       안쪽을 끝까지 내려도 패널 아래가 화면 밖이라 마지막 내용이 안 보였다. 대신 탭 바를 위에 붙인다 */
+    .va-panel { height: auto; min-height: 50vh; overflow: visible; padding-right: 0; }
+    .has-player .va-panel { padding-bottom: 24px; }
+    .va-shell { padding-bottom: 110px; }
+    .va-tabs { position: sticky; top: 0; z-index: 6; background: var(--app-surface-solid); margin-left: -12px; margin-right: -12px; padding: 0 12px; }
+    .va-kw-nav { top: 46px; }
+    .va-actions-table .va-owner-cell { width: 76px; }
+    .va-actions-table .va-due-cell { width: 60px; white-space: normal; word-break: keep-all; }
+    .va-actions-table th, .va-actions-table td { padding: 8px 4px; font-size: 13px; }
+    .va-md-grid .va-col-no { width: 24px; padding: 6px 2px; }
+    .va-md-grid .va-col-narrow { width: 64px; padding: 6px 4px; }
+    .va-md-grid td, .va-md-grid th { padding: 6px 4px; }
+    .va-topic { padding: 10px; }
+    /* 타임라인은 가로 스크롤 없이 화면 폭에 맞춘다 — 스크롤되면 뒷부분 주제·발화가 안 보였다 */
+    .va-tl-topic { font-size: 11px; }
+    .va-sec ul, .va-sec ol { padding-left: 18px; }
+    .va-tl-label { flex-basis: 48px; }
+    .va-tl-axis { margin-left: 48px; }
+    .va-player-now { display: none; }
+    .va-kw-nav { font-size: 12px; }
+    .va-kw-nav span { flex-basis: 100%; }
+}

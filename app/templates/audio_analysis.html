@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Analysis</title>
+    <script src="/static/js/common.js?v={{ version }}"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/audio_analysis.css?v={{ version }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+</head>
+<body class="page-audio app-page">
+<div class="top-bar" data-auto-hide="true">
+    <div class="back app-header__left">
+        <a href="{{ url_for('main.home') }}" class="app-back">Back</a>
+    </div>
+    <div class="app-title">Voice Analysis</div>
+    <div class="logout app-user-menu app-header__right">
+        {% if current_user.is_authenticated %}
+        <button type="button" class="app-menu-button" aria-label="사용자 메뉴" aria-expanded="false">☰</button>
+        <div class="app-menu-panel" role="menu">
+            <span class="app-menu-name">{{ current_user.get_id() }}</span>
+            <a href="#" class="app-menu-info is-disabled" role="menuitem" aria-disabled="true" onclick="return false;">내 정보 <small>준비중</small></a>
+            <a href="{{ url_for('auth.logout') }}" class="danger" role="menuitem">Logout</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<main class="va-shell">
+    <section class="va-card">
+        <h2>🎙️ 녹음 파일 분석</h2>
+        {% if not ready %}
+        <div class="va-warn">분석 환경(venv_audio)이 아직 설치되지 않았습니다.</div>
+        {% endif %}
+        <label class="va-drop" id="drop">
+            <input type="file" id="file-input" accept="audio/*,video/mp4,video/webm,.m4a,.amr,.3gp,.opus">
+            <div><strong>파일을 끌어다 놓거나 클릭해서 선택</strong></div>
+            <div class="va-hint">m4a · mp3 · wav · ogg · flac · mp4 등 — 통화 녹음, 회의 녹음</div>
+            <div id="file-name" class="va-job-name" style="margin-top:8px"></div>
+        </label>
+        <div class="va-row">
+            <label for="num-speakers">화자 수</label>
+            <select id="num-speakers">
+                <option value="0">자동 감지</option>
+                {% for n in range(1, max_speakers + 1) %}
+                <option value="{{ n }}">{{ n }}명</option>
+                {% endfor %}
+            </select>
+            <button type="button" class="va-btn va-btn-primary" id="upload-btn" disabled>분석 시작</button>
+        </div>
+        <div class="va-row">
+            <label for="job-hotwords">이 파일의 이름·용어</label>
+            <select id="upload-previous" class="va-input" title="이전 회의 대비 변경사항을 정리합니다"><option value="">이전 회의 없음</option></select>
+            <input type="text" id="job-hotwords" class="va-input" placeholder="예: 박인우, 법무부 기록관, 퍼스트정보 (선택, 쉼표로 구분 — 이 파일에만 적용)">
+        </div>
+        <div class="va-upload-bar" id="upload-bar"><div></div></div>
+        <div class="va-hint">화자 수를 알면 지정하는 게 정확합니다 (통화는 보통 2명). 모든 처리는 이 서버에서만 이루어지고 외부로 전송되지 않습니다. 작업은 한 번에 하나씩 순서대로 처리됩니다.</div>
+    </section>
+
+    <details class="va-card va-dict" id="dict-card">
+        <summary><h2>📖 단어장 <span class="va-muted" id="dict-summary"></span></h2></summary>
+        <div class="va-dict-grid">
+            <div>
+                <label for="dict-hotwords"><b>단어</b> — 자주 나오는 사람 이름, 회사·부서명, 업무 용어 (한 줄에 하나)</label>
+                <textarea id="dict-hotwords" rows="6" placeholder="박인우&#10;법무부 기록관&#10;퍼스트정보"></textarea>
+                <div class="va-hint">받아쓴 뒤 발음이 비슷한 부분을 이 표기로 고칩니다 (예: 박인호→박인우, 버스정보→퍼스트정보 — 3글자 이상). 대화에 나오면 주요 키워드에도 항상 표시됩니다. 고친 내역은 결과 상단에 보입니다.</div>
+            </div>
+            <div>
+                <label for="dict-corrections"><b>교정 규칙</b> — 한 줄에 <code>틀린 말 =&gt; 바른 말</code></label>
+                <textarea id="dict-corrections" rows="6" placeholder="공무원 받으신 =&gt; 공문 받으신"></textarea>
+                <div class="va-hint">힌트로도 안 고쳐지는 흔한 단어 오인식용 (공문→공무원 등). 그대로 바뀌므로 진짜 '공무원'까지 바뀌지 않게 앞뒤 말을 넣어 좁게 쓰세요.</div>
+            </div>
+        </div>
+        <div class="va-row">
+            <button type="button" class="va-btn va-btn-primary" id="dict-save">저장</button>
+            <span class="va-hint" style="margin:0">저장 후 목록에서 <b>재분석</b>하면 반영됩니다 (받아쓰기는 재사용해서 빠릅니다).</span>
+        </div>
+    </details>
+
+    <section class="va-card">
+        <h2>분석 목록</h2>
+        <div class="va-jobs" id="jobs"><div class="va-empty">불러오는 중…</div></div>
+    </section>
+
+    <section class="va-card va-result" id="result-card" hidden>
+        <div class="va-result-head">
+            <div class="va-result-titles">
+                <h2 id="r-title"></h2>
+                <div class="va-sub" id="r-sub"></div>
+            </div>
+            <div class="va-actions">
+                <button type="button" class="va-btn va-btn-sm" id="copy-btn">복사</button>
+                <a class="va-btn va-btn-sm" id="dl-full" href="#">전체 MD</a>
+                <a class="va-btn va-btn-sm" id="dl-minutes" href="#">회의록 MD</a>
+            </div>
+        </div>
+        <div id="r-warnings"></div>
+
+        <div id="r-visual">
+            <div class="va-block-title">화자별 발화 비율</div>
+            <div class="va-share" id="r-share"></div>
+            <div class="va-legend" id="r-legend"></div>
+
+            <div class="va-block-title">타임라인 <span class="va-muted">— 누르면 그 시점으로 이동</span></div>
+            <div class="va-timeline" id="r-timeline"></div>
+
+            <div class="va-block-title">주요 키워드 <span class="va-muted">— 누르면 대화록에서 강조 · 단어장에 넣은 용어는 항상 표시</span></div>
+            <div class="va-keywords"><span id="r-keywords" style="display:contents"></span><input type="search" id="kw-search" class="va-input va-kw-search" placeholder="🔍 대화록에서 찾기 (Enter)"></div>
+        </div>
+
+        <div class="va-tabs" role="tablist">
+            <button type="button" class="va-tab is-active" data-tab="summary">요약</button>
+            <button type="button" class="va-tab" data-tab="minutes">회의록</button>
+            <button type="button" class="va-tab" data-tab="transcript">대화록</button>
+            <button type="button" class="va-tab" data-tab="raw">원문 MD</button>
+        </div>
+        <div class="va-kw-nav" id="kw-nav" hidden>
+            <span id="kw-nav-label"></span>
+            <button type="button" class="va-btn va-btn-sm" id="kw-prev">▲ 이전</button>
+            <button type="button" class="va-btn va-btn-sm" id="kw-next">▼ 다음</button>
+            <button type="button" class="va-btn va-btn-sm" id="kw-clear">✕</button>
+        </div>
+        <div class="va-panel" data-panel="summary"></div>
+        <div class="va-panel va-md" data-panel="minutes" hidden></div>
+        <div class="va-panel" data-panel="transcript" hidden></div>
+        <pre class="va-panel va-raw" data-panel="raw" hidden></pre>
+
+        <!-- 브라우저 기본 컨트롤은 모바일마다 모양이 달라 높이를 맞추면 글자·막대가 어긋났다 — 직접 그린다 -->
+        <div class="va-player" id="r-player" hidden>
+            <audio id="r-audio" preload="metadata"></audio>
+            <button type="button" class="va-play" id="p-play" aria-label="재생">▶</button>
+            <span class="va-ptime" id="p-time">00:00 / 00:00</span>
+            <input type="range" class="va-pseek" id="p-seek" min="0" max="1000" value="0" aria-label="재생 위치">
+            <button type="button" class="va-prate" id="p-rate" aria-label="재생 속도">1x</button>
+            <span class="va-player-now" id="r-now"></span>
+        </div>
+    </section>
+</main>
+
+<script src="/static/js/ui_chrome.js?v={{ version }}"></script>
+<script src="/static/js/audio_analysis.js?v={{ version }}"></script>
+</body>
+</html>

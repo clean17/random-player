@@ -5,6 +5,7 @@ __pycache__/
 *.pyo
 # Ignore virtual environment directory
 venv/
+venv_audio/
 env/
 .env
 *.env
