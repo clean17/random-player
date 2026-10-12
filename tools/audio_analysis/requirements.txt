@@ -15,3 +15,5 @@ huggingface_hub==0.25.2
 numpy==1.26.4
 soundfile
 requests
+# 주요 키워드용 한국어 형태소 분석기 (명사만 뽑는다 — 없으면 글자 규칙으로 대신, 부정확)
+kiwipiepy==0.24.0

@@ -345,8 +345,82 @@ def _strip_josa(tok: str) -> str:
     return tok
 
 
+_kiwi = None
+
+
+def _get_kiwi():
+    """한국어 형태소 분석기(Kiwi) — venv_audio 에 kiwipiepy 가 없으면 None (그때는 글자 규칙으로 대신한다)."""
+    global _kiwi
+    if _kiwi is None:
+        try:
+            from kiwipiepy import Kiwi
+            _kiwi = Kiwi()
+        except Exception as e:
+            print('kiwipiepy 를 못 불러 키워드를 글자 규칙으로 뽑습니다: {}'.format(e), flush=True)
+            _kiwi = False
+    return _kiwi or None
+
+
+# 명사여도 키워드로는 의미 없는 말
+_GENERIC_NOUNS = set('''부분 정도 생각 말씀 경우 때문 얘기 내용 상황 방식 문제 필요 가능 이유 방법 결과 사항 관련 진행 확인
+정리 요청 사용 작성 해당 이번 다음 지금 오늘 내일 어제 이후 이전 처음 마지막 자체 실제 기존 일반 전체 하나 사람 우리 저희
+거기 여기 그쪽 이쪽 저쪽 대리님 과장님 차장님 부장님 이사님 팀장님 선생님 시간 이상 이하 정말 진짜 계속 다시
+예정 여부 완료 예상 검토 논의 공유'''.split())
+
+
+def _noun_counts_kiwi(kiwi, utterances: List[Dict]) -> Dict[str, int]:
+    """형태소 분석으로 명사(NNG·NNP)와 영문(SL)만 센다 — '에서'(조사), '않나'(보조용언+어미),
+    '제대'(부사 '제대로'를 조사 '로'로 잘못 떼던 것) 같은 게 키워드로 잡히던 문제 (2026-10-12)."""
+    counts = {}
+    for u in utterances:
+        text = u['text']
+        # 붙여 쓴 명사는 하나로 — Kiwi 는 '요구사항' 을 '요구'+'사항' 으로 쪼개 '요구' 가 따로 잡혔다.
+        # 명사·영문·명사파생접미사(XSN: '사용자'의 '자')가 띄어쓰기 없이 이어지면 한 덩어리로 센다
+        groups, cur, prev_end = [], [], -1
+        for t in kiwi.tokenize(text):
+            joinable = t.tag in ('NNG', 'NNP', 'SL', 'XSN')
+            if joinable and cur and t.start == prev_end:
+                cur.append(t)
+            else:
+                if cur:
+                    groups.append(cur)
+                cur = [t] if joinable and t.tag != 'XSN' else []
+            prev_end = t.start + t.len
+        if cur:
+            groups.append(cur)
+        for g in groups:
+            term = text[g[0].start:g[-1].start + g[-1].len]
+            if len(g) == 1 and g[0].tag == 'SL':
+                if len(term) < 2:
+                    continue
+                term = term.upper() if len(term) <= 4 else term  # api / Api → API
+            elif len(term) < 2 or term in _GENERIC_NOUNS or term in _STOPWORDS:
+                continue
+            elif g[-1].tag == 'XSN' and g[-1].form == '적':
+                continue  # '전반적', '기본적' — 관형어라 키워드가 아니다
+            counts[term] = counts.get(term, 0) + 1
+    return counts
+
+
+def is_keyword_like(term: str) -> bool:
+    """LLM 이 고른 키워드 검사 — 동사·형용사·어미·조사·부사가 섞이면 키워드가 아니다 ('하셔야', '있지' 등)."""
+    kiwi = _get_kiwi()
+    if not kiwi:
+        return True
+    tags = [t.tag for t in kiwi.tokenize(term)]
+    if not tags or any(tag.startswith(('V', 'E', 'J')) or tag in ('MAG', 'MAJ', 'IC', 'XSV', 'XSA') for tag in tags):
+        return False
+    return any(tag.startswith('N') or tag in ('SL', 'SN', 'SH') for tag in tags)
+
+
 def frequent_terms(utterances: List[Dict], limit: int = 20, min_count: int = 3) -> List[Tuple[str, int]]:
     """대화록에서 자주 나온 명사성 용어 — 클로바노트 '주요 키워드'처럼 '함수', '화면', 'API' 같은 업무 용어가 잡힌다."""
+    kiwi = _get_kiwi()
+    if kiwi:
+        counts = _noun_counts_kiwi(kiwi, utterances)
+        ranked = sorted((kv for kv in counts.items() if kv[1] >= min_count), key=lambda kv: -kv[1])
+        return ranked[:limit]
+    # kiwipiepy 가 없을 때의 대체 — 조사·어미를 글자 규칙으로 뗀다 (부정확: '제대로'→'제대')
     counts = {}
     for u in utterances:
         for tok in re.findall(r'[가-힣]{2,}|[A-Za-z][A-Za-z0-9]+', u['text']):
@@ -395,7 +469,8 @@ def select_keywords(utterances: List[Dict], llm_keywords: List[str], user_terms:
     llm = []
     for k in _clean_list(llm_keywords):
         n = count_keyword(k, haystack)
-        if n and len(k) >= 2 and not any(f.lower() == k.lower() for f in found) and k not in {x for x, _ in llm}:
+        if (n and len(k) >= 2 and is_keyword_like(k) and not any(f.lower() == k.lower() for f in found)
+                and k not in {x for x, _ in llm}):
             llm.append((k, n))
     for k, n in sorted(llm, key=lambda kv: -kv[1])[:KW_LLM_QUOTA]:
         found[k] = n
