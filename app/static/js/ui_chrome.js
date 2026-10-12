@@ -109,13 +109,34 @@
     });
   }
 
+  // 맨 위이거나 맨 위에 닿으면 보인다. 맨 위가 아니면 위로 REVEAL_UP 이상 '연속으로' 올려야 보인다 —
+  // 4px 만 올려도 내려와서 글을 읽다 살짝만 움직여도 상단바가 내용을 가렸다. 내릴 땐 HIDE_DOWN 이상이면 숨긴다
+  const TOP_ZONE = 2;
+  const REVEAL_UP = 100;
+  const HIDE_DOWN = 12;
+  let upAccum = 0;
+  let downAccum = 0;
+
   function handleScroll() {
     ticking = false;
     const y = getY();
     const diff = y - lastY;
-    if (Math.abs(diff) < 4) return;
-    if (diff < 0 || y <= 2) showChrome();
-    else if (diff > 0) hideChrome();
+    if (y <= TOP_ZONE) {
+      upAccum = downAccum = 0;
+      showChrome();
+      lastY = y;
+      return;
+    }
+    if (diff === 0) return;
+    if (diff < 0) {
+      upAccum += -diff;
+      downAccum = 0;
+      if (upAccum >= REVEAL_UP) showChrome();
+    } else {
+      downAccum += diff;
+      upAccum = 0;
+      if (downAccum >= HIDE_DOWN) hideChrome();
+    }
     lastY = y;
   }
 
@@ -133,14 +154,39 @@
 
   if (!isChatPage) window.addEventListener('scroll', onScroll, { passive: true });
 
+  // 마우스만 — 모바일 손가락 이동도 pointermove 로 들어와서, 상단을 살짝 문지르기만 해도 바가 내려왔다
   document.addEventListener('pointermove', (event) => {
-    if (event.clientY <= 36) showChrome();
+    if (event.pointerType === 'mouse' && event.clientY <= 36) showChrome();
   }, { passive: true });
+
+  // 터치는 상단에서 시작해 아래로 끌어내릴 때만 — 상단을 터치(탭)만 해도 내려오던 문제
+  const PULL_START_ZONE = 54;  // 이 높이 안에서 시작한 터치만
+  const PULL_DISTANCE = 24;    // 이만큼 아래로 끌어야 보인다
+  let pullStart = null;
 
   document.addEventListener('touchstart', (event) => {
     const touch = event.touches && event.touches[0];
-    if (touch && touch.clientY <= 54) showChrome();
+    pullStart = (event.touches.length === 1 && touch && touch.clientY <= PULL_START_ZONE)
+      ? { x: touch.clientX, y: touch.clientY } : null;
   }, { passive: true });
+
+  document.addEventListener('touchmove', (event) => {
+    if (!pullStart) return;
+    const touch = event.touches && event.touches[0];
+    if (!touch) return;
+    const dy = touch.clientY - pullStart.y;
+    const dx = touch.clientX - pullStart.x;
+    if (dy >= PULL_DISTANCE && dy > Math.abs(dx)) {  // 옆으로 미는 건 제외
+      showChrome();
+      pullStart = null;
+    } else if (dy < -8) {
+      pullStart = null;  // 위로 미는 중이면 더 볼 것 없다
+    }
+  }, { passive: true });
+
+  ['touchend', 'touchcancel'].forEach((type) => {
+    document.addEventListener(type, () => { pullStart = null; }, { passive: true });
+  });
 
   requestAnimationFrame(() => {
     lastY = getY();
