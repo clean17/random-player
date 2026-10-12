@@ -276,8 +276,12 @@ mark.va-hl.is-current { background: #f59e0b; color: #fff; box-shadow: 0 0 0 2px 
     .va-panel { height: auto; min-height: 50vh; overflow: visible; padding-right: 0; }
     .has-player .va-panel { padding-bottom: 24px; }
     .va-shell { padding-bottom: 110px; }
-    .va-tabs { position: sticky; top: 0; z-index: 6; background: var(--app-surface-solid); margin-left: -12px; margin-right: -12px; padding: 0 12px; }
-    .va-kw-nav { top: 46px; }
+    .va-tabs { position: sticky; top: 0; z-index: 6; background: var(--app-surface-solid); margin-left: -12px; margin-right: -12px; padding: 0 12px; transition: top .24s ease; }
+    .va-kw-nav { top: 46px; transition: top .24s ease; }
+    /* 상단바가 내려오면(ui_chrome.js 가 body 에 chrome-visible) 탭 바·키워드 이동 바도 그 아래로 —
+       안 그러면 상단바에 가려졌다. 상단바와 같은 속도(.24s)로 움직이고, 올라가면 원래 위치(top: 0)로 */
+    body.chrome-visible .va-tabs { top: calc(var(--app-header-height) + env(safe-area-inset-top)); }
+    body.chrome-visible .va-kw-nav { top: calc(var(--app-header-height) + env(safe-area-inset-top) + 46px); }
     .va-actions-table .va-owner-cell { width: 76px; }
     .va-actions-table .va-due-cell { width: 60px; white-space: normal; word-break: keep-all; }
     .va-actions-table th, .va-actions-table td { padding: 8px 4px; font-size: 13px; }
