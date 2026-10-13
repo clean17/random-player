@@ -518,6 +518,24 @@ async function getAudioInputs() {
 }
 
 
+// 모바일: label에 "speaker"가 들어간 마이크(Android Chrome의 "Speakerphone" 등)가 있으면 그 deviceId를 돌려준다.
+// 기본 장치가 수화기(earpiece)로 잡히면 소리가 귀대고 통화하는 감도/경로로 묶이기 때문.
+// 이어폰·블루투스 등 외부 장치가 연결돼 있으면 사용자가 그걸 쓰려는 것이므로 개입하지 않는다(null).
+// label은 마이크 권한을 받은 뒤에만 채워지므로 getUserMedia 이후에 호출해야 한다.
+async function findMobileSpeakerphoneMicId() {
+    if (!isMobileDevice) return null;
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(device => device.kind === "audioinput");
+        if (audioInputs.some(d => /bluetooth|wired|usb|headphone/i.test(d.label))) return null;
+        const speaker = audioInputs.find(d => /speaker/i.test(d.label));
+        return speaker ? speaker.deviceId : null;
+    } catch (err) {
+        console.warn("스피커폰 마이크 탐색 실패:", err);
+        return null;
+    }
+}
+
 async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = false) {
     // 기존 스트림 종료
     if (myStream) {
@@ -544,7 +562,14 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
         let audioTrack = myStream.getAudioTracks()[0];
         const audioSettings = audioTrack.getSettings();
         currentMicrophoneDeviceId = audioSettings.deviceId || null; // 필요없는지 테스트 필요
-        console.log("🎤 현재 사용 중인 마이크 deviceId:", currentMicrophoneDeviceId);
+        console.log("🎤 현재 사용 중인 마이크 deviceId:", currentMicrophoneDeviceId, audioTrack.label);
+
+        // 모바일은 스피커폰 마이크가 따로 보이면 그걸 우선으로 고정한다 (아래 재요청 단계에서 그 deviceId로 잡힘)
+        const speakerphoneMicId = await findMobileSpeakerphoneMicId();
+        if (speakerphoneMicId && speakerphoneMicId !== currentMicrophoneDeviceId) {
+            console.log("🔊 스피커폰 마이크 우선 선택:", speakerphoneMicId);
+            currentMicrophoneDeviceId = speakerphoneMicId;
+        }
 
         // deviceId 없이 잡은 최초 트랙은 OS 기본 통신 장치로 라우팅되어 먹먹하게 들리는 경우가 있어,
         // 실제 deviceId를 알아낸 뒤 그 deviceId로 다시 명시적으로 잡아 교체한다 (마이크 전환 후 되돌렸을 때와 동일한 경로)
@@ -566,6 +591,7 @@ async function getMedia(audioDeviceId = null, keepVideo = true,  switchCamera = 
                 audioTrack = pinnedAudioTrack;
             } catch (pinErr) {
                 console.warn("마이크 deviceId 고정 재요청 실패, 기본 트랙 사용:", pinErr);
+                currentMicrophoneDeviceId = audioSettings.deviceId || null;
             }
         }
 
