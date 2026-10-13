@@ -360,11 +360,12 @@ function setSlide(filename) {
 }
 
 function decrementTotalCount() {
-    const el = document.getElementById('total_count');
-    if (!el) return;
-    const n = parseInt(el.textContent, 10);
+    // 위아래 두 군데에 있다 (masonry) — id 로 잡으면 첫 번째만 갱신된다
+    const els = document.querySelectorAll('.total-count');
+    if (!els.length) return;
+    const n = parseInt(els[0].textContent, 10);
     if (isNaN(n) || n <= 0) return;
-    el.textContent = n - 1;
+    els.forEach(el => { el.textContent = n - 1; });
     if (n - 1 === 0) {
         document.querySelectorAll('.pagination').forEach(p => p.remove());
         document.querySelectorAll('.delete-button').forEach(b => b.remove());
