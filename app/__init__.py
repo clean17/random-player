@@ -387,7 +387,7 @@ def create_app():
     def get_test():
         return render_template('test_cctv.html', version=int(time.time()))
 
-    BASE = Path(r"\\wsl.localhost\docker-desktop-data\data\docker\volumes\igdata\_data")
+    BASE = Path(r"\\wsl.localhost\docker-desktop\mnt\docker-desktop-disk\data\docker\volumes\igdata\_data")
 
     @app.route("/download")
     def download():
