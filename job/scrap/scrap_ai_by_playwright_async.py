@@ -58,17 +58,50 @@ def download_image(img_url, save_path):
                 handler.write(img_data)
             # print(f"Downloaded {img_url} to {save_path}")
             # print(f"{save_path}")
+            return True
         else:
             # print(f"Skipped {img_url}, width: {img.width}px")
-            pass
+            return False
     except Exception as e:
         print(f"Failed to download {img_url}: {e}")
+        return False
 
 def save_image_with_uuid(img_name, img_url, save_dir):
     name, ext = os.path.splitext(img_name)
     unique_img_name = f"{name}{ext}"
     save_path = os.path.join(save_dir, unique_img_name)
-    download_image(img_url, save_path)
+    return download_image(img_url, save_path)
+
+# 이미지·영상 호스트 — 예전 글은 namu.la, 2026-10 이후 글은 arca.live(ac.arca.live / ac-o.arca.live)
+MEDIA_HOSTS = ("ac.namu.la", "ac-p1.namu.la", "arca.live")
+
+
+def is_media_url(src):
+    return bool(src) and any(host in src for host in MEDIA_HOSTS)
+
+
+def to_absolute_url(src):
+    if src.startswith('//'):
+        return 'https:' + src
+    if src.startswith('/'):
+        return urljoin(url_host, src)
+    return src
+
+
+def media_candidates(pairs):
+    """[[data-originalurl, src], ...] → 요소마다 시도할 주소 목록. 허용 호스트만, 중복 요소는 한 번만."""
+    result = []
+    seen = set()
+    for pair in pairs:
+        urls = [to_absolute_url(u) for u in dict.fromkeys(pair) if is_media_url(u)]
+        if not urls:
+            continue
+        key = urls[0].split('?')[0]   # expires/key 만 다른 같은 파일
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(urls)
+    return result
 
 # 서명 URL(?expires=...&key=...)의 만료 여부를 먼저 확인 — 만료된 상태면 재시도해도 소용없으니
 # 로그에 남겨서 "네트워크 문제였는지 vs 이미 만료돼서였는지"를 바로 구분할 수 있게 한다.
@@ -110,22 +143,23 @@ async def save_video_with_uuid(page, video_name: str, video_url: str, save_dir: 
 
             if not result.get("ok"):
                 print(f"Failed to download {video_url}: HTTP {result.get('status')}")
-                return
+                return False
 
             data = base64.b64decode(result["base64"])
             with open(save_path, "wb") as f:
                 f.write(data)
-            return
+            return True
         except Exception as e:
             expiry_info = _signed_url_expiry_info(video_url)
             if expiry_info and expiry_info[1] <= 0:
                 print(f"Failed to download {video_url}: {e} (서명 URL 만료됨, {-expiry_info[1]:.0f}초 지남 — 재시도해도 소용없음)")
-                return
+                return False
             if attempt < max_attempts:
                 print(f"Failed to download {video_url}: {e} (재시도 {attempt}/{max_attempts})")
                 await page.wait_for_timeout(1500)
                 continue
             print(f"Failed to download {video_url}: {e} (재시도 {max_attempts}회 모두 실패)")
+    return False
 
 CLOUDFLARE_TITLE_MARKERS = ("Just a moment", "Attention Required")
 
@@ -239,50 +273,38 @@ async def async_crawl_images_from_page(page_num, board_url_template):
                 # 천천히 자동 스크롤
                 await async_auto_scroll_page(page)
 
-                # <p><a><img></a></p> 구조에서 img 태그의 src 추출
-                srcs = await page.eval_on_selector_all(
-                    "div.article-body div.fr-view.article-content p a > img",
-                    "els => els.map(img => img.getAttribute('src'))"
+                # <a><img></a> 구조에서 img 주소 추출 (<p>로 안 감싼 글도 있어 p 는 뺐다)
+                # arca.live 글은 src 가 리사이즈본이고 원본(type=orig)은 data-originalurl 에 있다.
+                # namu.la 글은 data-originalurl 이 없어 기존처럼 src 만 쓴다.
+                # data-originalurl 의 expires 가 src 보다 이른(이미 만료된) 경우가 있어 [원본, src] 순으로 시도한다.
+                img_pairs = await page.eval_on_selector_all(
+                    "div.article-body div.fr-view.article-content a > img",
+                    "els => els.map(img => [img.getAttribute('data-originalurl'), img.getAttribute('src')])"
+                )
+                # 영상: 예전 <p><span><video>, 2026-10 이후 <video class="video-autoplay"> — 감싸는 태그 무관하게 잡는다
+                video_pairs = await page.eval_on_selector_all(
+                    "div.article-body div.fr-view.article-content video",
+                    "els => els.map(video => [video.getAttribute('data-originalurl'), video.getAttribute('src')])"
                 )
 
-                img_urls = [
-                    ('https:' + src if src and src.startswith('//') else src)
-                    for src in srcs
-                    if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
-                ]
+                img_candidates = media_candidates(img_pairs)
+                video_candidates = media_candidates(video_pairs)
 
-                video_srcs = await page.eval_on_selector_all(
-                    "div.article-body div.fr-view.article-content p video",
-                    "els => els.map(video => video.getAttribute('src'))"
-                )
+                img_count = 0
+                video_count = 0
+                for urls in img_candidates:
+                    img_name = os.path.basename(urls[0].split('?')[0])
+                    # 폭 700px 미만·실패는 제외
+                    if any(save_image_with_uuid(img_name, url, IMAGE_DIR) for url in urls):
+                        img_count += 1
 
-                video_urls = [
-                    ('https:' + src if src and src.startswith('//') else src)
-                    for src in video_srcs
-                    if src and ("ac.namu.la" in src or "ac-p1.namu.la" in src or "ac.arca.live" in src)
-                ]
-
-                count = 0
-                for img_url in img_urls:
-                    if img_url.startswith('//'):
-                        img_url = 'https:' + img_url
-                    elif img_url.startswith('/'):
-                        img_url = urljoin(url_host, img_url)
-
-                    img_name = os.path.basename(img_url.split('?')[0])
-                    save_image_with_uuid(img_name, img_url, IMAGE_DIR)
-                    count = count + 1
-
-                for video_url in video_urls:
-                    if video_url.startswith('//'):
-                        video_url = 'https:' + video_url
-                    elif video_url.startswith('/'):
-                        video_url = urljoin(url_host, video_url)
-
-                    video_name = os.path.basename(video_url.split('?')[0])
-                    await save_video_with_uuid(page, video_name, video_url, IMAGE_DIR)
-                    count = count + 1
-                print(f"{ts()} download success : {count}", flush=True)
+                for urls in video_candidates:
+                    video_name = os.path.basename(urls[0].split('?')[0])
+                    for url in urls:   # 원본 실패 시 src 로
+                        if await save_video_with_uuid(page, video_name, url, IMAGE_DIR):
+                            video_count += 1
+                            break
+                print(f"{ts()} download success : 이미지 {img_count}/{len(img_candidates)}, 영상 {video_count}/{len(video_candidates)}", flush=True)
 
                 # 수집 후 url을 등록한다
                 try:
