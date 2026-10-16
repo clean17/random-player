@@ -24,6 +24,7 @@ from job.compress_file import compress_directory_to_zip
 from job.renew_stock_close import renew_interest_stocks_close, verify_low_stock_data, update_product_code
 from job.interest_stock_picks import run_interest_stock_picks
 from utils.image_thumbs import run_image_thumbs_job
+from job.cleanup_invalid_screens import cleanup_invalid_screens
 # sched 기본 스케줄러, 블로킹
 # scheduler = sched.scheduler(time.time, time.sleep)
 
@@ -427,6 +428,15 @@ def create_scheduler():
         trigger=CronTrigger(hour=5, minute=0),
         id="image_thumbs_daily",
         executor="cpu",
+        replace_existing=True,
+    )
+
+    # 1-6) 매일 05:30 IG 스크랩 진단 스크린샷(logs/i/<YYMM>/invalid) 중 생성 후 30일 지난 것 삭제 (2026-10-16)
+    scheduler.add_job(
+        cleanup_invalid_screens,
+        trigger=CronTrigger(hour=5, minute=30),
+        id="cleanup_invalid_screens_daily",
+        executor="io",
         replace_existing=True,
     )
 
