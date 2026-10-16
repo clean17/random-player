@@ -682,6 +682,13 @@
         }
     }
 
+    // 아직 안 그린 항목이 남아 있으면 한 묶음 더 그린다. 더 그릴 게 없으면 false
+    function renderMoreItems() {
+        if (currentIndex >= allItems.length) return false;
+        renderBatch();
+        return true;
+    }
+
     // 현재 렌더된 이미지+비디오를 data-index 순으로 합쳐 파일명 배열 반환
     // (원래 refine 전용이라 이름이 buildRefineFileList였다 — temp/trip 이미지는 data-filename이
     // 없어서(위 #image-data 템플릿 참고) alt 속성으로 대체한다)
@@ -1951,6 +1958,12 @@
         let next = croppableItems().find(it => itemIndex(it) > ci);
         if (!next && typeof preloadAheadOfSlide === 'function') {
             preloadAheadOfSlide(ci);
+            next = croppableItems().find(it => itemIndex(it) > ci);
+        }
+        // preloadAheadOfSlide 는 data-index 거리(ci + 열 수×2)까지만 그린다. 그 구간 타일을 move 로 옮겨
+        // DOM 에서 빠졌으면 그릴 포인터(currentIndex)가 이미 그 너머라 아무것도 안 그려 '마지막 이미지'로 오판했다.
+        // 자를 수 있는 다음 이미지가 나오거나 전부 그릴 때까지 계속 그린다.
+        while (!next && typeof renderMoreItems === 'function' && renderMoreItems()) {
             next = croppableItems().find(it => itemIndex(it) > ci);
         }
         return next;
