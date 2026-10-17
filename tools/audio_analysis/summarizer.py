@@ -3,7 +3,8 @@
 worker.py 가 받아쓰기·화자분리로 만든 발화 목록(utterances)을 받아 로컬 Ollama 로 분석한다.
 7.8B 급 모델이 8k 컨텍스트에서 돌아가므로 한 번에 다 넣지 않는다.
 
-  1. 구간 분석  대화록을 SUMMARY_CHUNK_CHARS 단위로 잘라 구간마다 JSON(주제·결정·요청·조치·이슈·미결·일정·키워드)을 뽑는다
+  1. 구간 분석  대화록을 SUMMARY_CHUNK_CHARS 단위로 잘라 구간마다 세 번(CHUNK_PASSES: 주제·키워드 / 결정·조치·미결 /
+                요청·이슈·일정) 나눠 JSON 으로 뽑는다
   2. 근거 검증  주제 외 항목은 근거 발언(quote)을 원문에서 그대로 베끼게 하고, 코드로 원문과 대조해 못 찾으면 버린다.
                 항목 내용의 명사·날짜도 근거 발언 주변에 실제로 있어야 남긴다 (_ground_items)
   3. 통합       구간 결과를 압축해 넣고 제목·목적·핵심 요약·참여자·키워드만 JSON 으로 받는다
@@ -64,23 +65,25 @@ _RISK = _obj('issue', 'quote', 'ts', optional=('impact', 'response'))
 _OPEN = _obj('content', 'quote', 'ts')                              # 미결사항
 _SCHEDULE = _obj('item', 'date', 'quote', 'ts')                     # 일정사항 (예정/변경/마감은 코드가 원문으로 판정)
 
-CHUNK_SCHEMA = {
-    'type': 'object',
-    'properties': {
-        'topics': {'type': 'array', 'items': {
-            'type': 'object',
-            'properties': {'title': _STR, 'start': _STR, 'points': _STR_LIST, 'conclusion': _STR, 'speakers': _STR_LIST},
-            'required': ['title', 'start', 'points', 'conclusion', 'speakers']}},
-        'decisions': {'type': 'array', 'items': _DECISION},
-        'requests': {'type': 'array', 'items': _REQUEST},
-        'action_items': {'type': 'array', 'items': _ACTION},
-        'risks': {'type': 'array', 'items': _RISK},
-        'issues': {'type': 'array', 'items': _OPEN},
-        'schedule': {'type': 'array', 'items': _SCHEDULE},
-        'keywords': _STR_LIST,
-    },
-    'required': ['topics', 'decisions', 'requests', 'action_items', 'risks', 'issues', 'schedule', 'keywords'],
-}
+def _schema(**props):
+    return {'type': 'object', 'properties': props, 'required': list(props)}
+
+
+# 구간마다 세 번 나눠 묻는다 — 한 번에 8개 항목을 시키면 7.8B 는 주제만 성실히 쓰고 나머지는 몇 개 대충 채웠다
+# (회의1012: 리스크 '티맥스 연락 없음'·'HTML 반입 안 열림' 을 아예 못 뽑음). 항목 2~3개씩 따로 물으면 찾는 데만 집중한다 (2026-10-18)
+TOPIC_SCHEMA = _schema(
+    topics={'type': 'array', 'items': {
+        'type': 'object',
+        'properties': {'title': _STR, 'start': _STR, 'points': _STR_LIST, 'conclusion': _STR, 'speakers': _STR_LIST},
+        'required': ['title', 'start', 'points', 'conclusion', 'speakers']}},
+    keywords=_STR_LIST,
+)
+AGREE_SCHEMA = _schema(decisions={'type': 'array', 'items': _DECISION},
+                       action_items={'type': 'array', 'items': _ACTION},
+                       issues={'type': 'array', 'items': _OPEN})
+ASK_SCHEMA = _schema(requests={'type': 'array', 'items': _REQUEST},
+                     risks={'type': 'array', 'items': _RISK},
+                     schedule={'type': 'array', 'items': _SCHEDULE})
 
 # 통합 단계는 원문을 못 보고 구간 요약만 본다 — 결정·요청·조치·이슈·미결·일정 목록은 여기서 다시 쓰게 하지 않는다.
 # 예전엔 이 목록이 구간 결과보다 우선 채택돼 '은행에 함수 목록 요청'(실제로는 티맥스에 보냄) 같은 항목이 나갔다 (2026-10-17)
@@ -107,8 +110,10 @@ COMPARE_SCHEMA = {
     'required': ['followups', 'changes'],
 }
 
-CHUNK_PROMPT = """다음은 녹음 대화록의 {idx}/{total} 구간({start}~{end})이다. 각 줄은 "[시각] 화자: 발언" 형식이다.
-이 구간을 분석해 JSON 으로 답해라.
+_CHUNK_HEAD = """다음은 녹음 대화록의 {idx}/{total} 구간({start}~{end})이다. 각 줄은 "[시각] 화자: 발언" 형식이다.
+"""
+
+TOPIC_PROMPT = _CHUNK_HEAD + """이 구간에서 다룬 주제를 정리해 JSON 으로 답해라.
 
 - topics: 이 구간에서 다룬 주제를 시간 순서대로 빠짐없이. 짧게 스쳐 간 주제도 별도로 적는다.
   - title: 주제 이름 (10~25자 명사형, 예: "UI/UX 표준 가이드 일정")
@@ -118,27 +123,83 @@ CHUNK_PROMPT = """다음은 녹음 대화록의 {idx}/{total} 구간({start}~{en
     "공유함", "논의함" 같은 과정 표현은 쓰지 않는다 (나쁜 예: "진행 상황 공유 및 계획 논의" / 좋은 예: "초안은 차주 화요일까지 화자 3이 보완")
     단순 보고였으면 "보고만 함 — 별도 결정 없음", 결론이 안 났으면 "결론 없음 — ○○ 추가 확인 필요"처럼 적는다
   - speakers: 그 주제에서 발언한 화자 표기 목록
-- decisions: 그 자리에서 확정·합의됐다고 말한 것만. 검토 중·제안·보고는 넣지 않는다. content(결정 내용)
-- requests: 한 화자가 다른 사람에게 "해 주세요/알려 주세요/보내 주세요"처럼 직접 부탁한 것. content(요청 내용),
-  recipient(요청받은 사람 — 화자 표기나 대화에 나온 이름, 모르면 "미정")
-- action_items: 누가 "하겠다"고 했거나 맡게 된 일. task(수행 작업), owner(맡은 화자 또는 이름, 모르면 "미정"),
-  due(그 발언에 나온 기한 표현 그대로, 없으면 "미정")
-- risks: 발언자가 문제·우려·지연·불가·"안 된다"를 직접 말한 것만. 네가 예상하거나 일반론으로 덧붙이지 않는다.
-  issue(말한 문제), impact(그 영향을 발언에서 말했으면 적고 아니면 ""), response(대응을 발언에서 말했으면 적고 아니면 "")
-- issues: 미결사항 — "내일 정해서 알려드리겠다", "확인해 보겠다", "더 고민해야 한다"처럼 결정을 미루거나 확인이 남았다고
-  대화에서 말한 것만. content(무엇이 미결인지)
-- schedule: 날짜·기한·시기가 실제로 말해진 일정. item(무엇의 일정), date(발언 표기 그대로, 예: "차주 화요일", "10월 14일", "11월~12월")
 - keywords: 이 구간의 핵심 용어 5~10개. 대화록에 실제로 등장한 표기 그대로 (일반적인 단어 말고 고유한 용어 위주)
+{note}
+[대화록]
+{text}"""
 
-decisions·requests·action_items·risks·issues·schedule 의 모든 항목에는 근거를 붙인다:
-  quote: 근거가 된 발언을 대화록에서 글자 그대로 복사한 15~40자. 시각·화자 표기는 빼고 발언 본문만,
-    고쳐 쓰거나 요약하지 않는다 (나쁜 예: "화자 10: 오늘 검토 요청 예정" / 좋은 예: "오늘 검토 요청을 한번 드릴 예정이고")
+# 항목 추출 공통 꼬리 — 코드(_ground_items)가 quote 를 원문과 대조하고, 항목 종류별 표현(_CUES)이 그 근처에 있는지 본다
+_ITEM_TAIL = """
+대화록을 처음부터 끝까지 한 줄씩 훑어 위 표현이 나오는 발언을 빠짐없이 찾는다. 각 항목에는 근거를 붙인다:
+  quote: 근거 발언을 대화록에서 글자 그대로 복사한 15~40자 — 위의 표현이 들어간 부분을 고른다.
+    시각·화자 표기는 빼고 발언 본문만, 한 발언 안에서만, 고쳐 쓰거나 요약하지 않는다
+    (나쁜 예: "화자 10: 오늘 검토 요청 예정" / "추후 논의하기로 함 (30:55)" — 좋은 예: "오늘 검토 요청을 한번 드릴 예정이고")
   ts: 그 발언 줄의 시각 (대화록 표기 그대로)
+content·task·issue·item 은 근거를 베끼지 말고 무엇이(누가) 어떻게 됐는지 드러나게 15~40자로 다시 쓴다
+  (나쁜 예: "연락이 없다" / 좋은 예: "티맥스에 보낸 함수 목록 회신 없음").
 대화록에서 그대로 복사할 근거가 없는 항목은 넣지 않는다. 날짜·이름·부서·숫자는 근거 발언에 있는 것만 쓴다.
 해당 내용이 없으면 빈 배열이 정상이다 — 칸을 채우려고 만들어 내지 않는다.
 {note}
 [대화록]
 {text}"""
+
+AGREE_PROMPT = _CHUNK_HEAD + """이 구간에서 정해진 것·맡은 일·미뤄진 것을 찾아 JSON 으로 답해라.
+
+- decisions: 그 자리에서 정해진 것. "~하는 걸로 하겠습니다", "그렇게 하시죠", "~로 가시죠", "확정", "합의"처럼 정했다는 말이
+  있는 것만. 진행 상황 보고("~할 예정입니다")나 제안·질문은 넣지 않는다. content(결정 내용)
+- action_items: 누가 "~하겠습니다", "~드리겠습니다", "제가 ~할게요"처럼 하겠다고 했거나 맡게 된 일.
+  task(수행 작업), owner(맡은 화자 또는 이름, 모르면 "미정"), due(그 발언에 나온 기한 표현 그대로, 없으면 "미정")
+- issues: 미결사항 — "확인해서 말씀드리겠다", "내일 정해서 알려드리겠다", "보시고 말해주세요", "더 고민해야", "아직 ~못 했다"처럼
+  결정을 미루거나 확인이 남았다고 말한 것. content(무엇이 미결인지)
+""" + _ITEM_TAIL
+
+ASK_PROMPT = _CHUNK_HEAD + """이 구간에서 부탁한 것·문제로 말한 것·날짜가 나온 일정을 찾아 JSON 으로 답해라.
+
+- requests: 한 화자가 다른 사람에게 직접 부탁한 것. "~해 주세요", "~주시면", "알려 주셔야", "보내 주세요", "올려 주시겠어요"
+  같은 말이 있는 것. content(요청 내용), recipient(요청받은 사람 — 화자 표기나 대화에 나온 이름, 모르면 "미정")
+- risks: 발언자가 문제·우려를 직접 말한 것. "안 돼요", "안 열려요", "못 하겠다", "연락이 없다", "늦어진다", "뒤로 갈 수도",
+  "불가능", "어렵다", "이해가 안 간다" 같은 말이 있는 것. 네가 예상하거나 일반론으로 덧붙이지 않는다.
+  issue(말한 문제), impact(그 영향을 발언에서 말했으면 적고 아니면 ""), response(대응을 발언에서 말했으면 적고 아니면 "")
+- schedule: 날짜·기한·시기가 실제로 말해진 일정 ("10월 14일까지", "내일", "차주", "11월, 12월 정도").
+  item(무엇의 일정), date(발언 표기 그대로, 예: "차주 화요일", "10월 14일", "11월~12월")
+""" + _ITEM_TAIL
+
+# (진행 표시, 지시문, 스키마) — 구간마다 이 순서로 묻는다
+REFINE_SCHEMA = _schema(results={'type': 'array', 'items': _obj('no', 'text')})
+
+# 대상이 빠진 항목을 앞뒤 대화를 보고 다시 쓰게 한다. 근거 발언만 보고 쓰면 '링크를 만들어서 공유해드리겠습니다'
+# (무슨 링크인지 없음 — 실제로는 바로 앞에서 보여 준 안내사항 목업 화면) 처럼 대상이 빠진다는 피드백 (2026-10-18).
+# 구간 전체를 주면 7.8B 는 대상을 못 찾고 입력 형식('[조치] … — … (화자 5)')을 따라 쓰거나 '11월 중순'을 지어내서,
+# 항목마다 그 앞뒤 대화만 잘라 붙여 준다. 예시는 일부러 다른 회의 내용으로 (같은 회의 예시는 답을 알려 주는 셈)
+REFINE_PROMPT = """아래 회의록 항목들은 무엇에 대한 것인지가 빠져 있다. 각 항목 아래 [앞뒤 대화]를 읽고, 회의록만 보는 사람도
+알 수 있게 항목 문장을 다시 써라.
+
+- "링크", "자료", "파일", "그거", "그 부분", "답이 없다"처럼 대상이 빠진 말은 앞뒤 대화에 나온 실제 대상
+  (문서·화면·기능·시스템·업체·사람 이름)을 넣어 쓴다
+  (예: 원래 "파일 보내드리겠습니다" → "요구사항 정의서 엑셀 파일 전달")
+  (예: 원래 "아직 답이 없어요" → "보안팀에 요청한 방화벽 정책 승인 회신 없음")
+- 15~50자 명사형 한 문장. 구분 표기·화자 표기·시각·괄호 설명은 넣지 않는다
+- 앞뒤 대화에 있는 말만 쓴다. 날짜·숫자·이름을 새로 만들지 않는다. 대상을 찾을 수 없으면 원래 문장 그대로 쓴다
+results: 모든 항목에 대해 no(항목 번호), text(다시 쓴 문장)
+
+{items}"""
+
+REFINE_BATCH = 6                                    # 한 번에 다시 쓰게 할 항목 수 (앞뒤 대화까지 8k 에 들어가게)
+REFINE_CONTEXT_BEFORE, REFINE_CONTEXT_AFTER = 8, 1  # 대상은 근거보다 꽤 앞에서 나오곤 한다 (목업 화면 23:17 → 링크 25:19)
+REFINE_LINE_CHARS = 160                             # 앞뒤 대화 한 줄 길이 상한
+_REFINE_LABEL = {'decisions': '결정', 'requests': '요청', 'action_items': '조치', 'risks': '이슈', 'issues': '미결',
+                 'schedule': '일정'}
+# 다시 쓴 문장에 새로 들어가면 안 되는 표현 — 숫자·날짜어는 앞뒤 대화에 그대로 있어야 받는다 ('11월, 12월 정도' → '11월 중순')
+_EXACT_TOKENS = re.compile(r'\d+\S*|중순|초순|하순|월말|연말|오전|오후|[월화수목금토일]요일|내일|오늘|모레|차주|금주|다음 ?주|이번 ?주')
+# 이 명사만으로는 무엇에 대한 항목인지 알 수 없다 — 다시 쓴 뒤에도 이것뿐이면 버린다
+_VAGUE_NOUNS = set('링크 자료 파일 문서 기능 작업 화면 건 거 것 쪽 그것 이것 데이터 업무 정보 의견 답변 연락 회신 일 부탁 '
+                   '외부 내부 용 전체 일부 다음 기존 신규'.split())
+
+CHUNK_PASSES = (
+    ('주제', TOPIC_PROMPT, TOPIC_SCHEMA),
+    ('결정·조치·미결', AGREE_PROMPT, AGREE_SCHEMA),
+    ('요청·이슈·일정', ASK_PROMPT, ASK_SCHEMA),
+)
 
 MERGE_PROMPT = """다음은 하나의 녹음({kind_hint}, 길이 {duration})을 구간별로 분석한 결과다. 이를 통합해 JSON 으로 답해라.
 
@@ -514,11 +575,14 @@ _KIND_DUE = re.compile(r'까지|마감|기한|이내')
 # '타 시스템은 접속을 막아요'(설명)를 리스크로 넣었다. 같은 모델에게 원문 대조 판정을 시켜 봤지만 '기한이 없어서 틀림'
 # 처럼 기준을 못 지키고 정작 '은행에 요청'은 통과시켜서 접었다 (2026-10-17) — 표현 유무로 거른다
 _CUES = {
-    'decisions': re.compile(r'하기로|걸로|것으로|거로|확정|결정|정했|정하|합의|그렇게 하|그렇게 진행|진행하겠|진행하도록|하도록 하겠|'
-                            r'하시면 될|하면 될|가겠|가기로|쓰기로|맞추기로|하시죠|가시죠|맞는 것 같'),
-    'requests': re.compile(r'주세요|주시|주셔|주실|줘요|달라|부탁|요청|올려 ?주|보내 ?주|알려 ?주|해 ?줄|드려도|해야 ?되거든'),
-    'risks': re.compile(r'안 ?되|안 ?돼|안 ?열|못 ?하|못 ?할|못 ?했|못 ?쓰|문제|어렵|어려|우려|걱정|늦어|늦게|지연|연락이 없|'
-                        r'불가능|막혀|부족|리스크|이슈|이해가 ?안|뒤로 갈|넘어가|미뤄|오래 걸'),
+    # '하면 될 것 같습니다'·'~할 예정입니다' 는 보고에도 늘 붙어서 뺐다 — '남기기로 했거든요' 처럼 '~기로' 는 넣었다 (2026-10-18)
+    'decisions': re.compile(r'기로|걸로 ?하|걸로 ?가|걸로 ?정|것으로 ?하|확정|결정|정했|합의|그렇게 하|그렇게 진행|'
+                            r'하시죠|가시죠|로 가죠|로 하죠'),
+    # 맨 '요청' 은 '요청드린 상태입니다'(보고)에도 걸려서 뺐다
+    'requests': re.compile(r'주세요|주시|주셔|주실|줘요|달라|부탁|요청 ?드립|요청 ?드릴게|올려 ?주|보내 ?주|알려 ?주|해 ?줄|'
+                           r'드려도|해야 ?되거든'),
+    'risks': re.compile(r'안 ?되|안 ?돼|안 ?열|안 ?맞|못 ?하|못 ?할|못 ?했|못 ?쓰|문제|어렵|어려|우려|걱정|늦어|늦게|지연|'
+                        r'연락이 없|답을 안|불가능|막혀|부족|리스크|이슈|이해가 ?안|뒤로 갈|넘어가|미뤄|오래 걸|느려|느리|모르겠'),
     'issues': re.compile(r'확인해|확인하|확인 ?후|나중에|추후|다시|고민|정해|확정|알려|말씀드리|검토|모르|아직|결정|물어보|의견'),
 }
 
@@ -659,16 +723,10 @@ def resolve_date(expr: str, base: str) -> str:
             return fmt(datetime.date(b.year + (1 if mo < b.month - 6 else 0), mo, dd))
         except ValueError:
             return ''
-    if re.search(r'\d월', s):
+    # 월 단위('11월~12월')와 월 없는 날짜('12일까지')는 풀지 않는다 — 20261008 회의의 '12일까지'는 앞 문장의
+    # '7월 8일' 에 이어진 7월 12일이었는데 녹음일 기준으로 10/12 로 풀렸다 (2026-10-18)
+    if re.search(r'\d월|\d일', s):
         return ''
-    m = re.search(r'(?<!\d)(\d{1,2})일', s)
-    if m:
-        dd = int(m.group(1))
-        y, mo = (b.year, b.month) if dd >= b.day else (b.year + (b.month == 12), b.month % 12 + 1)
-        try:
-            return fmt(datetime.date(y, mo, dd))
-        except ValueError:
-            return ''
     for word, days in (('오늘', 0), ('내일', 1), ('모레', 2)):
         if word in s:
             return fmt(b + datetime.timedelta(days))
@@ -730,7 +788,8 @@ def _ground_items(res: Dict, chunk: List[Dict], speakers_set: set, diarized: boo
             if key == 'requests':
                 row['requester'] = u['speaker'] if diarized else '미정'  # 요청한 사람 = 근거 발언을 한 사람
                 rcp = str(it.get('recipient') or '').strip()
-                row['recipient'] = rcp if _person_ok(rcp, speakers_set, ctx) and rcp != row['requester'] else '미정'
+                same = re.sub(r'\D', '', rcp.split('(')[0]) == re.sub(r'\D', '', row['requester']) != ''
+                row['recipient'] = rcp if _person_ok(rcp, speakers_set, ctx) and not same else '미정'
             elif key == 'action_items':
                 owner = str(it.get('owner') or '').strip()
                 due = str(it.get('due') or '').strip()
@@ -755,6 +814,84 @@ def _ground_items(res: Dict, chunk: List[Dict], speakers_set: set, diarized: boo
             kept.append(row)
         st['kept'] += len(kept)
         res[key] = kept
+
+
+def _needs_refine(text: str, quote: str) -> bool:
+    """대상이 없거나('링크 공유'), 너무 짧거나, 근거를 거의 그대로 베낀('연락이 없다') 항목."""
+    g = _grams(text)
+    return is_vague(text) or len(_norm(text)) < 8 or len(g & _grams(quote)) / max(1, len(g)) >= 0.7
+
+
+def _clean_refined(t: str, old: str) -> str:
+    """모델이 붙이곤 하는 '[조치] …', '… (화자 5)', '원래 문장 — 새 문장' 을 걷어낸다."""
+    t = re.sub(r'\s+', ' ', t or '').strip(' -•·"')
+    t = re.sub(r'^\[[^\]]{1,6}\]\s*', '', t)
+    t = re.sub(r'\s*\((화자|담당)[^)]*\)\s*$', '', t)
+    parts = [x.strip() for x in t.split(' — ') if x.strip()]
+    if len(parts) > 1 and _similar(parts[0], old):
+        t = parts[1]
+    elif parts:
+        t = parts[0]
+    return t.strip()
+
+
+def _refine_items(res: Dict, chunk: List[Dict], stats: Dict) -> None:
+    """대상이 빠진 항목만 앞뒤 대화와 함께 다시 쓰게 한다. 다시 쓴 문장의 명사 대부분과 숫자·날짜어 전부가
+    그 앞뒤 대화에 있어야 바꾸고, 아니면 원래 문장을 둔다 — 구체화하다 지어내지 않게."""
+    starts = [u['start'] for u in chunk]
+    todo = []
+    for key, main in _GROUND_SPEC:
+        for x in res.get(key) or []:
+            if _needs_refine(x[main], x['quote']):
+                i = min(range(len(chunk)), key=lambda k: abs(starts[k] - x['ts']))
+                todo.append((key, main, x, chunk[max(0, i - REFINE_CONTEXT_BEFORE):i + REFINE_CONTEXT_AFTER + 1]))
+    for b in range(0, len(todo), REFINE_BATCH):
+        batch = todo[b:b + REFINE_BATCH]
+        blocks = []
+        for n, (key, main, x, ctx_utts) in enumerate(batch, 1):
+            who = (' (요청자 {})'.format(x['requester']) if key == 'requests' else
+                   ' (담당 {})'.format(x['owner']) if key == 'action_items' else '')
+            blocks.append('### 항목 {} [{}] {}{}\n근거: [{}] "{}"\n[앞뒤 대화]\n{}'.format(
+                n, _REFINE_LABEL[key], x[main], who, fmt_ts(x['ts']), x['quote'],
+                '\n'.join(utterance_line(u)[:REFINE_LINE_CHARS] for u in ctx_utts)))
+        out = _ollama_json(REFINE_PROMPT.format(items='\n\n'.join(blocks)), REFINE_SCHEMA)
+        texts = {}
+        for r in out.get('results') or []:
+            m = re.search(r'\d+', str(r.get('no') or ''))
+            if m:
+                texts[int(m.group())] = str(r.get('text') or '')
+        for n, (key, main, x, ctx_utts) in enumerate(batch, 1):
+            new = _clean_refined(texts.get(n, ''), x[main])
+            if key == 'schedule':  # 날짜는 옆 칸에 있다 — '산출문 검토 완료 예정 (10월 14일까지)' 의 괄호를 뗀다
+                new = re.sub(r'\s*\([^)]*\)$', '', new)
+            if not new or _norm(new) == _norm(x[main]):
+                continue
+            ctx = _norm(' '.join(u['text'] for u in ctx_utts))
+            cctx = _canon_date_words(ctx)
+            exact_ok = all(_canon_date_words(tok) in cctx for tok in _EXACT_TOKENS.findall(new))
+            if _supported(new, ctx) and exact_ok:
+                print('  구체화[{}] {} → {}'.format(key, x[main], new), flush=True)
+                x[main] = new
+                stats[key]['refined'] = stats[key].get('refined', 0) + 1
+            else:
+                print('  구체화 거부[{} 원문에 없는 내용] {} → {}'.format(key, x[main], new), flush=True)
+    # 그래도 '링크 공유', '연락이 없다'처럼 무엇에 대한 건지 모르는 항목은 버린다. 주제 이름을 앞에 붙여 봤지만
+    # 주제 경계가 느슨해 '[시스템 접근 권한 설정] 연락이 없다'(실제로는 티맥스 회신) 처럼 오히려 틀린 맥락이 붙었다 (2026-10-18)
+    for key, main in _GROUND_SPEC:
+        kept = []
+        for x in res.get(key) or []:
+            if is_vague(x[main]):
+                stats[key]['vague'] = stats[key].get('vague', 0) + 1
+                stats[key]['kept'] -= 1
+                print('  버림[{} 대상 불명] {} ← "{}"'.format(key, x[main], x['quote']), flush=True)
+            else:
+                kept.append(x)
+        res[key] = kept
+
+
+def is_vague(text: str) -> bool:
+    """'링크 공유', '자료 전달'처럼 무엇에 대한 건지 알 수 있는 명사가 하나도 없는가."""
+    return not [n for n in _content_nouns(text) if n not in _VAGUE_NOUNS]
 
 
 # ─────────────────────────── 분석 ───────────────────────────
@@ -784,14 +921,22 @@ def analyze(utterances: List[Dict], duration: float, diarized: bool, speakers: L
     # 1. 구간 분석 + 근거 검증
     chunk_results = []
     grounding = {}  # type: Dict[str, Dict[str, int]]
+    steps = len(chunks) * len(CHUNK_PASSES)
     for i, chunk in enumerate(chunks, 1):
-        progress(p_start + span * 0.8 * (i - 1) / len(chunks), '내용 분석 중 ({}/{})'.format(i, len(chunks)))
         c_start, c_end = chunk[0]['start'], chunk[-1]['end']
-        res = _ollama_json(CHUNK_PROMPT.format(
-            idx=i, total=len(chunks), start=fmt_ts(c_start), end=fmt_ts(c_end), note=note,
-            text='\n'.join(utterance_line(u) for u in chunk)), CHUNK_SCHEMA)
+        text = '\n'.join(utterance_line(u) for u in chunk)
+        res = {}  # type: Dict
+        for n, (label, prompt, schema) in enumerate(CHUNK_PASSES):
+            done = (i - 1) * len(CHUNK_PASSES) + n
+            progress(p_start + span * 0.8 * done / steps, '내용 분석 중 ({}/{} {})'.format(i, len(chunks), label))
+            part = _ollama_json(prompt.format(idx=i, total=len(chunks), start=fmt_ts(c_start), end=fmt_ts(c_end),
+                                              note=note, text=text), schema)
+            for key in schema['required']:
+                res[key] = part.get(key) or []
         res['_start'], res['_end'] = c_start, c_end
         _ground_items(res, chunk, valid_speakers, diarized, grounding)
+        progress(p_start + span * 0.8 * (i - 0.1) / len(chunks), '내용 분석 중 ({}/{} 항목 구체화)'.format(i, len(chunks)))
+        _refine_items(res, chunk, grounding)
         chunk_results.append(res)
     print('근거 검증(남음/전체): ' + ', '.join('{} {}/{}'.format(k, v['kept'], sum(v.values()))
                                          for k, v in grounding.items()), flush=True)
@@ -890,6 +1035,10 @@ def analyze(utterances: List[Dict], duration: float, diarized: bool, speakers: L
     }
 
 
+def _shared_nouns(a: str, b: str) -> int:
+    return len(set(_content_nouns(a)) & set(_content_nouns(b)))
+
+
 def _dedupe_objects(items: List[Dict], key: str, limit: int, defaults: Optional[Dict[str, str]] = None,
                     same: Tuple[str, ...] = ()) -> List[Dict]:
     """key 필드가 비슷한(_similar) 항목은 앞의 것만 남긴다 (same 칸까지 같을 때만). 나머지 칸은 그대로 두고,
@@ -898,8 +1047,10 @@ def _dedupe_objects(items: List[Dict], key: str, limit: int, defaults: Optional[
     for it in items:
         it = it or {}
         main = re.sub(r'\s+', ' ', str(it.get(key) or '')).strip()
-        if not main or any(_similar(main, o[key]) and all(_norm(str(it.get(k))) == _norm(str(o.get(k))) for k in same)
-                           for o in out):
+        # 같은 발언(ts)에서 나온 항목은 더 느슨하게 같다고 본다 — '함수 범위 재검토 요청' / '함수 범위에 대한 판단을 다시 해주시면'
+        if not main or any((_similar(main, o[key]) or (it.get('ts') is not None and it.get('ts') == o.get('ts')
+                                                       and _shared_nouns(main, o[key]) >= 2))
+                           and all(_norm(str(it.get(k))) == _norm(str(o.get(k))) for k in same) for o in out):
             continue
         row = dict(it)
         row[key] = main
