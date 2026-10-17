@@ -3,10 +3,17 @@
 worker.py 가 받아쓰기·화자분리로 만든 발화 목록(utterances)을 받아 로컬 Ollama 로 분석한다.
 7.8B 급 모델이 8k 컨텍스트에서 돌아가므로 한 번에 다 넣지 않는다.
 
-  1. 구간 분석  대화록을 SUMMARY_CHUNK_CHARS 단위로 잘라 구간마다 JSON(주제·결정·할 일·미결·키워드)을 뽑는다
-  2. 통합       구간 결과를 압축해 넣고 제목·목적·결론·핵심 요약·참여자·키워드를 JSON 으로 받는다
-  3. 조립       주제 목록은 구간 결과를 시간순으로 이어 붙이고(인접한 같은 주제는 합침),
+  1. 구간 분석  대화록을 SUMMARY_CHUNK_CHARS 단위로 잘라 구간마다 JSON(주제·결정·요청·조치·이슈·미결·일정·키워드)을 뽑는다
+  2. 근거 검증  주제 외 항목은 근거 발언(quote)을 원문에서 그대로 베끼게 하고, 코드로 원문과 대조해 못 찾으면 버린다.
+                항목 내용의 명사·날짜도 근거 발언 주변에 실제로 있어야 남긴다 (_ground_items)
+  3. 통합       구간 결과를 압축해 넣고 제목·목적·핵심 요약·참여자·키워드만 JSON 으로 받는다
+  4. 조립       주제 목록은 구간 결과를 시간순으로 이어 붙이고(인접한 같은 주제는 합침), 항목은 근거 시각으로 주제에 붙인다.
                 회의록은 LLM 에게 다시 쓰게 하지 않고 이 구조에서 결정적으로 만든다 — 내용이 새거나 지어지지 않게
+
+2026-10-17 사용자 피드백("요청·이슈·미결이 실제와 다르다, 일정은 맞는 것과 틀린 것이 섞였다, 검토 결과만 쓸만하다")으로
+바꾼 것: 예전엔 통합 단계 LLM 이 원문 없이 구간 요약만 보고 요청·리스크·미결·일정 목록을 다시 썼고 그게 우선 채택돼
+지어낸 항목이 그대로 나갔다. 또 리스크의 '예상 위험'·'대응' 이 필수 칸이라 모델이 추측으로 채웠다.
+→ 목록은 원문을 본 구간 결과만 쓰고, 모든 항목에 원문 근거를 요구·검증하며, 말하지 않은 칸은 비운다.
 
 LLM 출력은 Ollama 의 JSON 스키마 강제(format=<schema>)로 받는다. 작은 모델도 형식은 깨지지 않는다.
 """
@@ -43,15 +50,19 @@ SYSTEM = (
 
 _STR = {'type': 'string'}
 _STR_LIST = {'type': 'array', 'items': _STR}
-def _obj(*keys):
-    return {'type': 'object', 'properties': {k: _STR for k in keys}, 'required': list(keys)}
+def _obj(*keys, optional=()):
+    return {'type': 'object', 'properties': {k: _STR for k in keys + tuple(optional)}, 'required': list(keys)}
 
 
-# 회의록 7개 항목(논의·결정·요청·조치·이슈및리스크·미결·일정)에 맞춘 구조 (2026-10-12)
-_ACTION = _obj('owner', 'task', 'due')                 # 조치사항: 수행 작업, 담당자, 완료 기한
-_REQUEST = _obj('content', 'requester', 'recipient')    # 요청사항: 요청 내용, 요청자, 수신자
-_RISK = _obj('issue', 'risk', 'response')               # 이슈 및 리스크: 발생 문제, 예상 위험, 대응 방안
-_SCHEDULE = _obj('item', 'date', 'kind')                # 일정사항: 일정, 날짜, 예정/변경/마감
+# 회의록 7개 항목(논의·결정·요청·조치·이슈및리스크·미결·일정)에 맞춘 구조 (2026-10-12).
+# 주제 외 항목은 전부 quote(근거 발언 원문 그대로)·ts(그 줄 시각)를 함께 받아 원문과 대조한다 (2026-10-17)
+_DECISION = _obj('content', 'quote', 'ts')                          # 결정사항
+_ACTION = _obj('task', 'owner', 'due', 'quote', 'ts')               # 조치사항: 수행 작업, 담당자, 완료 기한
+_REQUEST = _obj('content', 'recipient', 'quote', 'ts')              # 요청사항: 요청 내용, 수신자 (요청자 = 근거 발언 화자)
+# 이슈 및 리스크: 말한 문제. 영향·대응은 말했을 때만 — 필수 칸이면 7.8B 가 추측으로 채운다
+_RISK = _obj('issue', 'quote', 'ts', optional=('impact', 'response'))
+_OPEN = _obj('content', 'quote', 'ts')                              # 미결사항
+_SCHEDULE = _obj('item', 'date', 'quote', 'ts')                     # 일정사항 (예정/변경/마감은 코드가 원문으로 판정)
 
 CHUNK_SCHEMA = {
     'type': 'object',
@@ -60,17 +71,19 @@ CHUNK_SCHEMA = {
             'type': 'object',
             'properties': {'title': _STR, 'start': _STR, 'points': _STR_LIST, 'conclusion': _STR, 'speakers': _STR_LIST},
             'required': ['title', 'start', 'points', 'conclusion', 'speakers']}},
-        'decisions': _STR_LIST,
+        'decisions': {'type': 'array', 'items': _DECISION},
         'requests': {'type': 'array', 'items': _REQUEST},
         'action_items': {'type': 'array', 'items': _ACTION},
         'risks': {'type': 'array', 'items': _RISK},
-        'issues': _STR_LIST,
+        'issues': {'type': 'array', 'items': _OPEN},
         'schedule': {'type': 'array', 'items': _SCHEDULE},
         'keywords': _STR_LIST,
     },
     'required': ['topics', 'decisions', 'requests', 'action_items', 'risks', 'issues', 'schedule', 'keywords'],
 }
 
+# 통합 단계는 원문을 못 보고 구간 요약만 본다 — 결정·요청·조치·이슈·미결·일정 목록은 여기서 다시 쓰게 하지 않는다.
+# 예전엔 이 목록이 구간 결과보다 우선 채택돼 '은행에 함수 목록 요청'(실제로는 티맥스에 보냄) 같은 항목이 나갔다 (2026-10-17)
 MERGE_SCHEMA = {
     'type': 'object',
     'properties': {
@@ -81,15 +94,8 @@ MERGE_SCHEMA = {
         'summary_text': _STR,
         'participants': {'type': 'array', 'items': _obj('speaker', 'role')},
         'keywords': _STR_LIST,
-        'decisions': _STR_LIST,
-        'requests': {'type': 'array', 'items': _REQUEST},
-        'action_items': {'type': 'array', 'items': _ACTION},
-        'risks': {'type': 'array', 'items': _RISK},
-        'issues': _STR_LIST,
-        'schedule': {'type': 'array', 'items': _SCHEDULE},
     },
-    'required': ['title', 'type', 'purpose', 'overview', 'summary_text', 'participants', 'keywords',
-                 'decisions', 'requests', 'action_items', 'risks', 'issues', 'schedule'],
+    'required': ['title', 'type', 'purpose', 'overview', 'summary_text', 'participants', 'keywords'],
 }
 
 COMPARE_SCHEMA = {
@@ -112,14 +118,24 @@ CHUNK_PROMPT = """다음은 녹음 대화록의 {idx}/{total} 구간({start}~{en
     "공유함", "논의함" 같은 과정 표현은 쓰지 않는다 (나쁜 예: "진행 상황 공유 및 계획 논의" / 좋은 예: "초안은 차주 화요일까지 화자 3이 보완")
     단순 보고였으면 "보고만 함 — 별도 결정 없음", 결론이 안 났으면 "결론 없음 — ○○ 추가 확인 필요"처럼 적는다
   - speakers: 그 주제에서 발언한 화자 표기 목록
-- decisions: 확정된 내용·합의 결과만 (검토 중이거나 제안 단계인 것은 넣지 않는다)
-- requests: 누가 누구에게 부탁·요청한 것. content(요청 내용), requester(요청한 화자/이름), recipient(요청받은 화자/이름/부서, 모르면 "미정")
-- action_items: 담당과 할 일이 정해진 조치. task(수행 작업), owner(담당 화자 또는 이름, 모르면 "미정"), due(언급된 기한, 없으면 "미정")
-- risks: 발생한 문제나 예상되는 위험. issue(문제), risk(그로 인한 위험·영향), response(언급된 대응 방안, 없으면 "미정")
-- issues: 확정되지 않아 추가 검토가 필요한 사항
-- schedule: 언급된 날짜·일정. item(무엇의 일정), date(대화록 표기 그대로, 예: "차주 화요일", "7월 12일"), kind("예정"/"변경"/"마감" 중 하나)
+- decisions: 그 자리에서 확정·합의됐다고 말한 것만. 검토 중·제안·보고는 넣지 않는다. content(결정 내용)
+- requests: 한 화자가 다른 사람에게 "해 주세요/알려 주세요/보내 주세요"처럼 직접 부탁한 것. content(요청 내용),
+  recipient(요청받은 사람 — 화자 표기나 대화에 나온 이름, 모르면 "미정")
+- action_items: 누가 "하겠다"고 했거나 맡게 된 일. task(수행 작업), owner(맡은 화자 또는 이름, 모르면 "미정"),
+  due(그 발언에 나온 기한 표현 그대로, 없으면 "미정")
+- risks: 발언자가 문제·우려·지연·불가·"안 된다"를 직접 말한 것만. 네가 예상하거나 일반론으로 덧붙이지 않는다.
+  issue(말한 문제), impact(그 영향을 발언에서 말했으면 적고 아니면 ""), response(대응을 발언에서 말했으면 적고 아니면 "")
+- issues: 미결사항 — "내일 정해서 알려드리겠다", "확인해 보겠다", "더 고민해야 한다"처럼 결정을 미루거나 확인이 남았다고
+  대화에서 말한 것만. content(무엇이 미결인지)
+- schedule: 날짜·기한·시기가 실제로 말해진 일정. item(무엇의 일정), date(발언 표기 그대로, 예: "차주 화요일", "10월 14일", "11월~12월")
 - keywords: 이 구간의 핵심 용어 5~10개. 대화록에 실제로 등장한 표기 그대로 (일반적인 단어 말고 고유한 용어 위주)
-해당 내용이 없는 항목은 빈 배열로 둔다.
+
+decisions·requests·action_items·risks·issues·schedule 의 모든 항목에는 근거를 붙인다:
+  quote: 근거가 된 발언을 대화록에서 글자 그대로 복사한 15~40자. 시각·화자 표기는 빼고 발언 본문만,
+    고쳐 쓰거나 요약하지 않는다 (나쁜 예: "화자 10: 오늘 검토 요청 예정" / 좋은 예: "오늘 검토 요청을 한번 드릴 예정이고")
+  ts: 그 발언 줄의 시각 (대화록 표기 그대로)
+대화록에서 그대로 복사할 근거가 없는 항목은 넣지 않는다. 날짜·이름·부서·숫자는 근거 발언에 있는 것만 쓴다.
+해당 내용이 없으면 빈 배열이 정상이다 — 칸을 채우려고 만들어 내지 않는다.
 {note}
 [대화록]
 {text}"""
@@ -135,12 +151,7 @@ MERGE_PROMPT = """다음은 하나의 녹음({kind_hint}, 길이 {duration})을 
 - participants: 화자별 역할 추정 ({speakers}). 아래 [화자별 첫 발언]의 자기소개·호칭과 발언 내용으로 드러난 이름·소속·직함만
   (예: "박인호 대리, 법무부 교육관"), 근거 없으면 "불명"
 - keywords: 전체 핵심 키워드 10~15개 (구간 키워드 중에서 중요한 것, 표기 그대로)
-- decisions: 결정사항 — 확정 내용·합의 결과 (중복 제거, 구체적으로)
-- requests: 요청사항 (중복은 합치고 requester·recipient 유지)
-- action_items: 조치사항 (중복은 합치고 owner·due 유지)
-- risks: 이슈 및 리스크 (중복 제거)
-- issues: 미결사항 — 미확정·추가 검토 필요 (중복 제거)
-- schedule: 일정사항 (같은 일정은 하나로, 날짜 표기 유지)
+구간별 분석에 없는 사실·날짜·이름은 쓰지 않는다.
 {note}
 [화자별 첫 발언]
 {intros}
@@ -282,15 +293,6 @@ def _similar(a: str, b: str, threshold: float = 0.4) -> bool:
     """글자 2-gram 겹침 비율 — '7월 12일까지 TAS 품질 검토 완료' 와 '…검토 및 추가 검토 요청 완료 예정' 을 같은 항목으로 본다."""
     x, y = _bigrams(a), _bigrams(b)
     return len(x & y) / max(1, min(len(x), len(y))) >= threshold * 1.5 or len(x & y) / max(1, len(x | y)) >= threshold
-
-
-def _merge_unique(primary: List[str], extra: List[str], limit: int) -> List[str]:
-    """통합 단계 결과(이미 중복 정리됨)를 우선 쓰고, 구간 결과는 비슷한 게 없을 때만(=통합에서 빠진 것) 보충한다."""
-    out = _clean_list(primary)
-    for item in _clean_list(extra):
-        if not any(_similar(item, o) for o in out):
-            out.append(item)
-    return out[:limit]
 
 
 def split_sentences(text: str) -> List[str]:
@@ -493,6 +495,268 @@ def select_keywords(utterances: List[Dict], llm_keywords: List[str], user_terms:
     return sorted(({'word': k, 'count': n} for k, n in found.items() if n), key=lambda x: -x['count'])
 
 
+# ─────────────────────────── 근거 검증 ───────────────────────────
+# 7.8B 는 빈 목록을 그럴듯한 항목으로 채우는 경향이 강하다 — 지시문만으로는 못 막아서 코드로 걸러낸다 (2026-10-17)
+
+QUOTE_MATCH_MIN = 0.6    # quote 의 글자 3-gram 중 이 비율 이상이 한 발화(+다음 발화)에 있어야 근거로 인정
+SUPPORT_MIN = 0.6        # 항목 내용의 명사 중 이 비율 이상이 근거 발언 주변에 실제로 있어야 남긴다
+CONTEXT_BEFORE, CONTEXT_AFTER = 3, 4   # '근거 발언 주변' = 앞 3 · 뒤 4 발화 (질문-답이 몇 발화에 걸친다)
+
+# 항목 문장에 흔히 붙는 말 — 원문에 없어도 지어낸 내용은 아니므로 검사에서 뺀다
+_META_NOUNS = set('''위험 리스크 지연 가능성 일정 대응 방안 조정 문제 우려 영향 결정 요청 예정 작업 담당 추가 협의 계획 마감
+변경 차질 미정 화자 여부 시점 기간 준비 반영 이슈 미결 조치 수신 요청자 확정 합의 처리 제공 전달 관리 설정 보고 업무 담당자
+불명확 명확 구체 일관성 접근성 프로세스 대한 방법 시기 사항 내용 진행 필요 확인 검토 공유 완료 예상 논의 결과'''.split())
+
+# 예정/변경/마감은 LLM 에게 고르게 하지 않고 근거 발언의 표현으로 정한다
+_KIND_CHANGE = re.compile(r'연기|미뤄|미루|늦어|뒤로|변경|바뀌|바꿔|조정|당겨|밀려')
+_KIND_DUE = re.compile(r'까지|마감|기한|이내')
+# 항목 종류별로 근거 문장(인용 문장 ±1)에 있어야 하는 표현. 7.8B 는 '오늘 검토 요청 드릴 예정'(보고)을 결정으로,
+# '타 시스템은 접속을 막아요'(설명)를 리스크로 넣었다. 같은 모델에게 원문 대조 판정을 시켜 봤지만 '기한이 없어서 틀림'
+# 처럼 기준을 못 지키고 정작 '은행에 요청'은 통과시켜서 접었다 (2026-10-17) — 표현 유무로 거른다
+_CUES = {
+    'decisions': re.compile(r'하기로|걸로|것으로|거로|확정|결정|정했|정하|합의|그렇게 하|그렇게 진행|진행하겠|진행하도록|하도록 하겠|'
+                            r'하시면 될|하면 될|가겠|가기로|쓰기로|맞추기로|하시죠|가시죠|맞는 것 같'),
+    'requests': re.compile(r'주세요|주시|주셔|주실|줘요|달라|부탁|요청|올려 ?주|보내 ?주|알려 ?주|해 ?줄|드려도|해야 ?되거든'),
+    'risks': re.compile(r'안 ?되|안 ?돼|안 ?열|못 ?하|못 ?할|못 ?했|못 ?쓰|문제|어렵|어려|우려|걱정|늦어|늦게|지연|연락이 없|'
+                        r'불가능|막혀|부족|리스크|이슈|이해가 ?안|뒤로 갈|넘어가|미뤄|오래 걸'),
+    'issues': re.compile(r'확인해|확인하|확인 ?후|나중에|추후|다시|고민|정해|확정|알려|말씀드리|검토|모르|아직|결정|물어보|의견'),
+}
+
+# 결정·미결은 질문 뒤 답에서 정해지거나 미뤄진다('알림은 어떻게 관리하실 거예요?' → 두 발화 뒤 '그거는 한번 보시고
+# 말해주세요') — 이 둘은 근거 다음 발화까지 표현을 찾는다
+_CUE_IN_REPLY = ('decisions', 'issues')
+CUE_REPLY_UTTS = 2
+
+_DATE_FILLERS = {'까지', '경', '정도', '중', '쯤', '이내', '부터', '이후', '이전', '말', '초', '중순', '예정', '전', '안'}
+_WEEKDAYS = '월화수목금토일'
+
+
+def _norm(s: str) -> str:
+    return re.sub(r'[\W_]', '', s or '').lower()
+
+
+def _grams(s: str, n: int = 3) -> set:
+    s = _norm(s)
+    if len(s) < n:
+        return {s} if s else set()
+    return {s[i:i + n] for i in range(len(s) - n + 1)}
+
+
+_QUOTE_SPLIT = re.compile(r'\n|\[[\d:]+\]|화자\s?\d*\s*[:：]')
+QUOTE_KEEP_CHARS = 80  # 화면에 보여 줄 근거 인용 길이
+
+
+def _strip_quote(quote: str) -> str:
+    """모델이 대화록 줄 모양대로 '[12:34] 화자 10: …' 를 붙이거나, 지시(15~40자)를 어기고 여러 발화를
+    '…\\n화자 6: …' 로 이어 붙여 인용하곤 한다 (20261008 회의 34개 중 18개) — 첫 발화 조각만 쓴다."""
+    for seg in _QUOTE_SPLIT.split(quote or ''):
+        seg = seg.strip(' "\'“”')
+        if len(_norm(seg)) >= 5:
+            return seg[:QUOTE_KEEP_CHARS]
+    return (quote or '').strip()[:QUOTE_KEEP_CHARS]
+
+
+def _locate_quote(quote: str, utts: List[Dict], hint: Optional[float]) -> Optional[int]:
+    """quote 가 나온 발화의 위치. 화자분리가 한 문장을 두 발화로 쪼개곤 해서 다음 발화까지 이어 붙여 본다."""
+    q = _grams(_strip_quote(quote))
+    if len(q) < 3:  # 다섯 글자도 안 되는 인용은 어디에나 맞는다
+        return None
+    best_key, best_i = None, None
+    for i, u in enumerate(utts):
+        nxt = utts[i + 1]['text'] if i + 1 < len(utts) else ''
+        win = _grams(u['text'] + nxt)
+        key = (round(len(q & win) / len(q), 3), len(q & _grams(u['text'])),
+               -abs(u['start'] - hint) if hint is not None else 0)
+        if best_key is None or key > best_key:
+            best_key, best_i = key, i
+    return best_i if best_key and best_key[0] >= QUOTE_MATCH_MIN else None
+
+
+def _near_sentences(utts: List[Dict], quote: str) -> str:
+    """인용과 가장 많이 겹치는 문장과 그 앞뒤 한 문장."""
+    sents = [x for u in utts for x in split_sentences(u['text'])]
+    if not sents:
+        return ''
+    q = _grams(quote)
+    best = max(range(len(sents)), key=lambda k: len(q & _grams(sents[k])))
+    return ' '.join(sents[max(0, best - 1):best + 2])
+
+
+def _content_nouns(text: str) -> List[str]:
+    text = re.sub(r'화자\s?\d+', ' ', text or '')
+    kiwi = _get_kiwi()
+    if kiwi:
+        toks = [t.form for t in kiwi.tokenize(text) if t.tag in ('NNG', 'NNP', 'SL', 'SN')]
+    else:
+        toks = [_strip_josa(t) for t in re.findall(r'[가-힣]{2,}|[A-Za-z]{2,}|\d+', text)]
+    skip = _GENERIC_NOUNS | _META_NOUNS | _STOPWORDS
+    return [t for t in toks if (len(t) >= 2 or t.isdigit()) and t not in skip]
+
+
+def _supported(text: str, ctx_norm: str) -> bool:
+    """text 의 명사 대부분이 근거 주변 원문에 있는가 — '은행에 함수 목록 요청'처럼 원문에 없는 대상·사실을 지어낸 걸 잡는다."""
+    nouns = _content_nouns(text)
+    if not nouns:
+        return True
+    return sum(1 for n in nouns if _norm(n) in ctx_norm) / len(nouns) >= SUPPORT_MIN
+
+
+def _canon_date_words(s: str) -> str:
+    s = _norm(s)
+    for a, b in (('이번주', '금주'), ('다음주', '차주'), ('금일', '오늘'), ('명일', '내일')):
+        s = s.replace(a, b)
+    return s
+
+
+def _date_said(date: str, ctx_norm: str) -> bool:
+    """날짜 표현의 숫자·날짜어가 근거 주변 원문에 그대로 있는가 — 다른 일정의 날짜가 붙은 걸 잡는다."""
+    ctx = _canon_date_words(ctx_norm)
+    for tok in re.findall(r'\d+[월일주년시분]?|[가-힣A-Za-z]+', _canon_date_words(date)):
+        if tok not in _DATE_FILLERS and tok not in ctx:
+            return False
+    return True
+
+
+def _is_unset(s: str) -> bool:
+    return (s or '').strip() in ('', '-', '미정', '불명', '없음', '해당 없음', '없다')
+
+
+def _person_ok(who: str, speakers_set: set, ctx_norm: str) -> bool:
+    """담당·수신자 검사 — '화자 N' 은 실제 화자여야 하고, 이름·부서는 근거 주변 원문에 나와야 한다."""
+    if _is_unset(who):
+        return False
+    m = re.match(r'^화자\s?(\d+)', who.strip())
+    if m:
+        return '화자 ' + m.group(1) in speakers_set
+    nouns = _content_nouns(who) or [who]
+    return all(_norm(n) in ctx_norm for n in nouns)
+
+
+def schedule_kind(text: str) -> str:
+    if _KIND_CHANGE.search(text or ''):
+        return '변경'
+    if _KIND_DUE.search(text or ''):
+        return '마감'
+    return '예정'
+
+
+def resolve_date(expr: str, base: str) -> str:
+    """'차주 화요일' → '10/20(화)' — base 는 녹음 일시('2026-10-12 …'). 못 풀면 ''.
+    월 단위('11월~12월')·기간처럼 하루로 못 박을 수 없는 건 풀지 않는다."""
+    import datetime
+    if not expr or not base or not re.match(r'\d{4}-\d{2}-\d{2}', base):
+        return ''
+    b = datetime.date(int(base[:4]), int(base[5:7]), int(base[8:10]))
+    s = _canon_date_words(expr)
+
+    def fmt(d):
+        return '{}/{}({})'.format(d.month, d.day, _WEEKDAYS[d.weekday()])
+
+    m = re.search(r'(?<!\d)(\d{1,2})월(\d{1,2})일', s)
+    if m:
+        mo, dd = int(m.group(1)), int(m.group(2))
+        try:
+            return fmt(datetime.date(b.year + (1 if mo < b.month - 6 else 0), mo, dd))
+        except ValueError:
+            return ''
+    if re.search(r'\d월', s):
+        return ''
+    m = re.search(r'(?<!\d)(\d{1,2})일', s)
+    if m:
+        dd = int(m.group(1))
+        y, mo = (b.year, b.month) if dd >= b.day else (b.year + (b.month == 12), b.month % 12 + 1)
+        try:
+            return fmt(datetime.date(y, mo, dd))
+        except ValueError:
+            return ''
+    for word, days in (('오늘', 0), ('내일', 1), ('모레', 2)):
+        if word in s:
+            return fmt(b + datetime.timedelta(days))
+    wd = re.search('([월화수목금토일])요일', s)
+    week = 0 if '금주' in s else 1 if '차주' in s else None
+    if week is not None:
+        monday = b - datetime.timedelta(b.weekday()) + datetime.timedelta(weeks=week)
+        if wd:
+            return fmt(monday + datetime.timedelta(_WEEKDAYS.index(wd.group(1))))
+        return '{}~{}'.format(fmt(monday), fmt(monday + datetime.timedelta(4)))
+    if wd:
+        return fmt(b + datetime.timedelta((_WEEKDAYS.index(wd.group(1)) - b.weekday()) % 7 or 7))
+    return ''
+
+
+# 목록 → (본문 칸, 근거 확인이 필요한 보조 칸)
+_GROUND_SPEC = (
+    ('decisions', 'content'),
+    ('requests', 'content'),
+    ('action_items', 'task'),
+    ('risks', 'issue'),
+    ('issues', 'content'),
+    ('schedule', 'item'),
+)
+
+
+def _ground_items(res: Dict, chunk: List[Dict], speakers_set: set, diarized: bool, stats: Dict) -> None:
+    """구간 결과의 각 항목을 원문과 대조해 근거 없는 건 버리고, 근거 시각(ts)을 원문 기준으로 바로잡는다.
+    stats 에 목록별 {kept, no_quote, unsupported, bad_date, no_cue} 를 센다."""
+    for key, main in _GROUND_SPEC:
+        st = stats.setdefault(key, {'kept': 0, 'no_quote': 0, 'unsupported': 0, 'bad_date': 0})
+        kept = []
+        for it in res.get(key) or []:
+            if not isinstance(it, dict):
+                continue
+            text = re.sub(r'\s+', ' ', str(it.get(main) or '')).strip(' -•·')
+            if _is_unset(text):
+                continue
+            i = _locate_quote(str(it.get('quote') or ''), chunk, parse_ts(str(it.get('ts') or '')))
+            if i is None:
+                st['no_quote'] += 1
+                print('  버림[{} 근거 없음] {} ← "{}"'.format(key, text, it.get('quote')), flush=True)
+                continue
+            ctx = _norm(' '.join(u['text'] for u in chunk[max(0, i - CONTEXT_BEFORE):i + CONTEXT_AFTER + 1]))
+            if not _supported(text, ctx):
+                st['unsupported'] += 1
+                print('  버림[{} 원문에 없는 내용] {} ← "{}"'.format(key, text, it.get('quote')), flush=True)
+                continue
+            u = chunk[i]
+            row = {main: text, 'ts': u['start'], 'quote': _strip_quote(str(it.get('quote') or ''))}
+            cue = _CUES.get(key)
+            cue_text = _near_sentences(chunk[i:i + 2], row['quote'])
+            if key in _CUE_IN_REPLY:
+                cue_text += ' ' + ' '.join(u2['text'] for u2 in chunk[i + 1:i + 1 + CUE_REPLY_UTTS])
+            if cue and not cue.search(cue_text):
+                st['no_cue'] = st.get('no_cue', 0) + 1
+                print('  버림[{} 해당 표현 없음] {} ← "{}"'.format(key, text, row['quote']), flush=True)
+                continue
+            if key == 'requests':
+                row['requester'] = u['speaker'] if diarized else '미정'  # 요청한 사람 = 근거 발언을 한 사람
+                rcp = str(it.get('recipient') or '').strip()
+                row['recipient'] = rcp if _person_ok(rcp, speakers_set, ctx) and rcp != row['requester'] else '미정'
+            elif key == 'action_items':
+                owner = str(it.get('owner') or '').strip()
+                due = str(it.get('due') or '').strip()
+                row['owner'] = owner if _person_ok(owner, speakers_set, ctx) else '미정'
+                row['due'] = due if not _is_unset(due) and _date_said(due, ctx) else '미정'
+            elif key == 'risks':
+                for src, dst in (('impact', 'risk'), ('response', 'response')):  # 'risk' 는 예전 결과와 같은 칸 이름
+                    v = re.sub(r'\s+', ' ', str(it.get(src) or '')).strip()
+                    row[dst] = v if not _is_unset(v) and _supported(v, ctx) else ''
+            elif key == 'schedule':
+                date = str(it.get('date') or '').strip()
+                if _is_unset(date) or not _date_said(date, ctx):
+                    st['bad_date'] += 1
+                    print('  버림[schedule 날짜가 원문에 없음] {} {} ← "{}"'.format(text, date, it.get('quote')), flush=True)
+                    continue
+                row['date'] = date
+                # '변경'은 인용 문장 앞뒤 한 문장까지('소프트웨어는 좀 더 뒤로 갈 수도 있어요. 운영 쪽은 … 11월, 12월'),
+                # '마감'은 인용·날짜로만 본다 — 항목 이름('설치 완료 기한')의 '기한'으로 마감이 되거나,
+                # 발언 전체를 보면 딴 얘기('메뉴 명칭 변경')로 변경이 되던 것 (2026-10-17)
+                near = _near_sentences(chunk[i:i + 2], row['quote'])
+                row['kind'] = '변경' if _KIND_CHANGE.search(near) else schedule_kind(row['quote'] + ' ' + date)
+            kept.append(row)
+        st['kept'] += len(kept)
+        res[key] = kept
+
+
 # ─────────────────────────── 분석 ───────────────────────────
 
 def _speaker_intros(utterances: List[Dict], per_speaker: int = 2, max_chars: int = 120) -> str:
@@ -508,15 +772,18 @@ def _speaker_intros(utterances: List[Dict], per_speaker: int = 2, max_chars: int
 
 def analyze(utterances: List[Dict], duration: float, diarized: bool, speakers: List[str],
             progress: ProgressFn, p_start: float, p_end: float, kind_hint: str = '',
-            user_terms: Optional[List[str]] = None) -> Dict:
+            user_terms: Optional[List[str]] = None, base_date: str = '') -> Dict:
     """kind_hint: 파일명으로 알 수 있는 녹음 종류 (예: '통화 녹음') — 없으면 내용으로 판단한다.
-    user_terms: 단어장·업로드 때 적은 용어 — 대화록에 나오면 키워드에 항상 넣는다."""
+    user_terms: 단어장·업로드 때 적은 용어 — 대화록에 나오면 키워드에 항상 넣는다.
+    base_date: 녹음 일시('2026-10-08 16:27') — '차주 화요일' 같은 상대 날짜를 실제 날짜로 푸는 기준. 없으면 안 푼다."""
     note = '' if diarized else NO_SPEAKER_NOTE
     chunks = chunk_utterances(utterances, SUMMARY_CHUNK_CHARS)
     span = (p_end - p_start)
+    valid_speakers = set(speakers)
 
-    # 1. 구간 분석
+    # 1. 구간 분석 + 근거 검증
     chunk_results = []
+    grounding = {}  # type: Dict[str, Dict[str, int]]
     for i, chunk in enumerate(chunks, 1):
         progress(p_start + span * 0.8 * (i - 1) / len(chunks), '내용 분석 중 ({}/{})'.format(i, len(chunks)))
         c_start, c_end = chunk[0]['start'], chunk[-1]['end']
@@ -524,10 +791,12 @@ def analyze(utterances: List[Dict], duration: float, diarized: bool, speakers: L
             idx=i, total=len(chunks), start=fmt_ts(c_start), end=fmt_ts(c_end), note=note,
             text='\n'.join(utterance_line(u) for u in chunk)), CHUNK_SCHEMA)
         res['_start'], res['_end'] = c_start, c_end
+        _ground_items(res, chunk, valid_speakers, diarized, grounding)
         chunk_results.append(res)
+    print('근거 검증(남음/전체): ' + ', '.join('{} {}/{}'.format(k, v['kept'], sum(v.values()))
+                                         for k, v in grounding.items()), flush=True)
 
     # 주제: 시각 보정 후 시간순으로 이어 붙이고 인접한 같은 주제는 합친다
-    valid_speakers = set(speakers)
     topics = []
     for res in chunk_results:
         for t in res.get('topics') or []:
@@ -569,22 +838,26 @@ def analyze(utterances: List[Dict], duration: float, diarized: bool, speakers: L
     keywords = select_keywords(utterances, list(merged.get('keywords') or []) +
                                [k for r in chunk_results for k in (r.get('keywords') or [])], user_terms)
 
-    def pooled(key):  # 통합 결과(중복 정리됨)를 앞에, 구간 결과를 뒤에 — 앞쪽이 우선
-        return list(merged.get(key) or []) + [x for r in chunk_results for x in (r.get(key) or [])]
+    def gathered(key):  # 근거 검증을 통과한 구간 결과만, 시간순
+        return sorted((x for r in chunk_results for x in (r.get(key) or [])), key=lambda x: x['ts'])
 
-    decisions = _merge_unique(merged.get('decisions'), [d for r in chunk_results for d in (r.get('decisions') or [])], 15)
-    issues = _merge_unique(merged.get('issues'), [x for r in chunk_results for x in (r.get('issues') or [])], 12)
-    actions = _dedupe_objects(pooled('action_items'), 'task', 20,
-                              defaults={'owner': '미정', 'due': '미정'})
-    # 조치사항으로 이미 잡힌 요청은 요청사항에서 뺀다 — 같은 일이 두 항목에 반복되지 않게
-    requests = [x for x in _dedupe_objects(pooled('requests'), 'content', 15,
-                                           defaults={'requester': '미정', 'recipient': '미정'})
-                if not any(_similar(x['content'], a['task']) for a in actions)]
-    risks = _dedupe_objects(pooled('risks'), 'issue', 12, defaults={'risk': '-', 'response': '미정'})
-    schedule = _dedupe_objects(pooled('schedule'), 'item', 15, defaults={'date': '미정', 'kind': '예정'})
+    decisions = _dedupe_objects(gathered('decisions'), 'content', 15)
+    issues = _dedupe_objects(gathered('issues'), 'content', 12)
+    actions = _dedupe_objects(gathered('action_items'), 'task', 20)
+    # 조치사항으로 이미 잡힌 요청은 요청사항에서 뺀다 — 같은 일이 두 항목에 반복되지 않게 (같은 대목일 때만)
+    requests = [x for x in _dedupe_objects(gathered('requests'), 'content', 15)
+                if not any(_similar(x['content'], a['task']) and abs(x['ts'] - a['ts']) <= 60 for a in actions)]
+    risks = _dedupe_objects(gathered('risks'), 'issue', 12)
+    # 같은 일의 일정이라도 날짜가 다르면(변경 등) 따로 남긴다
+    schedule = _dedupe_objects(gathered('schedule'), 'item', 15, same=('date',))
     for s in schedule:
-        if s['kind'] not in ('예정', '변경', '마감'):
-            s['kind'] = '예정'
+        s['resolved'] = resolve_date(s['date'], base_date)
+    for x in actions:
+        x['due_resolved'] = resolve_date(x['due'], base_date) if x['due'] != '미정' else ''
+
+    # 항목을 근거 시각으로 주제에 붙인다 — 회의록에서 검토 결과 아래 세부로 보여 준다
+    for x in decisions + issues + actions + requests + risks + schedule:
+        x['topic'] = max([i for i, t in enumerate(topics) if t['start'] <= x['ts'] + 1] or [0]) if topics else -1
 
     participants = []
     for p in merged.get('participants') or []:
@@ -612,35 +885,45 @@ def analyze(utterances: List[Dict], duration: float, diarized: bool, speakers: L
         'risks': risks,
         'issues': issues,
         'schedule': schedule,
+        'grounding': grounding,
         'model': OLLAMA_MODEL,
     }
 
 
-def _dedupe_objects(items: List[Dict], key: str, limit: int, defaults: Dict[str, str]) -> List[Dict]:
-    """key 필드가 비슷한(_similar) 항목은 앞의 것만 남긴다. 빈 필드는 defaults 로 채운다 ('불명' 도 '미정' 으로)."""
+def _dedupe_objects(items: List[Dict], key: str, limit: int, defaults: Optional[Dict[str, str]] = None,
+                    same: Tuple[str, ...] = ()) -> List[Dict]:
+    """key 필드가 비슷한(_similar) 항목은 앞의 것만 남긴다 (same 칸까지 같을 때만). 나머지 칸은 그대로 두고,
+    defaults 에 있는 칸이 비면 채운다 ('불명' 도 '미정' 으로)."""
     out = []  # type: List[Dict]
     for it in items:
         it = it or {}
         main = re.sub(r'\s+', ' ', str(it.get(key) or '')).strip()
-        if not main or any(_similar(main, o[key]) for o in out):
+        if not main or any(_similar(main, o[key]) and all(_norm(str(it.get(k))) == _norm(str(o.get(k))) for k in same)
+                           for o in out):
             continue
-        row = {key: main}
-        for k, d in defaults.items():
+        row = dict(it)
+        row[key] = main
+        for k, d in (defaults or {}).items():
             v = str(it.get(k) or '').strip()
             row[k] = d if v in ('', '불명', '없음') else v
         out.append(row)
     return out[:limit]
 
 
+def item_text(x, key: str = 'content') -> str:
+    """결정·미결은 예전 결과(2026-10-17 이전)에선 문자열, 지금은 {content, ts, quote} — 둘 다 읽는다."""
+    return x if isinstance(x, str) else str((x or {}).get(key) or '')
+
+
 def _digest(a: Dict) -> str:
     """이전 회의 비교용 요약 — 결정·조치·요청·일정·이슈만 짧게."""
     lines = ['제목: ' + (a.get('title') or '')]
-    lines += ['결정: ' + d for d in a.get('decisions') or []]
+    lines += ['결정: ' + item_text(d) for d in a.get('decisions') or []]
     lines += ['조치: {} (담당 {}, 기한 {})'.format(x['task'], x['owner'], x['due']) for x in a.get('action_items') or []]
     lines += ['요청: {} ({} → {})'.format(x['content'], x['requester'], x['recipient']) for x in a.get('requests') or []]
     lines += ['일정: {} {} ({})'.format(x['item'], x['date'], x['kind']) for x in a.get('schedule') or []]
     lines += ['이슈: ' + x['issue'] for x in a.get('risks') or []]
-    lines += ['미결: ' + x for x in a.get('issues') or []]
+    lines += ['미결: ' + item_text(x) for x in a.get('issues') or []]
     return '\n'.join(lines)[:3500]
 
 
@@ -675,15 +958,15 @@ def _compact_for_merge(chunk_results: List[Dict]) -> str:
                     lines.append('  - ' + p)
             for key, label in (('decisions', '결정'), ('issues', '미결'), ('keywords', '키워드')):
                 if r.get(key):
-                    lines.append('- {}: {}'.format(label, ' / '.join(r[key])))
+                    lines.append('- {}: {}'.format(label, ' / '.join(item_text(x) for x in r[key])))
             for a in r.get('action_items') or []:
                 lines.append('- 조치: {} (담당 {}, 기한 {})'.format(a.get('task'), a.get('owner'), a.get('due')))
             for a in r.get('requests') or []:
                 lines.append('- 요청: {} ({} → {})'.format(a.get('content'), a.get('requester'), a.get('recipient')))
             for a in r.get('risks') or []:
-                lines.append('- 이슈: {} / 위험: {} / 대응: {}'.format(a.get('issue'), a.get('risk'), a.get('response')))
+                lines.append('- 이슈: ' + ' / '.join(x for x in (a.get('issue'), a.get('risk'), a.get('response')) if x))
             for a in r.get('schedule') or []:
-                lines.append('- 일정: {} {} ({})'.format(a.get('item'), a.get('date'), a.get('kind')))
+                lines.append('- 일정: {} {}'.format(a.get('item'), a.get('date')))
             parts.append('\n'.join(lines))
         text = '\n\n'.join(parts)
         if len(text) <= MERGE_INPUT_CHARS:
@@ -760,25 +1043,30 @@ def build_minutes(meta: Dict, a: Dict) -> str:
     lines.append('| 작성 | 녹음 자동 분석 ({}) — 검토 필요 |'.format(meta['analyzed_at']))
     lines.append('')
 
+    by_topic = _items_by_topic(a)
     lines += ['## 1. 논의사항', '']
     for i, t in enumerate(a.get('topics') or [], 1):
         lines += ['### 1.{} {} ({}~{})'.format(i, t['title'], fmt_ts(t['start']), fmt_ts(t['end'])), '']
-        lines += ['- ' + p for p in t['points']]
+        # 검토 결과를 헤드라인으로 맨 위에, 그 아래 근거가 되는 논의·결정·조치… 를 정리한다 (2026-10-17 피드백)
         if t.get('conclusion'):
-            lines.append('- **검토 결과:** ' + t['conclusion'])
+            lines += ['> **검토 결과:** ' + t['conclusion'], '']
+        if t['points']:
+            lines.append('- **논의 내용**')
+            lines += ['  - ' + p for p in t['points']]
+        lines += ['- **{}** {}'.format(label, text) for label, text in by_topic.get(i - 1, [])]
         lines.append('')
     if not a.get('topics'):
         lines += ['- 없음', '']
 
     lines += ['## 2. 결정사항', '']
-    lines += ['{}. {}'.format(i, d) for i, d in enumerate(a.get('decisions') or [], 1)] or ['- 없음']
+    lines += ['{}. {}{}'.format(i, item_text(d), ts_tag(d)) for i, d in enumerate(a.get('decisions') or [], 1)] or ['- 없음']
     lines.append('')
 
     lines += ['## 3. 요청사항', '']
     if a.get('requests'):
-        lines += ['| No | 요청 내용 | 요청자 | 수신자 |', '|---|---|---|---|']
-        lines += ['| {} | {} | {} | {} |'.format(i, _md_cell(x['content']), _speaker_cell(x['requester'], roles),
-                                                _speaker_cell(x['recipient'], roles))
+        lines += ['| No | 요청 내용 | 요청자 | 수신자 | 시각 |', '|---|---|---|---|---|']
+        lines += ['| {} | {} | {} | {} | {} |'.format(i, _md_cell(x['content']), _speaker_cell(x['requester'], roles),
+                                                     _speaker_cell(x['recipient'], roles), ts_tag(x).strip())
                   for i, x in enumerate(a['requests'], 1)]
     else:
         lines.append('- 없음')
@@ -786,8 +1074,9 @@ def build_minutes(meta: Dict, a: Dict) -> str:
 
     lines += ['## 4. 조치사항', '']
     if a.get('action_items'):
-        lines += ['| No | 수행 작업 | 담당 | 기한 |', '|---|---|---|---|']
-        lines += ['| {} | {} | {} | {} |'.format(i, _md_cell(x['task']), _speaker_cell(x['owner'], roles), _due_cell(x['due']))
+        lines += ['| No | 수행 작업 | 담당 | 기한 | 시각 |', '|---|---|---|---|---|']
+        lines += ['| {} | {} | {} | {} | {} |'.format(i, _md_cell(x['task']), _speaker_cell(x['owner'], roles),
+                                                     _date_cell(x['due'], x.get('due_resolved')), ts_tag(x).strip())
                   for i, x in enumerate(a['action_items'], 1)]
     else:
         lines.append('- 없음')
@@ -796,26 +1085,69 @@ def build_minutes(meta: Dict, a: Dict) -> str:
     lines += ['## 5. 이슈 및 리스크', '']
     if a.get('risks'):
         for i, x in enumerate(a['risks'], 1):
-            lines.append('{}. **{}**'.format(i, x['issue']))
-            if x.get('risk') and x['risk'] != '-':
-                lines.append('   - 예상 위험: ' + x['risk'])
-            lines.append('   - 대응 방안: ' + x['response'])
+            lines.append('{}. **{}**{}'.format(i, x['issue'], ts_tag(x)))
+            if not _is_unset(x.get('risk')):
+                lines.append('   - 영향: ' + x['risk'])
+            if not _is_unset(x.get('response')):
+                lines.append('   - 대응: ' + x['response'])
     else:
         lines.append('- 없음')
     lines.append('')
 
     lines += ['## 6. 미결사항', '']
-    lines += ['- ' + x for x in a.get('issues') or ['없음']]
+    lines += ['- {}{}'.format(item_text(x), ts_tag(x)) for x in a.get('issues') or []] or ['- 없음']
     lines.append('')
 
     lines += ['## 7. 일정사항', '']
     if a.get('schedule'):
-        lines += ['| 구분 | 일정 | 날짜 |', '|---|---|---|']
-        lines += ['| {} | {} | {} |'.format(x['kind'], _md_cell(x['item']), _due_cell(x['date'])) for x in a['schedule']]
+        lines += ['| 구분 | 일정 | 날짜 | 시각 |', '|---|---|---|---|']
+        lines += ['| {} | {} | {} | {} |'.format(x['kind'], _md_cell(x['item']), _date_cell(x['date'], x.get('resolved')),
+                                                ts_tag(x).strip())
+                  for x in a['schedule']]
     else:
         lines.append('- 없음')
     lines.append('')
     return '\n'.join(lines)
+
+
+def ts_tag(x) -> str:
+    """근거 시각 — 마크다운에는 `@12:34` 로 넣고, 화면(audio_analysis.js)이 이걸 대화록 이동 버튼으로 바꾼다."""
+    return ' `@{}`'.format(fmt_ts(x['ts'])) if isinstance(x, dict) and x.get('ts') is not None else ''
+
+
+def _date_cell(date: str, resolved: Optional[str]) -> str:
+    """'차주 화요일' + '10/20(화)' → '차주<br>화요일<br>(10/20(화))'."""
+    return _due_cell(date) + ('<br>({})'.format(resolved) if resolved else '')
+
+
+def _with_date(date: str, resolved: Optional[str]) -> str:
+    return date + (' ({})'.format(resolved) if resolved else '')
+
+
+def _items_by_topic(a: Dict) -> Dict[int, List[Tuple[str, str]]]:
+    """주제 번호 → [(구분, 내용)] — 회의록 논의사항에서 각 주제의 검토 결과 아래에 붙인다.
+    topic 칸은 근거 시각으로 붙인 것이라 예전 결과(근거 없음)에는 없다 → 빈 dict."""
+    out = {}  # type: Dict[int, List[Tuple[str, str]]]
+
+    def add(x, label, text):
+        if isinstance(x, dict) and isinstance(x.get('topic'), int) and x['topic'] >= 0:
+            out.setdefault(x['topic'], []).append((x.get('ts') or 0, label, text + ts_tag(x)))
+
+    for x in a.get('decisions') or []:
+        add(x, '결정', item_text(x))
+    for x in a.get('action_items') or []:
+        due = '' if _is_unset(x.get('due')) else ' · 기한 ' + _with_date(x['due'], x.get('due_resolved'))
+        add(x, '조치', '{} — {}{}'.format(x['task'], x['owner'], due))
+    for x in a.get('requests') or []:
+        add(x, '요청', '{} ({} → {})'.format(x['content'], x['requester'], x['recipient']))
+    for x in a.get('schedule') or []:
+        add(x, '일정', '{}: {} [{}]'.format(x['item'], _with_date(x['date'], x.get('resolved')), x['kind']))
+    for x in a.get('risks') or []:
+        extra = ' / '.join(p + x[k] for k, p in (('risk', '영향: '), ('response', '대응: ')) if not _is_unset(x.get(k)))
+        add(x, '이슈', x['issue'] + (' — ' + extra if extra else ''))
+    for x in a.get('issues') or []:
+        add(x, '미결', item_text(x))
+    return {k: [(label, text) for _, label, text in sorted(v, key=lambda r: r[0])] for k, v in out.items()}
 
 
 def build_summary(meta: Dict, a: Dict, compare: Optional[Dict]) -> List[str]:
@@ -836,20 +1168,23 @@ def build_summary(meta: Dict, a: Dict, compare: Optional[Dict]) -> List[str]:
 
     lines += ['## AI 핵심 요약', '', a.get('summary_text') or '-', '']
 
-    lines += ['## 결정사항', ''] + (['- ' + d for d in a.get('decisions') or []] or ['- 없음']) + ['']
+    lines += ['## 결정사항', ''] + (['- {}{}'.format(item_text(d), ts_tag(d)) for d in a.get('decisions') or []]
+                                  or ['- 없음']) + ['']
 
     lines += ['## 조치사항', '']
     if a.get('action_items'):
         lines += ['| 담당 | 수행 작업 | 기한 |', '|---|---|---|']
-        lines += ['| {} | {} | {} |'.format(_speaker_cell(x['owner'], roles), _md_cell(x['task']), _due_cell(x['due']))
+        lines += ['| {} | {}{} | {} |'.format(_speaker_cell(x['owner'], roles), _md_cell(x['task']), ts_tag(x),
+                                             _date_cell(x['due'], x.get('due_resolved')))
                   for x in a['action_items']]
     else:
         lines.append('- 없음')
     lines.append('')
 
     lines += ['## 이슈 및 미결사항', '']
-    lines += ['- ⚠️ {} — 대응: {}'.format(x['issue'], x['response']) for x in a.get('risks') or []]
-    lines += ['- ❓ ' + x for x in a.get('issues') or []]
+    lines += ['- ⚠️ {}{}{}'.format(x['issue'], '' if _is_unset(x.get('response')) else ' — 대응: ' + x['response'], ts_tag(x))
+              for x in a.get('risks') or []]
+    lines += ['- ❓ {}{}'.format(item_text(x), ts_tag(x)) for x in a.get('issues') or []]
     if not a.get('risks') and not a.get('issues'):
         lines.append('- 없음')
     lines.append('')

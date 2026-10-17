@@ -441,6 +441,7 @@ def main():
         speakers = [s['speaker'] for s in summarizer.speaker_stats(utterances)]
 
         analysis, summary_skip, compare = None, '', None
+        title = args.title or os.path.splitext(os.path.basename(args.input))[0]
         kind_hint = '통화 녹음' if is_call_recording(args.title or args.input) else ''
         prev = load_previous(args.outdir)
         # 요약 입력이 그대로면 LLM 을 다시 돌리지 않고 이전 결과를 쓴다. temperature 0·고정 seed·요청마다 빈 상태로
@@ -459,7 +460,8 @@ def main():
             try:
                 analysis = summarizer.analyze(utterances, duration, bool(turns), speakers,
                                               lambda p, m: status.update(p, m), P_DIARIZE, P_SUMMARY,
-                                              kind_hint=kind_hint, user_terms=terms)
+                                              kind_hint=kind_hint, user_terms=terms,
+                                              base_date=summarizer.recorded_at_from_title(title))
                 if prev:
                     status.update(P_SUMMARY, '이전 회의와 비교 중 ({})'.format(prev['info']['title']))
                     compare = summarizer.compare_with_previous(prev['analysis'], prev['meta'], analysis)
@@ -471,7 +473,6 @@ def main():
             finally:
                 summarizer.ollama_unload()
 
-        title = args.title or os.path.splitext(os.path.basename(args.input))[0]
         meta = {
             'title': title,
             'recorded_at': summarizer.recorded_at_from_title(title),

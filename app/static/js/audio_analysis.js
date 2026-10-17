@@ -52,8 +52,17 @@
     }
     function list(items, cls) {
         if (!items || !items.length) return '<p class="va-muted">없음</p>';
-        return `<ul class="${cls || ''}">${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+        return `<ul class="${cls || ''}">${items.map(x => `<li>${itemHtml(x)}</li>`).join('')}</ul>`;
     }
+    // 결정·미결은 예전 결과에선 문자열, 2026-10-17 부터 {content, ts, quote} — 근거 시각 버튼을 붙인다
+    function itemHtml(x, key) {
+        if (typeof x === 'string') return esc(x);
+        return esc(x[key || 'content'] || '') + quoteTs(x);
+    }
+    function quoteTs(x) {
+        return x && typeof x.ts === 'number' ? ` <span title="${esc(x.quote || '')}">${tsBtn(x.ts)}</span>` : '';
+    }
+    const unset = v => !v || ['-', '미정', '불명', '없음'].includes(String(v).trim());
     // 한 발화를 문장마다 한 줄로 (클로바노트 음성 기록처럼) — 긴 발화가 한 덩어리 벽글이 되지 않게
     function splitSentences(text) {
         return String(text).trim().split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -291,7 +300,13 @@
             ? DOMPurify.sanitize(marked.parse(view.minutes))
             : '<p class="va-muted">요약이 없어 회의록을 만들지 못했습니다</p>';
         // 회의록 표 — 담당·요청자·수신자·기한·날짜·구분·No 칸은 좁게(두 줄) 잡아 내용 칸을 넓힌다
-        const NARROW = ['담당', '요청자', '수신자', '기한', '날짜', '구분'];
+        const NARROW = ['담당', '요청자', '수신자', '기한', '날짜', '구분', '시각'];
+        // 근거 시각 `@12:34` → 대화록 이동 버튼
+        panel('minutes').querySelectorAll('code').forEach(c => {
+            const m = /^@(?:(\d+):)?(\d{1,2}):(\d{2})$/.exec(c.textContent.trim());
+            if (!m) return;
+            c.outerHTML = tsBtn(Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]));
+        });
         panel('minutes').querySelectorAll('table').forEach(t => {
             const head = Array.from(t.querySelectorAll('th')).map(th => th.textContent.trim());
             if (!head.some(h => NARROW.includes(h))) return;
@@ -495,12 +510,13 @@
 
         html.push(`<div class="va-sec"><h3>📋 조치사항</h3>${(a.action_items || []).length
             ? `<div class="va-table-wrap"><table class="va-table va-actions-table"><thead><tr><th class="va-owner-cell">담당</th><th>수행 작업</th><th class="va-due-cell">기한</th></tr></thead><tbody>${
-                a.action_items.map(x => `<tr><td class="va-owner-cell">${ownerHtml(x.owner)}</td><td>${esc(x.task)}</td><td class="va-due-cell">${dueHtml(x.due)}</td></tr>`).join('')
+                a.action_items.map(x => `<tr><td class="va-owner-cell">${ownerHtml(x.owner)}</td><td>${esc(x.task)}${quoteTs(x)}</td><td class="va-due-cell">${dueHtml(x.due)}${x.due_resolved ? `<br><small>${esc(x.due_resolved)}</small>` : ''}</td></tr>`).join('')
             }</tbody></table></div>` : '<p class="va-muted">없음</p>'}</div>`);
 
-        const risks = (a.risks || []).map(x => `<li class="va-risk"><b>${esc(x.issue)}</b>${
-            x.risk && x.risk !== '-' ? `<span class="va-risk-line">위험: ${esc(x.risk)}</span>` : ''}<span class="va-risk-line">대응: ${esc(x.response)}</span></li>`);
-        const open = (a.issues || []).map(x => `<li class="va-open">${esc(x)}</li>`);
+        const risks = (a.risks || []).map(x => `<li class="va-risk"><b>${esc(x.issue)}</b>${quoteTs(x)}${
+            unset(x.risk) ? '' : `<span class="va-risk-line">영향: ${esc(x.risk)}</span>`}${
+            unset(x.response) ? '' : `<span class="va-risk-line">대응: ${esc(x.response)}</span>`}</li>`);
+        const open = (a.issues || []).map(x => `<li class="va-open">${itemHtml(x)}</li>`);
         html.push(`<div class="va-sec"><h3>⚠️ 이슈 및 미결사항</h3>${risks.length + open.length
             ? `<ul class="va-issue-list">${risks.join('')}${open.join('')}</ul>` : '<p class="va-muted">없음</p>'}</div>`);
 
