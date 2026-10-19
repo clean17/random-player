@@ -1747,7 +1747,11 @@
         if (preloaded.has(url)) return preloaded.get(url);
         const p = new Promise((resolve, reject) => {
             const im = new Image();
-            im.onload = () => resolve(im);
+            // 받기만 하면 화면에 붙일 때 디코딩(큰 원본은 수십~수백 ms)을 또 기다린다 — 미리 디코딩까지 해 둔다
+            im.onload = () => {
+                const decoded = im.decode ? im.decode().catch(() => {}) : Promise.resolve();
+                decoded.then(() => resolve(im));
+            };
             im.onerror = reject;
             im.src = url;
         });
@@ -1756,8 +1760,17 @@
         while (preloaded.size > 6) preloaded.delete(preloaded.keys().next().value);
         return p;
     }
+    // 앞으로는 PREFETCH_AHEAD 장, 뒤로는 1장. 현재 + 앞 2 + 뒤 1 = 4 라 preloaded(최대 6) 안에 들어간다
+    const PREFETCH_AHEAD = 2;
     function prefetchNeighbors(item) {
-        [findNext(item), findPrev(item)].forEach(it => { if (it) preload(originalUrl(it)).catch(() => {}); });
+        let it = item;
+        for (let i = 0; i < PREFETCH_AHEAD; i++) {
+            it = findNext(it);
+            if (!it) break;
+            preload(originalUrl(it)).catch(() => {});
+        }
+        const prev = findPrev(item);
+        if (prev) preload(originalUrl(prev)).catch(() => {});
     }
 
     // 편집 중인 이미지를 뒤 갤러리(메인 스크롤) 화면 가운데로 옮겨 둔다 — 슬라이드쇼(image.js setSlide)와 같은 방식.
@@ -1804,6 +1817,9 @@
             return;
         }
         if (token !== openToken) return;       // 기다리는 사이 다른 이미지로 넘어감(키를 빠르게 연타)
+        // 현재 원본을 다 받았으니 편집기를 만드는 동안 다음 것들을 받기 시작한다(예전엔 편집기 완성 후에 시작해서
+        // 빠르게 넘기면 다음 원본이 아직 오는 중이었다). 현재 것과 대역폭을 다투지 않게 받은 뒤에 시작한다.
+        prefetchNeighbors(imageItem);
         let built;
         try {
             built = await buildEditor(url, token);
@@ -1825,7 +1841,6 @@
         updateInfo();
         // 확정 버튼 활성화 — 편집기가 준비되는 사이 원본 보기를 켰으면 잠근 채로 둔다(라벨의 [원본] 표시도 유지)
         setOriginView(originView.classList.contains('on'));
-        prefetchNeighbors(imageItem);
     }
 
     // 틀 안을 끌어도 틀은 제자리에 두고 '뒤 이미지를 직접 끄는 것처럼' 같은 방향으로 이미지를 옮긴다 — 틀 바깥 끌기
