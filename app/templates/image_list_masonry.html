@@ -1178,6 +1178,26 @@
 
         // 균형 맞추기 (아이템 수 < 열 수면 열 축소, 빈 열이면 rebalance)
         adjustColumnsIfNeeded();
+
+        // 한 열에 몰아서 이동하면 그 열 아래가 비어 배경이 보인다 → 추가 렌더
+        fillShortColumns();
+        // 이미지 로딩으로 높이가 확정된 뒤 한 번 더 확인
+        setTimeout(fillShortColumns, 300);
+    }
+
+    // 뷰포트 하단 기준으로 마지막 이미지가 화면 아래까지 못 닿는 열이 있으면 이어서 렌더
+    function fillShortColumns() {
+        const MAX_ROUNDS = columns.length * 3; // 안전장치
+        for (let i = 0; i < MAX_ROUNDS; i++) {
+            if (currentIndex >= allItems.length) return;
+            const hasGap = columns.some(col => {
+                const items = col.querySelectorAll('.image-item');
+                if (items.length === 0) return true;
+                return items[items.length - 1].getBoundingClientRect().bottom < window.innerHeight;
+            });
+            if (!hasGap) return;
+            renderBatch();
+        }
     }
 
 
