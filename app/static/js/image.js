@@ -545,7 +545,11 @@ function getCenterImage(index= '') {
 function nextImage(nextImg) {
     const centerImage = getCenterImage();
     if (nextImg == null && centerImage) {
-        const nextImgEl = centerImage.nextElementSibling;
+        let nextImgEl = centerImage.nextElementSibling;
+        // masonry: 아직 안 그린 이미지가 남아 있으면(스크롤해야만 그려지던 경우) 그려서 이어간다
+        while (!nextImgEl && typeof renderMoreItems === 'function' && renderMoreItems()) {
+            nextImgEl = centerImage.nextElementSibling;
+        }
         if (nextImgEl && nextImgEl.classList.contains('image-item')) {
             nextImgEl.scrollIntoView({ behavior: 'auto', block: 'center' });
             if (nextImgEl.querySelector('video') && (dir === 'refine' || dir === 'image2' || dir === 'image' || dir === 'move')) {
