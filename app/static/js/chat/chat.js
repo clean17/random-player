@@ -1535,15 +1535,13 @@ function renderCheckIcon() {
 
 // 파라미터 보다 낮은 채팅 ID들 모두 읽음 표시 전환
 function setCheckIconsGreenUpTo() {
-    const rows = document.querySelectorAll('.messageRow[data-chat-id]');
-    rows.forEach(row => {
+    // 0.5초마다 불리므로 모든 행이 아니라 아직 남아 있는(읽지 않은) 체크 아이콘만 훑는다
+    document.querySelectorAll('.messageRow > .checkIcon').forEach(checkIcon => {
+        const row = checkIcon.parentElement;
         const rowChatId = parseInt(row.dataset.chatId, 10);
         if (!isNaN(rowChatId) && rowChatId <= peerLastReadChatId) {
-            const checkIcon = row.querySelector('.checkIcon');
-            if (checkIcon) {
-                checkIcon.style.setProperty("color", "green", "important");
-                checkIcon.remove();
-            }
+            checkIcon.style.setProperty("color", "green", "important");
+            checkIcon.remove();
         }
     });
 }
@@ -1660,16 +1658,8 @@ function moveMinusOneToEnd() {
     const chatContainer = document.getElementById('chat-container');
     if (!chatContainer) return;
 
-    // 모든 messageRow 중에서 data-chat-id="-1" 인 요소 찾기
-    const rows = chatContainer.querySelectorAll('.messageRow');
-    let minusOneRow = null;
-
-    rows.forEach(row => {
-        if (row.dataset.chatId === "-1") {
-            minusOneRow = row;
-        }
-    });
-
+    // 50ms 마다 불리므로 모든 행을 훑지 않고 셀렉터로 바로 찾는다 (메시지가 많을수록 느려지던 부분)
+    const minusOneRow = chatContainer.querySelector('.messageRow[data-chat-id="-1"]');
     if (!minusOneRow) return; // 해당 요소 없음
 
     // 이미 마지막이면 아무 것도 안 함
