@@ -13,7 +13,7 @@ from app.repository.chats.ChatDTO import ChatDTO
 from app.repository.chats.ChatPreviewDTO import ChatPreviewDTO
 from app.repository.chats.chats import insert_chat, get_chats_count, find_chats_by_offset, chats_to_line_list, \
     find_chat_room_by_roomname, update_chat_room, insert_chat_url_preview, find_chat_url_preview, \
-    find_chat_indices_by_keyword, fetch_context_by_center, find_chat_by_id, update_chat_message
+    find_chat_indices_by_keyword, find_chats_range, fetch_context_by_center, find_chat_by_id, update_chat_message
 from app.repository.scrap_posts.ScrapPostDTO import ScrapPostDTO
 from app.repository.scrap_posts.scrap_posts import insert_scrap_post, find_scrap_post
 from app.repository.users.users import find_user_by_username, find_all_active_usernames
@@ -492,6 +492,22 @@ def search_chat():
     # - DB에 fulltext/like로 전체에서 매칭되는 "행 인덱스" 리스트를 반환
     hits = find_chat_indices_by_keyword(q)  # 오름차순 인덱스
     return jsonify({"count": len(hits), "hits": hits})
+
+
+# 검색 모드 윈도잉: 기준 id 의 위(older)/아래(newer)로 이어서 limit 개를 가져온다
+@func.route("/chat/load-range", methods=["POST"])
+@login_required
+def load_chat_range():
+    payload = request.get_json(force=True) or {}
+    try:
+        chat_id = int(payload.get("id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "id is required"}), 400
+    direction = "older" if payload.get("direction") == "older" else "newer"
+    limit = max(1, min(int(payload.get("limit", 50)), 200))
+
+    rows = find_chats_range(chat_id, direction, limit)
+    return jsonify({"logs": chats_to_line_list(rows), "count": len(rows)})
 
 
 # 중심 인덱스를 기준으로 위/아래 컨텍스트 슬라이스 가져오기

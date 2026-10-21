@@ -29,9 +29,6 @@
 </head>
 <body class="page-chat">
 <div class="icon-buttons">
-    <!--<button id="searchBtn btn-open-search" title="Search">
-        <i class="fa-solid fa-magnifying-glass"></i>
-    </button>-->
     <button id="toggleNotification">
         <i class="fa-solid fa-bell"></i>
     </button>
@@ -49,6 +46,9 @@
         <span id="peerLastSeen" class="peer-last-seen" aria-live="polite"></span>
     </div>
     <div class="logout app-user-menu app-header__right chat-header-actions">
+        <button type="button" id="chat-search-open" class="chat-search-toggle" aria-label="채팅 검색" title="채팅 검색">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        </button>
         <div class="chat-theme-menu" data-chat-theme-menu>
             <button type="button" class="chat-theme-toggle" aria-label="채팅 테마 변경" aria-expanded="false">
                 <svg class="chat-theme-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -73,6 +73,25 @@
     </div>
 </div>
 
+<div id="chat-search-bar" class="chat-search-bar" role="search" hidden>
+    <div class="chat-search-field">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="chat-search-input" type="text" inputmode="search" enterkeyhint="search"
+               placeholder="대화 내용 검색" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="chat-search-clear" type="button" aria-label="검색어 지우기" hidden>
+            <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
+        </button>
+    </div>
+    <span id="chat-search-count" class="chat-search-count" aria-live="polite"></span>
+    <button id="chat-search-prev" type="button" aria-label="이전(더 오래된) 결과" disabled>
+        <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+    </button>
+    <button id="chat-search-next" type="button" aria-label="다음(더 최근) 결과" disabled>
+        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+    </button>
+    <button id="chat-search-close" type="button" class="chat-search-close">닫기</button>
+</div>
+
 <div id="user-count-indicator" class="chat-user-count" aria-label="접속자 수" role="button" tabindex="0" aria-expanded="false">
     <i class="fas fa-user" aria-hidden="true"></i>
     <span id="userCount">1</span>
@@ -80,16 +99,6 @@
 </div>
 
 <div class="container">
-    <div id="chat-search-wrap" style="position:sticky; top:50px; z-index:10; display: none">
-        <div id="chat-search-panel" hidden style="margin-top:8px; background:#fff; border:1px solid #ddd; border-radius:8px; padding:8px; display:flex; gap:8px; align-items:center;">
-            <input id="chat-search-input" type="text" placeholder="검색어" style="flex:1; padding:6px 8px;">
-            <button id="btn-run-search" type="button">검색</button>
-            <button id="btn-prev-hit" type="button" disabled>▲</button>
-            <span id="hit-counter" style="min-width:60px; text-align:center;">0/0</span>
-            <button id="btn-next-hit" type="button" disabled>▼</button>
-            <button id="btn-close-search" type="button">닫기</button>
-        </div>
-    </div>
     <!-- 채팅 메시지 목록 -->
     <div id="chat-container">
         {% for log in chat_logs %}
@@ -187,7 +196,7 @@
 <script src="/static/js/chat/video_call_window.js?v={{ version }}"></script>
 <script src="/static/js/chat/upload_file.js?v={{ version }}"></script>
 <script src="/static/js/chat/chat.js?v={{ version }}"></script>
-<!--<script src="/static/js/chat/chat_search.js?v={{ version }}"></script>-->
+<script src="/static/js/chat/chat_search.js?v={{ version }}"></script>
 <script src="/static/js/ui_chrome.js?v={{ version }}"></script>
 <script src="/static/js/chat/chat_theme.js?v={{ version }}"></script>
 </body>

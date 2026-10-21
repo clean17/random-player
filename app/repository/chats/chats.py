@@ -146,15 +146,53 @@ def insert_chat_url_preview(chat: "ChatPreviewDTO", conn=None) -> int:
 # def update_temp_chat():
 #     pass
 
-# 검색 키워드의 id(pk) 리스트를 반환
+# 검색 키워드의 id(pk) 리스트를 반환 (오름차순)
+# - HTML 태그(<br>, <span> 등)는 검색 대상에서 뺀다
+# - 이미지/영상/파일 첨부는 URL 이 아니라 캡션(첫 <br> 뒤)만 검색한다
+# - LIKE 와일드카드(% _)는 이스케이프해서 글자 그대로 찾는다
 @db_transaction
 def find_chat_indices_by_keyword(q: str, conn=None) -> List[int]:
-    sql = "SELECT id FROM chats WHERE message ILIKE %s ORDER BY id;"
-    pattern = f"%{q}%"
+    sql = r"""
+    SELECT id FROM (
+        SELECT id,
+               regexp_replace(
+                   CASE WHEN message ~ '^https://chickchick\.kr/(image/images|video/temp-video/|file/files)'
+                        THEN COALESCE(substring(message from '<br>(.*)$'), '')
+                        ELSE message END,
+                   '<[^>]*>', '', 'g') AS body
+        FROM chats
+    ) t
+    WHERE body ILIKE %s ESCAPE '!'
+    ORDER BY id;
+    """
+    escaped = q.replace('!', '!!').replace('%', '!%').replace('_', '!_')
+    pattern = f"%{escaped}%"
     with conn.cursor() as cur:
-        cur.execute(sql, (pattern,))  # (q,)가 아니라 (pattern,)
+        cur.execute(sql, (pattern,))
         rows = cur.fetchall()
     return [r[0] for r in rows]
+
+# 기준 id 의 바로 앞(older) 또는 뒤(newer)로 limit 개를 오름차순으로 반환
+# (검색 모드에서 화면에 필요한 구간만 렌더링하며 위/아래로 이어 불러올 때 사용)
+@db_transaction
+def find_chats_range(chat_id: int, direction: str, limit: int = 50, conn=None):
+    if direction == "older":
+        inner = "WHERE c.id < %s ORDER BY c.id DESC"
+    else:
+        inner = "WHERE c.id > %s ORDER BY c.id ASC"
+    sql = f"""
+    SELECT * FROM (
+        SELECT c.*, u.username
+        FROM chats c
+        JOIN users u ON c.user_id = u.id
+        {inner}
+        LIMIT %s
+    ) a
+    ORDER BY a.id ASC;
+    """
+    with conn.cursor(row_factory=namedtuple_row) as cur:
+        cur.execute(sql, (chat_id, limit))
+        return cur.fetchall()
 
 # 키워드 id 기준으로 위 25, 아래 25 채팅을 반환 (총 51 로우)
 @db_transaction

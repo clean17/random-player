@@ -836,6 +836,7 @@ const readDebounce = debounce(() => {
 
 // 스크롤이 최하단일 경우 읽음 표시를 보내는 함수
 function sendReadDataLastChat() {
+    if (window.__chatWindowMode) return; // 검색 모드의 화면 하단은 최신 메시지가 아니므로 읽음 처리하지 않는다
     if (isScrollAtTheBottom()) {
         readDebounce();
     }
@@ -881,6 +882,11 @@ async function checkVerified() {
 //////////////////////////////// Render Chat ////////////////////////////////
 
 function loadMoreChats(event) {
+    // 검색 모드(윈도잉)에서는 chat_search.js 가 위/아래 로딩을 맡는다 (offset 기준 로딩과 섞이면 중간이 꼬인다)
+    if (window.__chatWindowMode) {
+        loading = false;
+        return;
+    }
     // 추가 전 맨 위 요소의 위치 저장
     const firstMsg = chatContainer.firstElementChild;
     const prevTop = firstMsg?.getBoundingClientRect().top || 0;
@@ -992,6 +998,12 @@ function renderPreviewCard(data) {
 
 // 메세지 추가
 function addMessage(data, load = false) {
+    // 검색 모드(과거 구간만 렌더 중)에서는 새로 도착한 메시지를 화면 중간에 붙이지 않는다.
+    // 검색 모드를 나올 때 서버에서 다시 불러온다. (윈도잉 자체가 이어 붙일 때는 __chatWindowAppending 으로 통과)
+    if (!load && window.__chatWindowMode && !window.__chatWindowAppending) {
+        window.__chatPendingNew = true;
+        return;
+    }
     isMine = data.username === username;
     isUnderline = data.underline; // 알림에서 사용한다
     const now = new Date();
@@ -1169,8 +1181,9 @@ function addMessage(data, load = false) {
         const dateStr = `20${yy}.${mm}.${dd}`; // 25.04.12 형식
 
         renderDateDivider(chatState, dateStr)
+        messageRow.dataset.date = dateStr; // 검색 모드에서 위/아래를 잘라낼 때 날짜 구분선 상태를 복구하는 데 쓴다
 
-        const shouldKeepBottom = initialChatBottomLock || (!load && isChatNearBottom(90));
+        const shouldKeepBottom = !window.__chatWindowAppending && (initialChatBottomLock || (!load && isChatNearBottom(90)));
 
         if (load) {
             // 저장된 메세지 렌더링
@@ -1626,6 +1639,12 @@ function moveBottonScroll(event) {
     if (event && typeof event.preventDefault === "function") event.preventDefault();
     if (!chatContainer) return;
 
+    // 검색 모드: 버튼을 직접 눌렀을 때만 최신 대화로 복귀. (링크 미리보기 등 자동 호출은 무시)
+    if (window.__chatWindowMode) {
+        if (event && typeof window.exitChatWindowMode === 'function') window.exitChatWindowMode();
+        return;
+    }
+
     // 버튼 클릭은 사용자가 명시적으로 요청한 순간이므로 흔들림 없이 즉시 한 번만 최하단으로 보낸다.
     // 여러 번 setTimeout/requestAnimationFrame 보정하면 모바일에서 스크롤이 떨려 보인다.
     const previousBehavior = chatContainer.style.scrollBehavior;
@@ -1647,7 +1666,7 @@ function handleChatScroll() {
     scrollTop = chatContainer.scrollTop;        // 현재 스크롤 위치
 
     if (scrollButton) {
-        scrollButton.style.display = getChatDistanceFromBottom() > 80 ? "block" : "none";
+        scrollButton.style.display = (getChatDistanceFromBottom() > 80 || window.__chatWindowMode) ? "block" : "none";
     }
 
     sendReadDataLastChat();

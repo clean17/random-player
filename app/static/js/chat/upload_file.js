@@ -275,11 +275,7 @@ function uploadPastedFiles(files) {
         if (action === 'upload') {
             fileInput?.click(); // 이때만 실제 파일 선택창 열기
         } else if (action === 'open-search') {
-            const wrap = document.getElementById('chat-search-wrap');
-            const panel = document.getElementById('chat-search-panel');
-            if (wrap) wrap.style.display = 'block';
-            if (panel) panel.hidden = false;
-            document.getElementById('chat-search-input')?.focus();
+            if (typeof window.openChatSearch === 'function') window.openChatSearch();
         } else if (action === 'paste') {
             console.log('붙여넣기 업로드 트리거'); // 필요 시 구현
         } else if (action === 'good') {
