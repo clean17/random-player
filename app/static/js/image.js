@@ -11,6 +11,7 @@ let nextImageElement = null,
 const nextBtn = document.getElementById('next-image-button'),
       previousBtn = document.getElementById('previous-image-button'),
       shuffleBtn = document.getElementById('shuffle-button'),
+      restoreOrderBtn = document.getElementById('restore-order-button'),
       delBtn = document.querySelector('.delete-button'),
       form = document.getElementById('delete-form'),
       emptyBinBtn = document.getElementById('empty-bin-button'),
@@ -1175,9 +1176,10 @@ slideShowBtn?.removeEventListener('click', slideShow)
 slideShowBtn?.addEventListener('click', slideShow)
 
 
-function shuffleImage() {
+function shuffleImage(restore) {
     renderLoadingOverlay()
-    fetch(`/image/shuffle/ref-images?dir=`+dir, { method: 'POST' })
+    const api = restore === true ? '/image/shuffle/ref-images/restore' : '/image/shuffle/ref-images'
+    fetch(`${api}?dir=`+dir, { method: 'POST' })
         .then(response => response.json())
         .then(data => {
             console.log(data)
@@ -1191,6 +1193,10 @@ function shuffleImage() {
         .catch(error => {
             console.error('Error:', error);
         });
+}
+
+function restoreImageOrder() {
+    shuffleImage(true)
 }
 
 

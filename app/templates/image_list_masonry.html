@@ -230,6 +230,7 @@
     <button class="menu-item-btn" id="fetch-image-button">↻ Fetch</button>
     {% elif dir == 'refine' %}
     <button class="menu-item-btn" id="shuffle-button">🔀 Shuffle</button>
+    <button class="menu-item-btn" id="restore-order-button">↩ Original order</button>
     <button class="menu-item-btn" id="slideshow-btn">▶ Slide show</button>
     {% elif dir in ['temp', 'trip'] %}
     <button class="menu-item-btn" onclick="downloadThisPage()">📄 Download This Page</button>
@@ -1441,6 +1442,8 @@
 
         shuffleBtn?.removeEventListener('click', shuffleImage);
         shuffleBtn?.addEventListener('click', shuffleImage);
+        restoreOrderBtn?.removeEventListener('click', restoreImageOrder);
+        restoreOrderBtn?.addEventListener('click', restoreImageOrder);
     }
 
     document.addEventListener("DOMContentLoaded", initPage)

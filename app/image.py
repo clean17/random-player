@@ -33,6 +33,7 @@ cos_image_arr = []
 moved_image_arr = []
 refined_image_arr = []
 ref_shuffled_images = None
+ref_original_images = []  # 서버 시작/셔플 시점의 원본(이름순) 순서
 
 # 설정
 LIMIT_PAGE_NUM = 1000
@@ -77,34 +78,47 @@ DIR_CONFIG: Final = {
 }
 
 
-# 정렬 함수
-def initialize_sorted_images():
-    global ref_shuffled_images
+def _list_ref_images():
     images = [
         f for f in os.listdir(REF_IMAGE_DIR)
         if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))
            and not f.lower().endswith(EXCLUDE_SUFFIXES)
     ]
     images.sort(key=lambda x: x.lower())  # 이름순 정렬
+    return images
+
+
+# 정렬(원본 순서) 함수 — 서버에 원본 순서 배열(ref_original_images)을 보관한다
+def initialize_sorted_images():
+    global ref_shuffled_images, ref_original_images
+    images = _list_ref_images()
+    ref_original_images = list(images)
     ref_shuffled_images = images
+    refined_image_arr[:] = images
 
 
-# 셔플 함수
+# 셔플 함수 — 원본 순서 배열은 건드리지 않고 복사본만 섞는다
 def initialize_shuffle_images():
-    global ref_shuffled_images
-    images = [
-        f for f in os.listdir(REF_IMAGE_DIR)
-        if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))
-           and not f.lower().endswith(EXCLUDE_SUFFIXES)
-    ]
+    global ref_shuffled_images, ref_original_images
+    images = _list_ref_images()
+    ref_original_images = list(images)
     random.seed(time.time())
     random.shuffle(images)
     ref_shuffled_images = images
     refined_image_arr[:] = images
 
 
-# 최초에는 정렬
-initialize_sorted_images()
+# 원본 순서 복원 — 저장해 둔 원본 순서 배열을 사용(그 사이 삭제된 파일은 제외)
+def restore_original_images():
+    global ref_shuffled_images
+    images = [f for f in ref_original_images
+              if os.path.isfile(os.path.join(REF_IMAGE_DIR, f))]
+    ref_shuffled_images = images
+    refined_image_arr[:] = images
+
+
+# 서버 시작 시: 원본 순서 저장 후 셔플
+initialize_shuffle_images()
 
 
 def safe_mtime(path):
@@ -1224,6 +1238,17 @@ def shuffle_image():
 
     # return jsonify({'status': 'success'})
     return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir)}), 200 # 명시적 표기
+
+
+@image_bp.route('/shuffle/ref-images/restore', methods=['POST'], endpoint='shuffle/ref-images/restore')
+@login_required
+def restore_image_order():
+    dir = request.args.get('dir')
+    page = int(request.args.get('page', 1))
+
+    restore_original_images()
+
+    return jsonify({"redirect": url_for('image.image_list', page=page, dir=dir)}), 200
 
 
 ###################### stock ##########################
