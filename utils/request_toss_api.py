@@ -2,6 +2,7 @@ import requests
 import json
 import time
 import threading
+import uuid
 from typing import Dict, List
 from flask import current_app, jsonify
 
@@ -16,6 +17,9 @@ DEFAULT_HEADERS = {
     "Content-Type": "application/json",
     "Origin": "https://tossinvest.com",
     "Referer": "https://tossinvest.com/",
+    # 2026-10-23: c-chart 계열이 _browserId 쿠키가 없으면 400 invalid-request를 돌려준다(실측:
+    # 값은 아무 UUID나 되고 로그인 쿠키·app-version·browser-tab-id는 불필요, 쿠키 이름만 필수).
+    "Cookie": "_browserId=" + uuid.uuid4().hex,
 }
 
 def toss_request_json(

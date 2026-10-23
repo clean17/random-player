@@ -4,6 +4,7 @@ import psycopg_pool
 import os
 import requests
 import time
+import uuid
 from datetime import datetime, time as dtime
 
 from pathlib import Path
@@ -187,6 +188,7 @@ _TOSS_HEADERS = {
     "Content-Type": "application/json",
     "Origin": "https://tossinvest.com",
     "Referer": "https://tossinvest.com/",
+    "Cookie": "_browserId=" + uuid.uuid4().hex,   # c-chart가 이 쿠키 없으면 400 (utils/request_toss_api.py 참고)
 }
 _TOSS_INFO_URL = "https://wts-info-api.tossinvest.com/api/v3/search-all/wts-auto-complete"
 _TOSS_AMOUNT_URL = "https://wts-info-api.tossinvest.com/api/v1/c-chart/kr-s/{}/day:1"
@@ -269,10 +271,11 @@ def renew_interest_stocks_close():
             continue  # 오류
 
 
-        # 현재 종가 가져오기
+        # 현재 종가 — 2026-10-23: c-chart(day:1) 엔드포인트가 토스 게이트웨이에서 어떤 파라미터로도
+        # 400 invalid-request를 돌려줘서(경로/파라미터와 무관, 1ms 응답) 검색 응답의 close.krw로 대체.
+        # 검색 응답(items[0])에 이미 현재가가 들어 있어 요청도 종목당 2회 -> 1회로 줄었다.
         try:
-            json_data = _toss_request_with_retry(_toss_get_amount, product_code)
-            last_close = json_data["result"]["candles"][0]["close"]
+            last_close = result[0]["data"]["items"][0]["close"]["krw"]
         except Exception as e:
             print(f"renew_interest_stocks_close [info 요청 실패4]: {str(ticker)} {str(product_name)} {e}")
             continue  # 오류
