@@ -10,6 +10,7 @@ import shutil
 import asyncio
 import io
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 from datetime import datetime
 
@@ -25,6 +26,7 @@ os.makedirs(INVALID_SCREEN_DIR, exist_ok=True)
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
+from utils.image_thumbs import ensure_thumb
 
 COS_DIR = settings['COS_DIR']
 IMAGE_DIR2 = settings['IMAGE_DIR2']
@@ -64,6 +66,7 @@ MIN_GOOD_VIDEO_BYTES = 50_000         # 50KB 이상만 후보 (짧은 캐러셀 
 
 # 동시 다운로드 제한
 MAX_CONCURRENCY = 4
+_thumb_pool = ThreadPoolExecutor(max_workers=2)   # 썸네일(Pillow·ffmpeg)은 CPU 작업 — 이벤트 루프를 막지 않게 스레드로, 동시 2개만
 # 팔로우
 ACCOUNTS = [
 
@@ -1151,6 +1154,15 @@ async def download_media(images: List[str], videos: List[str], video_cdn: List[s
         #     print(f"[INFO] {len(deleted)}개의 짧은/길이불명 비디오 삭제됨 (<1s or unknown)")
 
         final_paths = [p for p in ok_paths if p not in deleted]
+
+        # 저장된 파일마다 썸네일을 바로 만든다. 짧은 영상을 COS_DIR 로 옮긴 뒤에 해야 옮겨간 영상의 썸네일이 남지 않는다.
+        # 기준 폴더는 BASE_SAVE_DIR(IMAGE_DIR2) — 갤러리가 <기준>/thumb/<계정>/images/<이름>.webp 를 찾는다. 실패해도 다운로드는 유지.
+        thumb_base = os.path.dirname(dirs["base"])
+        loop = asyncio.get_event_loop()
+        thumb_res = await asyncio.gather(*[loop.run_in_executor(_thumb_pool, ensure_thumb, p, thumb_base) for p in final_paths])
+        thumb_failed = sum(1 for r in thumb_res if r == 'fail')
+        if thumb_failed:
+            print(f"[WARN] 썸네일 생성 실패 {thumb_failed}/{len(final_paths)}")
         stats = {
             "attempted": len(tasks),
             "download_failed": download_failed,
