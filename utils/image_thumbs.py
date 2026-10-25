@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""갤러리 썸네일 증분 생성 — <base_dir>/thumb/<상대경로(확장자 뺌)>.webp, 가로 800px.
+"""갤러리 썸네일 증분 생성 — <base_dir>/thumb/<상대경로(확장자 뺌)>.webp, 가로 640px.
 
 왜: /image/images(app/image.py get_image)는 thumb/ 에 같은 이름의 .webp 가 있으면 그걸 보내고
 없으면 원본을 보낸다. 썸네일이 없으면 원본이 그대로 나가 느리다(utils/image_thumbs_dryrun.py 결과:
@@ -27,7 +27,10 @@ import argparse
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -37,9 +40,9 @@ from PIL import Image, ImageOps
 
 Image.MAX_IMAGE_PIXELS = 250_000_000   # 초대형 이미지도 열어 보되, 그 이상은 실패로 기록
 
-THUMB_WIDTH = 800
+THUMB_WIDTH = 640
 QUALITY = 80
-SMALL_BYTES = 200 * 1024       # 가로가 THUMB_WIDTH 이하이고 파일도 이 이하면 썸네일 불필요
+SMALL_BYTES = 100 * 1024       # 파일이 이 크기 이하면 가로와 무관하게 썸네일 불필요(원본을 그대로 보낸다)
 RECENT_SEC = 600               # 이 시간 안에 수정된 파일은 다음 실행으로 미룬다
 
 IMG_EXT = {'.jpg', '.jpeg', '.jfif', '.png', '.webp', '.bmp', '.gif'}
@@ -66,6 +69,16 @@ def thumb_path(base: str, rel: str) -> str:
     return os.path.join(base, 'thumb', os.path.splitext(rel)[0] + '.webp')
 
 
+VIDEO_THUMB_SUBDIR = 'video_poster'   # 영상 썸네일은 thumb/ 아래 이 하위 폴더에 둔다
+
+
+def video_thumb_path(base: str, rel: str) -> str:
+    """영상 썸네일 경로: <base>/thumb/video_poster/<rel 확장자 뺌>.webp
+    이미지 썸네일(thumb_path)과 폴더를 나눈 이유 — 같은 폴더의 a.jpg 와 a.mp4 가 thumb/a.webp 하나로 충돌해
+    get_image 가 이미지 자리에 영상 프레임을 보내는 걸 막는다. thumb/ 아래라 이미지 스캔(scan_images)은 건너뛴다."""
+    return os.path.join(base, 'thumb', VIDEO_THUMB_SUBDIR, os.path.splitext(rel)[0] + '.webp')
+
+
 def probe(path: str) -> Tuple[int, int, bool, Optional[str]]:
     """헤더만 열어 (가로, 세로, 애니메이션 여부, 오류). 오류가 있으면 앞의 값은 의미 없다."""
     try:
@@ -90,6 +103,44 @@ def make_thumb(path: str, width: int = THUMB_WIDTH, quality: int = QUALITY) -> b
         return buf.getvalue()
 
 
+def make_video_thumb(src: str, dst: str, seeks: Tuple[float, ...] = (1.0, 0), width: int = THUMB_WIDTH,
+                     timeout: int = 20) -> bool:
+    """영상 한 프레임 → 가로 width webp(dst). ffmpeg 로 JPEG 한 장만 뽑고, 리사이즈·webp 변환은 make_thumb 이 한다.
+    seeks: 앞에서부터 시도할 초 — 영상이 더 짧으면 프레임이 안 나오므로 다음 값(보통 0)으로 한 번 더 시도한다.
+    중간 JPEG 는 -q:v 2 (재압축 열화 최소화), 쓰기는 임시 파일에 쓴 뒤 os.replace 로 교체한다."""
+    frame = dst + '.frame.jpg'
+    tmp = dst + '.tmp'
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    try:
+        for ss in seeks:
+            try:
+                subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-ss', str(ss), '-i', src,
+                                '-frames:v', '1', '-q:v', '2', frame],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+            except Exception as e:   # noqa: BLE001 — 타임아웃·ffmpeg 없음
+                _log(f'영상 프레임 추출 실패: {src} -> {e}')
+                return False
+            if os.path.exists(frame) and os.path.getsize(frame) > 0:
+                break
+        else:
+            return False
+        data = make_thumb(frame, width)
+        with open(tmp, 'wb') as f:
+            f.write(data)
+        os.replace(tmp, dst)
+        return True
+    except Exception as e:   # noqa: BLE001
+        _log(f'영상 썸네일 변환 실패: {src} -> {type(e).__name__}: {e}')
+        return False
+    finally:
+        for p in (frame, tmp):
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+
 def scan_images(base: str) -> List[Tuple[str, str, float, int]]:
     """(경로, 상대경로('/' 구분), mtime, 크기) 목록. thumb·origin(자르기 전 원본 백업) 폴더, 영상,
     제외 확장자는 건너뛴다."""
@@ -107,6 +158,94 @@ def scan_images(base: str) -> List[Tuple[str, str, float, int]]:
                 continue
             out.append((p, os.path.relpath(p, base).replace('\\', '/'), st.st_mtime, st.st_size))
     return out
+
+
+def _write_atomic(tp: str, data: bytes) -> None:
+    """임시 파일에 쓴 뒤 os.replace — 중간에 끊겨도 깨진 webp 를 서버가 보내지 않는다.
+    임시 파일 이름에 pid·스레드를 넣어 배치(05:00)와 스크랩 직후 호출이 같은 파일을 동시에 써도 서로 덮지 않는다."""
+    os.makedirs(os.path.dirname(tp), exist_ok=True)
+    tmp = f'{tp}.{os.getpid()}.{threading.get_ident()}.tmp'
+    with open(tmp, 'wb') as f:
+        f.write(data)
+    os.replace(tmp, tp)
+
+
+def _is_fresh(tp: str, src: str) -> bool:
+    """썸네일이 있고 원본보다 새로우면(수정시각 기준) 다시 만들 필요가 없다 — 배치(process_dir)의 '최신' 판정과 같다."""
+    try:
+        return os.path.getmtime(tp) >= os.path.getmtime(src)
+    except OSError:
+        return False
+
+
+def move_thumb(src_path: str, src_base: str, dst_path: str, dst_base: str) -> str:
+    """파일을 옮긴 뒤(dst_path 에 이미 있어야 한다) 썸네일도 따라 옮긴다 — 다시 만드는 것보다 훨씬 싸다.
+    src_path 는 이미 없어도 된다(경로 계산에만 쓴다). 이미지는 thumb_path, 영상은 video_thumb_path 를 옮긴다.
+    · 원래 썸네일이 있고 옮긴 파일보다 새로우면 → dst 쪽 같은 이름 썸네일을 지우고 옮긴다. 반환 'moved'
+    · 없거나 낡았으면 → 낡은 건 지우고 dst 에서 ensure_thumb 로 만든다(작은 파일 등은 만들지 않는다). 'made'|'skip'|'fail'
+    dst 에 있던 같은 이름 썸네일은 항상 지운다 — 새 파일의 것이 아니라 이전 파일의 잔재이기 때문이다."""
+    try:
+        ext = os.path.splitext(dst_path)[1].lower()
+        if ext in VIDEO_EXT:
+            tp_fn = video_thumb_path
+        elif ext in IMG_EXT:
+            tp_fn = thumb_path
+        else:
+            return 'skip'
+        src_rel = os.path.relpath(src_path, src_base).replace('\\', '/')
+        dst_rel = os.path.relpath(dst_path, dst_base).replace('\\', '/')
+        src_tp, dst_tp = tp_fn(src_base, src_rel), tp_fn(dst_base, dst_rel)
+        if os.path.exists(dst_tp):
+            os.remove(dst_tp)
+        if os.path.exists(src_tp):
+            if _is_fresh(src_tp, dst_path):
+                os.makedirs(os.path.dirname(dst_tp), exist_ok=True)
+                shutil.move(src_tp, dst_tp)   # 같은 볼륨이면 이름만 바뀌고, 다른 볼륨이면 복사 후 삭제
+                return 'moved'
+            os.remove(src_tp)
+        return ensure_thumb(dst_path, dst_base)
+    except Exception as e:   # noqa: BLE001
+        _log(f'move_thumb 실패 {src_path} -> {dst_path} — {type(e).__name__}: {e}'[:300])
+        return 'fail'
+
+
+def ensure_thumb(path: str, base: str, width: int = THUMB_WIDTH) -> str:
+    """파일 하나의 썸네일을 바로 만든다(스크랩·업로드 직후 호출용). base = 갤러리 기준 폴더(IMAGE_DIR 등) —
+    썸네일 경로가 base 기준 상대경로로 정해지므로(<base>/thumb/<rel>.webp) 계정 하위 폴더 파일도 갤러리가 찾는 자리에 생긴다.
+    이미지는 thumb_path, 영상은 video_thumb_path 에 만들고 규칙은 배치(process_dir)와 같다.
+    반환: 'made' | 'skip' | 'fail'. 예외를 던지지 않는다(썸네일 실패가 다운로드를 깨면 안 된다)."""
+    try:
+        rel = os.path.relpath(path, base).replace('\\', '/')
+        if rel.startswith('..'):
+            _log(f'ensure_thumb: base 밖의 파일이라 건너뜀 — {path}')
+            return 'fail'
+        ext = os.path.splitext(path)[1].lower()
+        if ext in VIDEO_EXT:
+            vtp = video_thumb_path(base, rel)
+            if _is_fresh(vtp, path):
+                return 'skip'
+            return 'made' if make_video_thumb(path, vtp, width=width) else 'fail'
+        if ext not in IMG_EXT:
+            return 'skip'
+        size = os.path.getsize(path)
+        if size <= SMALL_BYTES:
+            return 'skip'
+        if _is_fresh(thumb_path(base, rel), path):
+            return 'skip'
+        _, _, animated, err = probe(path)
+        if err:
+            _log(f'ensure_thumb: 이미지 열기 실패 {rel} — {err}')
+            return 'fail'
+        if animated:
+            return 'skip'
+        data = make_thumb(path, width)
+        if len(data) >= size:
+            return 'skip'
+        _write_atomic(thumb_path(base, rel), data)
+        return 'made'
+    except Exception as e:   # noqa: BLE001
+        _log(f'ensure_thumb 실패 {path} — {type(e).__name__}: {e}'[:300])
+        return 'fail'
 
 
 def _skip_path(name: str) -> str:
@@ -137,12 +276,12 @@ def _convert_one(item, base: str, width: int, deadline: float, dry_run: bool):
     path, rel, mtime, size = item
     if time.time() > deadline:
         return rel, 'deferred', None
-    w, _, animated, err = probe(path)
+    _, _, animated, err = probe(path)
     if err:
         return rel, 'fail', err
     if animated:
         return rel, 'skip', 'animated'
-    if w <= width and size <= SMALL_BYTES:
+    if size <= SMALL_BYTES:
         return rel, 'skip', 'small'
     if dry_run:
         return rel, 'made', 0
@@ -152,12 +291,7 @@ def _convert_one(item, base: str, width: int, deadline: float, dry_run: bool):
         return rel, 'fail', f'{type(e).__name__}: {e}'[:120]
     if len(data) >= size:
         return rel, 'skip', 'larger'   # 원본이 더 작으면 원본을 그대로 보내는 편이 낫다
-    tp = thumb_path(base, rel)
-    os.makedirs(os.path.dirname(tp), exist_ok=True)
-    tmp = tp + '.tmp'
-    with open(tmp, 'wb') as f:
-        f.write(data)
-    os.replace(tmp, tp)
+    _write_atomic(thumb_path(base, rel), data)
     return rel, 'made', len(data)
 
 

@@ -357,6 +357,15 @@ def delete_images_task(images_to_delete, dir):
                 except Exception as e:
                     print(f"[WARN] thumb delete failed: {webp_file} -> {e}")
 
+            # 영상이면 포스터(thumb/video_poster/<상대경로>.webp)도 지운다 — 원본에서 다시 만들 수 있는 캐시라 휴지통을 거치지 않는다.
+            from utils.image_thumbs import video_thumb_path
+            poster_file = os.path.normpath(video_thumb_path(thumb_base, rel))
+            if os.path.exists(poster_file):
+                try:
+                    os.remove(poster_file)
+                except OSError as e:
+                    print(f"[WARN] poster delete failed: {poster_file} -> {e}")
+
             if not os.path.exists(safe_path):
                 # 이미 지워졌거나 잘못된 이름
                 # print(f"[WARN] not found: {safe_path}")
@@ -595,18 +604,25 @@ def move_image():
             return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
 
         webp_file = safe_path_join(thumb_dir, name_without_ext + ".webp")
+        from utils.image_thumbs import VIDEO_THUMB_SUBDIR
+        poster_file = safe_path_join(os.path.join(thumb_dir, VIDEO_THUMB_SUBDIR), name_without_ext + ".webp")   # 영상 포스터
         motion_files = [safe_path_join(thumb_dir, name_without_ext + sfx)   # 모션포토 영상 캐시(옛 무음 캐시 포함)
                         for sfx in (MOTION_SUFFIX,) + OLD_MOTION_SUFFIXES]
     except ValueError:
         return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
 
-    # 존재하면 휴지통으로 이동
+    # 모션포토 영상 캐시는 옮기지 않고 지운다 — 원본에서 언제든 다시 만들 수 있는 캐시라 휴지통을 거치지 않는다.
     with _timed('thumb_trash'):
-        if os.path.exists(webp_file):
-            send2trash(webp_file)
         for motion_file in motion_files:
             if os.path.exists(motion_file):
-                os.remove(motion_file)   # 원본에서 언제든 다시 만들 수 있는 캐시라 휴지통을 거치지 않는다
+                os.remove(motion_file)
+
+    def drop_thumbs():
+        # 옮길 곳이 갤러리가 아니거나(temp → 삭제 폴더) 원본이 이미 없을 때: 남은 썸네일·포스터를 정리한다.
+        if os.path.exists(webp_file):
+            send2trash(webp_file)
+        if os.path.exists(poster_file):
+            os.remove(poster_file)
 
     # print('src_path', src_path)
     with _timed('src_exists'):
@@ -615,6 +631,14 @@ def move_image():
         # os.rename(src_path, dest_path) # OS ERROR : 다른 드라이브로 이동시킬 수 없다, shutil 사용을 권장
         with _timed('move'):
             shutil.move(src_path, dest_path) # src_path > dest_path 이동
+
+        # 썸네일(이미지·영상 포스터)도 따라 옮긴다 — 다시 만드는 것보다 싸다. 없거나 낡았으면 도착지에서 새로 만든다.
+        with _timed('thumb'):
+            if imagepath == 'temp':
+                drop_thumbs()
+            else:
+                from utils.image_thumbs import move_thumb
+                move_thumb(src_path, os.path.realpath(os.path.dirname(thumb_dir)), dest_path, os.path.dirname(dest_path))
 
         # 자른 이미지면 원본 백업(origin/)·자르기 기록도 같이 옮긴다 — move → refine, refine → move 등
         dst_dir = 'refine' if imagepath == 'move' else ('move' if imagepath != 'temp' else None)
@@ -635,6 +659,8 @@ def move_image():
 
         return jsonify({'status': 'success'})
     else:
+        with _timed('thumb_trash'):
+            drop_thumbs()   # 원본이 이미 없어도 남은 썸네일은 정리한다
         return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
 
@@ -931,13 +957,12 @@ def crop_image():
 
 
 def _rebuild_thumb(base, rel, src):
-    """편집/복원 직후 썸네일을 다시 만든다. utils/image_thumbs.py 와 같은 규칙: 이미 작으면(가로 800 이하 +
-    200KB 이하) 썸네일 없이 원본을 그대로 보내고, 썸네일이 원본보다 커지면 만들지 않는다."""
-    from utils.image_thumbs import make_thumb, probe, thumb_path, THUMB_WIDTH, SMALL_BYTES
+    """편집/복원 직후 썸네일을 다시 만든다. utils/image_thumbs.py 와 같은 규칙: 이미 작으면(100KB 이하)
+    썸네일 없이 원본을 그대로 보내고, 썸네일이 원본보다 커지면 만들지 않는다."""
+    from utils.image_thumbs import make_thumb, thumb_path, SMALL_BYTES
     tp = os.path.normpath(thumb_path(base, rel))
     size = os.path.getsize(src)
-    width = probe(src)[0]
-    data = None if (width <= THUMB_WIDTH and size <= SMALL_BYTES) else make_thumb(src)
+    data = None if size <= SMALL_BYTES else make_thumb(src)
     if data is None or len(data) >= size:
         if os.path.exists(tp):
             os.remove(tp)
