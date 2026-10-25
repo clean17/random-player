@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from config.config import settings
+from utils.image_thumbs import ensure_thumb
 from playwright.async_api import async_playwright
 from urllib.parse import urljoin, urlparse, parse_qs
 from PIL import Image
@@ -58,6 +59,7 @@ def download_image(img_url, save_path):
                 handler.write(img_data)
             # print(f"Downloaded {img_url} to {save_path}")
             # print(f"{save_path}")
+            ensure_thumb(save_path, IMAGE_DIR)   # 저장 직후 썸네일 — 실패해도 예외 없이 'fail' 만 돌려준다
             return True
         else:
             # print(f"Skipped {img_url}, width: {img.width}px")
@@ -148,6 +150,8 @@ async def save_video_with_uuid(page, video_name: str, video_url: str, save_dir: 
             data = base64.b64decode(result["base64"])
             with open(save_path, "wb") as f:
                 f.write(data)
+            # 영상 프레임 추출은 ffmpeg 호출이라 이벤트 루프를 막지 않게 스레드로
+            await asyncio.get_event_loop().run_in_executor(None, ensure_thumb, save_path, IMAGE_DIR)
             return True
         except Exception as e:
             expiry_info = _signed_url_expiry_info(video_url)

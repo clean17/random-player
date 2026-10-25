@@ -25,6 +25,8 @@ ARCHIVE_EXTENSIONS = {'.zip'}
 # title='htm' 버킷은 웹페이지 스냅샷 저장용으로 html 업로드가 의도된 기능이라 별도 허용
 HTML_EXTENSIONS = {'.html', '.htm', '.mhtml'}
 ALLOWED_UPLOAD_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | ARCHIVE_EXTENSIONS
+# 이 title(temp 하위 폴더)에 올리는 파일은 썸네일을 만들지 않는다 — 사진이 아니라 작업 자료
+THUMB_EXCLUDE_TITLES = {'유틸'}
 
 @upload.route('/', methods=['GET'])
 @login_required
@@ -92,9 +94,9 @@ def upload_file():
                                     os.remove(full_extracted_path)
                                     continue
                                 extracted_paths.append(full_extracted_path)
-                            zip_total = len(extracted_paths)
-                            for zip_index, extracted_path in enumerate(extracted_paths, start=1):
-                                convert_file(extracted_path, zip_index, zip_total)
+                            # 압축 파일 안의 파일에는 썸네일을 만들지 않는다 — 하위 폴더마다 thumb/ 이 따로 생기는데
+                            # 갤러리는 <선택한 폴더>/thumb/<상대경로> 에서 찾으므로 어차피 쓰이지 않는다.
+                            for extracted_path in extracted_paths:
                                 # saved_files.append(extracted_path)
                                 mime_type, _ = guess_type(filename)
                                 file_info ={
@@ -131,7 +133,8 @@ def upload_file():
                 else:
                     file_path = os.path.join(target_dir, f"{uuid_filename}")
                     file.save(file_path)
-                    convert_file(file_path, index, total_files)
+                    if title not in THUMB_EXCLUDE_TITLES:
+                        convert_file(file_path, index, total_files)
                     # saved_files.append(file_path)
                     mime_type, _ = guess_type(uuid_filename)
                     params = {
