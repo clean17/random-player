@@ -63,6 +63,10 @@
             pointer-events: none;
             z-index: 5;
         }
+        /* 로딩 중엔 브라우저 기본 컨트롤(내장 버퍼링 스피너 포함)을 숨겨 스피너가 겹쳐 보이지 않게 한다 */
+        .image-item.video-loading video::-webkit-media-controls {
+            display: none !important;
+        }
         @keyframes video-loading-spin {
             to { transform: rotate(360deg); }
         }
