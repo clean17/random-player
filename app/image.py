@@ -815,6 +815,45 @@ def _ai_upscale(region, out_w, out_h):
     return out
 
 
+_CROP_MAX_OVERSCAN = 8      # 틀 한 변이 이미지 한 변의 몇 배까지 허용할지(너무 크면 거의 전부가 블러 여백)
+_PAD_BLUR_FRAC = 0.03       # 여백 블러 반경 = 틀 가로 × 이 값. 편집 화면(.crop-bg)의 blur 도 같은 비율로 맞춘다
+_PAD_BG_ZOOM = 1.1          # 여백용 배경은 틀을 덮는 크기의 이 배로 키워 중앙을 자른다(블러 가장자리 번짐 가림) — 화면 CSS scale 과 동일
+
+
+def _pad_region(im, x, y, w, h, out_w):
+    """틀(x, y, w, h — 이미지 좌표, 이미지 밖으로 나가도 됨)을 이미지로 채우고, 이미지 밖 여백은 같은 이미지를
+    틀에 꽉 차게(cover) 키워 블러한 것으로 채운 PIL 이미지를 돌려준다. 편집 화면의 미리보기와 같은 구성.
+    틀이 매우 클 수 있어(세로로 긴 이미지 전체 = 수만 px) 저장 가로(out_w)보다 크면 그 크기로 줄여서 그린다 —
+    호출부는 region.width 로 확대/축소를 판단한다."""
+    from PIL import Image, ImageFilter
+    W, H = im.size
+    k = min(1.0, out_w / float(w))                  # 틀 → 작업 해상도 배율
+    rw, rh = max(1, int(round(w * k))), max(1, int(round(h * k)))
+    # 배경: 블러는 해상도가 필요 없으므로 아주 작게 만들어 블러한 뒤 키운다
+    f = min(1.0, 256.0 / max(rw, rh))
+    bw, bh = max(1, int(round(rw * f))), max(1, int(round(rh * f)))
+    s = max(bw / float(W), bh / float(H)) * _PAD_BG_ZOOM
+    sw, sh = max(bw, int(round(W * s))), max(bh, int(round(H * s)))
+    small = im.convert('RGB').resize((sw, sh), Image.BILINEAR)
+    l, t = (sw - bw) // 2, (sh - bh) // 2
+    small = small.crop((l, t, l + bw, t + bh)).filter(ImageFilter.GaussianBlur(max(1.0, bw * _PAD_BLUR_FRAC)))
+    bg = small.resize((rw, rh), Image.BICUBIC)
+    if im.mode == 'RGBA':
+        bg = bg.convert('RGBA')
+    # 이미지가 틀과 겹치는 부분만 그 위에 올린다(틀 좌표 → 작업 해상도)
+    ix0, iy0 = max(0, x), max(0, y)
+    ix1, iy1 = min(W, x + w), min(H, y + h)
+    if ix1 > ix0 and iy1 > iy0:
+        px0, py0 = int(round((ix0 - x) * k)), int(round((iy0 - y) * k))
+        px1, py1 = int(round((ix1 - x) * k)), int(round((iy1 - y) * k))
+        pw, ph = max(1, px1 - px0), max(1, py1 - py0)
+        part = im.crop((ix0, iy0, ix1, iy1))
+        if (pw, ph) != part.size:
+            part = part.resize((pw, ph), Image.LANCZOS)
+        bg.paste(part, (px0, py0))
+    return bg
+
+
 def _render_crop(src_path, box, out_w, out_h, ai=False, meta=None):
     """원본(EXIF 회전 반영)에서 box=(x, y, w, h)를 잘라 (out_w, out_h)로 리샘플한 PIL 이미지.
     ai=True 면 확대·축소와 상관없이 Real-ESRGAN 을 쓴다(원본이 흐릿할 때 노이즈·블록·흐림 정리용으로도 쓰므로 —
@@ -824,14 +863,19 @@ def _render_crop(src_path, box, out_w, out_h, ai=False, meta=None):
         im = ImageOps.exif_transpose(im)
         W, H = im.size
         x, y, w, h = box
-        w = max(1, min(int(round(w)), W))
+        # 틀은 좌우로만 이미지 밖으로 나갈 수 있다(2026-10-26 — 세로로 긴 이미지 전체를 3:4 에 담도록 축소해 이미지 가로가
+        # 틀보다 좁아질 때). 가로는 이미지의 _CROP_MAX_OVERSCAN 배까지, 세로는 이미지 안으로 붙잡는다. 이미지 밖은 블러로 채운다.
+        w = max(1, min(int(round(w)), int(W * _CROP_MAX_OVERSCAN)))
         h = max(1, min(int(round(h)), H))
-        x = max(0, min(int(round(x)), W - w))
+        x = max(1 - w, min(int(round(x)), W - 1))
         y = max(0, min(int(round(y)), H - h))
         if im.mode not in ('RGB', 'RGBA'):
             has_alpha = im.mode in ('LA', 'PA') or (im.mode == 'P' and 'transparency' in im.info)
             im = im.convert('RGBA' if has_alpha else 'RGB')
-        region = im.crop((x, y, x + w, y + h))
+        if x >= 0 and y >= 0 and x + w <= W and y + h <= H:
+            region = im.crop((x, y, x + w, y + h))
+        else:
+            region = _pad_region(im, x, y, w, h, out_w)
         out = None
         if meta is not None:
             meta.update(ai_used=False, ai_note=None)
@@ -839,7 +883,7 @@ def _render_crop(src_path, box, out_w, out_h, ai=False, meta=None):
             try:
                 ai_in = region
                 max_in_w = min(out_w, _AI_MAX_INPUT_W)
-                if region.width > max_in_w:   # 축소·1:1 이면 저장 크기로 먼저 줄여 넣는다(시간 제한) → AI 4배 → 저장 크기
+                if region.width > max_in_w:   # 축소·1:1 이면 저장 크기로 먼저 줄여 넣는다(시간 제한) → AI 4배 → 저장 크기 (region 은 w 보다 작을 수 있다 — _pad_region)
                     ai_in = region.resize((max_in_w, max(1, round(region.height * max_in_w / region.width))), Image.LANCZOS)
                 out = _ai_upscale(ai_in, out_w, out_h)
                 if meta is not None:
@@ -849,7 +893,7 @@ def _render_crop(src_path, box, out_w, out_h, ai=False, meta=None):
                 if meta is not None:
                     meta['ai_note'] = (f'AI 처리 시간 초과({_AI_TIMEOUT_SEC}초)' if isinstance(e, subprocess.TimeoutExpired)
                                        else str(e)[:120])
-        if out is None and out_w > w:
+        if out is None and out_w > region.width:
             # 확대: BICUBIC 만, 선명화 없음(2026-10-03 사용자 요청). LANCZOS 는 확대 시 경계에 밝고 어두운 띠(링잉)를
             # 만들어 날카롭게 보인다. 경과: LANCZOS+UnsharpMask(1.0,50%) → BICUBIC+UnsharpMask(1.6) 20→15→12→9→5% → 없음.
             # move 실사진 8장 기준 날카로움(처음 방식=100%): 지금 66% / 5% 언샤프 68% / BILINEAR 53%(확연히 흐림).

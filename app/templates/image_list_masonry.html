@@ -1560,6 +1560,16 @@
     #crop-modal .crop-edit .crop-layer { position: absolute; inset: 0; }
     #crop-modal .crop-edit .crop-layer.pending { visibility: hidden; pointer-events: none; }
     #crop-modal .crop-edit .crop-layer > img { display: block; max-width: 100%; }
+    /* 틀 안에서 이미지 밖인 여백은 같은 이미지를 틀에 꽉 차게(cover) 키워 블러한 것으로 채운다 — 저장 결과(서버
+       _pad_region)와 같은 구성. 틀(.cropper-view-box) 안에 넣어 틀 크기를 따라가고, 틀 안 원본 복제 이미지는 그 위에 올린다.
+       blur 반경은 틀 가로의 3%(JS 가 갱신 = 서버 _PAD_BLUR_FRAC), 가장자리 번짐은 1.1배 확대로 가린다(= _PAD_BG_ZOOM). */
+    #crop-modal .cropper-view-box > .crop-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    #crop-modal .cropper-view-box > .crop-bg > img { width: 100%; height: 100%; object-fit: cover; display: block;
+                                                     transform: scale(1.1); }
+    /* view-box 를 독립 쌓임 문맥으로 만들어 배경/복제 이미지의 z-index 가 틀 안에서만 놓이게 한다 — 안 그러면 복제 이미지가
+       drag 면(.cropper-face)·가장자리 선·모서리 핸들 위로 올라와 이미지 끌기와 크기 조절이 막힌다. */
+    #crop-modal .cropper-view-box { position: relative; z-index: 0; }
+    #crop-modal .cropper-view-box > img { position: relative; z-index: 1; pointer-events: none; }
     /* 원본/현재 토글 — 버튼 패널의 '원본으로 되돌리기' 바로 위. 원본 보는 중엔 슬라이드쇼 토글처럼 주황 강조.
        원본 보기는 편집 영역 위에 원본 백업 이미지를 덮어 보여주기만 한다(편집기는 그대로 뒤에 있다) */
     #crop-modal .crop-bar button.crop-origin-toggle.is-on { background: #f59e0b; border-color: #f59e0b; color: #111; }
@@ -1898,13 +1908,17 @@
             const left = (cont.width - bw) / 2, top = (cont.height - bh) / 2;
             const vm = c.options.viewMode;
             c.options.viewMode = 0;
+            suspendLimit = true;
             c.zoomTo(ratio);
             c.setCanvasData({ left: left - x * ratio, top: top - y * ratio });
             c.setCropBoxData({ left, top, width: bw, height: bh });
+            suspendLimit = false;
             c.options.viewMode = vm;
+            limitCanvas(c, c.container);   // c.container = 이미지를 담은 부모 = crop-layer
             updateInfo();
             return true;
         } catch (e) {
+            suspendLimit = false;
             console.error(e);
             return false;
         }
@@ -1928,14 +1942,48 @@
             const cw = nw * ratio, ch = nh * ratio;
             const vm = c.options.viewMode;
             c.options.viewMode = 0;
+            suspendLimit = true;
             c.zoomTo(ratio);
             c.setCanvasData({ left: (cont.width - cw) / 2, top: (cont.height - ch) / 2, width: cw, height: ch });
             c.setCropBoxData({ left: (cont.width - bw) / 2, top: (cont.height - bh) / 2, width: bw, height: bh });
+            suspendLimit = false;
             c.options.viewMode = vm;
             return true;
         } catch (e) {
+            suspendLimit = false;
             console.error(e);
             return false;
+        }
+    }
+
+    // 이미지 위치·크기 제한(viewMode 0 위에 직접 건다). 세로는 항상 틀이 이미지 안(= 이미지가 틀 높이보다 작아지지 않음).
+    // 가로는 이미지가 틀보다 넓으면 틀이 이미지 안, 이미지가 틀보다 좁아지면(저장 때 좌우 블러 여백) 이미지가 틀 안에서만 자유롭게 움직인다.
+    // 좁아지는 순간엔 가운데로 맞춘다. 배치 중(fitFullFrame/applyFrame)엔 중간 상태를 건드리지 않도록 suspendLimit 로 끈다.
+    let suspendLimit = false, limiting = false;
+    function limitCanvas(c, layer) {
+        if (suspendLimit || limiting) return;
+        limiting = true;
+        try {
+            const cv = c.getCanvasData(), b = c.getCropBoxData();
+            if (cv.height < b.height - 0.5) {          // 틀이 이미지보다 커졌다(모서리 조절 등) — 틀을 이미지 높이에 맞춘다
+                c.setCropBoxData({ left: b.left, top: b.top, width: cv.height * RATIO_W / RATIO_H, height: cv.height });
+                limiting = false; limitCanvas(c, layer); return;
+            }
+            let left = cv.left, top = cv.top;
+            top = Math.max(Math.min(top, b.top), b.top + b.height - cv.height);
+            const narrow = cv.width < b.width - 0.5;
+            if (narrow) {
+                if (!layer._narrow) left = b.left + (b.width - cv.width) / 2;   // 막 좁아졌다 → 가운데
+                left = Math.min(Math.max(left, b.left), b.left + b.width - cv.width);
+            } else {
+                left = Math.max(Math.min(left, b.left), b.left + b.width - cv.width);
+            }
+            layer._narrow = narrow;
+            if (Math.abs(left - cv.left) > 0.5 || Math.abs(top - cv.top) > 0.5) c.setCanvasData({ left, top });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            limiting = false;
         }
     }
 
@@ -1953,7 +2001,9 @@
             im.onload = () => {
                 if (token !== openToken) { layer.remove(); reject(new Error('stale')); return; }
                 const c = new Cropper(im, {
-                    aspectRatio: RATIO_W / RATIO_H, viewMode: 1, dragMode: 'move', autoCropArea: 1,
+                    // viewMode 0: 이미지·틀이 서로의 밖으로 나갈 수 있다(2026-10-26 — 축소해 이미지가 틀보다 작아져도 좌상단에
+                    // 붙지 않고 자유롭게 움직인다). 틀 밖 여백은 저장 때 블러로 채워진다(서버 _pad_region).
+                    aspectRatio: RATIO_W / RATIO_H, viewMode: 0, dragMode: 'move', autoCropArea: 1,
                     background: false, responsive: true, zoomable: true, toggleDragModeOnDblclick: false,
                     // 틀 바깥만 어둡게(modal), 틀 안은 덮개 없이 원본 그대로(highlight 끔) — 틀 안이 뿌옇게 보이지 않는다.
                     // 3분할 안내선(guides)과 가운데 십자(center)는 끈다(2026-10-02 사용자 요청 — 눈금 없이 테두리만).
@@ -1969,11 +2019,37 @@
                         layer.classList.toggle('ratio-match', Math.abs(a - b) <= 0.005 * Math.max(a, b));
                         fitFullFrame(c);
                         attachPan(layer, c);
+                        // 틀 안 여백용 블러 배경 — 틀(.cropper-view-box) 안, 원본 복제 이미지 뒤
+                        const vb = layer.querySelector('.cropper-view-box');
+                        if (vb) {
+                            const bg = document.createElement('div');
+                            bg.className = 'crop-bg';
+                            const bgImg = document.createElement('img');
+                            bgImg.alt = '';
+                            bgImg.src = url;
+                            bg.appendChild(bgImg);
+                            vb.insertBefore(bg, vb.firstChild);
+                            layer._padBlur = () => { bgImg.style.filter = `blur(${Math.max(1, c.getCropBoxData().width * 0.03)}px)`; };
+                            layer._padBlur();
+                        }
+                        layer._ready = true;
+                        limitCanvas(c, layer);
                         resolve({ layer, c });
                     },
                     // 준비 중인(아직 안 보이는) 편집기의 이벤트는 무시한다 — 안내 문구는 화면에 보이는 편집기 기준
-                    crop: () => { if (c === cropper) updateInfo(); },
-                    zoom: () => { if (c === cropper) setTimeout(updateInfo, 0); },
+                    crop: () => { if (layer._padBlur) layer._padBlur(); if (layer._ready) limitCanvas(c, layer); if (c === cropper) updateInfo(); },
+                    zoom: (e) => {
+                        if (layer._ready) {
+                            // 이미지 높이가 틀 높이보다 작아지게는 축소하지 못한다(세로는 여백 없음) — 그 한계까지만 줄인다
+                            const minRatio = c.getCropBoxData().height / c.getImageData().naturalHeight;
+                            if (e.detail.ratio < minRatio - 1e-6) {
+                                e.preventDefault();
+                                if (c.getImageData().height > c.getCropBoxData().height + 0.5) setTimeout(() => c.zoomTo(minRatio), 0);
+                                return;
+                            }
+                        }
+                        if (c === cropper) setTimeout(updateInfo, 0);
+                    },
                 });
             };
             im.src = url;                      // preload 로 이미 받아 둔 주소라 캐시에서 바로 뜬다
