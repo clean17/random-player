@@ -103,7 +103,69 @@ const PostMarkdown = (function () {
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
         });
+        buildToc();
     }
+
+    // ── 목차(PC 왼쪽 네비게이션) ─────────────────────────────────────────────────
+    // 렌더된 h1~h6 로 목차를 만들고 클릭하면 해당 제목으로 스크롤한다. 좁은 화면에서는 CSS 가 숨긴다(post.css .post-toc).
+    // 목차가 필요 없는 글(제목 2개 미만)은 만들지 않는다.
+    let tocEl = null, tocLinks = [], tocHeads = [], tocTicking = false;
+
+    function buildToc() {
+        if (tocEl) { tocEl.remove(); tocEl = null; }
+        tocLinks = [];
+        tocHeads = Array.from(mdEl.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+        if (tocHeads.length < 2) { tocHeads = []; return; }
+
+        const minLevel = Math.min.apply(null, tocHeads.map(h => Number(h.tagName[1])));
+        tocEl = document.createElement('nav');
+        tocEl.className = 'post-toc';
+        tocEl.setAttribute('aria-label', '목차');
+
+        tocHeads.forEach((h, i) => {
+            h.id = 'md-h-' + i;
+            const a = document.createElement('a');
+            a.href = '#' + h.id;
+            a.textContent = h.textContent;
+            a.title = h.textContent;
+            a.style.paddingLeft = (8 + (Number(h.tagName[1]) - minLevel) * 12) + 'px';
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            tocEl.appendChild(a);
+            tocLinks.push(a);
+        });
+        document.body.appendChild(tocEl);
+        tocEl.hidden = !on;
+        updateTocActive();
+    }
+
+    // 화면 위쪽(고정 헤더 아래)에 걸린 마지막 제목을 현재 위치로 표시한다
+    function updateTocActive() {
+        tocTicking = false;
+        if (!tocEl || !tocHeads.length) return;
+        let cur = 0;
+        tocHeads.forEach((h, i) => {
+            const margin = parseFloat(getComputedStyle(h).scrollMarginTop) || 0;
+            if (h.getBoundingClientRect().top <= margin + 4) cur = i;
+        });
+        tocLinks.forEach((a, i) => {
+            a.classList.toggle('is-active', i === cur);
+            if (i === cur) {   // 목차가 길면 활성 항목이 보이게 목차 안에서만 스크롤
+                const top = a.offsetTop, box = tocEl;
+                if (top < box.scrollTop || top + a.offsetHeight > box.scrollTop + box.clientHeight) {
+                    box.scrollTop = top - box.clientHeight / 2;
+                }
+            }
+        });
+    }
+
+    window.addEventListener('scroll', () => {
+        if (tocTicking || !tocEl || tocEl.hidden) return;
+        tocTicking = true;
+        requestAnimationFrame(updateTocActive);
+    }, { passive: true });
 
     // ── 마크다운 판별 ────────────────────────────────────────────────────────────
     // 코드 블록(```) 밖의 줄만 본다. 마크다운 신호에 점수를 주고, 코드처럼 보이는 줄의 비율이 높으면 탈락시킨다.
@@ -197,6 +259,7 @@ const PostMarkdown = (function () {
         on = value;
         contentEl.hidden = value;
         mdEl.hidden = !value;
+        if (tocEl) { tocEl.hidden = !value; if (value) updateTocActive(); }
         buttonEl.textContent = value ? '원문 보기' : 'MD 보기';
         buttonEl.setAttribute('aria-pressed', value ? 'true' : 'false');
         if (persist) save(value);

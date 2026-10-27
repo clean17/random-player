@@ -3943,6 +3943,41 @@ body.page-post-view .post-md {
     line-height: 1.65;
 }
 body.page-post-view .post-md > :first-child { margin-top: 0; }
+/* 목차 점프 시 고정 헤더에 제목이 가려지지 않게 */
+body.page-post-view .post-md :is(h1, h2, h3, h4, h5, h6) {
+    scroll-margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 16px);
+}
+
+/* 목차(PC) — 가운데 정렬된 본문 카드(최대 980px) 왼쪽 여백에 고정. 여백이 좁은 화면에서는 숨긴다 */
+.post-toc { display: none; }
+@media (min-width: 1400px) {
+    .post-toc:not([hidden]) {
+        display: block;
+        position: fixed;
+        top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 192px);
+        right: calc(50% + 490px + 16px);
+        width: min(260px, calc((100vw - 980px) / 2 - 32px));
+        max-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 216px);
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 10px 6px;
+        border-left: 2px solid #e5e7eb;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    .post-toc a {
+        display: block;
+        padding: 4px 8px;
+        border-radius: 6px;
+        color: #4b5563;
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .post-toc a:hover { background: #f3f4f6; color: #111827; }
+    .post-toc a.is-active { background: #eff6ff; color: #2563eb; font-weight: 600; }
+}
 body.page-post-view .post-md p { margin: 0 0 0.9em; }
 body.page-post-view .post-md h1,
 body.page-post-view .post-md h2,
