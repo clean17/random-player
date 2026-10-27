@@ -3948,15 +3948,15 @@ body.page-post-view .post-md :is(h1, h2, h3, h4, h5, h6) {
     scroll-margin-top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 16px);
 }
 
-/* 목차(PC) — 가운데 정렬된 본문 카드(최대 980px) 왼쪽 여백에 고정. 여백이 좁은 화면에서는 숨긴다 */
+/* 목차(PC) — 가운데 정렬된 본문 카드(최대 1120px) 왼쪽 여백에 고정. 여백이 좁은 화면에서는 숨긴다 */
 .post-toc { display: none; }
-@media (min-width: 1400px) {
+@media (min-width: 1500px) {
     .post-toc:not([hidden]) {
         display: block;
         position: fixed;
         top: calc(var(--app-header-height, 56px) + env(safe-area-inset-top) + 192px);
-        right: calc(50% + 490px + 16px);
-        width: min(260px, calc((100vw - 980px) / 2 - 32px));
+        right: calc(50% + 560px + 16px);
+        width: min(260px, calc((100vw - 1120px) / 2 - 32px));
         max-height: calc(100dvh - var(--app-header-height, 56px) - env(safe-area-inset-top) - 216px);
         overflow-y: auto;
         box-sizing: border-box;
