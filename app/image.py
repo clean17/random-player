@@ -371,7 +371,20 @@ def delete_images_task(images_to_delete, dir):
                 # print(f"[WARN] not found: {safe_path}")
                 continue
 
-            send2trash(safe_path)
+            if dir in ('image', 'image2'):
+                # base_dir 의 상위 디렉토리에 있는 deleted 로 이동(상대경로 유지, 이름 충돌 시 번호 부여)
+                deleted_root = os.path.join(os.path.dirname(os.path.realpath(thumb_base)), 'deleted')
+                dest = os.path.normpath(os.path.join(deleted_root, rel))
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                if os.path.exists(dest):
+                    stem, ext = os.path.splitext(dest)
+                    n = 1
+                    while os.path.exists(f"{stem}_{n}{ext}"):
+                        n += 1
+                    dest = f"{stem}_{n}{ext}"
+                shutil.move(safe_path, dest)
+            else:
+                send2trash(safe_path)
 
         except FileNotFoundError:
             print(f"[WARN] not found (caught): {image}")
