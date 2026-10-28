@@ -11,6 +11,12 @@
     <script src="/static/js/common.js?v={{ version }}"></script>
 
     <style>
+        #load-status{
+            text-align:center; padding:14px 12px; margin:12px auto; font-size:14px; font-weight:600;
+            border-radius:8px; max-width:420px; user-select:none;
+        }
+        #load-status.loading{ background:#fff4e0; color:#b26a00; }
+        #load-status.done{ background:#e6f6ea; color:#1b7a3a; }
         #masonry.image-container{
             display: flex !important;
             flex-direction: row !important;
@@ -412,6 +418,9 @@
 
         </div>
 
+        <!-- 렌더링/이미지 로딩 진행 상태 — 느린 네트워크에서 "끝났는지" 구분하기 위한 표시 -->
+        <div id="load-status" class="loading" style="display:none;"></div>
+
         <div id="empty-state" style="display:{% if images_length == 0 %}flex{% else %}none{% endif %}; flex-direction:column; align-items:center; justify-content:center; padding:80px 20px; color:#bbb; user-select:none;">
             <svg width="130" height="110" viewBox="0 0 130 110" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="8" y="8" width="114" height="84" rx="10" stroke="#ddd" stroke-width="3" fill="#f8f8f8"/>
@@ -611,6 +620,26 @@
         }
     }
 
+
+    // 하단 로딩 상태: 아직 그릴 항목이 남았거나 이미지가 로딩 중이면 "불러오는 중", 전부 끝나면 "완료"
+    function updateLoadStatus() {
+        const el = document.getElementById('load-status');
+        if (!el || !allItems.length) return;
+
+        const notRendered = allItems.length - currentIndex;
+        let pendingImgs = 0;
+        msr_container.querySelectorAll('img.thumbnail').forEach(img => {
+            if (img.dataset.src || !img.complete) pendingImgs++;
+        });
+
+        const done = notRendered <= 0 && pendingImgs === 0;
+        el.style.display = 'block';
+        el.className = done ? 'done' : 'loading';
+        el.textContent = done
+            ? `✓ 모든 이미지 로드 완료 (${allItems.length}개)`
+            : `이미지 불러오는 중… (${currentIndex}/${allItems.length}${pendingImgs ? ', 로딩 대기 ' + pendingImgs : ''})`;
+    }
+    setInterval(updateLoadStatus, 500);
 
     function rebalanceFromBottom() {
         if (columns.length < 2) return;
