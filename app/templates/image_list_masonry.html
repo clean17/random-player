@@ -372,6 +372,7 @@
                 <video class="video-thumbnail"
                        muted playsinline controls loop
                        data-index="{{ loop.index }}"
+                       poster="{{ url_for('static', filename='svg/video_skeleton.svg') }}"
                        data-poster="/video/temp-video-poster/{{ image|urlencode }}?dir={{ dir }}&selected_dir={{ selected_dir|urlencode }}"
                        alt="{{ image|urlencode }}"
                 >
