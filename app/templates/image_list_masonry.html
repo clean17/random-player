@@ -53,6 +53,10 @@
             border-radius: 0;
             display: block;
         }
+        /* 첫 프레임이 나오기 전(스켈레톤/포스터 단계)엔 image.css 의 min-height:500px 를 풀어 이미지 스켈레톤과 같은 높이로 보이게 한다 (video-ready 는 videoLoadObserver 에서 붙인다) */
+        .masonry-column .image-item .video-thumbnail:not(.video-ready) {
+            min-height: 0;
+        }
         /* 영상 첫 프레임이 나오기 전까지 포스터 위에 띄우는 로딩 표시 (videoLoadObserver 에서 붙이고 뗀다) */
         .image-item.video-loading::after {
             content: '';
@@ -913,11 +917,14 @@
             if (targetEl.dataset.poster) targetEl.poster = targetEl.dataset.poster;
             // 첫 프레임이 나올 때까지 포스터 위에 로딩 표시
             const item = targetEl.closest('.image-item');
+            const markReady = () => targetEl.classList.add('video-ready');
             if (item && targetEl.readyState < 2) {
                 item.classList.add('video-loading');
-                const done = () => item.classList.remove('video-loading');
+                const done = () => { item.classList.remove('video-loading'); markReady(); };
                 targetEl.addEventListener('loadeddata', done, { once: true });
                 targetEl.addEventListener('error', done, { once: true });
+            } else {
+                markReady();
             }
             targetEl.load();
             attachTapEventOnly(targetEl, { autoPlay: true });
