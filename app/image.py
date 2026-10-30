@@ -1,6 +1,7 @@
 # image.py
 import os
 import re
+import stat
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, send_from_directory, abort, g, \
     send_file
 from flask_login import login_required, current_user
@@ -141,7 +142,7 @@ def get_images(start, count, page, dir, image_arr=None):
             image_arr[:] = images
 
     else:
-        full_paths = []
+        entries = []  # (mtime, path)
 
         for root, dirs, files in os.walk(dir):
             # thumb: 썸네일 / origin: 자르기 전 원본 백업(crop-image) — 둘 다 갤러리 목록에 넣지 않는다
@@ -152,11 +153,19 @@ def get_images(start, count, page, dir, image_arr=None):
 
                 full_path = os.path.join(root, f)
 
-                if os.path.isfile(full_path):
-                    full_paths.append(full_path)
+                # 목록을 만드는 사이에 다른 프로세스(스크래퍼/이동·삭제)가 파일을 옮기면 그 사이
+                # 사라진 파일이 생긴다(2026-11-01 move 디렉토리에서 FileNotFoundError로 500).
+                # isfile 따로 + 정렬 때 getmtime 따로 두 번 보지 말고 한 번에 stat 해서, 없어졌으면 건너뛴다.
+                try:
+                    st = os.stat(full_path)
+                except OSError:
+                    continue
+                if stat.S_ISREG(st.st_mode):
+                    entries.append((st.st_mtime, full_path))
 
         # 수정시간 오름차순
-        full_paths.sort(key=lambda x: os.path.getmtime(x))
+        entries.sort(key=lambda e: e[0])
+        full_paths = [p for _, p in entries]
 
         # dir 기준 상대경로로 변환
         images = [
