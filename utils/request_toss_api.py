@@ -6,6 +6,8 @@ import uuid
 from typing import Dict, List
 from flask import current_app, jsonify
 
+from utils.toss_openapi import get_trading_amounts as get_amounts
+
 INFO_URL = "https://wts-info-api.tossinvest.com/api/v3/search-all/wts-auto-complete"
 OVERVIEW_URL = "https://wts-info-api.tossinvest.com/api/v2/stock-infos/PRODUCTCODE/overview"
 AMOUNT_URL = "https://wts-info-api.tossinvest.com/api/v1/c-chart/kr-s/PRODUCTCODE/day:1"
@@ -113,38 +115,13 @@ def request_stock_volume_and_amount(product_code):
 # 검색 단계 없이 바로 조회한다.
 # 60초 캐시 — 3초 자동새로고침(장중)에 맞춰 매번 부르면 renew_interest_stocks_close에서
 # 겪은 것과 같은 Toss 쪽 속도제한(TLS handshake 거부)을 다시 겪는다.
-_AMOUNT_CACHE_LOCK = threading.Lock()
-_AMOUNT_CACHE: Dict[str, tuple] = {}   # stk_cd -> (timestamp, amount)
-_AMOUNT_CACHE_TTL = 60.0
-
-
+#
+# 2026-10-30: 비공식 c-chart가 막혀 공식 Open API로 교체(utils/toss_openapi.py). 거래대금 상위 100위는
+# 랭킹의 실제 값, 그 밖은 일봉 거래량 x 대표가격 근사. 10초 캐시는 그쪽에서 처리한다.
 def get_trading_amounts(stk_cds: List[str]) -> Dict[str, float]:
     """종목코드 리스트 -> {종목코드: 오늘 거래대금(원)}. 조회 실패한 종목은 결과에서 빠진다
     (표시용 부가 정보라 실패해도 화면이 죽으면 안 됨)."""
-    now = time.time()
-    result: Dict[str, float] = {}
-    to_fetch = []
-    with _AMOUNT_CACHE_LOCK:
-        for code in stk_cds:
-            cached = _AMOUNT_CACHE.get(code)
-            if cached and now - cached[0] < _AMOUNT_CACHE_TTL:
-                result[code] = cached[1]
-            else:
-                to_fetch.append(code)
-
-    for code in to_fetch:
-        try:
-            url = AMOUNT_URL.replace("PRODUCTCODE", f"A{code}")
-            res = requests.get(url, headers=DEFAULT_HEADERS, timeout=5)
-            res.raise_for_status()
-            amount = res.json()["result"]["candles"][0]["amount"]
-            result[code] = amount
-            with _AMOUNT_CACHE_LOCK:
-                _AMOUNT_CACHE[code] = (now, amount)
-        except Exception as e:
-            print(f"[WARN] get_trading_amounts 실패: {code} {e}")
-
-    return result
+    return get_amounts(stk_cds)
 
 
 # ── 종목 뉴스 (2026-09-08, 관심종목 추천 리포트용) ───────────────────────────

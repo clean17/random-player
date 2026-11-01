@@ -13,6 +13,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from utils.wsgi_midleware import logger
+from utils.toss_openapi import get_last_prices
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # project_root
 
@@ -250,45 +251,25 @@ def renew_interest_stocks_close():
 
     close_list = []
 
-    for i, row in enumerate(rows):
-        time.sleep(0.2)  # 200ms 대기 — 50ms는 Toss 쪽 속도제한(TLS handshake 거부)을 유발했음
-        ticker = row['stock_code']
-        product_name = None  # 매 루프마다 초기화 — 안 하면 실패 시 이전 종목명이 그대로 로그에 남음
+    # 2026-10-30: 비공식 wts-info-api가 400으로 막혀 공식 Open API(/api/v1/prices)로 교체.
+    # 최대 200종목을 한 번에 조회하므로 종목당 0.2초 대기 루프가 필요 없다. 공식 시세엔 로고가
+    # 없어 logo_image_url은 None(UPDATE의 COALESCE가 기존 DB 값을 유지).
+    tickers = [str(r['stock_code']) for r in rows]
+    try:
+        prices = get_last_prices(tickers)
+    except Exception as e:
+        print(f"renew_interest_stocks_close [prices 요청 실패]: {e}")
+        prices = {}
 
-        try:
-            json_data = _toss_request_with_retry(_toss_search_stock_info, str(ticker))
-            result = json_data["result"]
-
-            # 거래정지는 데이터를 주지 않는다
-            if len(result) == 0:
-                continue
-
-            product_code = result[0]["data"]["items"][0]["productCode"]
-            product_name = result[0]["data"]["items"][0]["productName"]
-            logo_image_url = result[0]["data"]["items"][0]["logoImageUrl"]
-        except Exception as e:
-            print(f"renew_interest_stocks_close [info 요청 실패1]: {str(ticker)} {str(product_name)} {e}")
-            continue  # 오류
-
-
-        # 현재 종가 — 2026-10-23: c-chart(day:1) 엔드포인트가 토스 게이트웨이에서 어떤 파라미터로도
-        # 400 invalid-request를 돌려줘서(경로/파라미터와 무관, 1ms 응답) 검색 응답의 close.krw로 대체.
-        # 검색 응답(items[0])에 이미 현재가가 들어 있어 요청도 종목당 2회 -> 1회로 줄었다.
-        try:
-            last_close = result[0]["data"]["items"][0]["close"]["krw"]
-        except Exception as e:
-            print(f"renew_interest_stocks_close [info 요청 실패4]: {str(ticker)} {str(product_name)} {e}")
-            continue  # 오류
-
-        # print(f'{i+1}/{len(rows)} ticker : {ticker}, close : {last_close}')
-        if is_valid_number_value(last_close):
-            # close_list.append((str(last_close), category, logo_image_url, ticker))    # 순서: (값, 키)
-            close_list.append((str(last_close).replace(",", ""), None, logo_image_url, ticker))    # 순서: (값, 키)
-        else:
-            print(f"invalid last_close: {ticker} {product_name} last_close={last_close!r}")
+    for ticker in tickers:
+        last_close = prices.get(ticker)   # 거래정지 등으로 응답에 없으면 건너뜀
+        if last_close is None:
             continue
-        # update_interest_stock_list_close(close_list)   # 급하게 데이터 넣을 때
-        # close_list.clear()
+        if is_valid_number_value(last_close):
+            close_list.append((str(int(last_close)) if float(last_close).is_integer() else str(last_close),
+                               None, None, ticker))    # 순서: (close, category, logo, 키)
+        else:
+            print(f"invalid last_close: {ticker} last_close={last_close!r}")
 
     if len(close_list) > 0:
         update_interest_stock_list_close(close_list)
@@ -322,29 +303,18 @@ def verify_low_stock_data():
 # 하루에 한번 토스 product_code 갱신
 def update_product_code():
     from app.repository.stocks.stocks import get_stock_list, update_stocks_product_code
-    from utils.request_toss_api import request_stock_info_with_toss_api
-
     stocks = get_stock_list("kor")
 
+    # 2026-10-30: 비공식 검색 API가 막혀서(400) productCode를 검색으로 얻지 못한다. KRX 종목의
+    # productCode는 'A'+6자리 종목코드라(실측: A000660, A489790 …) API 없이 만든다. AutoSales의
+    # job들이 이 값을 DB에서 읽어 None 여부만 확인하고 6자리로 되돌려 쓴다.
     for stock in stocks:
         try:
             stock_code = stock.get('stock_code')
-            result = request_stock_info_with_toss_api(stock_code)
-
-            if result is None or not result:  # dict이 비어있으면 False
+            if not stock_code:
                 continue
 
-            data_list = result['result']
-            if not data_list:  # result 리스트가 비어있음
-                continue
-
-            items = data_list[0].get('data', {}).get('items', [])
-            if not items:  # items 리스트가 비어있음
-                continue
-
-            productCode = items[0].get('productCode')
-
-            update_stocks_product_code(stock_code, productCode)
+            update_stocks_product_code(stock_code, f"A{stock_code}")
         except Exception as e:
             print(f"Failed to update stock {stock}: {e}")
 
