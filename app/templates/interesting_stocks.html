@@ -3259,113 +3259,73 @@
             const stocks = Array.from(s);
             // console.log('stocks', stocks);
 
-            stocks.forEach(stock_name=>{
-                // console.log(stock_name);
-                const data = {
-                    stock_name: stock_name,
+            // 2026-10-30: 비공식 /stocks/info(종목당 1회)를 공식 Open API 일괄 조회(/stocks/quotes)로 교체.
+            if (stocks.length === 0) return;
+            axios.post("/stocks/quotes", {codes: stocks.filter(Boolean)}, {
+                headers: {"Content-Type": "application/json"},
+                timeout: 8000
+            }).then(res => {
+                const quotes = res.data || {};
+                for (const i of stock_names) {
+                    const code = (i.textContent.match(/\(([^)]*)\)/) || [null, null])[1];
+                    const q = quotes[code];
+                    if (!q) continue;
+                    const tr = i.closest('tr');
+                    const yesterday_close_el = tr.querySelector('.yst_close');
+                    const current_price_el = tr.querySelector('.cur_close');
+                    const price_change_pct_el = tr.querySelector('.prc_change');
+                    updateTdWithBlink(current_price_el, fmt2(q.price) + '원');
+                    const calc_change_pct = (current_price_el.textContent.replace(/[^0-9.]/g, '') - yesterday_close_el.textContent.replace(/[^0-9.]/g, ''))
+                        / yesterday_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
+                    updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
                 }
-                axios.post("/stocks/info", data, {
-                    headers: {"Content-Type": "application/json"},
-                    timeout: 3000 // 3초 초과시 자동 reject
-                }).then(res => {
-                    const stock_data = res.data.result[0]?.data.items[0];
-                    const stock_name = stock_data?.productName;
-                    const product_code = stock_data?.productCode;
-                    p.add(product_code);
-                    const logo_image_url = stock_data?.logoImageUrl;
-                    const realtime_price = stock_data?.close.krw;
-
-                    for (const i of stock_names) {
-                        if (i.textContent.split('(')[0] === stock_name) {
-                            const tr = i.closest('tr');
-                            i.previousElementSibling.value = product_code;
-                            const yesterday_close_el = tr.querySelector('.yst_close');
-                            const current_price_el = tr.querySelector('.cur_close');
-                            const price_change_pct_el = tr.querySelector('.prc_change');
-                            updateTdWithBlink(current_price_el, fmt2(realtime_price) + '원');
-                            const calc_change_pct = (current_price_el.textContent.replace(/[^0-9.]/g, '') - yesterday_close_el.textContent.replace(/[^0-9.]/g, ''))
-                                / yesterday_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
-                            updateTdWithBlink(price_change_pct_el, fmt2(calc_change_pct) + '%');
-                        }
-                    }
-                }).catch(error => {
-                    throw error; // 기타 에러는 그대로 던짐
-                });
-            })
+            }).catch(error => {
+                console.error('quotes 조회 실패', error);
+            });
         }, 3000)
 
         // 거래대금 변동률
         timer2 = setInterval(()=>{
-            const productCodes = Array.from(p);
-            productCodes.forEach(productCode => {
-                console.log('p', productCode)
-                if (productCode) {
-                    const data = {
-                        product_code: productCode
-                    }
-                    axios.post("/stocks/amount", data, {
-                        headers: {"Content-Type": "application/json"},
-                        timeout: 3000 // 3초 초과시 자동 reject
-                    }).then(res => {
-                        const amount = res.data.result.candles[0].amount;
-                        const product_codes = document.querySelectorAll('.product_code');
-
-                        for (const p1 of product_codes) {
-                            if (p1.value === productCode) {
-                                const tr = p1.closest('tr');
-                                const yesterday_amount = tr.querySelector('.avg_amount').dataset.avg5dAmount;
-                                const amount_change_pct = Number(amount) / Number(yesterday_amount.replace(/[^0-9.]/g, "")) * 100
-                                const current_amount_el = tr.querySelector('.cur_amount');
-                                const amount_change_pct_el = tr.querySelector('.tv_change');
-                                updateTdWithBlink(current_amount_el, trValFmtWon(amount));
-                                updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
-                            }
-                        }
-                    }).catch(error => {
-                        throw error; // 기타 에러는 그대로 던짐
-                    });
-                }
-            })
-
+            // 2026-10-30: 비공식 /stocks/amount·/stocks/info(종목당 1회씩)를 공식 Open API 일괄 조회
+            // (/stocks/quotes)로 교체. 거래대금은 상위 100위는 실제 값, 그 밖은 거래량 x 대표가격 근사.
             const activeTable = getActiveTabTarget();
+            const stock_names = document.querySelector(activeTable).querySelectorAll('.stock_name');
             const stock_names2 = document.querySelector(activeTable).querySelectorAll('.stock_name2'); // 탭 1
-            s2.clear();
-            stock_names2.forEach(i=>s2.add((i.textContent.match(/\(([^)]*)\)/) || [null, null])[1]));
-            const stocks2 = Array.from(s2);
-            // console.log('stocks2', stocks2);
+            const codeOf = el => (el.textContent.match(/\(([^)]*)\)/) || [null, null])[1];
+            const codes = Array.from(new Set([...stock_names, ...stock_names2].map(codeOf).filter(Boolean)));
+            if (codes.length === 0) return;
 
-            stocks2.forEach(stock_name=>{
-                stock_name = stock_name.split('(')[0];
-                // console.log(stock_name);
-                const data = {
-                    stock_name: stock_name,
+            axios.post("/stocks/quotes", {codes: codes}, {
+                headers: {"Content-Type": "application/json"},
+                timeout: 8000
+            }).then(async res => {
+                const quotes = res.data || {};
+
+                for (const i of stock_names) {
+                    const q = quotes[codeOf(i)];
+                    if (!q || q.amount == null) continue;
+                    const tr = i.closest('tr');
+                    const yesterday_amount = tr.querySelector('.avg_amount').dataset.avg5dAmount;
+                    const amount_change_pct = Number(q.amount) / Number(yesterday_amount.replace(/[^0-9.]/g, "")) * 100
+                    const current_amount_el = tr.querySelector('.cur_amount');
+                    const amount_change_pct_el = tr.querySelector('.tv_change');
+                    updateTdWithBlink(current_amount_el, trValFmtWon(q.amount));
+                    updateTdWithBlink(amount_change_pct_el, fmt2(amount_change_pct) + '%');
                 }
-                axios.post("/stocks/info", data, {
-                    headers: {"Content-Type": "application/json"},
-                    timeout: 3000 // 3초 초과시 자동 reject
-                }).then(async res => {
-                    const stock_data = res.data.result[0]?.data.items[0];
-                    const stock_name = stock_data?.productName;
-                    const product_code = stock_data?.productCode;
-                    // const logo_image_url = stock_data?.logoImageUrl;
-                    const realtime_price = stock_data?.close.krw;
 
-                    for (const i of stock_names2) {
-                        if (i.textContent.split('(')[0] === stock_name) {
-                            const tr = i.closest('tr');
-                            const high_close_el = tr.querySelector('.high_close');
-                            const chg_compare_peak_rate_el = tr.querySelector('.chg_compare_peak');
-                            const calc_change_pct = (realtime_price - high_close_el.textContent.replace(/[^0-9.]/g, ''))
-                                / high_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
-                            await updateTdWithBlink(chg_compare_peak_rate_el, fmt2(calc_change_pct) + '%');
-                        }
-                    }
-
-
-                }).catch(error => {
-                    throw error; // 기타 에러는 그대로 던짐
-                });
-            })
+                for (const i of stock_names2) {
+                    const q = quotes[codeOf(i)];
+                    if (!q) continue;
+                    const tr = i.closest('tr');
+                    const high_close_el = tr.querySelector('.high_close');
+                    const chg_compare_peak_rate_el = tr.querySelector('.chg_compare_peak');
+                    const calc_change_pct = (q.price - high_close_el.textContent.replace(/[^0-9.]/g, ''))
+                        / high_close_el.textContent.replace(/[^0-9.]/g, '') * 100;
+                    await updateTdWithBlink(chg_compare_peak_rate_el, fmt2(calc_change_pct) + '%');
+                }
+            }).catch(error => {
+                console.error('quotes 조회 실패', error);
+            });
         }, 1000 * 10)
     }
 

@@ -5,7 +5,7 @@ import threading
 import pandas as pd
 from datetime import datetime
 
-from flask import Blueprint, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
+from flask import Blueprint, current_app, render_template, jsonify, request, send_file, send_from_directory, session, url_for, redirect, Response, stream_with_context
 from flask_login import login_required, current_user
 from app.repository.stocks.StockDTO import StockDTO
 from app.repository.stocks.stocks import merge_daily_interest_stocks, get_interest_stocks, get_interest_stocks_info, \
@@ -18,6 +18,7 @@ from app.repository.stocks.stocks import merge_daily_interest_stocks, get_intere
     mark_stock_viewed, get_viewed_stocks, get_logo_urls_by_codes
 from app.repository.users.users import find_user_by_username
 import time
+from utils.toss_openapi import get_quotes
 from utils.request_toss_api import request_stock_overview_with_toss_api, request_stock_info_with_toss_api, \
     request_stock_volume_and_amount, request_stock_category, get_trading_amounts
 from job.batch_runner import predict_stock_graph
@@ -510,7 +511,22 @@ def delete_delisted_stock_stocks():
 def get_stocks(nation):
     return get_stock_list(nation)
 
-# 종목명 검색 > productCode
+# 관심종목 화면 폴링용 시세 (2026-10-30, 공식 Open API) — {codes:[...]} -> {code: {name, price, amount}}
+# 비공식 /info·/amount(productCode 기반)를 대체한다. 한 번에 최대 200종목.
+@stock.route("/quotes", methods=["POST"])
+def get_stock_quotes():
+    codes = (request.json or {}).get('codes') or []
+    codes = [c for c in dict.fromkeys(str(c) for c in codes) if re.fullmatch(r"[0-9A-Za-z.\-]{1,10}", c)][:200]
+    if not codes:
+        return jsonify({})
+    try:
+        return jsonify(get_quotes(codes))
+    except Exception as e:
+        current_app.logger.error(f"[TOSS OPENAPI] quotes 실패: {e}")
+        return jsonify({"error": "TOSS_OPENAPI_ERROR"}), 502
+
+
+# 종목명 검색 > productCode (비공식 API — 2026-10-30부터 막혀 있음, 프런트는 /quotes를 쓴다)
 @stock.route("/info", methods=["POST"])
 def get_realtime_price():
     data = request.json
