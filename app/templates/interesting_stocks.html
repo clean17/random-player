@@ -2259,11 +2259,15 @@
             // 직접 갈 방법이 없어 최선책으로 네이버 뉴스 검색(일반 웹검색보다 실제 기사가
             // 위에 뜰 확률이 높음)으로 보낸다 — 완벽한 원문 링크는 아니라는 한계는 남는다.
             const newsHtml = (p.news || []).slice(0, 2).map(n => {
+                // 뉴스 제목/매체/링크는 외부(Google News RSS) 값이라 innerHTML에 넣기 전에 이스케이프한다.
+                const escHtml = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
                 const title = n.title ?? '';
-                const url = `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(title)}`;
+                // 2026-10-30: 뉴스 출처를 Google News RSS로 바꾸면서 n.url(원문으로 리다이렉트되는 링크)이 생겼다.
+                // 없으면 예전처럼 네이버 뉴스 검색으로 보낸다.
+                const url = n.url || `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(title)}`;
                 const d = n.created_at ? new Date(n.created_at) : null;
                 const dateText = d && !isNaN(d) ? d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-                return `<div class="ms-pick-news-item"><a href="${url}" target="_blank" rel="noopener">${title}</a> <span class="ms-pick-news-source">${n.source ?? ''} · ${dateText}</span></div>`;
+                return `<div class="ms-pick-news-item"><a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">${escHtml(title)}</a> <span class="ms-pick-news-source">${escHtml(n.source)} · ${dateText}</span></div>`;
             }).join('') || '-';
             const labelClass = (p.label === '적극매수' || p.label === '매수') ? 'ms-positive' : '';
             return `

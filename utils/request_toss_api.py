@@ -3,6 +3,8 @@ import json
 import time
 import threading
 import uuid
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 from typing import Dict, List
 from flask import current_app, jsonify
 
@@ -129,33 +131,53 @@ def get_trading_amounts(stk_cds: List[str]) -> Dict[str, float]:
 # 스케줄러 잡(요청 컨텍스트 밖)에서 그대로 못 쓴다 — get_trading_amounts()와 같은 이유로
 # Flask에 의존하지 않는 별도 함수로 둔다.
 def get_stock_news(stock_name: str, limit: int = 3) -> List[Dict]:
-    """종목명으로 최근 뉴스 최대 limit건을 [{id, title, source, created_at}, ...]로 반환.
+    """종목명으로 최근 뉴스 최대 limit건을 [{id, title, source, created_at, url}, ...]로 반환.
     실패하면 빈 리스트(표시용 부가 데이터라 화면/리포트가 죽으면 안 됨).
 
-    2026-09-08: id를 추가했다 — 토스 NEWS 섹션 응답엔 기사 원문 URL이 없어서(title/source/
-    createdAt만 옴), 대신 이 id로 토스 자체 리더 페이지(https://tossinvest.com/news/{id})를
-    만들 수 있다(실측: /api/v1/news/{id}가 200으로 본문 전체를 반환 — 웹 페이지도 같은 id로
-    떠 있는 걸 리다이렉트로 확인). 원문 매체 URL은 여전히 못 얻지만 전체 기사 내용을 보여주는
-    페이지라 검색 링크보다 훨씬 낫다."""
+    2026-10-30: 토스 NEWS(비공식 검색 API)가 400으로 막혔고 공식 Open API엔 뉴스가 없다.
+    Google News RSS(공개 피드)로 교체했다 — 최근 7일 기사만, 제목은 'OO - 매체' 꼴이라 매체명을
+    떼어 source로 분리한다. url은 news.google.com 리다이렉트 링크(클릭하면 원문 매체로 이동)라
+    프런트가 검색 링크 대신 이걸 쓸 수 있다. created_at은 ISO 8601(UTC). 같은 종목을 한 리포트에서
+    여러 번 부르지 않지만, 피드 부담을 줄이려 1시간 캐시한다."""
+    key = (stock_name, limit)
+    now = time.time()
+    with _NEWS_CACHE_LOCK:
+        cached = _NEWS_CACHE.get(key)
+        if cached and now - cached[0] < _NEWS_CACHE_TTL:
+            return cached[1]
     try:
-        res = requests.post(
-            INFO_URL,
-            json={"query": stock_name, "sections": [{"type": "NEWS"}]},
-            headers=DEFAULT_HEADERS,
+        res = requests.get(
+            _NEWS_RSS_URL,
+            params={"q": f"{stock_name} 주식 when:7d", "hl": "ko", "gl": "KR", "ceid": "KR:ko"},
+            headers={"User-Agent": "Mozilla/5.0"},
             timeout=10,
         )
         res.raise_for_status()
-        result = res.json().get("result") or []
-        items = (result[0].get("data", {}).get("items") or []) if result else []
-        return [{
-            "id": it.get("id"),
-            "title": it.get("title"),
-            "source": it.get("source"),
-            "created_at": it.get("createdAt"),
-        } for it in items[:limit]]
+        out = []
+        for it in ET.fromstring(res.content).findall("./channel/item")[:limit]:
+            title = it.findtext("title") or ""
+            src_el = it.find("source")
+            source = src_el.text if src_el is not None else None
+            if source and title.endswith(" - " + source):
+                title = title[:-len(" - " + source)]
+            try:
+                created_at = parsedate_to_datetime(it.findtext("pubDate")).isoformat()
+            except Exception:
+                created_at = None
+            link = it.findtext("link")
+            out.append({"id": link, "title": title, "source": source, "created_at": created_at, "url": link})
+        with _NEWS_CACHE_LOCK:
+            _NEWS_CACHE[key] = (now, out)
+        return out
     except Exception as e:
         print(f"[WARN] get_stock_news 실패: {stock_name} {e}")
         return []
+
+
+_NEWS_RSS_URL = "https://news.google.com/rss/search"
+_NEWS_CACHE_LOCK = threading.Lock()
+_NEWS_CACHE: Dict[tuple, tuple] = {}
+_NEWS_CACHE_TTL = 3600.0
 
 
 def request_stock_category(company_code):
