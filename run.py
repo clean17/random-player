@@ -130,6 +130,9 @@ if __name__ == '__main__':
             # 문제없다 — 로그인 직후 페이지 로드처럼 순간적으로 요청이 몰릴 때의 큐 튐을 줄이려는
             # 목적. db_pool max_size(config/db_connect.py)도 10->20으로 같이 늘렸다 — 안 늘리면
             # 병목이 스레드 대신 DB 커넥션 풀로 옮겨갈 뿐이라서.
-            serve(app, host='127.0.0.1', port=8090, threads=24, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
+            # 2026-11-04: 24 -> 48, db_pool 20 -> 40. 갤러리 화면이 열릴 때 파일 요청이 수십 개씩 한꺼번에
+            # 몰려 'Task queue depth'가 최대 37까지 튀었다(11/03 22:44). 끝나면 몇 초 안에 해소되는
+            # 일시적 쏠림이라 스레드를 두 배로 늘려 흡수한다. PG max_connections=100(당시 사용 17).
+            serve(app, host='127.0.0.1', port=8090, threads=48, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
     finally:
         cleanup(scheduler, node_process, [mock_process])
