@@ -242,6 +242,9 @@
     {% if dir in ['image', 'image2', 'move', 'cos'] %}
     <button class="menu-item-btn" id="empty-bin-button">🗑 Empty bin</button>
     <button class="menu-item-btn" id="fetch-image-button">↻ Fetch</button>
+    {% if dir == 'image2' %}
+    <button class="menu-item-btn" id="ai-screen-button" title="refine 취향 모델로 1차 분류 — 통과한 이미지만 move 로 이동 (모델은 읽기만)">🤖 AI 1차 분류 → move</button>
+    {% endif %}
     {% elif dir == 'refine' %}
     <button class="menu-item-btn" id="shuffle-button">🔀 Shuffle</button>
     <button class="menu-item-btn" id="restore-order-button">↩ Original order</button>
@@ -2298,6 +2301,78 @@
     }
     saveBtn.onclick = () => doSave(false);
     aiBtn.onclick = () => doSave(true);
+})();
+</script>
+{% endif %}
+{% if dir == 'image2' %}
+<script>
+// AI 1차 분류(2026-11-03): refine 취향 모델로 image2 를 걸러 통과분만 move 로 옮긴다. 남은 건 사용자가 직접 본다.
+// 서버(app/image_curate.py /api/screen)는 모델을 읽기만 한다 — 판정·학습은 그대로. 이동은 기존 /image/move-image 를 쓴다.
+(function () {
+    const btn = document.getElementById('ai-screen-button');
+    if (!btn) return;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    async function api(url, body) {
+        const r = await fetch(url, body ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {});
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+        return j;
+    }
+    function statusBox() {
+        let el = document.getElementById('ai-screen-status');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'ai-screen-status';
+            el.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10003;' +
+                'background:rgba(20,20,20,.92);color:#fff;padding:18px 24px;border-radius:10px;font-size:15px;' +
+                'max-width:90vw;text-align:center;line-height:1.6;white-space:pre-line';
+            document.body.appendChild(el);
+        }
+        return el;
+    }
+    btn.addEventListener('click', async () => {
+        const panel = document.getElementById('top-menu-panel');
+        if (panel) panel.style.display = 'none';
+        btn.disabled = true;
+        const box = statusBox();
+        let moved = 0;
+        try {
+            box.textContent = 'AI 1차 분류 준비 중…';
+            await api('/image/curate/api/screen/run', {dir: 'image2'});
+            let r;
+            for (;;) {
+                r = await api('/image/curate/api/screen?dir=image2');
+                if (!r.running) break;
+                box.textContent = '새 이미지 특징 계산 중 (GPU)\n' + (r.progress || '');
+                await sleep(2000);
+            }
+            box.remove();
+            if (!r.n_pass) { alert(`통과한 이미지가 없습니다 (대상 ${r.scored}장).`); return; }
+            if (!confirm(`AI 1차 분류 결과\n대상 ${r.scored}장 중 통과 ${r.n_pass}장` +
+                         `\n(취향 점수 미달 ${r.n_high_p} · refine 과 다른 종류 ${r.n_low_sim}, 겹칠 수 있음` +
+                         (r.missing ? ` · 계산 안 된 ${r.missing}장 제외` : '') + `)` +
+                         `\n\n통과 ${r.n_pass}장을 move 로 옮길까요? 나머지는 image2 에 남습니다.`)) return;
+            // 이동은 서버가 백그라운드로 한다(649장을 브라우저가 하나씩 보내면 중간에 끊기기 쉽고 실패 원인도 안 보였다)
+            const box2 = statusBox();
+            let m = await api('/image/curate/api/screen/move', {});
+            while (m.running) {
+                box2.textContent = `move 로 이동 중 ${m.moved + m.n_fail}/${m.total}` + (m.n_fail ? ` (실패 ${m.n_fail})` : '');
+                await sleep(1500);
+                m = await api('/image/curate/api/screen/move');
+            }
+            moved = m.moved;
+            box2.remove();
+            if (m.n_fail) console.warn('AI 1차 분류 이동 실패', m.fail);
+            alert(`move 로 ${m.moved}장 이동` + (m.n_fail ? `, 실패 ${m.n_fail}장\n예: ${m.fail.slice(0, 3).join('\n')}` : '') +
+                  (m.error ? `\n오류: ${m.error}` : ''));
+        } catch (e) {
+            const b = document.getElementById('ai-screen-status'); if (b) b.remove();
+            alert('AI 1차 분류 오류: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            if (moved) location.reload();
+        }
+    });
 })();
 </script>
 {% endif %}
