@@ -434,7 +434,10 @@ class _timed:
         self.t = time.perf_counter()
 
     def __exit__(self, *exc):
-        steps = getattr(g, 'steps', None)
+        try:
+            steps = getattr(g, 'steps', None)
+        except RuntimeError:   # 요청 밖(백그라운드 스레드에서 move_image_core 호출) — 계측 생략
+            return
         if steps is None:
             steps = g.steps = {}
         steps[self.name] = round(time.perf_counter() - self.t, 3)
@@ -571,17 +574,22 @@ def fetch_image_list():
 @login_required
 @_log_slow()
 def move_image():
-    payload = request.get_json(silent=True) or {}
+    body, code = move_image_core(request.get_json(silent=True) or {})
+    return jsonify(body), code
+
+
+def move_image_core(payload):
+    """move-image 본체 — (응답 dict, HTTP 코드). 요청 밖(AI 1차 분류 일괄 이동, app/image_curate.py)에서도 부른다."""
     # imagepath의 값에 따라 src_path 결정
     imagepath = payload.get('imagepath')
     subpath = payload.get('subpath', '')
     filename = payload.get('filename')
 
     if not imagepath:
-        return jsonify({'status': 'error', 'message': 'imagepath is required'}), 400
+        return {'status': 'error', 'message': 'imagepath is required'}, 400
 
     if not filename:
-        return jsonify({'status': 'error', 'message': 'filename is required'}), 400
+        return {'status': 'error', 'message': 'filename is required'}, 400
 
     filename = urllib.parse.unquote(filename)
 
@@ -623,7 +631,7 @@ def move_image():
             src_path = safe_path_join(TEMP_IMAGE_DIR, os.path.join(subpath, filename))
             thumb_dir = os.path.join(TEMP_IMAGE_DIR, subpath, "thumb")
         else:
-            return jsonify({'status': 'error', 'message': 'Invalid imagepath'}), 400
+            return {'status': 'error', 'message': 'Invalid imagepath'}, 400
 
         webp_file = safe_path_join(thumb_dir, name_without_ext + ".webp")
         from utils.image_thumbs import VIDEO_THUMB_SUBDIR
@@ -631,7 +639,7 @@ def move_image():
         motion_files = [safe_path_join(thumb_dir, name_without_ext + sfx)   # 모션포토 영상 캐시(옛 무음 캐시 포함)
                         for sfx in (MOTION_SUFFIX,) + OLD_MOTION_SUFFIXES]
     except ValueError:
-        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
+        return {'status': 'error', 'message': 'Invalid filename'}, 400
 
     # 모션포토 영상 캐시는 옮기지 않고 지운다 — 원본에서 언제든 다시 만들 수 있는 캐시라 휴지통을 거치지 않는다.
     with _timed('thumb_trash'):
@@ -674,16 +682,19 @@ def move_image():
             except OSError as e:
                 print(f'[WARN] crop origin carry failed: {src_rel} -> {dst_dir}: {e}')
 
+        if dst_dir == 'refine':
+            _schedule_curate_embed()
+
         raw_filename = urllib.parse.unquote(payload.get('filename', ''))
         if imagepath in DIR_CONFIG:
             arr = DIR_CONFIG[imagepath].image_arr
             arr[:] = [p for p in arr if p != raw_filename]
 
-        return jsonify({'status': 'success'})
+        return {'status': 'success'}, 200
     else:
         with _timed('thumb_trash'):
             drop_thumbs()   # 원본이 이미 없어도 남은 썸네일은 정리한다
-        return jsonify({'status': 'error', 'message': 'File not found'}), 404
+        return {'status': 'error', 'message': 'File not found'}, 404
 
 
 
@@ -941,6 +952,17 @@ def _save_image(img, path, fmt, icc=None):
         img.save(path, 'WEBP', quality=95, method=6, **kw)
 
 
+def _schedule_curate_embed():
+    """refine 이미지가 바뀌면(이동해 들어옴·자르기·되돌리기) 정리 화면용 임베딩/특징을 백그라운드로 갱신한다
+    (app/image_curate.py schedule_embed — 마지막 요청 60초 뒤 한 번, 바뀐 파일만 GPU 계산). 실패해도 갤러리는 영향 없음.
+    image_curate 가 이 모듈을 import 하므로 순환을 피하려고 여기서 늦게 import 한다."""
+    try:
+        from app.image_curate import schedule_embed
+        schedule_embed()
+    except Exception as e:  # noqa: BLE001
+        print(f'[WARN] curate embed schedule failed: {e}')
+
+
 @image_bp.route('/crop-image', methods=['POST'], endpoint='crop-image')
 @login_required
 # @_log_slow()   # 2026-10-11 끔 — 확대 렌더(특히 AI)는 원래 수 초~10초 걸려 매번 [느린요청] 경고가 찍혔다
@@ -1017,6 +1039,8 @@ def crop_image():
         _crop_history[hist_key] = {'box': [round(v, 2) for v in obox], 'unit': unit, 'out': [out_w, out_h]}
     _save_crop_history()
     ver = _bump_edit_version(dir_, filename)
+    if dir_ == 'refine':
+        _schedule_curate_embed()
     return jsonify({'status': 'success', 'v': ver, 'size': [out_w, out_h], 'box': list(used_box),
                     'original_size': list(orig_size), 'has_origin': True,
                     'ai_used': meta.get('ai_used', False), 'ai_note': meta.get('ai_note')})
@@ -1160,6 +1184,8 @@ def crop_restore():
     _adopt_moved_history(dir_, filename)
     last = _crop_history.pop(f'{dir_}/{filename}', None)
     _save_crop_history()
+    if dir_ == 'refine':
+        _schedule_curate_embed()
     return jsonify({'status': 'success', 'v': ver, 'has_origin': False,
                     'last_crop': {'box': last['box'], 'unit': last['unit']} if last else None})
 
