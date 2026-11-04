@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>refine 정리</title>
+<script src="/static/js/common.js?v={{ version }}"></script>
+<style>
+:root{--bg:#121212;--card:#1c1c1c;--fg:#ddd;--mut:#888;--rm:#e5484d;--keep:#30a46c;--acc:#3b82f6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,sans-serif;padding-bottom:84px}
+header{position:sticky;top:0;z-index:5;background:#121212ee;backdrop-filter:blur(6px);padding:10px 16px;border-bottom:1px solid #2a2a2a;transition:transform .24s ease,opacity .22s ease}
+/* 스크롤 내리면 위로 숨김 — 메인 화면과 같은 /static/js/ui_chrome.js(data-auto-hide)가 chrome-hidden 을 붙인다 */
+header.chrome-hidden{transform:translateY(calc(-100% - env(safe-area-inset-top)));opacity:.08}
+header a{color:var(--mut);text-decoration:none;margin-right:12px}
+.tabs{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tabs button{background:#222;color:var(--fg);border:1px solid #333;border-radius:999px;padding:6px 14px;cursor:pointer}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.info{padding:10px 16px;color:var(--mut);font-size:13px}
+.info b{color:var(--fg)}
+.info select{background:#222;color:var(--fg);border:1px solid #333;border-radius:6px;padding:2px 6px}
+.grid{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:10px;padding:0 16px}
+.cols{display:flex;gap:4px;margin-left:auto}
+.cols button{width:34px;padding:6px 0;background:#222;color:var(--fg);border:1px solid #333;border-radius:6px;cursor:pointer;font-weight:600}
+.cols button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+/* 모바일은 1열 고정(선택 버튼도 숨김). 기준 800px = 기존 갤러리(image_list_masonry)가 자동 1열로 바꾸는 폭 */
+@media (max-width:800px){.grid{grid-template-columns:minmax(0,1fr)}.cols{display:none}}
+.group{margin:10px 16px;padding:8px;background:#181818;border-radius:8px}
+.group .grid{padding:0}
+.group h4{margin:0 0 6px;font-weight:500;color:var(--mut);font-size:12px}
+.c{position:relative;background:var(--card);border-radius:8px;overflow:hidden;cursor:pointer;outline:3px solid transparent;outline-offset:-3px;user-select:none}
+.c img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:#222}
+.c .meta{padding:6px 8px;font-size:13px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c .badge{position:absolute;top:8px;left:8px;padding:3px 12px;border-radius:999px;font-size:15px;font-weight:600;color:#fff}
+.c .zoom{position:absolute;top:8px;right:8px;width:40px;height:40px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:20px;cursor:zoom-in}
+.c.rm{outline-color:var(--rm)} .c.rm .badge{background:var(--rm)} .c.rm img{opacity:.55}
+.c.keep{outline-color:var(--keep)} .c.keep .badge{background:var(--keep)}
+.c.sel{outline-color:var(--acc)} .c.sel .badge{background:var(--acc)}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:#181818f2;border-top:1px solid #2a2a2a}
+.bar .cnt{color:var(--mut)} .bar .cnt b{color:var(--fg)}
+.bar button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:15px;cursor:pointer}
+.bar button:disabled{opacity:.4;cursor:default}
+.bar .sub{background:#2a2a2a}
+#viewer{position:fixed;inset:0;z-index:9;background:#000;display:none}
+/* 여백 없이 화면 전체 — 작은 이미지도 화면에 맞춰 확대(비율 유지). 100dvh: 모바일 주소창 높이 반영 */
+#viewer img{position:absolute;inset:0;width:100vw;height:100vh;height:100dvh;object-fit:contain}
+#viewer .cap{position:absolute;bottom:0;left:0;right:0;text-align:center;color:#ccc;font-size:12px;padding:16px 16px 8px;word-break:break-all;background:linear-gradient(transparent,#000a);pointer-events:none}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:8px;display:none;z-index:10001;max-width:90vw}
+/* 로딩 오버레이(common.js renderLoadingOverlay) — style.css 의 #overlay 규칙만 옮겨 왔다(style.css 전체는 이 화면 버튼 모양을 바꿔서 안 씀).
+   편집 창(10000)보다 위 */
+#overlay{position:fixed;inset:0;width:100vw;height:100vh;background:rgba(0,0,0,.4);z-index:10002}
+#overlay img{position:absolute;top:45%;left:51%;transform:translate(-50%,-50%);width:100px;height:100px}
+#viewer .crop-open{position:absolute;top:12px;right:12px;z-index:1;border:0;border-radius:999px;padding:8px 16px;background:#000a;color:#fff;font-size:15px;cursor:pointer}
+#viewer .crop-open:hover{background:#000d}
+</style>
+<!-- 이미지 자르기(3:4) — refine 갤러리(image_list_masonry.html)의 편집기를 옮겨 온 것. 서버 API(/image/crop-image·crop-info·crop-restore)는 같다 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<style>
+#crop-modal{display:none;position:fixed;inset:0;z-index:10000;background:#0b0b0b;flex-direction:column;color:#eee}
+#crop-modal.open{display:flex}
+html.crop-editing,body.crop-editing{overflow:hidden!important}
+#crop-modal button{margin:0;box-sizing:border-box}
+#crop-modal .crop-bar{position:fixed;z-index:3;visibility:hidden;display:flex;flex-direction:column;gap:6px;width:min(230px,calc(100vw - 32px));padding:10px 12px;border-radius:12px;background:rgba(20,20,20,.82);box-shadow:0 4px 18px rgba(0,0,0,.5)}
+#crop-modal .crop-bar.placed{visibility:visible}
+#crop-modal .crop-bar.docked{left:auto!important;top:auto!important;right:16px;bottom:calc(16px + env(safe-area-inset-bottom))}
+#crop-modal .crop-btns{display:grid;grid-template-columns:1fr;gap:8px}
+#crop-modal .crop-x{position:fixed;top:16px;right:16px;z-index:5;padding:6px 10px;font-size:2em;line-height:1;color:#fff;background:none;border:0;cursor:pointer;opacity:.7}
+#crop-modal .crop-x:hover{opacity:1}
+#crop-modal .crop-nav{position:fixed;z-index:4;width:48px;height:48px;border:0;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 0 4px;font-size:2.4em;line-height:1;color:#fff;background:rgba(0,0,0,.35);cursor:pointer;opacity:.65;user-select:none;visibility:hidden}
+#crop-modal .crop-nav.placed{visibility:visible}
+#crop-modal .crop-nav:hover{opacity:1;background:rgba(0,0,0,.6)}
+#crop-modal .crop-index{position:fixed;bottom:20px;right:16px;z-index:5;color:#fff;font-size:13px;font-family:monospace;pointer-events:none;background:rgba(0,0,0,.45);padding:2px 10px;border-radius:4px}
+#crop-modal .crop-label{position:fixed;bottom:20px;left:16px;z-index:5;color:#fff;font-size:13px;font-family:monospace;pointer-events:none;background:rgba(0,0,0,.45);padding:2px 10px;border-radius:4px;max-width:calc(100% - 140px);word-break:break-all}
+#crop-modal .crop-label:empty{display:none}
+#crop-modal .crop-bar button{width:100%;height:42px;padding:0 10px;border-radius:8px;border:1px solid #6e6e6e;background:#3d3d3d;color:#fff;font-size:15px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#crop-modal .crop-bar button.primary{background:#2f88ff;border-color:#2f88ff}
+#crop-modal .crop-bar button.ai{background:#7a4dff;border-color:#7a4dff}
+#crop-modal .crop-bar button:not(:disabled):hover{filter:brightness(1.12)}
+#crop-modal .crop-bar button:disabled{opacity:.5;cursor:default}
+#crop-modal .crop-bar button.crop-origin-toggle.is-on{background:#f59e0b;border-color:#f59e0b;color:#111}
+#crop-modal .crop-info{font-size:13px;line-height:1.3;height:3.9em;overflow:hidden;color:#bbb;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+#crop-modal .cropper-view-box{outline:1px solid rgba(255,255,255,.45);box-shadow:none;position:relative;z-index:0}
+#crop-modal .cropper-modal{background-color:#000;opacity:.85}
+#crop-modal .cropper-dashed{border-color:#fff;opacity:.6}
+#crop-modal .cropper-dashed.dashed-h{display:none}
+#crop-modal .crop-layer.ratio-match .cropper-dashed{display:none}
+#crop-modal .cropper-point{background-color:#fff;opacity:.55}
+#crop-modal .crop-panel{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;width:100%}
+#crop-modal .crop-stage{flex:1;min-height:0;position:relative}
+#crop-modal .crop-edit{position:absolute;inset:0}
+#crop-modal .crop-edit .crop-layer{position:absolute;inset:0}
+#crop-modal .crop-edit .crop-layer.pending{visibility:hidden;pointer-events:none}
+#crop-modal .crop-edit .crop-layer>img{display:block;max-width:100%}
+#crop-modal .cropper-view-box>.crop-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+#crop-modal .cropper-view-box>.crop-bg>img{width:100%;height:100%;object-fit:cover;display:block;transform:scale(1.1)}
+#crop-modal .cropper-view-box>img{position:relative;z-index:1;pointer-events:none}
+#crop-modal .crop-origin-view{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:contain;background:#0b0b0b;display:none}
+#crop-modal .crop-origin-view.on{display:block}
+</style>
+</head>
+<body>
+<header data-auto-hide="true">
+  <a href="/image/pages?dir=refine">← refine</a><b>refine 정리</b>
+  <div class="tabs">
+    <button data-tab="cand" class="on">후보</button>
+    <button data-tab="dup">중복</button>
+    <button data-tab="review">임시 보관함</button>
+    <button data-tab="archive">보관함</button>
+    <span class="cols" id="cols" title="열 수">
+      <button data-col="1">1</button><button data-col="2">2</button><button data-col="3">3</button><button data-col="4">4</button><button data-col="5">5</button>
+    </span>
+  </div>
+</header>
+<div class="info" id="info">불러오는 중…</div>
+<div id="list"></div>
+<div class="bar">
+  <span class="cnt" id="cnt"></span>
+  <span><button class="sub" id="flip" style="display:none">전체 반전</button> <button class="sub" id="selall" style="display:none">전체 선택</button> <button class="sub" id="go2" style="display:none" disabled>refine 으로 복원</button> <button id="go" disabled>확정</button></span>
+</div>
+<div id="viewer"><img alt=""><button type="button" class="crop-open" title="자르기 (C)">✂ 자르기</button><div class="cap"></div></div>
+<div id="crop-modal" aria-hidden="true">
+  <div class="crop-panel">
+    <div class="crop-stage">
+      <div class="crop-edit" id="crop-edit"></div>
+      <img class="crop-origin-view" id="crop-origin-view" alt="원본">
+    </div>
+    <button type="button" class="crop-x" id="crop-x-btn" title="닫기 (Esc)">✕</button>
+    <button type="button" class="crop-nav" id="crop-prev-btn" title="이전 이미지 (←)">&#8249;</button>
+    <button type="button" class="crop-nav" id="crop-next-btn" title="다음 이미지 (→)">&#8250;</button>
+    <div class="crop-label" id="crop-label"></div>
+    <div class="crop-index" id="crop-index"></div>
+    <div class="crop-bar" id="crop-bar">
+      <span class="crop-info" id="crop-info">불러오는 중...</span>
+      <div class="crop-btns">
+        <button type="button" class="primary" id="crop-save-btn" disabled title="Space / Enter">확정(덮어쓰기)</button>
+        <button type="button" class="ai" id="crop-ai-btn" disabled title="Shift+Space / Shift+Enter — AI(Real-ESRGAN)로 정리해 저장, 약 5~10초">AI로 확정</button>
+        <button type="button" class="crop-origin-toggle" id="crop-origin-toggle" style="visibility:hidden;" title="원본/현재 전환 (O)">원본 보기</button>
+        <button type="button" id="crop-restore-btn" style="visibility:hidden;" title="백스페이스">원본으로 되돌리기</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="/static/js/ui_chrome.js?v={{ version }}"></script>
+
+<script>
+const $ = s => document.querySelector(s);
+const enc2 = s => encodeURIComponent(encodeURIComponent(s));   // 서버가 Flask 디코딩 후 unquote_plus 를 한 번 더 한다
+// vers: 자른 이미지의 캐시 회피값(서버 img_v, 자르기 확정·되돌리기마다 바뀜) — 없으면 브라우저 캐시의 옛 이미지가 보인다
+const vers = {};
+// sub: '' = refine 최상위, '_review' = 임시 보관함, '_archive' = 보관함
+const SUB = {review: '_review', archive: '_archive'};
+const subOf = t => SUB[t] || '';
+const imgUrl = (name, sub, original) =>
+  `/image/images?dir=refine&filename=${enc2((sub ? sub + '/' : '') + name)}` + (original ? '&original=1' : '') +
+  (!sub && vers[name] ? `&v=${vers[name]}` : '');
+let tab = 'cand', state = {}, nPer = 100;
+
+// 열 수(1~5). 선택값은 이 브라우저에만 저장. 선택 전에는 기존 갤러리와 같은 폭 기준으로 자동.
+const COL_KEY = 'curate-col-count';
+function autoCols() { const w = window.innerWidth; return w > 2500 ? 5 : w > 1900 ? 4 : w > 1200 ? 3 : w > 800 ? 2 : 1; }
+function savedCols() { try { return Number(localStorage.getItem(COL_KEY)) || null; } catch (e) { return null; } }
+function applyCols() {
+  const n = savedCols() || autoCols();
+  document.documentElement.style.setProperty('--cols', n);
+  document.querySelectorAll('#cols button').forEach(b => b.classList.toggle('on', +b.dataset.col === n));
+}
+$('#cols').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  try { localStorage.setItem(COL_KEY, b.dataset.col); } catch (err) {}
+  applyCols();
+};
+window.addEventListener('resize', applyCols);
+applyCols();
+
+function toast(msg, ms = 2500) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms); }
+async function api(url, body) {
+  const r = await fetch(url, body ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+
+function card(it, sub, mark) {
+  const d = document.createElement('div');
+  d.className = 'c'; d.dataset.name = it.name;
+  if (it.v) vers[it.name] = it.v;
+  const meta = sub ? (it.src === 'dup' ? '중복 정리' : '후보 판정') + (it.ts ? ' · ' + it.ts.slice(5, 16).replace('T', ' ') : '')
+                   : `aes ${it.aes} · sim ${it.sim}` + (it.model != null ? ` · 취향 ${(1 - it.model).toFixed(3)}` : '');   // 서버는 '제거될 가능성' — 높을수록 좋게 뒤집어 표시
+  d.innerHTML = `<img loading="lazy" alt=""><span class="badge"></span><button class="zoom" title="${sub ? '크게 보기' : '자르기 / 크게 보기'}">⤢</button><div class="meta"></div>`;
+  d.querySelector('img').src = imgUrl(it.name, sub);
+  d.querySelector('.meta').textContent = meta;
+  d.title = it.name;
+  // ⤢ = 기존 자르기 편집기를 바로 연다(2026-11-02 사용자 요청). 보관함(_review·_archive)은 자르기 대상이 아니라 확대 보기만
+  d.querySelector('.zoom').onclick = e => { e.stopPropagation(); sub ? view(d) : cropEditor.open(d, {fromViewer: false}); };
+  d.onclick = () => { state[it.name] = mark(state[it.name]); paint(d); count(); };
+  paint(d);
+  return d;
+}
+const LABEL = {rm: '제거', keep: '유지', sel: '복원'};
+function paint(d) {
+  const s = state[d.dataset.name] || '';
+  d.classList.remove('rm', 'keep', 'sel'); if (s) d.classList.add(s);
+  d.querySelector('.badge').textContent = LABEL[s] || '';
+  d.querySelector('.badge').style.display = s ? '' : 'none';
+}
+const viewerOpen = () => $('#viewer').style.display === 'block';
+let viewing = null;   // 확대 보기 중인 카드
+function view(d) {
+  viewing = d;
+  const v = $('#viewer'), name = d.dataset.name;
+  v.querySelector('img').src = imgUrl(name, subOf(tab), true);
+  const s = state[name];
+  v.querySelector('.cap').textContent = (LABEL[s] ? `[${LABEL[s]}] ` : '') + name;
+  v.querySelector('.crop-open').style.display = subOf(tab) ? 'none' : '';   // 보관함(_review·_archive)은 자르기 대상 아님
+  v.style.display = 'block';
+}
+function closeViewer() { $('#viewer').style.display = 'none'; $('#viewer img').src = ''; }
+$('#viewer').onclick = closeViewer;
+$('#viewer .crop-open').onclick = e => { e.stopPropagation(); if (viewing) cropEditor.open(viewing, {fromViewer: true}); };
+
+// ── 이전/다음 이미지 — refine 갤러리(image.js nextImage/previousImage)와 같은 방식 ─────────────
+//   →/↓/PageDown 다음, ←/↑/PageUp 이전 (다음은 refine 처럼 400ms 스로틀).
+//   목록: 화면 세로 중앙에 가장 가까운 이미지를 기준으로 '같은 열'의 바로 아래/위 이미지를 화면 중앙으로 스크롤.
+//         같은 줄에 여러 장이면 가로 중앙에 가까운 쪽이 기준. 중복 탭은 다음 그룹의 같은 열로 이어진다.
+//   확대 보기: refine 슬라이드쇼처럼 목록 순서대로 이전/다음, Esc 닫기.
+let lastNext = 0;
+const cards = () => Array.from(document.querySelectorAll('#list .c'));
+function centerCard(list) {
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  let best = null, by = Infinity, bx = Infinity;
+  list.forEach(d => {
+    const r = d.getBoundingClientRect();
+    const dy = Math.abs(r.top + r.height / 2 - cy), dx = Math.abs(r.left + r.width / 2 - cx);
+    if (dy < by - 1 || (Math.abs(dy - by) <= 1 && dx < bx)) { best = d; by = dy; bx = dx; }
+  });
+  return best;
+}
+function neighborInColumn(list, base, dir) {
+  const b = base.getBoundingClientRect(), bx = b.left + b.width / 2;
+  let best = null, bd = Infinity;
+  list.forEach(d => {
+    if (d === base) return;
+    const r = d.getBoundingClientRect();
+    if (Math.abs(r.left + r.width / 2 - bx) > b.width / 2) return;   // 다른 열
+    const dist = dir > 0 ? r.top - b.top : b.top - r.top;
+    if (dist > 1 && dist < bd) { bd = dist; best = d; }
+  });
+  return best;
+}
+function step(dir) {
+  const list = cards(); if (!list.length) return;
+  if (viewerOpen()) {
+    const i = list.indexOf(viewing) + dir;
+    if (i < 0) return toast('처음입니다.', 1200);
+    if (i >= list.length) return toast('마지막입니다.', 1200);
+    list[i].scrollIntoView({behavior: 'auto', block: 'center'});
+    return view(list[i]);
+  }
+  const base = centerCard(list); if (!base) return;
+  const next = neighborInColumn(list, base, dir);
+  if (!next) return toast(dir > 0 ? '마지막입니다.' : '처음입니다.', 1200);
+  next.scrollIntoView({behavior: 'auto', block: 'center'});
+}
+document.addEventListener('keydown', e => {
+  if (e.target.closest('select, input, textarea') || e.altKey || e.ctrlKey || e.metaKey) return;
+  switch (e.key) {
+    case 'ArrowRight': case 'ArrowDown': case 'PageDown': {
+      e.preventDefault();
+      const now = Date.now(); if (now - lastNext < 400) return; lastNext = now;
+      step(1); break;
+    }
+    case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+      e.preventDefault(); step(-1); break;
+    case 'Escape':
+      if (viewerOpen()) { e.preventDefault(); closeViewer(); }
+      break;
+    case 'c': case 'C': case 'ㅊ':   // 확대 보기에서 자르기(ㅊ = 한글 자판의 c)
+      if (viewerOpen() && viewing && !subOf(tab)) { e.preventDefault(); cropEditor.open(viewing, {fromViewer: true}); }
+      break;
+  }
+});
+
+function count() {
+  const v = Object.values(state);
+  const rm = v.filter(x => x === 'rm').length, keep = v.filter(x => x === 'keep').length, sel = v.filter(x => x === 'sel').length;
+  const c = $('#cnt'), go = $('#go');
+  if (tab === 'cand') { c.innerHTML = `제거 <b>${rm}</b> · 유지 <b>${keep}</b>`; go.textContent = '확정'; go.disabled = !(rm + keep); }
+  if (tab === 'dup') { c.innerHTML = `제거 <b>${rm}</b>`; go.textContent = '제거 확정'; go.disabled = !rm; }
+  if (tab === 'review') { c.innerHTML = `선택 <b>${sel}</b>`; go.textContent = '보관함으로 이동'; go.disabled = !sel; }
+  if (tab === 'archive') { c.innerHTML = `선택 <b>${sel}</b>`; go.textContent = 'refine 으로 복원'; go.disabled = !sel; }
+  const go2 = $('#go2');
+  go2.style.display = tab === 'review' ? '' : 'none';   // 임시 보관함: 주 동작은 '보관함으로 이동', 보조로 복원
+  go2.disabled = !(tab === 'review' && sel);
+  // 전체 선택(임시 보관함·보관함) — 전부 선택돼 있으면 '전체 해제'
+  const sa = $('#selall'), nCards = document.querySelectorAll('#list .c').length;
+  sa.style.display = subOf(tab) && nCards ? '' : 'none';
+  sa.textContent = nCards && sel === nCards ? '전체 해제' : '전체 선택';
+}
+
+$('#selall').onclick = () => {
+  const cards = document.querySelectorAll('#list .c');
+  const all = [...cards].every(d => state[d.dataset.name] === 'sel');
+  cards.forEach(d => { state[d.dataset.name] = all ? '' : 'sel'; paint(d); });
+  count();
+};
+
+async function load() {
+  state = {}; $('#list').innerHTML = ''; $('#info').textContent = '불러오는 중…'; $('#flip').style.display = 'none'; count();
+  try {
+    if (tab === 'cand') {
+      const j = await api(`/image/curate/api/candidates?n=${nPer}`);
+      shownVer = j.cache_ver;
+      $('#info').innerHTML = `refine <b>${j.total}</b>장 중 정리 후보 <b>${j.items.length}</b>장 (gif 제외) · ` +
+        (j.model ? `취향 모델 사용 중 (제거 ${j.n_remove} · 유지 ${j.n_keep} 판정 학습)` : `기본 점수(동떨어짐) — 판정이 쌓이면 취향 모델이 켜집니다`) +
+        (j.missing ? ` · 임베딩 없는 새 이미지 ${j.missing}장 제외` : '') +
+        `<br>기본값은 <b style="color:var(--keep)">유지</b>입니다. 뺄 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 바꾸고 확정하세요(유지로 확정한 이미지는 다시 후보에 나오지 않습니다). 제거는 임시 보관함(_review)으로 옮기기만 합니다. ` +
+        `표시 수 <select id="nsel">${[50, 100, 150, 300].map(n => `<option ${n === nPer ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+      $('#nsel').onchange = e => { nPer = +e.target.value; load(); };
+      const g = document.createElement('div'); g.className = 'grid';
+      // 2026-11-02 사용자: 처음엔 전부 유지 — 취향 모델이 켜진 뒤로는 제거가 더 적어서 몇 장만 누르면 된다
+      j.items.forEach(it => { state[it.name] = 'keep'; g.appendChild(card(it, false, s => s === 'keep' ? 'rm' : 'keep')); });
+      $('#list').appendChild(g);
+      if (!j.items.length) $('#list').innerHTML = '<div class="empty">후보가 없습니다.</div>';
+      $('#flip').style.display = j.items.length ? '' : 'none';
+    } else if (tab === 'dup') {
+      const j = await api('/image/curate/api/dups');
+      const total = j.groups.reduce((a, g) => a + g.length, 0);
+      $('#info').innerHTML = `근접중복 <b>${j.groups.length}</b>그룹 · <b>${total}</b>장 (유사도 ≥ ${j.thr}) · 그룹 안은 미적 점수 높은 순.<br>` +
+        `별로인 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 표시하고 확정하세요. 같은 촬영의 다른 컷일 수도 있으니 ⤢ 로 크게 확인하세요.`;
+      j.groups.forEach((grp, gi) => {
+        const box = document.createElement('div'); box.className = 'group';
+        box.innerHTML = `<h4>그룹 ${gi + 1} · ${grp.length}장</h4>`;
+        const g = document.createElement('div'); g.className = 'grid';
+        grp.forEach(it => g.appendChild(card(it, false, s => s === 'rm' ? '' : 'rm')));
+        box.appendChild(g); $('#list').appendChild(box);
+      });
+      if (!j.groups.length) $('#list').innerHTML = '<div class="empty">중복 그룹이 없습니다.</div>';
+    } else if (tab === 'archive') {
+      const j = await api('/image/curate/api/review?where=archive');
+      $('#info').innerHTML = `보관함(refine/_archive) <b>${j.items.length}</b>장 · 임시 보관함에서 마지막 검토를 마친 이미지입니다. ` +
+        `되돌릴 이미지를 골라 복원할 수 있습니다(복원하면 '유지' 판정으로 학습).`;
+      const g = document.createElement('div'); g.className = 'grid';
+      j.items.forEach(it => g.appendChild(card(it, '_archive', s => s === 'sel' ? '' : 'sel')));
+      $('#list').appendChild(g);
+      if (!j.items.length) $('#list').innerHTML = '<div class="empty">보관함이 비어 있습니다.</div>';
+    } else {
+      const j = await api('/image/curate/api/review');
+      const nDup = j.items.filter(it => it.src === 'dup').length;
+      $('#info').innerHTML = `임시 보관함(refine/_review) <b>${j.items.length}</b>장 · 마지막으로 확인해서 골라 <b>보관함으로 이동</b>하거나, ` +
+        `잘못 뺀 것은 <b>refine 으로 복원</b>하세요(복원하면 '유지' 판정으로 학습, 보관함 이동은 학습에 영향 없음).` +
+        (nDup ? `<br>중복 정리로 들어온 <b>${nDup}</b>장은 F:\\image_curate_trash 로 빼낼 수 있습니다(취향 학습에 원래 안 쓰는 이미지 — 빼도 후보 순서는 그대로). ` +
+                `<button type="button" id="purge-dup">중복 정리분 ${nDup}장 빼내기</button>` : '');
+      if (nDup) $('#purge-dup').onclick = async () => {
+        if (!confirm(`중복 정리로 임시 보관함에 들어온 ${nDup}장을 F:\\image_curate_trash 로 옮깁니다.\n` +
+                     `임시 보관함에서 빠지고, 저장해 둔 임베딩 항목도 지웁니다. 취향 모델 학습에는 원래 안 쓰던 이미지라 후보 순서는 바뀌지 않습니다.\n` +
+                     `필요 없으면 그 폴더를 직접 지우세요.`)) return;
+        if (typeof renderLoadingOverlay === 'function') renderLoadingOverlay();
+        try {
+          const r = await api('/image/curate/api/purge-dups', {});
+          toast(`${r.moved}장 옮김 → ${r.dest || '-'}` + (Object.keys(r.fail).length ? ` · 실패 ${Object.keys(r.fail).length}` : ''), 6000);
+          await load();
+        } catch (e) { toast('오류: ' + e.message, 5000); }
+        finally { if (typeof removeLoadingOverlay === 'function') removeLoadingOverlay(); }
+      };
+      const g = document.createElement('div'); g.className = 'grid';
+      j.items.forEach(it => g.appendChild(card(it, '_review', s => s === 'sel' ? '' : 'sel')));
+      $('#list').appendChild(g);
+      if (!j.items.length) $('#list').innerHTML = '<div class="empty">임시 보관함이 비어 있습니다.</div>';
+    }
+  } catch (e) { $('#info').textContent = '오류: ' + e.message; }
+  count();
+}
+
+$('#flip').onclick = () => {
+  document.querySelectorAll('#list .c').forEach(d => { state[d.dataset.name] = state[d.dataset.name] === 'rm' ? 'keep' : 'rm'; paint(d); });
+  count();
+};
+
+$('#go').onclick = async () => {
+  const pick = s => Object.keys(state).filter(k => state[k] === s);
+  const go = $('#go'); go.disabled = true;
+  // 확정 진행 중(이동·판정 기록·임베딩 갱신·후보 다시 받기)엔 로딩 오버레이(common.js) — 확인창에서 취소하면 안 띄운다
+  let busy = false;
+  const busyOn = () => { busy = true; if (typeof renderLoadingOverlay === 'function') renderLoadingOverlay(); };
+  try {
+    if (tab === 'cand') {
+      const rm = pick('rm'), keep = pick('keep');
+      if (!confirm(`제거 ${rm.length}장을 임시 보관함으로 옮기고, 유지 ${keep.length}장을 기록합니다.`)) return count();
+      busyOn();
+      const j = await api('/image/curate/api/apply', {src: 'candidate', remove: rm, keep});
+      toast(`임시 보관함으로 ${j.moved}장 이동 · 유지 ${j.kept}장 기록` + (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
+    } else if (tab === 'dup') {
+      const rm = pick('rm');
+      if (!confirm(`${rm.length}장을 임시 보관함으로 옮깁니다.`)) return count();
+      busyOn();
+      const j = await api('/image/curate/api/apply', {src: 'dup', remove: rm});
+      toast(`임시 보관함으로 ${j.moved}장 이동` + (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
+    } else if (tab === 'review') {
+      const sel = pick('sel');
+      if (!confirm(`${sel.length}장을 보관함으로 옮깁니다(판정·학습은 그대로).`)) return count();
+      busyOn();
+      const j = await api('/image/curate/api/archive', {names: sel});
+      toast(`보관함으로 ${j.moved}장 이동` + (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
+    } else {
+      const sel = pick('sel');
+      busyOn();
+      const j = await api('/image/curate/api/restore', {names: sel, from: 'archive'});
+      toast(`refine 으로 ${j.restored}장 복원` + (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
+    }
+    // 서버가 확정 직후 embed.py 를 띄운다 — 자른/새 이미지 임베딩까지 반영된 뒤 새 취향 모델로 다시 받는다
+    state = {}; $('#list').innerHTML = ''; count();
+    $('#info').textContent = '임베딩 갱신 중… (자른·새 이미지 다시 계산, 보통 수 초)';
+    applying = true;
+    try { await waitEmbed(180000); } finally { applying = false; }
+    await load();
+  } catch (e) { toast('오류: ' + e.message, 5000); count(); }
+  finally { if (busy && typeof removeLoadingOverlay === 'function') removeLoadingOverlay(); }
+};
+
+// 임시 보관함 → refine 복원(보조 버튼). 복원은 '유지' 판정으로 학습된다
+$('#go2').onclick = async () => {
+  const sel = Object.keys(state).filter(k => state[k] === 'sel');
+  if (tab !== 'review' || !sel.length) return;
+  $('#go2').disabled = true;
+  if (typeof renderLoadingOverlay === 'function') renderLoadingOverlay();
+  try {
+    const j = await api('/image/curate/api/restore', {names: sel, from: 'review'});
+    toast(`refine 으로 ${j.restored}장 복원` + (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
+    state = {}; $('#list').innerHTML = ''; count();
+    applying = true;
+    try { await waitEmbed(180000); } finally { applying = false; }
+    await load();
+  } catch (e) { toast('오류: ' + e.message, 5000); count(); }
+  finally { if (typeof removeLoadingOverlay === 'function') removeLoadingOverlay(); }
+};
+
+// ── 임베딩 갱신(서버가 embed.py 를 별도 프로세스로 실행) ───────────────────────
+//   화면 열 때·자르기 저장 후: 요청만 하고 기다리지 않는다. 끝났을 때 캐시가 바뀌었으면 — 아직 아무것도 안 눌렀고
+//   편집 창·확대 보기가 닫혀 있으면 후보를 다시 받고, 아니면 알림만(누른 표시가 날아가지 않게).
+//   확정 후: 끝날 때까지 기다렸다가 다시 받는다($('#go').onclick).
+let shownVer = null, watching = false, applying = false;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function waitEmbed(maxMs) {
+  const t0 = Date.now();
+  await sleep(800);   // 서버가 실행 표시를 올릴 틈
+  while (Date.now() - t0 < maxMs) {
+    try {
+      const s = await api('/image/curate/api/embed/status');
+      if (!s.running) { if (s.error) toast('임베딩 갱신 실패: ' + s.error, 5000); return s; }
+    } catch (e) { return null; }
+    await sleep(1500);
+  }
+  toast('임베딩 갱신이 오래 걸려 기존 값으로 보여줍니다.', 4000);
+  return null;
+}
+async function kickEmbed() {
+  try { await api('/image/curate/api/embed', {}); } catch (e) { return; }
+  if (watching) return;
+  watching = true;
+  const s = await waitEmbed(600000);
+  watching = false;
+  if (!s || applying || shownVer === null || s.cache_ver === shownVer) return;   // 확정 중이면 그쪽이 다시 받는다
+  const pristine = !Object.values(state).some(x => x === 'rm' || x === 'sel');
+  if (tab === 'cand' && pristine && !viewerOpen() && !$('#crop-modal').classList.contains('open')) {
+    toast('임베딩 갱신됨 — 후보를 다시 불러왔습니다.');
+    load();
+  } else {
+    toast('임베딩 갱신됨 — 확정하거나 새로고침하면 순위에 반영됩니다.', 4000);
+  }
+}
+
+// [data-tab] 으로 한정 — 열 수 버튼(#cols)도 .tabs 안에 있어서 '.tabs button' 으로 잡으면 탭 전환(tab=undefined → 보관함 목록)이 같이 걸린다
+document.querySelectorAll('.tabs button[data-tab]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button[data-tab]').forEach(x => x.classList.toggle('on', x === b));
+  tab = b.dataset.tab; load();
+});
+
+// ── 이미지 자르기(3:4) ─────────────────────────────────────────────────────────
+// refine 갤러리(image_list_masonry.html)의 편집기를 옮겨 왔다 — 틀·확대·끌기·블러 여백·원본 보기·되돌리기·AI 확정 동작은 같다.
+// 다른 점: 이전/다음은 이 화면의 카드 순서, 확정하면 카드 썸네일과 확대 보기를 새 버전(v)으로 바로 바꾼다.
+// refine 의 '이동'·Del(move 로 되돌리기)은 없다. 자른 뒤 점수(aes·sim·취향)는 embed.py 를 다시 돌려야 새 이미지 기준이 된다.
+const cropEditor = (function () {
+  const RATIO_W = 3, RATIO_H = 4;            // 서버 CROP_RATIO 와 같아야 한다
+  const DIR = 'refine';
+  const modal = $('#crop-modal'), editBox = $('#crop-edit');
+  const WHEEL_STEP = 0.02, WHEEL_STEP_CTRL = 0.10;
+  const info = $('#crop-info'), saveBtn = $('#crop-save-btn'), aiBtn = $('#crop-ai-btn');
+  const restoreBtn = $('#crop-restore-btn'), originToggle = $('#crop-origin-toggle'), originView = $('#crop-origin-view');
+  const bar = $('#crop-bar'), prevBtn = $('#crop-prev-btn'), nextBtn = $('#crop-next-btn');
+  const indexEl = $('#crop-index'), labelEl = $('#crop-label');
+  let cropper = null, st = null, saving = false, activeLayer = null, fromViewer = false;
+  let suspendLimit = false, limiting = false, openToken = 0;
+
+  editBox.addEventListener('wheel', (e) => {
+    if (cropper) cropper.options.wheelZoomRatio = e.ctrlKey ? WHEEL_STEP_CTRL : WHEEL_STEP;
+  }, {capture: true, passive: true});
+  document.addEventListener('wheel', (e) => {
+    if (e.ctrlKey && modal.classList.contains('open')) e.preventDefault();
+  }, {passive: false});
+
+  const nameOf = d => d.dataset.name;
+  const originalUrl = d => imgUrl(nameOf(d), false, true);
+
+  function setOriginView(on) {
+    on = !!(on && st && st.ov);
+    originView.classList.toggle('on', on);
+    if (on) originView.src = `/image/images?filename=${enc2(st.name)}&dir=${DIR}&origin=1&v=${st.ov}`;
+    originToggle.textContent = on ? '현재 보기' : '원본 보기';
+    originToggle.classList.toggle('is-on', on);
+    labelEl.textContent = st ? (on ? '[원본] ' : '') + st.name : '';
+    const ready = !!cropper && !on;
+    saveBtn.disabled = !ready; aiBtn.disabled = !ready;
+  }
+  function toggleOriginView() {
+    if (originToggle.style.visibility !== 'visible') return;
+    setOriginView(!originView.classList.contains('on'));
+  }
+  function resetOriginView() {
+    originView.classList.remove('on'); originView.removeAttribute('src');
+    originToggle.style.visibility = 'hidden';
+    originToggle.textContent = '원본 보기'; originToggle.classList.remove('is-on');
+  }
+  originToggle.onclick = toggleOriginView;
+
+  function outUnit() {
+    const box = cropper.getCropBoxData();
+    return Math.max(1, Math.round(box.width * (window.devicePixelRatio || 1) / RATIO_W));
+  }
+  function payload(ai) {
+    const d = cropper.getData(true);
+    return {dir: DIR, filename: st.name, box: {x: d.x, y: d.y, w: d.width, h: d.height}, unit: outUnit(), preview: false, ai: !!ai};
+  }
+  function updateIndex() {
+    if (!st) { indexEl.textContent = ''; labelEl.textContent = ''; return; }
+    labelEl.textContent = st.name;
+    const list = cards(), pos = list.indexOf(st.item);
+    indexEl.textContent = `${pos >= 0 ? pos + 1 : '-'} / ${list.length}`;
+  }
+  function layoutChrome() {
+    if (!cropper || !modal.classList.contains('open')) return;
+    const b = cropper.getCropBoxData(), er = editBox.getBoundingClientRect();
+    const L = er.left + b.left, R = L + b.width, CY = er.top + b.top + b.height / 2;
+    const vw = window.innerWidth, vh = window.innerHeight, G = 12, A = 48, M = 8;
+    const navTop = Math.min(Math.max(M, CY - A / 2), vh - A - M) + 'px';
+    prevBtn.style.left = Math.max(M, L - G - A) + 'px'; prevBtn.style.top = navTop;
+    nextBtn.style.left = Math.min(vw - M - A, R + G) + 'px'; nextBtn.style.top = navTop;
+    prevBtn.classList.add('placed'); nextBtn.classList.add('placed');
+    const pw = bar.offsetWidth, ph = bar.offsetHeight, px = R + G + A + G;
+    if (px + pw <= vw - M) {
+      bar.classList.remove('docked');
+      bar.style.left = px + 'px';
+      bar.style.top = Math.min(Math.max(M, CY - ph / 2), vh - ph - M) + 'px';
+    } else bar.classList.add('docked');
+    bar.classList.add('placed');
+    indexEl.style.bottom = bar.classList.contains('docked') ? `${bar.offsetHeight + 28}px` : '';
+    labelEl.style.maxWidth = bar.classList.contains('docked') ? `${Math.max(80, bar.getBoundingClientRect().left - 24)}px` : '';
+  }
+  window.addEventListener('resize', () => setTimeout(layoutChrome, 0));
+  function updateInfo() {
+    if (!cropper) return;
+    layoutChrome();
+    const d = cropper.getData(true), u = outUnit();
+    info.textContent = (st && st.notice ? st.notice + ' · ' : '')
+      + `영역 ${d.width}×${d.height} → 저장 ${RATIO_W * u}×${RATIO_H * u} (${RATIO_W}:${RATIO_H})`
+      + (RATIO_W * u > d.width ? ' · 확대' : '');
+  }
+  function teardown() {
+    if (cropper) { cropper.destroy(); cropper = null; }
+    editBox.innerHTML = ''; activeLayer = null;
+  }
+  function close() {
+    const item = st && st.item;
+    modal.classList.remove('open');
+    [bar, prevBtn, nextBtn].forEach(el => el.classList.remove('placed'));
+    document.documentElement.classList.remove('crop-editing'); document.body.classList.remove('crop-editing');
+    resetOriginView(); teardown(); st = null;
+    // 확대 보기에서 열었으면 마지막에 편집한 이미지로 확대 보기에 돌아간다(새 버전으로 다시 불러옴)
+    if (item) { if (fromViewer) view(item); else item.scrollIntoView({behavior: 'auto', block: 'center'}); }
+  }
+
+  const preloaded = new Map();
+  function preload(url) {
+    if (preloaded.has(url)) return preloaded.get(url);
+    const p = new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => { (im.decode ? im.decode().catch(() => {}) : Promise.resolve()).then(() => resolve(im)); };
+      im.onerror = reject; im.src = url;
+    });
+    preloaded.set(url, p); p.catch(() => preloaded.delete(url));
+    while (preloaded.size > 6) preloaded.delete(preloaded.keys().next().value);
+    return p;
+  }
+  function findNext(d) { const l = cards(); return l[l.indexOf(d) + 1]; }
+  function findPrev(d) { const l = cards(), i = l.indexOf(d); return i > 0 ? l[i - 1] : undefined; }
+  function prefetchNeighbors(d) {
+    let it = d;
+    for (let i = 0; i < 2; i++) { it = findNext(it); if (!it) break; preload(originalUrl(it)).catch(() => {}); }
+    const p = findPrev(d); if (p) preload(originalUrl(p)).catch(() => {});
+  }
+
+  async function open(d, opts = {}) {
+    if (!d || !window.Cropper) { if (!window.Cropper) toast('편집기(Cropper.js)를 불러오지 못했습니다.', 4000); return; }
+    if (opts.fromViewer !== undefined) fromViewer = opts.fromViewer;
+    if (viewerOpen()) closeViewer();
+    const token = ++openToken;
+    const url = originalUrl(d);
+    st = {item: d, name: nameOf(d)};
+    d.scrollIntoView({behavior: 'auto', block: 'center'});   // 닫으면 마지막에 편집한 이미지가 바로 보이게
+    restoreBtn.style.visibility = 'hidden';
+    resetOriginView();
+    fetch(`/image/crop-info?dir=${DIR}&filename=${enc2(st.name)}`).then(r => r.json()).then(j => {
+      if (token !== openToken || !j.has_origin) return;
+      restoreBtn.style.visibility = 'visible'; st.ov = j.ov; originToggle.style.visibility = 'visible';
+    }).catch(() => {});
+    saveBtn.disabled = true; aiBtn.disabled = true;
+    document.documentElement.classList.add('crop-editing'); document.body.classList.add('crop-editing');
+    modal.classList.add('open');
+    info.textContent = opts.loadingText || '원본 불러오는 중...';
+    try { await preload(url); } catch (e) { if (token === openToken) info.textContent = '원본을 불러오지 못했어요'; return; }
+    if (token !== openToken) return;
+    prefetchNeighbors(d);
+    let built;
+    try { built = await buildEditor(url, token); } catch (e) { if (token === openToken) info.textContent = '편집기를 만들지 못했어요'; return; }
+    if (token !== openToken) { built.c.destroy(); built.layer.remove(); return; }
+    const old = {c: cropper, layer: activeLayer};
+    built.layer.classList.remove('pending');
+    cropper = built.c; activeLayer = built.layer;
+    if (old.c) old.c.destroy();
+    if (old.layer) old.layer.remove();
+    if (opts.notice) st.notice = opts.notice;
+    updateIndex(); updateInfo();
+    setOriginView(originView.classList.contains('on'));
+  }
+
+  function attachPan(layer, c) {
+    const face = layer.querySelector('.cropper-face');
+    if (!face) return;
+    face.style.cursor = 'grab';
+    face.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      let lastX = e.clientX, lastY = e.clientY;
+      face.setPointerCapture(e.pointerId); face.style.cursor = 'grabbing';
+      const move = (ev) => { c.move(ev.clientX - lastX, ev.clientY - lastY); lastX = ev.clientX; lastY = ev.clientY; };
+      const up = () => {
+        face.removeEventListener('pointermove', move); face.removeEventListener('pointerup', up); face.removeEventListener('pointercancel', up);
+        face.style.cursor = 'grab';
+        if (c === cropper) updateInfo();
+      };
+      face.addEventListener('pointermove', move); face.addEventListener('pointerup', up); face.addEventListener('pointercancel', up);
+    });
+  }
+  function applyFrame(c, lc) {
+    try {
+      const cont = c.getContainerData(), dpr = window.devicePixelRatio || 1;
+      const [x, y, w, h] = lc.box;
+      if (!(w > 0 && h > 0)) return false;
+      let ratio = (RATIO_W * lc.unit / dpr) / w;
+      ratio = Math.min(ratio, cont.width / w, cont.height / h);
+      const bw = w * ratio, bh = h * ratio, left = (cont.width - bw) / 2, top = (cont.height - bh) / 2;
+      const vm = c.options.viewMode;
+      c.options.viewMode = 0; suspendLimit = true;
+      c.zoomTo(ratio);
+      c.setCanvasData({left: left - x * ratio, top: top - y * ratio});
+      c.setCropBoxData({left, top, width: bw, height: bh});
+      suspendLimit = false; c.options.viewMode = vm;
+      limitCanvas(c, c.container); updateInfo();
+      return true;
+    } catch (e) { suspendLimit = false; console.error(e); return false; }
+  }
+  function fitFullFrame(c) {
+    try {
+      const cont = c.getContainerData(), im = c.getImageData();
+      const nw = im.naturalWidth, nh = im.naturalHeight;
+      if (!(cont.width > 0 && cont.height > 0 && nw > 0 && nh > 0)) return false;
+      let bw = cont.width, bh = bw * RATIO_H / RATIO_W;
+      if (bh > cont.height) { bh = cont.height; bw = bh * RATIO_W / RATIO_H; }
+      const cur = c.getCropBoxData();
+      if (cur.width >= bw * 0.99 || cur.height >= bh * 0.99) return false;
+      const ratio = Math.max(bw / nw, bh / nh), cw = nw * ratio, ch = nh * ratio;
+      const vm = c.options.viewMode;
+      c.options.viewMode = 0; suspendLimit = true;
+      c.zoomTo(ratio);
+      c.setCanvasData({left: (cont.width - cw) / 2, top: (cont.height - ch) / 2, width: cw, height: ch});
+      c.setCropBoxData({left: (cont.width - bw) / 2, top: (cont.height - bh) / 2, width: bw, height: bh});
+      suspendLimit = false; c.options.viewMode = vm;
+      return true;
+    } catch (e) { suspendLimit = false; console.error(e); return false; }
+  }
+  function limitCanvas(c, layer) {
+    if (suspendLimit || limiting) return;
+    limiting = true;
+    try {
+      const cv = c.getCanvasData(), b = c.getCropBoxData();
+      if (cv.height < b.height - 0.5) {
+        c.setCropBoxData({left: b.left, top: b.top, width: cv.height * RATIO_W / RATIO_H, height: cv.height});
+        limiting = false; limitCanvas(c, layer); return;
+      }
+      let left = cv.left, top = cv.top;
+      top = Math.max(Math.min(top, b.top), b.top + b.height - cv.height);
+      const narrow = cv.width < b.width - 0.5;
+      if (narrow) {
+        if (!layer._narrow) left = b.left + (b.width - cv.width) / 2;
+        left = Math.min(Math.max(left, b.left), b.left + b.width - cv.width);
+      } else left = Math.max(Math.min(left, b.left), b.left + b.width - cv.width);
+      layer._narrow = narrow;
+      if (Math.abs(left - cv.left) > 0.5 || Math.abs(top - cv.top) > 0.5) c.setCanvasData({left, top});
+    } catch (e) { console.error(e); } finally { limiting = false; }
+  }
+  function buildEditor(url, token) {
+    return new Promise((resolve, reject) => {
+      const layer = document.createElement('div');
+      layer.className = 'crop-layer pending';
+      const im = document.createElement('img'); im.alt = '';
+      layer.appendChild(im); editBox.appendChild(layer);
+      im.onerror = () => { layer.remove(); reject(new Error('load')); };
+      im.onload = () => {
+        if (token !== openToken) { layer.remove(); reject(new Error('stale')); return; }
+        const c = new Cropper(im, {
+          aspectRatio: RATIO_W / RATIO_H, viewMode: 0, dragMode: 'move', autoCropArea: 1,
+          background: false, responsive: true, zoomable: true, toggleDragModeOnDblclick: false,
+          modal: true, highlight: false, guides: false, center: false, cropBoxMovable: false,
+          wheelZoomRatio: WHEEL_STEP,
+          ready: () => {
+            const d = c.getImageData();
+            const a = d.naturalWidth * RATIO_H, b = d.naturalHeight * RATIO_W;
+            layer.classList.toggle('ratio-match', Math.abs(a - b) <= 0.005 * Math.max(a, b));
+            fitFullFrame(c); attachPan(layer, c);
+            const vb = layer.querySelector('.cropper-view-box');
+            if (vb) {
+              const bg = document.createElement('div'); bg.className = 'crop-bg';
+              const bgImg = document.createElement('img'); bgImg.alt = ''; bgImg.src = url;
+              bg.appendChild(bgImg); vb.insertBefore(bg, vb.firstChild);
+              layer._padBlur = () => { bgImg.style.filter = `blur(${Math.max(1, c.getCropBoxData().width * 0.03)}px)`; };
+              layer._padBlur();
+            }
+            layer._ready = true; limitCanvas(c, layer);
+            resolve({layer, c});
+          },
+          crop: () => { if (layer._padBlur) layer._padBlur(); if (layer._ready) limitCanvas(c, layer); if (c === cropper) updateInfo(); },
+          zoom: (e) => {
+            if (layer._ready) {
+              const minRatio = c.getCropBoxData().height / c.getImageData().naturalHeight;
+              if (e.detail.ratio < minRatio - 1e-6) {
+                e.preventDefault();
+                if (c.getImageData().height > c.getCropBoxData().height + 0.5) setTimeout(() => c.zoomTo(minRatio), 0);
+                return;
+              }
+            }
+            if (c === cropper) setTimeout(updateInfo, 0);
+          },
+        });
+      };
+      im.src = url;
+    });
+  }
+  function frameCoversImage() {
+    if (!cropper) return false;
+    const d = cropper.getData(true), im = cropper.getImageData();
+    return Math.abs(d.x) <= 2 && Math.abs(d.y) <= 2 && Math.abs(d.width - im.naturalWidth) <= 2 && Math.abs(d.height - im.naturalHeight) <= 2;
+  }
+  function goNext() { if (!st) return; const n = findNext(st.item); if (!n) { info.textContent = '마지막 이미지예요'; return; } open(n); }
+  function goPrev() { if (!st) return; const p = findPrev(st.item); if (!p) { info.textContent = '첫 이미지예요'; return; } open(p); }
+
+  // 편집 중 키 입력은 여기서만(capture) — 뒤 목록의 방향키·Esc 처리로 넘기지 않는다
+  document.addEventListener('keydown', (e) => {
+    if (!modal.classList.contains('open')) return;
+    e.stopImmediatePropagation();
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': e.preventDefault(); goNext(); break;
+      case 'ArrowLeft': case 'PageUp': e.preventDefault(); goPrev(); break;
+      case 'Escape': e.preventDefault(); close(); break;
+      case 'o': case 'O': case 'ㅐ': e.preventDefault(); if (!e.repeat) toggleOriginView(); break;
+      case ' ': case 'Enter':
+        e.preventDefault();
+        if (e.repeat) break;
+        if (originView.classList.contains('on')) { setOriginView(false); break; }
+        if (e.shiftKey) { if (!aiBtn.disabled) aiBtn.click(); break; }
+        if (frameCoversImage()) goNext();          // 자를 게 없으면(틀 = 이미지 전체) 다음 이미지로
+        else if (!saveBtn.disabled) saveBtn.click();
+        break;
+      case 'Backspace':
+        e.preventDefault();
+        if (!e.repeat && !restoreBtn.disabled && restoreBtn.style.visibility === 'visible') restoreBtn.click();
+        break;
+      case 'ArrowUp': case 'ArrowDown': e.preventDefault(); break;
+    }
+  }, true);
+
+  $('#crop-x-btn').onclick = close;
+  prevBtn.onclick = goPrev;
+  nextBtn.onclick = goNext;
+
+  // 서버가 새 버전(v)을 주면 카드 썸네일을 바로 바꾼다(확대 보기는 닫을 때 새 버전으로 다시 연다)
+  function refreshCard(d, v) {
+    vers[nameOf(d)] = v;
+    const img = d.querySelector('img');
+    if (img) img.src = imgUrl(nameOf(d), false);
+  }
+
+  restoreBtn.onclick = async () => {
+    if (!st) return;
+    restoreBtn.disabled = true;
+    info.textContent = '원본으로 되돌리는 중...';
+    try {
+      const res = await fetch('/image/crop-restore', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                                     body: JSON.stringify({dir: DIR, filename: st.name})});
+      const j = await res.json();
+      if (!res.ok || j.status !== 'success') throw new Error(j.message || res.status);
+      refreshCard(st.item, j.v);
+      await open(st.item);
+      const framed = !!(j.last_crop && cropper && applyFrame(cropper, j.last_crop));
+      if (st) { st.notice = framed ? '원본으로 되돌렸어요 ✓ · 이전 틀 복원' : '원본으로 되돌렸어요 ✓'; updateInfo(); }
+    } catch (err) {
+      info.textContent = '되돌리기 실패: ' + err.message;
+    } finally { restoreBtn.disabled = false; }
+  };
+
+  async function doSave(ai) {
+    if (!cropper || saving || originView.classList.contains('on')) return;
+    saving = true; saveBtn.disabled = true; aiBtn.disabled = true;
+    if (typeof renderLoadingOverlay === 'function') renderLoadingOverlay();   // 갤러리 편집기와 같이 저장 중 로딩 오버레이
+    const t0 = Date.now();
+    const tick = ai ? setInterval(() => { info.textContent = `AI 처리 중... ${((Date.now() - t0) / 1000).toFixed(0)}초 (보통 5~10초)`; }, 500) : null;
+    info.textContent = ai ? 'AI 처리 중... (보통 5~10초)' : '저장 중...';
+    try {
+      const res = await fetch('/image/crop-image', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                                   body: JSON.stringify(payload(ai))});
+      const j = await res.json();
+      if (!res.ok || j.status !== 'success') throw new Error(j.message || res.status);
+      if (tick) clearInterval(tick);
+      refreshCard(st.item, j.v);
+      kickEmbed();   // 자른 이미지 임베딩 다시 계산(별도 프로세스) — 확정하면 새 값으로 순위에 반영
+      const sz = `${j.size[0]}×${j.size[1]}`;
+      const how = ai ? (j.ai_used ? 'AI로 저장했어요 ✓' : `AI 없이 저장했어요(${j.ai_note || '사유 없음'})`) : '저장했어요 ✓';
+      await open(st.item, {loadingText: `${how} (${sz}) — 새 이미지 불러오는 중...`, notice: `${how} (${sz})`});
+      updateInfo();
+    } catch (err) {
+      info.textContent = '저장 실패: ' + err.message;
+      saveBtn.disabled = false; aiBtn.disabled = false;
+    } finally {
+      if (tick) clearInterval(tick);
+      if (typeof removeLoadingOverlay === 'function') removeLoadingOverlay();
+      saving = false;
+    }
+  }
+  saveBtn.onclick = () => doSave(false);
+  aiBtn.onclick = () => doSave(true);
+
+  return {open};
+})();
+
+load();
+kickEmbed();   // 갤러리에서 자른/새로 들어온 이미지 반영(바뀐 게 없으면 캐시를 건드리지 않고 끝난다)
+</script>
+</body>
+</html>

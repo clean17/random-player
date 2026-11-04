@@ -182,6 +182,13 @@ def create_app():
     app.register_blueprint(posts, url_prefix='/posts')
     app.register_blueprint(push_bp, url_prefix='/')
     app.register_blueprint(audio, url_prefix='/audio')
+    # refine 정리 화면(2026-11-02). 같은 프로세스에서 자동매매가 돌기 때문에 이 부가 기능의 import 실패가
+    # 서버 기동을 막지 않도록 감싼다.
+    try:
+        from .image_curate import curate_bp
+        app.register_blueprint(curate_bp, url_prefix='/image/curate')
+    except Exception as e:  # noqa: BLE001
+        print(f'[WARN] image_curate 등록 실패: {type(e).__name__}: {e}')
     app.jinja_env.globals.update(max=max, min=min)
     # Jinja2 탬플릿 캐시 x
     app.jinja_env.auto_reload = True

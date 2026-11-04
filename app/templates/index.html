@@ -69,6 +69,8 @@
                 <option value="{{ url_for('image.image_list', dir=COS_DIR) }}">View Cosplay</option>
                 <option value="{{ url_for('image.image_list', dir=MOVE_DIR) }}">Move Image</option>
                 <option value="{{ url_for('image.image_list', dir=REF_IMAGE_DIR, firstRequst=True) }}">REF Images</option>
+                {# url_for 대신 고정 경로 — image_curate 등록이 실패해도(app/__init__.py try) 메인 화면이 BuildError 로 깨지지 않게 #}
+                <option value="/image/curate/">REF 정리</option>
                 {% endif %}
             </select>
         </form>
