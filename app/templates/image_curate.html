@@ -53,6 +53,10 @@ header a{color:var(--mut);text-decoration:none;margin-right:12px}
 #overlay img{position:absolute;top:45%;left:51%;transform:translate(-50%,-50%);width:100px;height:100px}
 #viewer .crop-open{position:absolute;top:12px;right:12px;z-index:1;border:0;border-radius:999px;padding:8px 16px;background:#000a;color:#fff;font-size:15px;cursor:pointer}
 #viewer .crop-open:hover{background:#000d}
+/* 확대 보기 이전/다음(2026-11-05, 태블릿용) — 좌우 가장자리 세로 중앙 */
+#viewer .vnav{position:absolute;top:50%;transform:translateY(-50%);z-index:1;border:0;border-radius:999px;width:56px;height:56px;background:#0008;color:#fff;font-size:30px;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#viewer .vnav:hover{background:#000c}
+#viewer .vnav.prev{left:10px} #viewer .vnav.next{right:10px}
 </style>
 <!-- 이미지 자르기(3:4) — refine 갤러리(image_list_masonry.html)의 편집기를 옮겨 온 것. 서버 API(/image/crop-image·crop-info·crop-restore)는 같다 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
@@ -131,9 +135,10 @@ html.crop-editing,body.crop-editing{overflow:hidden!important}
 <div id="list"></div>
 <div class="bar">
   <span class="cnt" id="cnt"></span>
+  <span class="nav"><button class="sub" id="nav-prev" title="이전 (← ↑ PageUp)">‹ 이전</button> <button class="sub" id="nav-next" title="다음 (→ ↓ PageDown)">다음 ›</button></span>
   <span><button class="sub" id="flip" style="display:none">전체 반전</button> <button class="sub" id="selall" style="display:none">전체 선택</button> <button class="sub" id="go2" style="display:none" disabled>refine 으로 복원</button> <button id="go" disabled>확정</button></span>
 </div>
-<div id="viewer"><img alt=""><button type="button" class="crop-open" title="자르기 (C)">✂ 자르기</button><div class="cap"></div></div>
+<div id="viewer"><img alt=""><button type="button" class="crop-open" title="자르기 (C)">✂ 자르기</button><button type="button" class="vnav prev" title="이전 (← ↑ PageUp)">‹</button><button type="button" class="vnav next" title="다음 (→ ↓ PageDown)">›</button><div class="cap"></div></div>
 <div id="crop-modal" aria-hidden="true">
   <div class="crop-panel">
     <div class="crop-stage">
@@ -235,6 +240,9 @@ function view(d) {
 function closeViewer() { $('#viewer').style.display = 'none'; $('#viewer img').src = ''; }
 $('#viewer').onclick = closeViewer;
 $('#viewer .crop-open').onclick = e => { e.stopPropagation(); if (viewing) cropEditor.open(viewing, {fromViewer: true}); };
+// 확대 보기 이전/다음 버튼 — 바탕 클릭(닫기)으로 번지지 않게 막는다. step() 은 아래에 정의(호출 시점엔 있음)
+$('#viewer .vnav.prev').onclick = e => { e.stopPropagation(); step(-1); };
+$('#viewer .vnav.next').onclick = e => { e.stopPropagation(); step(1); };
 
 // ── 이전/다음 이미지 — refine 갤러리(image.js nextImage/previousImage)와 같은 방식 ─────────────
 //   →/↓/PageDown 다음, ←/↑/PageUp 이전 (다음은 refine 처럼 400ms 스로틀).
@@ -279,6 +287,9 @@ function step(dir) {
   if (!next) return toast(dir > 0 ? '마지막입니다.' : '처음입니다.', 1200);
   next.scrollIntoView({behavior: 'auto', block: 'center'});
 }
+// 하단 바 이전/다음(2026-11-04, 태블릿용) — 키보드 ←/→ 와 같은 동작(목록: 같은 열 위/아래 이미지를 화면 중앙으로)
+$('#nav-prev').onclick = () => step(-1);
+$('#nav-next').onclick = () => step(1);
 document.addEventListener('keydown', e => {
   if (e.target.closest('select, input, textarea') || e.altKey || e.ctrlKey || e.metaKey) return;
   switch (e.key) {
