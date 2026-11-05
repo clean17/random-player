@@ -98,6 +98,20 @@ html.crop-editing,body.crop-editing{overflow:hidden!important}
 #crop-modal .cropper-view-box>img{position:relative;z-index:1;pointer-events:none}
 #crop-modal .crop-origin-view{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:contain;background:#0b0b0b;display:none}
 #crop-modal .crop-origin-view.on{display:block}
+#crop-modal .crop-nav-row{display:none}
+/* 모바일(2026-11-04): 버튼 패널을 이미지 위에 띄우지 않고 화면 아래 한 줄로 — 편집 영역이 그만큼 줄어 가리지 않는다.
+   이전/다음 화살표는 숨기고 아래 띠의 이전/다음 버튼(.crop-nav2)을 쓴다. layoutChrome 이 넣는 인라인 위치값은 !important 로 무시 */
+@media (max-width:700px){
+#crop-modal .crop-bar{position:static!important;visibility:visible;width:100%;box-sizing:border-box;border-radius:0;box-shadow:none;background:#141414;gap:4px;padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+#crop-modal .crop-btns{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+#crop-modal .crop-nav-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#crop-modal .crop-bar button.crop-nav2{height:40px;font-size:15px;background:#555;border-color:#888}
+#crop-modal .crop-bar button{height:34px;font-size:12px;padding:0 4px;border-radius:6px}
+#crop-modal .crop-info{height:auto;font-size:11px;-webkit-line-clamp:1}
+#crop-modal .crop-nav{display:none}
+#crop-modal .crop-index{top:20px;bottom:auto!important;right:64px}
+#crop-modal .crop-label{top:20px;bottom:auto;max-width:calc(100% - 170px)!important}
+}
 </style>
 </head>
 <body>
@@ -132,6 +146,7 @@ html.crop-editing,body.crop-editing{overflow:hidden!important}
     <div class="crop-label" id="crop-label"></div>
     <div class="crop-index" id="crop-index"></div>
     <div class="crop-bar" id="crop-bar">
+      <div class="crop-nav-row"><button type="button" class="crop-nav2" id="crop-prev2-btn">‹ 이전</button><button type="button" class="crop-nav2" id="crop-next2-btn">다음 ›</button></div>
       <span class="crop-info" id="crop-info">불러오는 중...</span>
       <div class="crop-btns">
         <button type="button" class="primary" id="crop-save-btn" disabled title="Space / Enter">확정(덮어쓰기)</button>
@@ -673,7 +688,7 @@ const cropEditor = (function () {
       e.preventDefault(); e.stopPropagation();
       let lastX = e.clientX, lastY = e.clientY;
       face.setPointerCapture(e.pointerId); face.style.cursor = 'grabbing';
-      const move = (ev) => { c.move(ev.clientX - lastX, ev.clientY - lastY); lastX = ev.clientX; lastY = ev.clientY; };
+      const move = (ev) => { if (pinching) { lastX = ev.clientX; lastY = ev.clientY; return; } c.move(ev.clientX - lastX, ev.clientY - lastY); lastX = ev.clientX; lastY = ev.clientY; };
       const up = () => {
         face.removeEventListener('pointermove', move); face.removeEventListener('pointerup', up); face.removeEventListener('pointercancel', up);
         face.style.cursor = 'grab';
@@ -750,7 +765,7 @@ const cropEditor = (function () {
         if (token !== openToken) { layer.remove(); reject(new Error('stale')); return; }
         const c = new Cropper(im, {
           aspectRatio: RATIO_W / RATIO_H, viewMode: 0, dragMode: 'move', autoCropArea: 1,
-          background: false, responsive: true, zoomable: true, toggleDragModeOnDblclick: false,
+          background: false, responsive: true, zoomable: true, zoomOnTouch: false, toggleDragModeOnDblclick: false,
           modal: true, highlight: false, guides: false, center: false, cropBoxMovable: false,
           wheelZoomRatio: WHEEL_STEP,
           ready: () => {
@@ -822,6 +837,42 @@ const cropEditor = (function () {
   $('#crop-x-btn').onclick = close;
   prevBtn.onclick = goPrev;
   nextBtn.onclick = goNext;
+  // 모바일 두 손가락 확대/축소(2026-11-04). 틀 안을 누르면 attachPan 이 터치를 가져가 Cropper 기본 핀치(zoomOnTouch)는
+  // 틀 바깥에서만 됐는데, 모바일에선 틀이 화면을 거의 다 채워 사실상 확대가 안 됐다. 그래서 Cropper 핀치는 끄고
+  // (zoomOnTouch:false) 화면 어디서든 두 손가락 사이 거리 비율로 zoomTo(가운데 지점 기준)한다. 핀치 중엔 attachPan 끌기를 멈춘다.
+  // 좌우 스와이프 넘기기는 한 손가락 이미지 끌기와 겹쳐 뺐다(2026-11-04 사용자) — 모바일은 아래 띠의 이전/다음 버튼.
+  let pinching = false;
+  (() => {
+    const pts = new Map();
+    let pinch = null;
+    const imgRatio = () => { const d = cropper.getImageData(); return d.width / d.naturalWidth; };
+    const two = () => { const [a, b] = [...pts.values()]; return {d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2}; };
+    window.addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'touch' || !modal.classList.contains('open') || !cropper) return;
+      if (e.isPrimary) { pts.clear(); pinch = null; pinching = false; }   // 새 터치 시작 — 놓친 손 뗌이 있어도 끌기가 막히지 않게
+      if (e.target.closest('.crop-bar, .crop-x, .crop-nav')) return;
+      pts.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      if (pts.size === 2) { pinching = true; pinch = {d: two().d, r: imgRatio(), c: cropper}; }
+    }, true);
+    window.addEventListener('pointermove', e => {
+      const p = pts.get(e.pointerId);
+      if (!p) return;
+      p.x = e.clientX; p.y = e.clientY;
+      if (!pinch || pts.size < 2 || pinch.c !== cropper) return;
+      e.preventDefault();
+      const t = two(), rect = cropper.cropper.getBoundingClientRect();
+      cropper.zoomTo(pinch.r * t.d / pinch.d, {x: t.x - rect.left, y: t.y - rect.top});
+    }, {capture: true, passive: false});
+    const end = e => {
+      if (!pts.delete(e.pointerId)) return;
+      if (pinch && pts.size < 2) { pinch = null; if (cropper) updateInfo(); }
+      if (!pts.size) pinching = false;
+    };
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+  })();
+  document.getElementById('crop-prev2-btn').onclick = goPrev;
+  document.getElementById('crop-next2-btn').onclick = goNext;
 
   // 서버가 새 버전(v)을 주면 카드 썸네일을 바로 바꾼다(확대 보기는 닫을 때 새 버전으로 다시 연다)
   function refreshCard(d, v) {
