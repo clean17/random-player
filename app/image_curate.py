@@ -38,7 +38,7 @@ import threading
 import time
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -356,20 +356,66 @@ def api_candidates():
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 503
     labels = st['labels']
+    rnd = _load_round()
+    since = rnd.get('started') if rnd else None
     order = np.argsort(-st['final'])
-    out = []
+    out, remaining = [], 0
     for i in order:
         nm = st['names'][i]
         if nm.lower().endswith('.gif'):          # 2026-11-02 사용자: 후보에서 gif 제외
             continue
-        if labels.get(nm, {}).get('label') == 'keep':
+        lb = labels.get(nm, {})
+        if since:
+            # 재평가 회차: 예전 '유지'도 다시 보여 주고, 이번 회차에 확정한 것만 뺀다
+            if lb.get('ts', '') >= since:
+                continue
+        elif lb.get('label') == 'keep':
             continue
-        out.append(_item(st, int(i)))
-        if len(out) >= n:
-            break
+        remaining += 1
+        if len(out) < n:
+            out.append(_item(st, int(i)))
     return jsonify({'items': out, 'model': st['model'] is not None,
-                    'n_remove': st['n_remove'], 'n_keep': st['n_keep'],
+                    'n_remove': st['n_remove'], 'n_keep': st['n_keep'], 'remaining': remaining,
+                    'round': rnd,
                     'total': len(st['names']), 'missing': st['missing'], 'cache_ver': _cache_ver()})
+
+
+# ── 전체 재평가 회차 (2026-11-04 사용자 요청) ────────────────────────────────
+# 1회차를 느슨하게 판정해서, 모델·판정은 그대로 두고 refine 전체를 다시 훑는다. 회차 중엔 후보 탭이 예전 '유지'
+# 이미지도 보여 주고, 회차 시작 뒤에 확정(ts 갱신)한 이미지만 뺀다. 확정은 평소와 같이 판정을 기록한다
+# (이번에 제거하면 예전 '유지'가 '제거'로 바뀌어 다음 순위부터 반영 — 판정을 바로잡는 것이므로).
+ROUND_PATH = os.path.join(os.path.dirname(LABELS_PATH), 'round.json')
+
+
+def _load_round() -> Optional[Dict]:
+    try:
+        with open(ROUND_PATH, 'r', encoding='utf-8') as f:
+            r = json.load(f)
+        return r if r.get('started') else None
+    except (OSError, ValueError):
+        return None
+
+
+@curate_bp.route('/api/round', methods=['POST'])
+@login_required
+def api_round():
+    """{action: 'start'|'end'} — 재평가 회차 시작/종료. 판정 기록·모델은 건드리지 않는다."""
+    action = (request.get_json(silent=True) or {}).get('action')
+    if action not in ('start', 'end'):
+        return jsonify({'error': 'invalid action'}), 400
+    with _lock:
+        prev = _load_round() or {}
+        if action == 'start':
+            # 판정 ts 는 초 단위라, 같은 초에 확정한 1회차 판정이 '이번 회차'로 잡히지 않게 1초 뒤로
+            r = {'n': int(prev.get('n', 1)) + 1,
+                 'started': (datetime.now() + timedelta(seconds=1)).isoformat(timespec='seconds')}
+        else:
+            r = {'n': int(prev.get('n', 1)), 'started': None, 'ended': datetime.now().isoformat(timespec='seconds')}
+        os.makedirs(os.path.dirname(ROUND_PATH), exist_ok=True)
+        with open(ROUND_PATH, 'w', encoding='utf-8') as f:
+            json.dump(r, f, ensure_ascii=False)
+    log.info('curate round %s: %s', action, r)
+    return jsonify(r)
 
 
 @curate_bp.route('/api/embed', methods=['POST'])

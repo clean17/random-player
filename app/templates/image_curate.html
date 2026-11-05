@@ -316,9 +316,26 @@ async function load() {
       $('#info').innerHTML = `refine <b>${j.total}</b>장 중 정리 후보 <b>${j.items.length}</b>장 (gif 제외) · ` +
         (j.model ? `취향 모델 사용 중 (제거 ${j.n_remove} · 유지 ${j.n_keep} 판정 학습)` : `기본 점수(동떨어짐) — 판정이 쌓이면 취향 모델이 켜집니다`) +
         (j.missing ? ` · 임베딩 없는 새 이미지 ${j.missing}장 제외` : '') +
-        `<br>기본값은 <b style="color:var(--keep)">유지</b>입니다. 뺄 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 바꾸고 확정하세요(유지로 확정한 이미지는 다시 후보에 나오지 않습니다). 제거는 임시 보관함(_review)으로 옮기기만 합니다. ` +
+        (j.round
+          ? `<br><b style="color:var(--rm)">전체 재평가 ${j.round.n}회차 진행 중</b> (${j.round.started.slice(5, 16).replace('T', ' ')} 시작) · ` +
+            `남은 <b>${j.remaining}</b>장 — 예전에 유지로 판정한 이미지도 다시 나옵니다. 이번 회차에 확정한 것만 빠집니다. ` +
+            `<button type="button" id="round-btn">재평가 종료</button>`
+          : `<br>남은 미판정 <b>${j.remaining}</b>장 · <button type="button" id="round-btn" ` +
+            `title="판정 기록·모델은 그대로 두고, 유지로 판정했던 이미지까지 refine 전체를 다시 훑습니다">전체 재평가 시작</button>`) +
+        `<br>기본값은 <b style="color:var(--keep)">유지</b>입니다. 뺄 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 바꾸고 확정하세요` +
+        (j.round ? '. ' : `(유지로 확정한 이미지는 다시 후보에 나오지 않습니다). `) + `제거는 임시 보관함(_review)으로 옮기기만 합니다. ` +
         `표시 수 <select id="nsel">${[50, 100, 150, 300].map(n => `<option ${n === nPer ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
       $('#nsel').onchange = e => { nPer = +e.target.value; load(); };
+      $('#round-btn').onclick = async () => {
+        const start = !j.round;
+        if (!confirm(start
+            ? `refine 전체(유지로 판정했던 이미지 포함)를 현재 모델 순서로 다시 평가합니다.\n` +
+              `지금까지의 판정과 모델은 그대로입니다. 이번 회차에 확정한 이미지만 다시 나오지 않습니다.\n` +
+              `예전에 유지였던 이미지를 이번에 제거하면 그 판정은 '제거'로 바뀝니다.`
+            : `재평가를 끝내고 평소 모드(유지 판정 이미지는 숨김)로 돌아갑니다.`)) return;
+        try { await api('/image/curate/api/round', {action: start ? 'start' : 'end'}); await load(); }
+        catch (e) { toast('오류: ' + e.message, 5000); }
+      };
       const g = document.createElement('div'); g.className = 'grid';
       // 2026-11-02 사용자: 처음엔 전부 유지 — 취향 모델이 켜진 뒤로는 제거가 더 적어서 몇 장만 누르면 된다
       j.items.forEach(it => { state[it.name] = 'keep'; g.appendChild(card(it, false, s => s === 'keep' ? 'rm' : 'keep')); });
