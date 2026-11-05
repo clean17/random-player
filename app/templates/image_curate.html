@@ -443,6 +443,7 @@ $('#go').onclick = async () => {
     applying = true;
     try { await waitEmbed(180000); } finally { applying = false; }
     await load();
+    window.scrollTo(0, 0);   // 새 후보는 맨 위부터 본다(목록을 비웠다 다시 채우면 브라우저가 이전 위치를 유지하려 한다)
   } catch (e) { toast('오류: ' + e.message, 5000); count(); }
   finally { if (busy && typeof removeLoadingOverlay === 'function') removeLoadingOverlay(); }
 };
@@ -460,6 +461,7 @@ $('#go2').onclick = async () => {
     applying = true;
     try { await waitEmbed(180000); } finally { applying = false; }
     await load();
+    window.scrollTo(0, 0);
   } catch (e) { toast('오류: ' + e.message, 5000); count(); }
   finally { if (typeof removeLoadingOverlay === 'function') removeLoadingOverlay(); }
 };
