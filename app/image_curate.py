@@ -8,6 +8,7 @@ refine 이미지 중 취향과 먼/점수 낮은 이미지를 골라 보관함(r
           판정은 labels.json 에 쌓이고, 쌓인 판정으로 취향 모델(tools/image_curate/scoring.py)을 학습해 다음 후보를 고른다.
   중복    근접중복 그룹(CLIP 유사도 ≥ 0.97). 기본값 '유지' — 별로인 것만 눌러 '제거'.
           중복 정리는 '둘 중 덜 나은 쪽'이라 취향 학습에는 쓰지 않는다(src='dup').
+          그룹별 '중복 아님 · 모두 유지'는 not_dup.json 에 쌍으로 기록해 다시 묶지 않는다(학습 무관).
   임시 보관함  _review/ 목록(후보·중복 탭에서 제거한 이미지가 먼저 오는 곳). 마지막으로 검토해서
           보관함(_archive/)으로 넘기거나 refine 으로 복원 — 복원한 이미지는 '유지' 판정으로 바뀐다.
   보관함  _archive/ 목록(2026-11-03 추가). 임시 보관함에서 넘기는 것은 판정·학습을 바꾸지 않는다 —
@@ -391,9 +392,57 @@ def api_dups():
         st = _compute()
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 503
-    groups = scoring.dup_groups(st['sc']['pairs'], len(st['names']))
+    pairs = st['sc']['pairs']
+    nd = _load_not_dup()
+    if nd and len(pairs):
+        names = st['names']
+        pairs = pairs[[_pair_key(names[i], names[j]) not in nd for i, j in pairs]]
+    groups = scoring.dup_groups(pairs, len(st['names']))
     out = [sorted([_item(st, i) for i in g], key=lambda x: -x['aes']) for g in groups]
     return jsonify({'groups': out, 'thr': scoring.DUP_THR})
+
+
+# ── '중복 아님' 기록 (2026-11-04 사용자 요청) ─────────────────────────────────
+# 유사도는 기준 이상이지만 실제론 살짝 다른 컷이라 전부 남길 그룹. 그 그룹 안의 모든 쌍을 기록해 두고 중복 탭에서
+# 그 쌍만 빼고 묶는다 — 나중에 새로 들어온 비슷한 이미지와의 쌍은 다시 보인다.
+# 판정(labels.json)과는 별개 파일이라 취향 학습·후보 목록에는 영향 없다.
+NOT_DUP_PATH = os.path.join(os.path.dirname(LABELS_PATH), 'not_dup.json')
+
+
+def _pair_key(a: str, b: str) -> str:
+    a, b = base_name(a), base_name(b)
+    return '\t'.join(sorted((a, b)))
+
+
+def _load_not_dup() -> set:
+    try:
+        with open(NOT_DUP_PATH, 'r', encoding='utf-8') as f:
+            return set(json.load(f))
+    except (OSError, ValueError):
+        return set()
+
+
+@curate_bp.route('/api/not-dup', methods=['POST'])
+@login_required
+def api_not_dup():
+    """{names: [...]} — 한 그룹을 '중복 아님(모두 유지)'으로 기록한다. 파일은 옮기지 않는다."""
+    names = [os.path.basename(x) for x in ((request.get_json(silent=True) or {}).get('names') or [])]
+    if len(names) < 2:
+        return jsonify({'error': '2장 이상 필요'}), 400
+    with _lock:
+        nd = _load_not_dup()
+        before = len(nd)
+        for a in range(len(names)):
+            for b in range(a + 1, len(names)):
+                nd.add(_pair_key(names[a], names[b]))
+        os.makedirs(os.path.dirname(NOT_DUP_PATH), exist_ok=True)
+        tmp = NOT_DUP_PATH + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(sorted(nd), f, ensure_ascii=False, indent=0)
+        os.replace(tmp, NOT_DUP_PATH)
+        backup_file(NOT_DUP_PATH, LABELS_BACKUP_KEEP)
+    log.info('curate not-dup: %d names, +%d pairs', len(names), len(nd) - before)
+    return jsonify({'added': len(nd) - before})
 
 
 _SUBS = {'review': REVIEW_SUBDIR, 'archive': ARCHIVE_SUBDIR}

@@ -332,10 +332,20 @@ async function load() {
         `별로인 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 표시하고 확정하세요. 같은 촬영의 다른 컷일 수도 있으니 ⤢ 로 크게 확인하세요.`;
       j.groups.forEach((grp, gi) => {
         const box = document.createElement('div'); box.className = 'group';
-        box.innerHTML = `<h4>그룹 ${gi + 1} · ${grp.length}장</h4>`;
+        box.innerHTML = `<h4>그룹 ${gi + 1} · ${grp.length}장 ` +
+          `<button type="button" class="notdup" title="살짝 다른 이미지 — 전부 남기고 이 그룹을 중복 목록에서 뺍니다(취향 학습과 무관)">중복 아님 · 모두 유지</button></h4>`;
         const g = document.createElement('div'); g.className = 'grid';
         grp.forEach(it => g.appendChild(card(it, false, s => s === 'rm' ? '' : 'rm')));
         box.appendChild(g); $('#list').appendChild(box);
+        box.querySelector('.notdup').onclick = async ev => {
+          const b = ev.currentTarget; b.disabled = true;
+          try {
+            await api('/image/curate/api/not-dup', {names: grp.map(it => it.name)});
+            grp.forEach(it => delete state[it.name]);   // 이 그룹에 찍어 둔 제거 표시도 버린다
+            box.remove(); count();
+            toast(`그룹 ${gi + 1} — ${grp.length}장 모두 유지(중복 아님)로 기록`);
+          } catch (e) { b.disabled = false; toast('오류: ' + e.message, 5000); }
+        };
       });
       if (!j.groups.length) $('#list').innerHTML = '<div class="empty">중복 그룹이 없습니다.</div>';
     } else if (tab === 'archive') {
