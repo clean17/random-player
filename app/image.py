@@ -570,6 +570,24 @@ def fetch_image_list():
                             selected_dir=selected_dir, search=search or None))
 
 
+@image_bp.route('/refresh-cache', methods=['GET'])
+def refresh_image_cache():
+    """화면의 fetch-image-button(/image/fetch)이 하는 일 — 디렉터리 풀 스캔으로 서버의 이미지 목록 배열을 갱신 —
+    만 로그인 없이 한다. 스크랩 잡(별 프로세스)이 작업을 끝낸 뒤 부른다(utils/image_cache_refresh.py).
+    로그인이 없는 대신 서버 로컬(127.0.0.1)에서 직접 들어온 요청만 받는다. nginx 를 거친 요청은
+    X-Forwarded-For/X-Real-IP 가 붙으므로 외부에서는 404 로 보인다."""
+    if (request.remote_addr not in ('127.0.0.1', '::1')
+            or request.headers.get('X-Forwarded-For') or request.headers.get('X-Real-IP')):
+        abort(404)
+
+    dir = request.args.get('dir')
+    if dir not in DIR_CONFIG:
+        return jsonify({'status': 'error', 'message': f'unknown dir: {dir}'}), 400
+
+    resolve_dir_page(dir, 1)   # 첫 페이지 = 풀 스캔(get_image_page 참고)
+    return jsonify({'status': 'success', 'dir': dir, 'count': len(DIR_CONFIG[dir].image_arr)})
+
+
 @image_bp.route('/move-image', methods=['POST'], endpoint='move-image')
 @login_required
 @_log_slow()

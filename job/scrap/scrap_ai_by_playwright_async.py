@@ -355,7 +355,12 @@ try:
     loop.run_until_complete(async_crawl_ai())
 finally:
     loop.close()
-    log_file.flush()
+    # 작업 종료 30초 후 화면의 fetch-image-button 과 같은 목록 갱신을 호출한다. log_file 은 위에서 이미 닫혔으니 파일에 직접 이어 쓴다.
+    def _append_log(msg):
+        with open(filename, "a", encoding="utf-8") as f:
+            f.write(f"{ts()} {msg}\n")
+    from utils.image_cache_refresh import refresh_image_caches
+    refresh_image_caches(["image"], delay=30, log=_append_log)
     os._exit(0)  # anyio atexit 스레드 풀 경고 방지
 
 '''
