@@ -637,20 +637,23 @@ _SCREEN_LOG = os.path.join(os.path.dirname(LABELS_PATH), 'screen.log')
 _screen_lock = threading.Lock()
 # 계산(features.py) → 분류(_screen_result)까지 한 스레드에서 끝내고 결과를 'result' 에 둔다 — 분류 계산이 image2
 # 목록 읽기(WSL 9P) 때문에 수십 초 걸려, 화면 요청 안에서 하면 프록시 시간 초과로 끊길 수 있다(2026-11-03).
-_screen = {'running': False, 'error': None, 'started': None, 'ended': None, 'phase': '', 'result': None}
+# 2026-11-05: 버튼 한 번이면 분류 → 이동까지 서버가 끝낸다(auto_move). 확인창을 기다리지 않아 탭을 닫아도 이동된다.
+#   'summary' 는 마지막 분류 요약(통과 목록 제외) — 이동이 끝나 result 를 비운 뒤에도 화면이 보여 줄 수 있게 남긴다.
+_screen = {'running': False, 'error': None, 'started': None, 'ended': None, 'phase': '', 'result': None,
+           'auto_move': False, 'summary': None}
 _screen_move = {'running': False, 'total': 0, 'moved': 0, 'fail': [], 'error': None}
 _screen_cache = {'key': None, 'val': None}
 
 
-def _kick_screen() -> bool:
+def _kick_screen(auto_move: bool = False) -> bool:
     if not os.path.isfile(_EMBED_PY):
         _screen['error'] = 'venv_imgml 없음'
         return False
     with _screen_lock:
         if _screen['running'] or _screen_move['running']:
-            return True
+            return True   # 이미 도는 중 — 화면은 진행 상황만 이어서 본다
         _screen['running'], _screen['error'], _screen['result'] = True, None, None
-        _screen['phase'] = ''
+        _screen['phase'], _screen['auto_move'], _screen['summary'] = '', auto_move, None
     threading.Thread(target=_screen_worker, name='curate-screen', daemon=True).start()
     return True
 
@@ -670,13 +673,23 @@ def _screen_worker() -> None:
             err = 'features.py 종료코드 %s (logs/image_curate/screen.log)' % p.returncode
         else:
             _screen['phase'] = '취향 모델로 분류 중… (image2 목록 읽기 포함 1분 안팎)'
-            _screen['result'] = _screen_result()
+            r = _screen['result'] = _screen_result()
+            _screen['summary'] = dict({k: v for k, v in r.items() if k != 'pass'}, n_pass=len(r['pass']))
+            log.info('curate screen done: scored=%s pass=%s', r['scored'], len(r['pass']))
     except Exception as e:  # noqa: BLE001
         err = '%s: %s' % (type(e).__name__, e)
     if err:
         log.warning('curate screen failed: %s', err)
+    names = []
     with _screen_lock:
+        r = _screen['result']
+        if not err and _screen['auto_move'] and r and r['pass']:
+            names = list(r['pass'])
+            # 분류 '끝'과 이동 '시작'을 한 잠금 안에서 — 화면이 그 사이 틈을 '아무것도 안 함'으로 보지 않게
+            _screen_move.update(running=True, total=len(names), moved=0, fail=[], error=None)
         _screen['running'], _screen['error'], _screen['ended'] = False, err, time.time()
+    if names:
+        _screen_move_worker(names)   # 같은 스레드에서 이어서 이동
 
 
 def _screen_move_worker(names: List[str]) -> None:
@@ -700,6 +713,8 @@ def _screen_move_worker(names: List[str]) -> None:
     finally:
         _screen['result'] = None   # 목록이 바뀌었으니 다음엔 다시 분류
         _screen_move['running'] = False
+        log.info('curate screen move done: moved=%s fail=%s error=%s',
+                 _screen_move['moved'], len(_screen_move['fail']), _screen_move['error'])
 
 
 def _screen_progress() -> str:
@@ -760,10 +775,10 @@ def api_screen():
         return jsonify({'running': True, 'progress': _screen['phase'] or _screen_progress()})
     if _screen['error']:
         return jsonify({'running': False, 'error': _screen['error']}), 500
-    r = _screen['result']
+    r = _screen['summary']
     if r is None:
         return jsonify({'running': False, 'error': '분류 결과 없음 — 다시 실행하세요'}), 409
-    return jsonify(dict({k: v for k, v in r.items() if k != 'pass'}, running=False, n_pass=len(r['pass'])))
+    return jsonify(dict(r, running=False, auto_move=_screen['auto_move'], moving=_screen_move['running']))
 
 
 @curate_bp.route('/api/screen/move', methods=['GET', 'POST'])
@@ -786,9 +801,10 @@ def api_screen_move():
 @curate_bp.route('/api/screen/run', methods=['POST'])
 @login_required
 def api_screen_run():
-    """image2 특징 계산(바뀐/새 파일만)을 백그라운드로 시작한다."""
-    if (request.get_json(silent=True) or {}).get('dir') not in SCREEN_DIRS:
+    """image2 특징 계산(바뀐/새 파일만) → 분류를 백그라운드로 시작한다. auto_move=true 면 통과분 이동까지."""
+    body = request.get_json(silent=True) or {}
+    if body.get('dir') not in SCREEN_DIRS:
         return jsonify({'error': 'invalid dir'}), 400
-    if not _kick_screen():
+    if not _kick_screen(bool(body.get('auto_move'))):
         return jsonify({'error': _screen['error']}), 503
     return jsonify({'running': True})

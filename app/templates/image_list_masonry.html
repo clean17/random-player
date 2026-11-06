@@ -2384,40 +2384,41 @@
         }
         return el;
     }
+    // 2026-11-05: 버튼 한 번이면 서버가 계산 → 분류 → 통과분 move 이동까지 백그라운드로 끝낸다(중간 확인창 없음).
+    //   탭을 닫아도 서버에서 계속 진행된다. 다시 누르면 진행 중인 작업에 붙어서 상황만 보여 준다.
     btn.addEventListener('click', async () => {
         const panel = document.getElementById('top-menu-panel');
         if (panel) panel.style.display = 'none';
+        if (!confirm('AI 1차 분류를 시작합니다.\n통과한 이미지는 확인 없이 바로 move 로 옮겨집니다(나머지는 image2 에 남음).\n' +
+                     '서버에서 백그라운드로 진행되므로 이 탭을 닫아도 됩니다.')) return;
         btn.disabled = true;
         const box = statusBox();
         let moved = 0;
         try {
             box.textContent = 'AI 1차 분류 준비 중…';
-            await api('/image/curate/api/screen/run', {dir: 'image2'});
+            await api('/image/curate/api/screen/run', {dir: 'image2', auto_move: true});
+            const tail = '\n\n(백그라운드 진행 — 탭을 닫아도 이동됩니다)';
             let r;
             for (;;) {
                 r = await api('/image/curate/api/screen?dir=image2');
                 if (!r.running) break;
-                box.textContent = '새 이미지 특징 계산 중 (GPU)\n' + (r.progress || '');
+                box.textContent = '새 이미지 특징 계산 중 (GPU)\n' + (r.progress || '') + tail;
                 await sleep(2000);
             }
-            box.remove();
-            if (!r.n_pass) { alert(`통과한 이미지가 없습니다 (대상 ${r.scored}장).`); return; }
-            if (!confirm(`AI 1차 분류 결과\n대상 ${r.scored}장 중 통과 ${r.n_pass}장` +
+            const head = `대상 ${r.scored}장 중 통과 ${r.n_pass}장` +
                          `\n(취향 점수 미달 ${r.n_high_p} · refine 과 다른 종류 ${r.n_low_sim}, 겹칠 수 있음` +
-                         (r.missing ? ` · 계산 안 된 ${r.missing}장 제외` : '') + `)` +
-                         `\n\n통과 ${r.n_pass}장을 move 로 옮길까요? 나머지는 image2 에 남습니다.`)) return;
-            // 이동은 서버가 백그라운드로 한다(649장을 브라우저가 하나씩 보내면 중간에 끊기기 쉽고 실패 원인도 안 보였다)
-            const box2 = statusBox();
-            let m = await api('/image/curate/api/screen/move', {});
+                         (r.missing ? ` · 계산 안 된 ${r.missing}장 제외` : '') + `)`;
+            let m = await api('/image/curate/api/screen/move');
+            if (!m.running && !r.n_pass) { box.remove(); alert(`AI 1차 분류 결과\n${head}\n\n옮길 이미지가 없습니다.`); return; }
             while (m.running) {
-                box2.textContent = `move 로 이동 중 ${m.moved + m.n_fail}/${m.total}` + (m.n_fail ? ` (실패 ${m.n_fail})` : '');
+                box.textContent = `${head}\n\nmove 로 이동 중 ${m.moved + m.n_fail}/${m.total}` + (m.n_fail ? ` (실패 ${m.n_fail})` : '') + tail;
                 await sleep(1500);
                 m = await api('/image/curate/api/screen/move');
             }
             moved = m.moved;
-            box2.remove();
+            box.remove();
             if (m.n_fail) console.warn('AI 1차 분류 이동 실패', m.fail);
-            alert(`move 로 ${m.moved}장 이동` + (m.n_fail ? `, 실패 ${m.n_fail}장\n예: ${m.fail.slice(0, 3).join('\n')}` : '') +
+            alert(`AI 1차 분류 결과\n${head}\n\nmove 로 ${m.moved}장 이동` + (m.n_fail ? `, 실패 ${m.n_fail}장\n예: ${m.fail.slice(0, 3).join('\n')}` : '') +
                   (m.error ? `\n오류: ${m.error}` : ''));
         } catch (e) {
             const b = document.getElementById('ai-screen-status'); if (b) b.remove();
