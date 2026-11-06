@@ -269,8 +269,8 @@ $('#viewer .vnav.next').onclick = e => { e.stopPropagation(); step(1); };
 
 // ── 이전/다음 이미지 — refine 갤러리(image.js nextImage/previousImage)와 같은 방식 ─────────────
 //   →/↓/PageDown 다음, ←/↑/PageUp 이전 (다음은 refine 처럼 400ms 스로틀).
-//   목록: 화면 세로 중앙에 가장 가까운 이미지를 기준으로 '같은 열'의 바로 아래/위 이미지를 화면 중앙으로 스크롤.
-//         같은 줄에 여러 장이면 가로 중앙에 가까운 쪽이 기준. 중복 탭은 다음 그룹의 같은 열로 이어진다.
+//   목록: 1열 이미지 중 화면 세로 중앙에 가장 가까운 것을 기준으로 1열의 바로 아래/위 이미지를 화면 중앙으로 스크롤.
+//         중복 탭은 다음 그룹의 1열로 이어진다.
 //   확대 보기: refine 슬라이드쇼처럼 목록 순서대로 이전/다음, Esc 닫기.
 let lastNext = 0;
 const cards = () => Array.from(document.querySelectorAll('#list .c'));
@@ -305,8 +305,13 @@ function step(dir) {
     list[i].scrollIntoView({behavior: 'auto', block: 'center'});
     return view(list[i]);
   }
-  const base = centerCard(list); if (!base) return;
-  const next = neighborInColumn(list, base, dir);
+  // 기준은 1열(가장 왼쪽 열) 카드 중 화면 세로 중앙에 가장 가까운 것(2026-11-06 사용자 요청) — 가운데 카드가
+  // 2·3열이면 그 열 아래가 비어 있을 때 다음이 남았는데도 '마지막'이 됐다. 중복 탭은 그룹마다 1열이 같은 위치라 이어진다.
+  const rects = list.map(d => d.getBoundingClientRect());
+  const minL = Math.min(...rects.map(r => r.left));
+  const col1 = list.filter((d, i) => rects[i].left - minL < rects[i].width / 2);
+  const base = centerCard(col1); if (!base) return;
+  const next = neighborInColumn(col1, base, dir);
   if (!next) return toast(dir > 0 ? '마지막입니다.' : '처음입니다.', 1200);
   next.scrollIntoView({behavior: 'auto', block: 'center'});
 }
