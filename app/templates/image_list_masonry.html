@@ -1650,6 +1650,7 @@
         <div class="crop-btns">
             <button type="button" class="primary" id="crop-save-btn" disabled title="Space / Enter">확정(덮어쓰기)</button>
             <button type="button" class="ai" id="crop-ai-btn" disabled title="Shift+Space / Shift+Enter — AI(Real-ESRGAN)로 깨끗하게 정리해 저장(확대·축소 모두), 약 5~10초">AI로 확정</button>
+            <button type="button" id="crop-rotate-btn" disabled title="시계 방향 90° (R) · 반시계 Shift+R">회전 ↻</button>
             <button type="button" class="crop-origin-toggle" id="crop-origin-toggle" style="visibility:hidden;" title="원본/현재 전환 (O)">원본 보기</button>
             <button type="button" id="crop-restore-btn" style="visibility:hidden;" title="백스페이스">원본으로 되돌리기</button>
             <button type="button" id="crop-move-btn" title="이미지 클릭과 같은 동작">refine으로 이동 ›</button>
@@ -1678,7 +1679,8 @@
     const restoreBtn = document.getElementById('crop-restore-btn');
     const originToggle = document.getElementById('crop-origin-toggle');
     const originView = document.getElementById('crop-origin-view');
-    let cropper = null, state = null, saving = false;
+    const rotateBtn = document.getElementById('crop-rotate-btn');
+    let cropper = null, state = null, saving = false, rotating = false;
 
     // 원본/현재 토글(2026-10-11) — 슬라이드쇼의 원본 보기(image.js toggleSlideOrigin)와 같은 동작을 편집 창에서도.
     // origin/ 백업이 있을 때만 버튼이 보이고, 원본을 보는 동안엔 틀이 가려지므로 확정 버튼을 잠근다.
@@ -1689,9 +1691,10 @@
         originToggle.textContent = on ? '현재 보기' : '원본 보기';   // 누르면 바뀔 보기 이름
         originToggle.classList.toggle('is-on', on);
         labelEl.textContent = state ? (on ? '[원본] ' : '') + state.filename : '';
-        const ready = !!cropper && !on;
+        const ready = !!cropper && !on && !rotating;
         saveBtn.disabled = !ready;
         aiBtn.disabled = !ready;
+        rotateBtn.disabled = !ready;
     }
     function toggleOriginView() {
         if (originToggle.style.visibility !== 'visible') return;
@@ -1714,7 +1717,7 @@
     function payload(preview, ai) {
         const d = cropper.getData(true);    // 원본(회전 반영) 픽셀 좌표
         return { dir, filename: state.filename, box: { x: d.x, y: d.y, w: d.width, h: d.height },
-                 unit: outUnit(), preview: !!preview, ai: !!ai };
+                 unit: outUnit(), preview: !!preview, ai: !!ai, rotate: state.rot || 0 };   // box 는 돌린 이미지 기준
     }
     // 화살표·버튼 패널을 지금 틀 위치에 맞춰 배치한다(틀이 움직이거나 크기가 바뀔 때마다 = updateInfo 때마다).
     // [‹] [틀] [›] [패널] — 패널이 화면 오른쪽에 안 들어가면 우하단 고정(docked).
@@ -1766,6 +1769,7 @@
         layoutChrome();
         const d = cropper.getData(true), u = outUnit();
         info.textContent = (state && state.notice ? state.notice + ' · ' : '')
+            + (state && state.rot ? `회전 ${state.rot}° · ` : '')
             + `영역 ${d.width}×${d.height} → 저장 ${RATIO_W * u}×${RATIO_H * u} (${RATIO_W}:${RATIO_H})`
             + (RATIO_W * u > d.width ? ' · 확대' : '');
     }
@@ -1864,7 +1868,8 @@
         const token = ++openToken;
         const enc = thumb.dataset.filename || thumb.alt;
         const url = originalUrl(imageItem);
-        state = { item: imageItem, filename: decodeURIComponent(enc), enc };
+        if (state && state.rotUrl) URL.revokeObjectURL(state.rotUrl);   // 이미 화면에 그려진 이미지는 그대로 보인다
+        state = { item: imageItem, filename: decodeURIComponent(enc), enc, rot: 0 };
         centerInGallery(imageItem);
         // 이 이미지에 origin/ 백업(= 한 번 이상 잘린 적 있음)이 있을 때만 '원본으로 되돌리기'를 보인다
         restoreBtn.style.visibility = 'hidden';   // 자리는 남겨 둔다(패널 크기 고정)
@@ -1881,6 +1886,7 @@
         // 비교 화면·미리보기 결과만 정리하고 편집기(cropper)는 남겨 둔다 — 이미지를 바꾸는 동안 화면이 비지 않게
         saveBtn.disabled = true;               // 새 편집기가 준비되면 바로 확정할 수 있다
         aiBtn.disabled = true;
+        rotateBtn.disabled = true;
         hideChromeForEdit();
         modal.classList.add('open');
         info.textContent = opts.loadingText || '원본 불러오는 중...';
@@ -2188,6 +2194,12 @@
                 e.preventDefault();
                 if (!e.repeat) toggleOriginView();
                 break;
+            case 'r':
+            case 'R':
+            case 'ㄱ':   // 한글 자판 상태의 r
+                e.preventDefault();
+                if (!e.repeat) rotate(e.shiftKey ? -90 : 90);   // Shift = 반시계
+                break;
             case ' ':
             case 'Enter':
                 e.preventDefault();
@@ -2355,6 +2367,60 @@
     }
     saveBtn.onclick = () => doSave(false);
     aiBtn.onclick = () => doSave(true);
+
+    // 회전(2026-11-05) — 90° 단위. 화면은 브라우저가 돌린 사본(blob)으로 편집기를 다시 만들어, 틀·제한·블러 여백 계산이
+    // 그대로 '돌린 이미지' 기준으로 동작한다(Cropper 자체 rotate 는 이 편집기의 크기 계산과 맞지 않는다).
+    // 저장은 서버가 원본을 같은 각도로 돌린 뒤 자른다(payload.rotate) — 화면용 사본의 화질과 무관.
+    // 틀은 돌린 이미지에 처음 열 때처럼 새로 잡는다. 확정하면 돌린 결과가 파일로 저장되고 각도는 0으로 돌아온다.
+    async function rotatedSrc(url, rot) {
+        const im = await preload(url);
+        const w = im.naturalWidth, h = im.naturalHeight, swap = rot % 180 !== 0;
+        const cv = document.createElement('canvas');
+        cv.width = swap ? h : w;
+        cv.height = swap ? w : h;
+        const g = cv.getContext('2d');
+        g.translate(cv.width / 2, cv.height / 2);
+        g.rotate(rot * Math.PI / 180);         // 캔버스는 양수 = 시계 방향
+        g.drawImage(im, -w / 2, -h / 2);
+        // webp 는 투명도를 유지하고 빠르다(지원 안 하는 브라우저는 png 로 만들어 준다)
+        const blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('canvas')), 'image/webp', 0.95));
+        return URL.createObjectURL(blob);
+    }
+    async function rotate(step) {
+        if (!cropper || !state || !state.url || saving || rotating || originView.classList.contains('on')) return;
+        const st = state, token = openToken;
+        const rot = ((st.rot || 0) + step + 360) % 360;
+        rotating = true;
+        setOriginView(false);                  // 버튼 잠금(rotating) 반영
+        info.textContent = '회전 중...';
+        let src = null;
+        try {
+            src = rot ? await rotatedSrc(st.url, rot) : st.url;
+            if (token !== openToken || st !== state) return;          // 그 사이 다른 이미지로 넘어감
+            const built = await buildEditor(src, token);
+            if (token !== openToken || st !== state) { built.c.destroy(); built.layer.remove(); return; }
+            const old = { c: cropper, layer: activeLayer };
+            built.layer.classList.remove('pending');
+            cropper = built.c;
+            activeLayer = built.layer;
+            if (old.c) old.c.destroy();
+            if (old.layer) old.layer.remove();
+            if (st.rotUrl) URL.revokeObjectURL(st.rotUrl);
+            st.rot = rot;
+            st.rotUrl = rot ? src : null;
+            src = null;                        // 사용 중 — 아래 finally 에서 지우지 않는다
+            st.notice = '';
+        } catch (e) {
+            if (st === state) st.notice = '회전 실패: ' + e.message;
+        } finally {
+            if (src && src !== st.url) URL.revokeObjectURL(src);
+            rotating = false;
+            // 회전 중 다른 이미지로 넘어갔어도 버튼 잠금은 풀어야 한다(open 끝의 setOriginView 는 rotating 중이라 잠근 채로 둠)
+            if (cropper) setOriginView(originView.classList.contains('on'));
+            if (st === state) updateInfo();
+        }
+    }
+    rotateBtn.onclick = () => rotate(90);
 })();
 </script>
 {% endif %}

@@ -887,13 +887,19 @@ def _pad_region(im, x, y, w, h, out_w):
     return bg
 
 
-def _render_crop(src_path, box, out_w, out_h, ai=False, meta=None):
+_CROP_ROTATE = {90: 'ROTATE_270', 180: 'ROTATE_180', 270: 'ROTATE_90'}   # 시계 방향 각도 → PIL(반시계 기준) 전치
+
+
+def _render_crop(src_path, box, out_w, out_h, ai=False, meta=None, rotate=0):
     """원본(EXIF 회전 반영)에서 box=(x, y, w, h)를 잘라 (out_w, out_h)로 리샘플한 PIL 이미지.
+    rotate(0/90/180/270, 시계 방향 — 2026-11-05 편집 창 회전 버튼)면 원본을 먼저 돌리고, box 는 돌린 이미지 좌표다.
     ai=True 면 확대·축소와 상관없이 Real-ESRGAN 을 쓴다(원본이 흐릿할 때 노이즈·블록·흐림 정리용으로도 쓰므로 —
     2026-10-03 사용자 요청, 처음엔 확대일 때만 썼다). meta(dict)를 주면 {'ai_used': bool, 'ai_note': 사유}를 채운다."""
     from PIL import Image, ImageOps
     with Image.open(src_path) as im:
         im = ImageOps.exif_transpose(im)
+        if rotate in _CROP_ROTATE:
+            im = im.transpose(getattr(Image, _CROP_ROTATE[rotate]))
         W, H = im.size
         x, y, w, h = box
         # 틀은 좌우로만 이미지 밖으로 나갈 수 있다(2026-10-26 — 세로로 긴 이미지 전체를 3:4 에 담도록 축소해 이미지 가로가
@@ -968,6 +974,7 @@ def _schedule_curate_embed():
 # @_log_slow()   # 2026-10-11 끔 — 확대 렌더(특히 AI)는 원래 수 초~10초 걸려 매번 [느린요청] 경고가 찍혔다
 def crop_image():
     """payload: dir, filename, box{x,y,w,h}(원본 픽셀, EXIF 회전 반영 후 좌표), unit(출력 = CROP_RATIO 각 항 × unit),
+    rotate(0/90/180/270 시계 방향 — 있으면 box 는 그만큼 돌린 이미지 좌표),
     preview(true면 결과 이미지만 돌려주고 파일은 건드리지 않는다)."""
     if hasattr(current_user, 'username') and current_user.username == settings['GUEST_USERNAME']:
         return jsonify({'status': 'error', 'message': 'forbidden'}), 403
@@ -982,8 +989,11 @@ def crop_image():
         b = p.get('box') or {}
         box = (float(b['x']), float(b['y']), float(b['w']), float(b['h']))
         unit = int(p.get('unit'))
+        rotate = int(p.get('rotate') or 0) % 360
     except (ValueError, KeyError, TypeError):
         return jsonify({'status': 'error', 'message': 'invalid parameters'}), 400
+    if rotate not in (0, 90, 180, 270):
+        return jsonify({'status': 'error', 'message': 'invalid rotate'}), 400
     fmt = _CROP_FORMATS.get(os.path.splitext(src)[1].lower())
     if fmt is None or not os.path.isfile(src):
         return jsonify({'status': 'error', 'message': 'unsupported or missing file'}), 400
@@ -992,7 +1002,8 @@ def crop_image():
 
     with _timed('render'):
         meta = {}
-        img, icc, used_box, orig_size = _render_crop(src, box, out_w, out_h, ai=bool(p.get('ai')), meta=meta)
+        img, icc, used_box, orig_size = _render_crop(src, box, out_w, out_h, ai=bool(p.get('ai')), meta=meta,
+                                                     rotate=rotate)
 
     if p.get('preview'):
         buf = io.BytesIO()
@@ -1032,7 +1043,8 @@ def crop_image():
         _rebuild_thumb(base, rel, src)
     hist_key = f'{dir_}/{filename}'
     _adopt_moved_history(dir_, filename)   # 다시 자를 때도 최초 원본 좌표로 환산하려면 직전 기록이 필요하다
-    obox = _origin_box(hist_key, used_box, orig_size, had_backup)
+    # 회전해서 자른 틀은 최초 원본 좌표로 환산할 수 없다 — 기록을 지운다('원본으로 되돌리기' 후 이전 틀 복원만 안 됨)
+    obox = None if rotate else _origin_box(hist_key, used_box, orig_size, had_backup)
     if obox is None:
         _crop_history.pop(hist_key, None)
     else:

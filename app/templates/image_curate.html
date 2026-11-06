@@ -156,6 +156,7 @@ html.crop-editing,body.crop-editing{overflow:hidden!important}
       <div class="crop-btns">
         <button type="button" class="primary" id="crop-save-btn" disabled title="Space / Enter">확정(덮어쓰기)</button>
         <button type="button" class="ai" id="crop-ai-btn" disabled title="Shift+Space / Shift+Enter — AI(Real-ESRGAN)로 정리해 저장, 약 5~10초">AI로 확정</button>
+        <button type="button" id="crop-rotate-btn" disabled title="시계 방향 90° (R) · 반시계 Shift+R">회전 ↻</button>
         <button type="button" class="crop-origin-toggle" id="crop-origin-toggle" style="visibility:hidden;" title="원본/현재 전환 (O)">원본 보기</button>
         <button type="button" id="crop-restore-btn" style="visibility:hidden;" title="백스페이스">원본으로 되돌리기</button>
       </div>
@@ -546,7 +547,8 @@ const cropEditor = (function () {
   const restoreBtn = $('#crop-restore-btn'), originToggle = $('#crop-origin-toggle'), originView = $('#crop-origin-view');
   const bar = $('#crop-bar'), prevBtn = $('#crop-prev-btn'), nextBtn = $('#crop-next-btn');
   const indexEl = $('#crop-index'), labelEl = $('#crop-label');
-  let cropper = null, st = null, saving = false, activeLayer = null, fromViewer = false;
+  const rotateBtn = $('#crop-rotate-btn');
+  let cropper = null, st = null, saving = false, activeLayer = null, fromViewer = false, rotating = false;
   let suspendLimit = false, limiting = false, openToken = 0;
 
   editBox.addEventListener('wheel', (e) => {
@@ -566,8 +568,8 @@ const cropEditor = (function () {
     originToggle.textContent = on ? '현재 보기' : '원본 보기';
     originToggle.classList.toggle('is-on', on);
     labelEl.textContent = st ? (on ? '[원본] ' : '') + st.name : '';
-    const ready = !!cropper && !on;
-    saveBtn.disabled = !ready; aiBtn.disabled = !ready;
+    const ready = !!cropper && !on && !rotating;
+    saveBtn.disabled = !ready; aiBtn.disabled = !ready; rotateBtn.disabled = !ready;
   }
   function toggleOriginView() {
     if (originToggle.style.visibility !== 'visible') return;
@@ -586,7 +588,8 @@ const cropEditor = (function () {
   }
   function payload(ai) {
     const d = cropper.getData(true);
-    return {dir: DIR, filename: st.name, box: {x: d.x, y: d.y, w: d.width, h: d.height}, unit: outUnit(), preview: false, ai: !!ai};
+    return {dir: DIR, filename: st.name, box: {x: d.x, y: d.y, w: d.width, h: d.height}, unit: outUnit(), preview: false, ai: !!ai,
+            rotate: st.rot || 0};   // box 는 돌린 이미지 기준
   }
   function updateIndex() {
     if (!st) { indexEl.textContent = ''; labelEl.textContent = ''; return; }
@@ -619,6 +622,7 @@ const cropEditor = (function () {
     layoutChrome();
     const d = cropper.getData(true), u = outUnit();
     info.textContent = (st && st.notice ? st.notice + ' · ' : '')
+      + (st && st.rot ? `회전 ${st.rot}° · ` : '')
       + `영역 ${d.width}×${d.height} → 저장 ${RATIO_W * u}×${RATIO_H * u} (${RATIO_W}:${RATIO_H})`
       + (RATIO_W * u > d.width ? ' · 확대' : '');
   }
@@ -662,7 +666,8 @@ const cropEditor = (function () {
     if (viewerOpen()) closeViewer();
     const token = ++openToken;
     const url = originalUrl(d);
-    st = {item: d, name: nameOf(d)};
+    if (st && st.rotUrl) URL.revokeObjectURL(st.rotUrl);   // 이미 화면에 그려진 이미지는 그대로 보인다
+    st = {item: d, name: nameOf(d), rot: 0};
     d.scrollIntoView({behavior: 'auto', block: 'center'});   // 닫으면 마지막에 편집한 이미지가 바로 보이게
     restoreBtn.style.visibility = 'hidden';
     resetOriginView();
@@ -670,7 +675,7 @@ const cropEditor = (function () {
       if (token !== openToken || !j.has_origin) return;
       restoreBtn.style.visibility = 'visible'; st.ov = j.ov; originToggle.style.visibility = 'visible';
     }).catch(() => {});
-    saveBtn.disabled = true; aiBtn.disabled = true;
+    saveBtn.disabled = true; aiBtn.disabled = true; rotateBtn.disabled = true;
     document.documentElement.classList.add('crop-editing'); document.body.classList.add('crop-editing');
     modal.classList.add('open');
     info.textContent = opts.loadingText || '원본 불러오는 중...';
@@ -685,6 +690,7 @@ const cropEditor = (function () {
     cropper = built.c; activeLayer = built.layer;
     if (old.c) old.c.destroy();
     if (old.layer) old.layer.remove();
+    st.url = url;
     if (opts.notice) st.notice = opts.notice;
     updateIndex(); updateInfo();
     setOriginView(originView.classList.contains('on'));
@@ -829,6 +835,7 @@ const cropEditor = (function () {
       case 'ArrowLeft': case 'PageUp': e.preventDefault(); goPrev(); break;
       case 'Escape': e.preventDefault(); close(); break;
       case 'o': case 'O': case 'ㅐ': e.preventDefault(); if (!e.repeat) toggleOriginView(); break;
+      case 'r': case 'R': case 'ㄱ': e.preventDefault(); if (!e.repeat) rotate(e.shiftKey ? -90 : 90); break;   // Shift = 반시계
       case ' ': case 'Enter':
         e.preventDefault();
         if (e.repeat) break;
@@ -940,6 +947,47 @@ const cropEditor = (function () {
   }
   saveBtn.onclick = () => doSave(false);
   aiBtn.onclick = () => doSave(true);
+
+  // 회전(2026-11-05) — refine 갤러리 편집기(image_list_masonry.html rotate)와 같은 방식. 90° 단위로 브라우저가 돌린 사본(blob)으로
+  // 편집기를 다시 만들고, 저장은 서버가 원본을 같은 각도로 돌린 뒤 자른다(payload.rotate). 확정하면 각도는 0으로 돌아온다.
+  async function rotatedSrc(url, rot) {
+    const im = await preload(url);
+    const w = im.naturalWidth, h = im.naturalHeight, swap = rot % 180 !== 0;
+    const cv = document.createElement('canvas');
+    cv.width = swap ? h : w; cv.height = swap ? w : h;
+    const g = cv.getContext('2d');
+    g.translate(cv.width / 2, cv.height / 2); g.rotate(rot * Math.PI / 180); g.drawImage(im, -w / 2, -h / 2);
+    const blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('canvas')), 'image/webp', 0.95));
+    return URL.createObjectURL(blob);
+  }
+  async function rotate(step) {
+    if (!cropper || !st || !st.url || saving || rotating || originView.classList.contains('on')) return;
+    const s0 = st, token = openToken, rot = ((s0.rot || 0) + step + 360) % 360;
+    rotating = true; setOriginView(false);
+    info.textContent = '회전 중...';
+    let src = null;
+    try {
+      src = rot ? await rotatedSrc(s0.url, rot) : s0.url;
+      if (token !== openToken || s0 !== st) return;
+      const built = await buildEditor(src, token);
+      if (token !== openToken || s0 !== st) { built.c.destroy(); built.layer.remove(); return; }
+      const old = {c: cropper, layer: activeLayer};
+      built.layer.classList.remove('pending');
+      cropper = built.c; activeLayer = built.layer;
+      if (old.c) old.c.destroy();
+      if (old.layer) old.layer.remove();
+      if (s0.rotUrl) URL.revokeObjectURL(s0.rotUrl);
+      s0.rot = rot; s0.rotUrl = rot ? src : null; src = null; s0.notice = '';
+    } catch (e) {
+      if (s0 === st) s0.notice = '회전 실패: ' + e.message;
+    } finally {
+      if (src && src !== s0.url) URL.revokeObjectURL(src);
+      rotating = false;
+      if (cropper) setOriginView(originView.classList.contains('on'));   // 그 사이 다른 이미지로 넘어갔어도 잠금 해제
+      if (s0 === st) updateInfo();
+    }
+  }
+  rotateBtn.onclick = () => rotate(90);
 
   return {open};
 })();
