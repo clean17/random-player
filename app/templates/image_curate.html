@@ -57,6 +57,16 @@ header a{color:var(--mut);text-decoration:none;margin-right:12px}
 #viewer .vnav{position:absolute;top:50%;transform:translateY(-50%);z-index:1;border:0;border-radius:999px;width:56px;height:56px;background:#0008;color:#fff;font-size:30px;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #viewer .vnav:hover{background:#000c}
 #viewer .vnav.prev{left:10px} #viewer .vnav.next{right:10px}
+/* 모바일(2026-11-05): 확대 보기 이미지는 화면 가득(버튼은 위에 겹침), 버튼 세로 위치는 JS(placeVnav)가 실제로 그려진
+   이미지 가운데에 맞춘다. 하단 바는 한 줄로 */
+@media (max-width:700px){
+#viewer .vnav{width:44px;height:72px;border-radius:10px;font-size:28px}
+#viewer .vnav.prev{left:6px} #viewer .vnav.next{right:6px}
+.bar{gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));flex-wrap:nowrap;white-space:nowrap}
+.bar .cnt{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.bar>span{flex-shrink:0}
+.bar button{padding:8px 10px;font-size:13px}
+}
 </style>
 <!-- 이미지 자르기(3:4) — refine 갤러리(image_list_masonry.html)의 편집기를 옮겨 온 것. 서버 API(/image/crop-image·crop-info·crop-restore)는 같다 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
@@ -239,6 +249,17 @@ function view(d) {
   v.querySelector('.crop-open').style.display = subOf(tab) ? 'none' : '';   // 보관함(_review·_archive)은 자르기 대상 아님
   v.style.display = 'block';
 }
+// 이전/다음 버튼을 실제로 그려진 이미지(object-fit:contain)의 세로 가운데에 둔다 — 모바일은 이미지를 아래로 붙여서 화면 가운데와 다르다
+function placeVnav() {
+  const img = $('#viewer img'), nw = img.naturalWidth, nh = img.naturalHeight;
+  if (!nw || !nh || !viewerOpen()) return;
+  const r = img.getBoundingClientRect(), k = Math.min(r.width / nw, r.height / nh), rh = nh * k;
+  const py = parseFloat((getComputedStyle(img).objectPosition || '').split(' ')[1]) / 100;
+  const cy = r.top + (r.height - rh) * (isNaN(py) ? 0.5 : py) + rh / 2;
+  document.querySelectorAll('#viewer .vnav').forEach(b => { b.style.top = cy + 'px'; });
+}
+$('#viewer img').addEventListener('load', placeVnav);
+window.addEventListener('resize', () => setTimeout(placeVnav, 0));
 function closeViewer() { $('#viewer').style.display = 'none'; $('#viewer img').src = ''; }
 $('#viewer').onclick = closeViewer;
 $('#viewer .crop-open').onclick = e => { e.stopPropagation(); if (viewing) cropEditor.open(viewing, {fromViewer: true}); };
