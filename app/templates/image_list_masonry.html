@@ -1968,9 +1968,12 @@
             const dpr = window.devicePixelRatio || 1;
             const [x, y, w, h] = lc.box;
             if (!(w > 0 && h > 0)) return false;
-            let ratio = (RATIO_W * lc.unit / dpr) / w;              // 화면 px / 원본 px
-            ratio = Math.min(ratio, cont.width / w, cont.height / h);   // 화면을 넘지 않게만(꽉 찬 틀도 그대로 복원)
-            const bw = w * ratio, bh = h * ratio;
+            // 틀의 화면 크기는 처음 열 때(fitFullFrame)와 같게 — 영역(위치·크기)만 복원한다. 예전엔 저장 당시 unit 으로 틀 크기까지
+            // 복원해서, 작은 화면(모바일 주소창·여백 등)에서 저장한 기록이면 되돌릴 때 틀이 작게 열렸다.
+            let bw = cont.width, bh = bw * RATIO_H / RATIO_W;
+            if (bh > cont.height) { bh = cont.height; bw = bh * RATIO_W / RATIO_H; }
+            const ratio = Math.min(bw / w, bh / h);   // 화면 px / 원본 px
+            bw = w * ratio; bh = h * ratio;
             const left = (cont.width - bw) / 2, top = (cont.height - bh) / 2;
             const vm = c.options.viewMode;
             c.options.viewMode = 0;
@@ -2105,7 +2108,7 @@
                     // 준비 중인(아직 안 보이는) 편집기의 이벤트는 무시한다 — 안내 문구는 화면에 보이는 편집기 기준
                     crop: () => { if (layer._padBlur) layer._padBlur(); if (layer._ready) limitCanvas(c, layer); if (c === cropper) updateInfo(); },
                     zoom: (e) => {
-                        if (layer._ready) {
+                        if (layer._ready && !suspendLimit) {   // applyFrame/fitFullFrame 이 배치하는 동안엔 막지 않는다
                             // 이미지 높이가 틀 높이보다 작아지게는 축소하지 못한다(세로는 여백 없음) — 그 한계까지만 줄인다
                             const minRatio = c.getCropBoxData().height / c.getImageData().naturalHeight;
                             if (e.detail.ratio < minRatio - 1e-6) {

@@ -546,13 +546,8 @@ async function kickEmbed() {
   const s = await waitEmbed(600000);
   watching = false;
   if (!s || applying || shownVer === null || s.cache_ver === shownVer) return;   // 확정 중이면 그쪽이 다시 받는다
-  const pristine = !Object.values(state).some(x => x === 'rm' || x === 'sel');
-  if (tab === 'cand' && pristine && !viewerOpen() && !$('#crop-modal').classList.contains('open')) {
-    toast('임베딩 갱신됨 — 후보를 다시 불러왔습니다.');
-    load();
-  } else {
-    toast('임베딩 갱신됨 — 확정하거나 새로고침하면 순위에 반영됩니다.', 4000);
-  }
+  // 자동 재로드 안 함(2026-11-06 사용자: 작업 중 화면이 새로고침돼 스크롤·진행 상태가 날아감) — 알림만 띄운다
+  toast('임베딩 갱신됨 — 확정하거나 새로고침하면 순위에 반영됩니다.', 4000);
 }
 
 // [data-tab] 으로 한정 — 열 수 버튼(#cols)도 .tabs 안에 있어서 '.tabs button' 으로 잡으면 탭 전환(tab=undefined → 보관함 목록)이 같이 걸린다
@@ -746,9 +741,12 @@ const cropEditor = (function () {
       const cont = c.getContainerData(), dpr = window.devicePixelRatio || 1;
       const [x, y, w, h] = lc.box;
       if (!(w > 0 && h > 0)) return false;
-      let ratio = (RATIO_W * lc.unit / dpr) / w;
-      ratio = Math.min(ratio, cont.width / w, cont.height / h);
-      const bw = w * ratio, bh = h * ratio, left = (cont.width - bw) / 2, top = (cont.height - bh) / 2;
+      // 틀의 화면 크기는 처음 열 때(fitFullFrame)와 같게 — 영역만 복원(저장 당시 unit 으로 크기까지 복원하면 작은 화면 기록이 작게 열림)
+      let bw = cont.width, bh = bw * RATIO_H / RATIO_W;
+      if (bh > cont.height) { bh = cont.height; bw = bh * RATIO_W / RATIO_H; }
+      const ratio = Math.min(bw / w, bh / h);
+      bw = w * ratio; bh = h * ratio;
+      const left = (cont.width - bw) / 2, top = (cont.height - bh) / 2;
       const vm = c.options.viewMode;
       c.options.viewMode = 0; suspendLimit = true;
       c.zoomTo(ratio);
@@ -830,7 +828,7 @@ const cropEditor = (function () {
           },
           crop: () => { if (layer._padBlur) layer._padBlur(); if (layer._ready) limitCanvas(c, layer); if (c === cropper) updateInfo(); },
           zoom: (e) => {
-            if (layer._ready) {
+            if (layer._ready && !suspendLimit) {   // applyFrame/fitFullFrame 이 배치하는 동안엔 막지 않는다
               const minRatio = c.getCropBoxData().height / c.getImageData().naturalHeight;
               if (e.detail.ratio < minRatio - 1e-6) {
                 e.preventDefault();
