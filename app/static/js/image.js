@@ -516,7 +516,9 @@ function moveImage(filename, index) {
 
 nextBtn?.addEventListener('click', () => nextImage());
 previousBtn?.addEventListener('click', () => previousImage());
-delBtn?.addEventListener('click', () => deletePage())
+delBtn?.addEventListener('click', () => {
+    if (confirm('Delete the file ?')) deletePage();   // 키보드 Delete 는 image_list_masonry.html 에서 따로 confirm
+})
 
 
 // 화면 중앙의 이미지 Element, Index
