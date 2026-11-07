@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>refine 정리</title>
 <script src="/static/js/common.js?v={{ version }}"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"> <!-- 닫기 X 아이콘(fa-times) -->
+<link rel="stylesheet" href="/static/css/close_button.css?v={{ version }}">
 <style>
 :root{--bg:#121212;--card:#1c1c1c;--fg:#ddd;--mut:#888;--rm:#e5484d;--keep:#30a46c;--acc:#3b82f6}
 *{box-sizing:border-box}
@@ -51,8 +53,10 @@ header a{color:var(--mut);text-decoration:none;margin-right:12px}
    편집 창(10000)보다 위 */
 #overlay{position:fixed;inset:0;width:100vw;height:100vh;background:rgba(0,0,0,.4);z-index:10002}
 #overlay img{position:absolute;top:45%;left:51%;transform:translate(-50%,-50%);width:100px;height:100px}
-#viewer .crop-open{position:absolute;top:12px;right:12px;z-index:1;border:0;border-radius:999px;padding:8px 16px;background:#000a;color:#fff;font-size:15px;cursor:pointer}
+#viewer .crop-open{position:absolute;top:16px;right:72px;z-index:1;border:0;border-radius:999px;padding:8px 16px;background:#000a;color:#fff;font-size:15px;cursor:pointer}
 #viewer .crop-open:hover{background:#000d}
+/* 확대 보기 닫기(2026-11-07): 공통 .crop-x(close_button.css) — 화면을 눌러도 닫히지만 명시적으로 보이게. 자르기는 그 왼쪽 */
+#viewer .crop-x{z-index:2}
 /* 확대 보기 이전/다음(2026-11-05, 태블릿용) — 좌우 가장자리 세로 중앙 */
 #viewer .vnav{position:absolute;top:50%;transform:translateY(-50%);z-index:1;border:0;border-radius:999px;width:56px;height:56px;background:#0008;color:#fff;font-size:30px;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #viewer .vnav:hover{background:#000c}
@@ -80,8 +84,6 @@ html.crop-editing,body.crop-editing{overflow:hidden!important}
 #crop-modal .crop-bar.placed{visibility:visible}
 #crop-modal .crop-bar.docked{left:auto!important;top:auto!important;right:16px;bottom:calc(16px + env(safe-area-inset-bottom))}
 #crop-modal .crop-btns{display:grid;grid-template-columns:1fr;gap:8px}
-#crop-modal .crop-x{position:fixed;top:16px;right:16px;z-index:5;padding:6px 10px;font-size:2em;line-height:1;color:#fff;background:none;border:0;cursor:pointer;opacity:.7}
-#crop-modal .crop-x:hover{opacity:1}
 #crop-modal .crop-nav{position:fixed;z-index:4;width:48px;height:48px;border:0;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 0 4px;font-size:2.4em;line-height:1;color:#fff;background:rgba(0,0,0,.35);cursor:pointer;opacity:.65;user-select:none;visibility:hidden}
 #crop-modal .crop-nav.placed{visibility:visible}
 #crop-modal .crop-nav:hover{opacity:1;background:rgba(0,0,0,.6)}
@@ -149,14 +151,14 @@ html.crop-editing,body.crop-editing{overflow:hidden!important}
   <span class="nav"><button class="sub" id="nav-prev" title="이전 (← ↑ PageUp)">‹ 이전</button> <button class="sub" id="nav-next" title="다음 (→ ↓ PageDown)">다음 ›</button></span>
   <span><button class="sub" id="flip" style="display:none">전체 반전</button> <button class="sub" id="selall" style="display:none">전체 선택</button> <button class="sub" id="go2" style="display:none" disabled>refine 으로 복원</button> <button id="go" disabled>확정</button></span>
 </div>
-<div id="viewer"><img alt=""><button type="button" class="crop-open" title="자르기 (C)">✂ 자르기</button><button type="button" class="vnav prev" title="이전 (← ↑ PageUp)">‹</button><button type="button" class="vnav next" title="다음 (→ ↓ PageDown)">›</button><div class="cap"></div></div>
+<div id="viewer"><img alt=""><button type="button" class="crop-x" id="viewer-x-btn" title="닫기 (Esc)"><i class="fas fa-times"></i></button><button type="button" class="crop-open" title="자르기 (C)">✂ 자르기</button><button type="button" class="vnav prev" title="이전 (← ↑ PageUp)">‹</button><button type="button" class="vnav next" title="다음 (→ ↓ PageDown)">›</button><div class="cap"></div></div>
 <div id="crop-modal" aria-hidden="true">
   <div class="crop-panel">
     <div class="crop-stage">
       <div class="crop-edit" id="crop-edit"></div>
       <img class="crop-origin-view" id="crop-origin-view" alt="원본">
     </div>
-    <button type="button" class="crop-x" id="crop-x-btn" title="닫기 (Esc)">✕</button>
+    <button type="button" class="crop-x" id="crop-x-btn" title="닫기 (Esc)"><i class="fas fa-times"></i></button>
     <button type="button" class="crop-nav" id="crop-prev-btn" title="이전 이미지 (←)">&#8249;</button>
     <button type="button" class="crop-nav" id="crop-next-btn" title="다음 이미지 (→)">&#8250;</button>
     <div class="crop-label" id="crop-label"></div>
@@ -262,6 +264,7 @@ $('#viewer img').addEventListener('load', placeVnav);
 window.addEventListener('resize', () => setTimeout(placeVnav, 0));
 function closeViewer() { $('#viewer').style.display = 'none'; $('#viewer img').src = ''; }
 $('#viewer').onclick = closeViewer;
+$('#viewer-x-btn').onclick = e => { e.stopPropagation(); closeViewer(); };
 $('#viewer .crop-open').onclick = e => { e.stopPropagation(); if (viewing) cropEditor.open(viewing, {fromViewer: true}); };
 // 확대 보기 이전/다음 버튼 — 바탕 클릭(닫기)으로 번지지 않게 막는다. step() 은 아래에 정의(호출 시점엔 있음)
 $('#viewer .vnav.prev').onclick = e => { e.stopPropagation(); step(-1); };

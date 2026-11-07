@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"> <!-- 아이콘, 체크 표시 -->
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="/static/css/image.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/close_button.css?v={{ version }}">
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="/static/js/common.js?v={{ version }}"></script>
 
@@ -1541,14 +1542,10 @@
     #crop-modal .crop-bar.docked { left: auto !important; top: auto !important;
                                    right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); }
     #crop-modal .crop-btns { display: grid; grid-template-columns: 1fr; gap: 8px; }
-    /* 닫기 X — 슬라이드쇼(#slideshow-modal .close-modal)와 같은 자리·모양 */
+    /* 닫기 X(.crop-x)는 /static/css/close_button.css 공통 — 슬라이드쇼·확대 보기와 같은 자리·모양 */
     /* 사이트 공통 button 규칙(style.css: padding 15px·margin-bottom 10px·파란 배경, 호버 효과)이 편집 창 버튼에도
        먹어서 X 가 화면 폭 전체로 늘어나 상단 가운데에 보였다 → 편집 창 버튼은 그 값들을 직접 되돌린다 */
     #crop-modal button { margin: 0; box-sizing: border-box; }
-    #crop-modal .crop-x { position: fixed; top: 16px; right: 16px; left: auto; width: auto; height: auto; z-index: 5;
-                          padding: 6px 10px; font-size: 2.2em; line-height: 1; color: #fff; background: none; border: none;
-                          border-radius: 0; box-shadow: none; cursor: pointer; opacity: 0.7; transition: opacity 0.16s; }
-    #crop-modal .crop-x:hover { opacity: 1; background: none; box-shadow: none !important; filter: none !important; transform: none !important; }
     /* 이전/다음 화살표 — 슬라이드쇼와 같은 모양, 위치는 틀 좌우 모서리 바깥(layoutChrome) */
     #crop-modal .crop-nav { position: fixed; z-index: 4; width: 48px; height: 48px; border: none; border-radius: 50%;
                             display: flex; align-items: center; justify-content: center; padding: 0 0 4px;

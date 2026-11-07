@@ -1,0 +1,14 @@
+/* 닫기(X) 버튼 공통 — <button type="button" class="crop-x" title="닫기 (Esc)"><i class="fas fa-times"></i></button>
+   (2026-11-07) 자르기 창·확대 보기·슬라이드쇼가 같은 모양·자리를 쓴다. 아이콘은 Font Awesome(fa-times).
+   기본은 화면 우상단 고정 — 회전하는 컨테이너 안(슬라이드쇼)처럼 위치가 달라야 하면 그쪽 CSS 에서 position 만 덮어쓴다.
+   사이트 공통 button 규칙(style.css: padding 15px·margin-bottom 10px·파란 배경, 호버 효과)이 먹지 않게 값을 직접 되돌린다 */
+.crop-x {
+    position: fixed; top: 16px; right: 16px; left: auto; z-index: 5;
+    width: auto; height: auto; margin: 0; padding: 6px 10px; box-sizing: border-box;
+    font-size: 2.2em; line-height: 1; color: #fff;
+    background: none; border: none; border-radius: 0; box-shadow: none;
+    cursor: pointer; opacity: 0.7; transition: opacity 0.16s;
+    -webkit-tap-highlight-color: transparent;
+}
+.crop-x:hover { opacity: 1; background: none; box-shadow: none !important; filter: none !important; transform: none !important; }
+.crop-x i { color: inherit; pointer-events: none; }

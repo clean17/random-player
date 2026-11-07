@@ -397,7 +397,7 @@ function slideShowDeleteCurrent() {
 
     slideShowImgs.splice(slideShowIdx, 1);
     if (!slideShowImgs.length) {
-        document.getElementById('slideshow-modal')?.querySelector('.close-modal')?.click();
+        document.getElementById('slideshow-modal')?.querySelector('.crop-x')?.click();
         return;
     }
     if (slideShowIdx >= slideShowImgs.length) slideShowIdx = slideShowImgs.length - 1;
@@ -1038,7 +1038,7 @@ function showSlideshowModal(fileList, startIdx = 0) {
         modal.innerHTML = `
             <div id="slideshow-rotator">
                 <video id="slideshow-motion" muted playsinline preload="none"></video>
-                <button class="close-modal" title="닫기"><i class="fas fa-times" style="color:white"></i></button>
+                <button type="button" class="crop-x" title="닫기 (Esc)"><i class="fas fa-times"></i></button>
                 <button class="rotate-modal" title="회전"><i class="fas fa-rotate-left" style="color:white"></i></button>
                 <button class="origin-toggle" title="원본/현재 전환 (O)" style="display:none">원본</button>
                 <button class="motion-toggle" title="모션 다시 재생 (M)" style="display:none">모션 ▶</button>
@@ -1056,7 +1056,7 @@ function showSlideshowModal(fileList, startIdx = 0) {
         `;
         document.body.appendChild(modal);
 
-        modal.querySelector('.close-modal').onclick = () => {
+        modal.querySelector('.crop-x').onclick = () => {
             clearTimeout(slideShowTimer);
             stopSlideCountdown();
             const v = modal.querySelector("#slideshow-video");
@@ -1117,7 +1117,7 @@ function showSlideshowModal(fileList, startIdx = 0) {
                     modal.querySelector('.slide-next').click();
                     break;
                 case 'Escape':
-                    modal.querySelector('.close-modal').click();
+                    modal.querySelector('.crop-x').click();
                     break;
                 case 'Delete':
                 case '`':
@@ -1138,7 +1138,7 @@ function showSlideshowModal(fileList, startIdx = 0) {
     }
     modal.style.display = "flex";
     enterModalFullscreen('slideshow', () => {
-        if (modal.style.display !== 'none') modal.querySelector('.close-modal').click();
+        if (modal.style.display !== 'none') modal.querySelector('.crop-x').click();
     });
     document.addEventListener('touchmove', _preventTouchScroll, { passive: false });
     document.body.classList.add('slideshow-active');
