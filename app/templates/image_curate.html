@@ -35,6 +35,11 @@ header a{color:var(--mut);text-decoration:none;margin-right:12px}
 .c .meta{padding:6px 8px;font-size:13px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c .badge{position:absolute;top:8px;left:8px;padding:3px 12px;border-radius:999px;font-size:15px;font-weight:600;color:#fff}
 .c .zoom{position:absolute;top:8px;right:8px;width:40px;height:40px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:20px;cursor:zoom-in}
+/* 유사 이미지 찾기(후보 탭) — 확대 버튼 바로 아래 */
+.c .simbtn{position:absolute;top:56px;right:8px;width:40px;height:40px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:22px;cursor:pointer}
+.c .simbtn:disabled{opacity:.5;cursor:progress}
+.group.sim{outline:1px solid var(--acc)}
+.group.sim h4{color:var(--fg)}
 .c.rm{outline-color:var(--rm)} .c.rm .badge{background:var(--rm)} .c.rm img{opacity:.55}
 .c.keep{outline-color:var(--keep)} .c.keep .badge{background:var(--keep)}
 .c.sel{outline-color:var(--acc)} .c.sel .badge{background:var(--acc)}
@@ -217,7 +222,22 @@ async function api(url, body) {
   return j;
 }
 
-function card(it, sub, mark) {
+// 유사 이미지 찾기(2026-11-08) — 서버가 백그라운드로 찾아 중복 탭 맨 위 그룹으로 넣는다. 화면은 끝날 때까지 가볍게 확인만
+let simShown = [];   // 중복 탭에 보이는 유사 검색 그룹 [{id, names}]
+async function findSimilar(name, btn) {
+  btn.disabled = true;
+  try {
+    let j = await api('/image/curate/api/similar', {name});
+    toast('비슷한 이미지 찾는 중… 끝나면 중복 탭에 보입니다', 2500);
+    for (let t = 0; j.running && t < 120; t++) { await new Promise(r => setTimeout(r, 1500)); j = await api('/image/curate/api/similar?name=' + encodeURIComponent(name)); }
+    if (j.running) toast('아직 찾는 중입니다 — 잠시 뒤 중복 탭을 열어 보세요', 4000);
+    else if (j.error) toast('유사 찾기 오류: ' + j.error, 5000);
+    else if (!j.n) toast('비슷한 이미지를 찾지 못했습니다', 3500);
+    else toast(`비슷한 이미지 ${j.n}장 → 중복 탭 맨 위 그룹에 추가`, 4000);
+  } catch (e) { toast('유사 찾기 오류: ' + e.message, 5000); }
+  finally { btn.disabled = false; }
+}
+function card(it, sub, mark, opt = {}) {
   const d = document.createElement('div');
   d.className = 'c'; d.dataset.name = it.name;
   if (it.v) vers[it.name] = it.v;
@@ -225,8 +245,16 @@ function card(it, sub, mark) {
                    : `aes ${it.aes} · sim ${it.sim}` + (it.model != null ? ` · 취향 ${(1 - it.model).toFixed(3)}` : '');   // 서버는 '제거될 가능성' — 높을수록 좋게 뒤집어 표시
   d.innerHTML = `<img loading="lazy" alt=""><span class="badge"></span><button class="zoom" title="${sub ? '크게 보기' : '자르기 / 크게 보기'}">⤢</button><div class="meta"></div>`;
   d.querySelector('img').src = imgUrl(it.name, sub);
-  d.querySelector('.meta').textContent = meta;
+  d.querySelector('.meta').textContent = it.simseed === undefined ? meta
+    : (it.simseed === null ? '기준 이미지 · ' : `유사 ${it.simseed} · `) + meta;
   d.title = it.name;
+  if (opt.similar) {
+    const b = document.createElement('button');
+    b.className = 'simbtn'; b.type = 'button'; b.textContent = '≈';
+    b.title = '이 이미지와 비슷한 이미지를 refine 전체에서 찾아 중복 탭에 보냅니다(백그라운드)';
+    b.onclick = e => { e.stopPropagation(); findSimilar(it.name, b); };
+    d.appendChild(b);
+  }
   // ⤢ = 기존 자르기 편집기를 바로 연다(2026-11-02 사용자 요청). 보관함(_review·_archive)은 자르기 대상이 아니라 확대 보기만
   d.querySelector('.zoom').onclick = e => { e.stopPropagation(); sub ? view(d) : cropEditor.open(d, {fromViewer: false}); };
   d.onclick = () => { state[it.name] = mark(state[it.name]); paint(d); count(); };
@@ -395,15 +423,36 @@ async function load() {
       };
       const g = document.createElement('div'); g.className = 'grid';
       // 2026-11-02 사용자: 처음엔 전부 유지 — 취향 모델이 켜진 뒤로는 제거가 더 적어서 몇 장만 누르면 된다
-      j.items.forEach(it => { state[it.name] = 'keep'; g.appendChild(card(it, false, s => s === 'keep' ? 'rm' : 'keep')); });
+      j.items.forEach(it => { state[it.name] = 'keep'; g.appendChild(card(it, false, s => s === 'keep' ? 'rm' : 'keep', {similar: true})); });
       $('#list').appendChild(g);
       if (!j.items.length) $('#list').innerHTML = '<div class="empty">후보가 없습니다.</div>';
       $('#flip').style.display = j.items.length ? '' : 'none';
     } else if (tab === 'dup') {
       const j = await api('/image/curate/api/dups');
       const total = j.groups.reduce((a, g) => a + g.length, 0);
-      $('#info').innerHTML = `근접중복 <b>${j.groups.length}</b>그룹 · <b>${total}</b>장 (유사도 ≥ ${j.thr}) · 그룹 안은 미적 점수 높은 순.<br>` +
+      simShown = (j.sim_groups || []).map(g => ({id: g.id, names: g.items.map(it => it.name)}));
+      $('#info').innerHTML = (simShown.length ? `유사 검색 <b>${simShown.length}</b>그룹 (기준 + 가장 비슷한 ${j.sim_top}장, 후보 탭 ≈ 버튼) · ` : '') +
+        `근접중복 <b>${j.groups.length}</b>그룹 · <b>${total}</b>장 (유사도 ≥ ${j.thr}) · 그룹 안은 미적 점수 높은 순.<br>` +
         `별로인 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 표시하고 확정하세요. 같은 촬영의 다른 컷일 수도 있으니 ⤢ 로 크게 확인하세요.`;
+      // 유사 검색 그룹(맨 위) — 하나라도 제거로 표시하고 확정하면 그 그룹은 닫힌다. 그대로 둘 거면 '모두 유지 · 그룹 닫기'
+      (j.sim_groups || []).forEach(sg => {
+        const box = document.createElement('div'); box.className = 'group sim';
+        box.innerHTML = `<h4>유사 검색 · ${sg.items.length}장 · 기준 ${sg.seed} ` +
+          `<button type="button" class="notdup" title="파일·판정은 그대로 두고 이 유사 검색 결과만 닫습니다">모두 유지 · 그룹 닫기</button></h4>`;
+        const g = document.createElement('div'); g.className = 'grid';
+        sg.items.forEach(it => g.appendChild(card(it, false, s => s === 'rm' ? '' : 'rm')));
+        box.appendChild(g); $('#list').appendChild(box);
+        box.querySelector('.notdup').onclick = async ev => {
+          const b = ev.currentTarget; b.disabled = true;
+          try {
+            await api('/image/curate/api/similar/dismiss', {ids: [sg.id]});
+            sg.items.forEach(it => delete state[it.name]);
+            simShown = simShown.filter(x => x.id !== sg.id);
+            box.remove(); count();
+            toast(`유사 검색 그룹(${sg.seed}) 닫음`);
+          } catch (e) { b.disabled = false; toast('오류: ' + e.message, 5000); }
+        };
+      });
       j.groups.forEach((grp, gi) => {
         const box = document.createElement('div'); box.className = 'group';
         box.innerHTML = `<h4>그룹 ${gi + 1} · ${grp.length}장 ` +
@@ -421,7 +470,7 @@ async function load() {
           } catch (e) { b.disabled = false; toast('오류: ' + e.message, 5000); }
         };
       });
-      if (!j.groups.length) $('#list').innerHTML = '<div class="empty">중복 그룹이 없습니다.</div>';
+      if (!j.groups.length && !simShown.length) $('#list').innerHTML = '<div class="empty">중복 그룹이 없습니다.</div>';
     } else if (tab === 'archive') {
       const j = await api('/image/curate/api/review?where=archive');
       $('#info').innerHTML = `보관함(refine/_archive) <b>${j.items.length}</b>장 · 임시 보관함에서 마지막 검토를 마친 이미지입니다. ` +
@@ -481,7 +530,11 @@ $('#go').onclick = async () => {
       if (!confirm(`${rm.length}장을 임시 보관함으로 옮깁니다.`)) return count();
       busyOn();
       const j = await api('/image/curate/api/apply', {src: 'dup', remove: rm});
-      toast(`임시 보관함으로 ${j.moved}장 이동` + (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
+      // 제거 표시를 한 유사 검색 그룹은 검토가 끝난 것으로 보고 닫는다(남은 이미지는 유지)
+      const done = simShown.filter(g => g.names.some(n => rm.includes(n))).map(g => g.id);
+      if (done.length) await api('/image/curate/api/similar/dismiss', {ids: done}).catch(() => {});
+      toast(`임시 보관함으로 ${j.moved}장 이동` + (done.length ? ` · 유사 검색 ${done.length}그룹 닫음` : '') +
+            (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
     } else if (tab === 'review') {
       const sel = pick('sel');
       if (!confirm(`${sel.length}장을 보관함으로 옮깁니다(판정·학습은 그대로).`)) return count();

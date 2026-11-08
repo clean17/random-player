@@ -9,6 +9,7 @@ refine 이미지 중 취향과 먼/점수 낮은 이미지를 골라 보관함(r
   중복    근접중복 그룹(CLIP 유사도 ≥ 0.97). 기본값 '유지' — 별로인 것만 눌러 '제거'.
           중복 정리는 '둘 중 덜 나은 쪽'이라 취향 학습에는 쓰지 않는다(src='dup').
           그룹별 '중복 아님 · 모두 유지'는 not_dup.json 에 쌍으로 기록해 다시 묶지 않는다(학습 무관).
+          후보 탭 카드의 '≈'로 그 이미지와 가장 비슷한 SIM_TOP 장을 찾아 중복 탭 맨 위 그룹으로 보낼 수 있다(sim_groups.json).
   임시 보관함  _review/ 목록(후보·중복 탭에서 제거한 이미지가 먼저 오는 곳). 마지막으로 검토해서
           보관함(_archive/)으로 넘기거나 refine 으로 복원 — 복원한 이미지는 '유지' 판정으로 바뀐다.
   보관함  _archive/ 목록(2026-11-03 추가). 임시 보관함에서 넘기는 것은 판정·학습을 바꾸지 않는다 —
@@ -229,7 +230,8 @@ def _compute() -> Dict:
            'labels': labels, 'missing': missing,
            'n_remove': len(rm), 'n_keep': int(keep_mask.sum()),
            # image2 1차 분류(_screen_result)가 같은 모델을 읽기만 한다
-           'clf': clf, 'X_cur': X_all[ci], 'keep_cur': keep_mask[:len(ci)]}
+           'clf': clf, 'X_cur': X_all[ci], 'keep_cur': keep_mask[:len(ci)],
+           'E': E}   # 정규화 CLIP 임베딩(현재 refine 순서) — 유사 이미지 찾기(_sim_worker)
     _state_cache['key'], _state_cache['val'] = key, val
     return val
 
@@ -438,14 +440,121 @@ def api_dups():
         st = _compute()
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 503
+    names = st['names']
+    # 유사 검색 그룹(맨 위) — 기준 이미지 먼저, 나머지는 유사도 높은 순. 지금 refine 에 남은 것만, 2장 미만이면 뺀다
+    idx = {n: i for i, n in enumerate(names)}
+    sim_out, in_sim = [], set()
+    for g in _load_sim_groups():
+        members = [g['seed']] + sorted(g['sims'], key=lambda n: -g['sims'][n])
+        items = []
+        for n in members:
+            if n in idx:
+                it = _item(st, idx[n])
+                it['simseed'] = None if n == g['seed'] else g['sims'][n]
+                items.append(it)
+                in_sim.add(idx[n])
+        if len(items) >= 2:
+            sim_out.append({'id': g['id'], 'seed': g['seed'], 'ts': g.get('ts'), 'items': items})
     pairs = st['sc']['pairs']
     nd = _load_not_dup()
-    if nd and len(pairs):
-        names = st['names']
-        pairs = pairs[[_pair_key(names[i], names[j]) not in nd for i, j in pairs]]
-    groups = scoring.dup_groups(pairs, len(st['names']))
+    if (nd or in_sim) and len(pairs):
+        # 유사 검색 그룹에 이미 나온 이미지는 일반 중복 그룹에서 뺀다(같은 카드가 두 번 나오지 않게)
+        pairs = pairs[[_pair_key(names[i], names[j]) not in nd and i not in in_sim and j not in in_sim
+                       for i, j in pairs]]
+    groups = scoring.dup_groups(pairs, len(names))
     out = [sorted([_item(st, i) for i in g], key=lambda x: -x['aes']) for g in groups]
-    return jsonify({'groups': out, 'thr': scoring.DUP_THR})
+    return jsonify({'groups': out, 'sim_groups': sim_out, 'thr': scoring.DUP_THR, 'sim_top': SIM_TOP})
+
+
+# ── 유사 이미지 찾기 → 중복 탭 (2026-11-08 사용자 요청) ─────────────────────────
+# 후보 탭에서 한 이미지와 비슷한 게 여러 장 보이면, 그 이미지 카드의 '≈' 버튼으로 refine 전체에서 비슷한 이미지를
+# 찾아 중복 탭 맨 위에 한 그룹(기준 + 가장 비슷한 SIM_TOP 장)으로 보낸다. 유사도 기준선은 쓰지 않는다 — 아래 참고.
+# 비슷한 구도까지. 찾기는 백그라운드 스레드(점수 캐시가 낡았으면 다시 계산하느라 수십 초 걸릴 수 있다).
+# 그룹은 sim_groups.json 에 남고, 중복 탭에서 그 그룹을 손대 확정하거나 '모두 유지 · 그룹 닫기'를 누르면 지운다.
+# 판정·학습은 일반 중복 탭과 같다(제거 = src 'dup', 학습에 안 씀).
+# 기준선을 안 쓰는 이유(2026-11-08 실측, refine 400장 표본): 가장 비슷한 1장의 유사도 중앙값 0.904(하위 10% 0.845,
+#   상위 10% 0.948), 10번째도 0.865 — 무관한 인물 사진끼리도 0.85~0.90 이 흔하고, 같은 옷·장소·포즈라도 자른 범위·확대가
+#   다르면 0.90 안팎이라 고정 기준(처음 0.92)으로는 사용자가 보기에 같은 촬영인 컷을 놓쳤다. 인물 임베딩도 분포가 같았다.
+#   그래서 순위만 쓴다 — 사용자 결정: 기준 포함 3장(상위 2장).
+SIM_GROUPS_PATH = os.path.join(os.path.dirname(LABELS_PATH), 'sim_groups.json')
+SIM_TOP = 2
+_sim_jobs = {}   # 기준 이미지 → {'running', 'n', 'error'}
+
+
+def _load_sim_groups() -> List[Dict]:
+    try:
+        with open(SIM_GROUPS_PATH, 'r', encoding='utf-8') as f:
+            return list(json.load(f))
+    except (OSError, ValueError):
+        return []
+
+
+def _save_sim_groups(groups: List[Dict]) -> None:
+    os.makedirs(os.path.dirname(SIM_GROUPS_PATH), exist_ok=True)
+    tmp = SIM_GROUPS_PATH + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(groups, f, ensure_ascii=False)
+    os.replace(tmp, SIM_GROUPS_PATH)
+
+
+def _sim_worker(seed: str) -> None:
+    job = _sim_jobs[seed]
+    try:
+        st = _compute()
+        names = st['names']
+        if seed not in names:
+            raise RuntimeError('refine 에 없거나 아직 임베딩이 없는 이미지')
+        i = names.index(seed)
+        sims = st['E'] @ st['E'][i]
+        sims[i] = -1.0
+        hit = [int(j) for j in np.argsort(-sims)[:SIM_TOP]]
+        job['n'] = len(hit)
+        if hit:
+            ts = datetime.now().isoformat(timespec='seconds')
+            g = {'id': '%s@%s' % (seed, ts), 'seed': seed, 'ts': ts,
+                 'sims': {names[j]: round(float(sims[j]), 3) for j in hit}}
+            with _lock:
+                groups = [x for x in _load_sim_groups() if x.get('seed') != seed]   # 같은 기준은 새 결과로 교체
+                _save_sim_groups([g] + groups)
+        log.info('curate similar: %s → %d', seed, len(hit))
+    except Exception as e:  # noqa: BLE001
+        job['error'] = '%s: %s' % (type(e).__name__, e)
+        log.warning('curate similar failed: %s — %s', seed, job['error'])
+    finally:
+        job['running'] = False
+
+
+@curate_bp.route('/api/similar', methods=['GET', 'POST'])
+@login_required
+def api_similar():
+    """POST {name}: 그 이미지와 비슷한 refine 이미지 찾기를 백그라운드로 시작. GET ?name=: 진행 상황."""
+    if request.method == 'POST':
+        name = os.path.basename((request.get_json(silent=True) or {}).get('name') or '')
+        if not name:
+            return jsonify({'error': 'name 필요'}), 400
+        with _lock:
+            job = _sim_jobs.get(name)
+            if not (job and job['running']):
+                job = _sim_jobs[name] = {'running': True, 'n': None, 'error': None}
+                threading.Thread(target=_sim_worker, args=(name,), name='curate-similar', daemon=True).start()
+        return jsonify(job)
+    job = _sim_jobs.get(os.path.basename(request.args.get('name') or ''))
+    if job is None:
+        return jsonify({'error': '작업 없음'}), 404
+    return jsonify(job)
+
+
+@curate_bp.route('/api/similar/dismiss', methods=['POST'])
+@login_required
+def api_similar_dismiss():
+    """{ids: [...]} 유사 검색 그룹을 중복 탭에서 지운다(파일·판정은 그대로)."""
+    ids = set((request.get_json(silent=True) or {}).get('ids') or [])
+    with _lock:
+        groups = _load_sim_groups()
+        left = [g for g in groups if g.get('id') not in ids]
+        if len(left) != len(groups):
+            _save_sim_groups(left)
+    return jsonify({'removed': len(groups) - len(left)})
 
 
 # ── '중복 아님' 기록 (2026-11-04 사용자 요청) ─────────────────────────────────
