@@ -832,15 +832,18 @@ def _screen_move_worker(names: List[str]) -> None:
 
 # 2026-11-07: AI 1차 분류 이동이 끝나고 2분 뒤 move 목록을 풀 스캔으로 갱신한다 — 화면의 fetch-image-button
 #   (/image/fetch → resolve_dir_page(dir, 1)) 을 누른 것과 같은 효과. 탭을 닫아 둬도 서버에서 알아서 한다.
+# 2026-11-09: 옮겨 나간 쪽(image2)도 같이 갱신한다.
 SCREEN_MOVE_REFRESH_DELAY = 120
+SCREEN_MOVE_REFRESH_DIRS = ('move', 'image2')
 
 
 def _refresh_move_list() -> None:
-    try:
-        image_mod.resolve_dir_page('move', 1)
-        log.info('curate screen: move 목록 갱신 완료 (fetch-image 동등)')
-    except Exception as e:  # noqa: BLE001
-        log.warning('curate screen: move 목록 갱신 실패: %s: %s', type(e).__name__, e)
+    for d in SCREEN_MOVE_REFRESH_DIRS:
+        try:
+            image_mod.resolve_dir_page(d, 1)
+            log.info('curate screen: %s 목록 갱신 완료 (fetch-image 동등)', d)
+        except Exception as e:  # noqa: BLE001
+            log.warning('curate screen: %s 목록 갱신 실패: %s: %s', d, type(e).__name__, e)
 
 
 def _screen_progress() -> str:
