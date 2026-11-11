@@ -937,3 +937,18 @@ def api_screen_run():
     if not _kick_screen(bool(body.get('auto_move'))):
         return jsonify({'error': _screen['error']}), 503
     return jsonify({'running': True})
+
+
+@curate_bp.route('/api/screen/run-local', methods=['POST'])
+def api_screen_run_local():
+    """갤러리 AI 이동 버튼(/api/screen/run, auto_move=true)과 같은 일을 로그인 없이 시작한다. 2026-11-11.
+    스크랩 잡(별 프로세스)이 작업과 목록 갱신을 끝낸 뒤 부른다(utils/image_cache_refresh.py trigger_ai_screen).
+    /image/refresh-cache 와 같은 기준 — 서버 로컬(127.0.0.1)에서 직접 들어온 요청만 받고, nginx 를 거친 요청은 404.
+    이미 분류·이동이 도는 중이면 새로 시작하지 않는다(_kick_screen)."""
+    if (request.remote_addr not in ('127.0.0.1', '::1')
+            or request.headers.get('X-Forwarded-For') or request.headers.get('X-Real-IP')):
+        return jsonify({'error': 'not found'}), 404
+    if not _kick_screen(True):
+        return jsonify({'error': _screen['error']}), 503
+    log.info('curate screen: 로컬 요청으로 AI 1차 분류+이동 시작')
+    return jsonify({'running': True})
