@@ -3,6 +3,7 @@ import os
 import sys
 import asyncio
 from typing import Optional, List
+from urllib.parse import quote, urlparse
 from playwright.async_api import async_playwright, Page, BrowserContext
 
 import configparser
@@ -28,6 +29,15 @@ ACCOUNTS = [
 USER_DATA_DIR = str(Path("./data/ig_profile-15").resolve())  # fx015
 # USER_DATA_DIR = str(Path("./data/ig_profile-16").resolve())  # fx016
 WAIT_SECOND = 40
+REFINE_URL = "https://chickchick.kr/image/pages?dir=refine&page=1&search={account}"
+
+
+def account_name(entry: str) -> str:
+    """ACCOUNTS 항목이 계정명이거나 인스타 URL(…/계정/reel/…)일 때 계정명만 뽑는다."""
+    s = entry.strip()
+    if s.startswith("http"):
+        s = urlparse(s).path
+    return s.strip("/").split("/")[0]
 
 
 async def get_focus_page(context: BrowserContext, focus_page: Optional[Page]) -> Page:
@@ -56,18 +66,24 @@ async def open_tabs_keep_focus(context: BrowserContext, urls: List[str], focus_p
         # 루프마다 포커스 탭이 닫혔는지 확인(사용자가 닫을 수 있으니)
         focus_page = await get_focus_page(context, focus_page)
 
-        url = "https://www.instagram.com/" + u.lstrip("/")
-        page = await context.new_page()
-        try:
-            await page.goto(url, wait_until="domcontentloaded")
-        except Exception as e:
-            print(f"[WARN] 페이지 이동 실패, 스킵 ({url}): {e}")
+        # 계정 페이지 + refine 이미지 정리 페이지(계정 검색)를 같이 연다
+        targets = [
+            u if u.startswith("http") else "https://www.instagram.com/" + u.lstrip("/"),
+            REFINE_URL.format(account=quote(account_name(u))),
+        ]
+        for url in targets:
+            page = await context.new_page()
             try:
-                if not page.is_closed():
-                    await page.close()
-            except Exception:
-                pass
-            continue
+                await page.goto(url, wait_until="domcontentloaded")
+            except Exception as e:
+                print(f"[WARN] 페이지 이동 실패, 스킵 ({url}): {e}")
+                try:
+                    if not page.is_closed():
+                        await page.close()
+                except Exception:
+                    pass
+                continue
+            pages.append(page)
 
         # 닫히는 타이밍 레이스 방지: 한 번 더 보정 후 포커스 복귀
         focus_page = await get_focus_page(context, focus_page)
@@ -76,7 +92,6 @@ async def open_tabs_keep_focus(context: BrowserContext, urls: List[str], focus_p
         except Exception:
             pass
 
-        pages.append(page)
         await asyncio.sleep(WAIT_SECOND)
 
     return pages

@@ -1,7 +1,7 @@
 import os
 import shutil
 
-DEL_CNT = 5
+DEL_CNT = 2
 # 썸네일(thumb)·자르기 전 원본 백업(origin) 폴더 — 계정 디렉토리로 보지 않고, 안에 든 파일도 "파일 있음"으로 치지 않는다
 SKIP_DIRS = {'origin', 'thumb'}
 
@@ -82,7 +82,7 @@ def count_files_by_empty_dirs(a_dir, b_dir, c_dir):
     return dict(sorted_result), deleted_dirs
 
 
-a = r'\\wsl.localhost\docker-desktop-data\data\docker\volumes\igdata\_data\ig'
-b =  r'\\wsl.localhost\docker-desktop-data\data\docker\volumes\igdata\_data\move'
-c =  r'\\wsl.localhost\docker-desktop-data\data\docker\volumes\igdata\_data\야짤2024'
+a = r'\\wsl.localhost\docker-desktop\mnt\docker-desktop-disk\data\docker\volumes\igdata\_data\ig'
+b =  r'\\wsl.localhost\docker-desktop\mnt\docker-desktop-disk\data\docker\volumes\igdata\_data\move'
+c =  r'\\wsl.localhost\docker-desktop\mnt\docker-desktop-disk\data\docker\volumes\igdata\_data\야짤2024'
 count_files_by_empty_dirs(a, b, c)
