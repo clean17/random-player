@@ -133,6 +133,13 @@ if __name__ == '__main__':
             # 2026-11-04: 24 -> 48, db_pool 20 -> 40. 갤러리 화면이 열릴 때 파일 요청이 수십 개씩 한꺼번에
             # 몰려 'Task queue depth'가 최대 37까지 튀었다(11/03 22:44). 끝나면 몇 초 안에 해소되는
             # 일시적 쏠림이라 스레드를 두 배로 늘려 흡수한다. PG max_connections=100(당시 사용 17).
-            serve(app, host='127.0.0.1', port=8090, threads=48, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
+            # 2026-11-09: connection_limit 100(기본) -> 400. 'total open connections reached the connection limit' 경고가
+            # 났다. nginx 는 443 에서 http2 로 받아 요청마다 새 연결(Connection: close)로 waitress 에 넘기는데, 갤러리를 열면
+            # /image/images 가 초당 100건 넘게 한꺼번에 나가 열린 연결이 일시적으로 100을 넘었다(access.log: 11/09 00:25
+            # 973건/분·최대 126건/초, uct 최대 3.1초 = waitress 가 그동안 연결을 안 받음. 11/03 22:44 도 같은 패턴).
+            # 스레드(48)는 안 밀렸다(Task queue depth 없음). 몇 초 안에 풀리는 일시적 쏠림이라 연결 상한만 올려 흡수한다 —
+            # 처리 속도가 빨라지는 건 아니다(대기 위치가 소켓 대기열에서 waitress 작업 큐로 옮겨갈 뿐).
+            # 평상시 Established 는 44개 안팎. 반영은 서버 재시작 때.
+            serve(app, host='127.0.0.1', port=8090, threads=48, connection_limit=400, max_request_body_size=1024*1024*1024*50)  # Waitress 서버, SSL 설정은 nginx에서 처리한다 / WebSocket 미지원, 50GB
     finally:
         cleanup(scheduler, node_process, [mock_process])
