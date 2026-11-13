@@ -1023,6 +1023,9 @@ def safe_open_exclusive(path: str):
 MIN_IMAGE_SIDE = 150   # 이 값 이하(가로 또는 세로)인 이미지는 썸네일로 간주해 건너뜀
 SKIPPED_SMALL = ""     # download_one이 작은 이미지를 의도적으로 건너뛴 경우의 반환값
 
+DOWNLOAD_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+PW_DOWNLOAD_RETRIES = 2   # page.request.get 소켓 오류 시 추가 재시도 횟수
+
 class _RetryViaBrowser(Exception):
     """aiohttp → page.request 재시도 신호"""
     pass
@@ -1049,14 +1052,27 @@ async def download_one(session: aiohttp.ClientSession, url: str, save_dir: str, 
     except _RetryViaBrowser:
         try:
             is_image = "_img" in prefix
-            pw_resp = await page.request.get(url, headers={
+            pw_headers = {
+                # 헤드리스 기본 UA(HeadlessChrome)는 CDN이 소켓을 끊는 원인이 될 수 있어 위장
+                "User-Agent": DOWNLOAD_USER_AGENT,
                 "Referer": "https://www.instagram.com/",
                 "Accept": "image/avif,image/webp,image/png,image/*;q=0.9,*/*;q=0.8" if is_image
                           else "video/mp4,video/*;q=0.9,*/*;q=0.8",
                 "Sec-Fetch-Dest": "image" if is_image else "video",
                 "Sec-Fetch-Mode": "no-cors",
                 "Sec-Fetch-Site": "cross-site",
-            })
+            }
+            pw_resp = None
+            for attempt in range(PW_DOWNLOAD_RETRIES + 1):
+                try:
+                    pw_resp = await page.request.get(url, headers=pw_headers)
+                    break
+                except Exception as e:
+                    # HTTP 응답 없이 연결이 끊긴 경우(socket hang up 등)만 재시도
+                    if attempt >= PW_DOWNLOAD_RETRIES:
+                        raise
+                    print(f"[WARN] download_one(pw) 재시도 {attempt + 1}/{PW_DOWNLOAD_RETRIES} ({type(e).__name__}: {str(e).splitlines()[0]})")
+                    await asyncio.sleep(1.5 * (attempt + 1))
             if not pw_resp.ok:
                 print(f"[WARN] download_one(pw) HTTP {pw_resp.status}: {url[:80]}")
                 return None
@@ -1371,7 +1387,7 @@ async def run_scrap():
 
         for acc, err_links in pending.items():
             today = datetime.today().strftime('%Y/%m/%d %H:%M:%S')
-            print(f"[INFO] [{today}] [{acc}] 에러 링크 재시도: {len(err_links)}개")
+            print(f"[INFO] [{today}] [{acc}] 에러 링크 재시도: {len(err_links)}개 (출처: {os.path.abspath(ERROR_LINKS_FILE)})")
             try:
                 page = await context.new_page()
             except Exception:
@@ -1414,4 +1430,13 @@ if __name__ == "__main__":
         loop.run_until_complete(run_scrap())
     finally:
         loop.close()
+        # 작업 종료 30초 후 화면의 fetch-image-button 과 같은 목록 갱신을 호출한다. run_scrap 이 log_file 을 이미 닫았으니 파일에 직접 이어 쓴다.
+        # 갱신 대상: 저장 폴더(IMAGE_DIR2='image2') + 짧은 영상을 옮겨 둔 COS_DIR('cos')
+        def _append_log(msg):
+            with open(filename, "a", encoding="utf-8") as f:
+                f.write(f"{msg}\n")
+        from utils.image_cache_refresh import refresh_image_caches, trigger_ai_screen
+        refresh_image_caches(["image2", "cos"], delay=30, log=_append_log)
+        # 목록 갱신 30초 후 image2 갤러리의 AI 1차 분류(→ move 이동) 버튼과 같은 작업을 서버에 시작시킨다
+        trigger_ai_screen(delay=30, log=_append_log)
         os._exit(0)  # anyio atexit 스레드 풀 경고 방지
