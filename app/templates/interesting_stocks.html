@@ -634,7 +634,7 @@
             {% if current_user.get_id() != config.GUEST_USERNAME %}
             <button type="button" class="btn btn-secondary" id="picks-reserve-buy-btn"
                     style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
-                           font-size:13px; font-weight:500; line-height:1; align-items:center;">추천 매수 예약</button>
+                           font-size:13px; font-weight:500; line-height:1; align-items:center;" title="'적극매수' 종목만 자동매수 대상으로 일괄 추가">적극매수 예약</button>
             <button type="button" class="btn btn-secondary" id="reserved-clear-all-btn"
                     style="display:none; box-sizing:border-box; height:34px; padding:0 12px; margin:0 20px 0 0;
                            font-size:13px; font-weight:500; line-height:1; align-items:center;">전체 해제</button>
@@ -1128,7 +1128,7 @@
         const clearAllBtn = document.getElementById('reserved-clear-all-btn');
         if (clearAllBtn) clearAllBtn.style.display = (tabId === 'tab-reserved' || tabId === 'tab-picks') ? 'inline-flex' : 'none';
 
-        // 추천종목 탭에서만 "'매수' 이상 전체 자동매수 예약" 버튼 노출 — 전체 해제 버튼과 같은 자리(공용 탭바)
+        // 추천종목 탭에서만 "'적극매수' 전체 자동매수 예약" 버튼 노출 — 전체 해제 버튼과 같은 자리(공용 탭바)
         const picksReserveBtn = document.getElementById('picks-reserve-buy-btn');
         if (picksReserveBtn) picksReserveBtn.style.display = (tabId === 'tab-picks') ? 'inline-flex' : 'none';
 
@@ -2156,7 +2156,7 @@
         const discEl = document.getElementById('ms-picks-disclaimer');
         const countEl = document.getElementById('count');
         const picks = data.picks || [];
-        lastInterestPicks = picks;   // "'매수' 이상 전체 자동매수 예약" 버튼 + 헤더 정렬이 참조하는 원본(정렬 전) 목록
+        lastInterestPicks = picks;   // "'적극매수' 전체 자동매수 예약" 버튼 + 헤더 정렬이 참조하는 원본(정렬 전) 목록
 
         // "검색 결과" 헤더의 건수 배지 — 관심종목/예측종목 등 다른 탭이 마지막으로 남겨둔
         // 값이 그대로 보이던 문제(2026-09-08) — 이 탭은 항상 top 10이라 픽 개수로 갱신한다.
@@ -3424,9 +3424,13 @@
         }
     });
 
-    // 추천종목 탭: 추천상태 '매수' 이상('매수'·'적극매수')인 종목 전부를 자동매수 대상으로
-    // 일괄 체크. 이미 예약된 종목은 건드리지 않는다(/stocks/reserved가 토글이라, 이미 true인
+    // 추천종목 탭: 추천상태 '적극매수'인 종목 전부를 자동매수 대상으로 일괄 체크.
+    // 이미 예약된 종목은 건드리지 않는다(/stocks/reserved가 토글이라, 이미 true인
     // 걸 다시 부르면 꺼져버림 — 2026-09-22 추가).
+    // 2026-11-14: 대상을 '매수' 이상 → '적극매수'만으로 좁혔다. 9/8~11/13 15:20 추천 526건
+    // 사후 측정에서 D+5가 적극매수 -1.48% / 매수 -2.84% / 관심 -3.98%(시장 중앙값 -1.51%)로
+    // 추천 전체에 매수 근거가 없었고, 그나마 덜 나빴던 적극매수(점수 0.70↑ + 외·기 순매수 3%↑)만
+    // 일괄 예약 대상으로 남긴다. 개별 체크 버튼은 그대로라 '매수' 종목도 손으로는 예약할 수 있다.
     // 외국인·기관 순매수가 둘 다 음수(매도 우위)인 종목은 제외한다. 값이 없는(null, 예: 장중
     // 기관 집계 전) 쪽이 있으면 판단 불가 → 제외하지 않는다.
     const isBothNetNegative = p =>
@@ -3434,17 +3438,17 @@
         Number(p.foreign_net) < 0 && Number(p.institution_net) < 0;
     document.getElementById('picks-reserve-buy-btn')?.addEventListener('click', async () => {
         const buyable = lastInterestPicks.filter(p =>
-            (p.label === '매수' || p.label === '적극매수') && !flagCacheHas(reservedStocks, p.stock_code));
+            p.label === '적극매수' && !flagCacheHas(reservedStocks, p.stock_code));
         const targets = buyable.filter(p => !isBothNetNegative(p));
         const excluded = buyable.length - targets.length;
         if (!targets.length) {
             showDebugToast(excluded
                 ? `추가할 종목이 없어요 (외국인·기관 순매수 모두 음수인 ${excluded}종목 제외)`
-                : "추가할 종목이 없어요 ('매수' 이상이 없거나 이미 전부 예약됨)");
+                : "추가할 종목이 없어요 ('적극매수'가 없거나 이미 전부 예약됨)");
             return;
         }
         const excludedNote = excluded ? `\n(외국인·기관 순매수 모두 음수인 ${excluded}종목 제외)` : '';
-        if (!confirm(`'매수' 이상 ${targets.length}종목을 자동매수 대상으로 추가할까요?${excludedNote}`)) return;
+        if (!confirm(`'적극매수' ${targets.length}종목을 자동매수 대상으로 추가할까요?${excludedNote}`)) return;
 
         const btn = document.getElementById('picks-reserve-buy-btn');
         btn.disabled = true;
