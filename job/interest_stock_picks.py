@@ -1,32 +1,57 @@
 # -*- coding: utf-8 -*-
-"""관심종목(interest_stocks) 중 추천 top N — 2026-09-08 추가.
+"""관심종목 추천 top N — 2026-09-08 추가, 2026-11-14 전면 재설계(v2).
 
-규칙 기반 점수/라벨 방식(사용자 선택, LLM 서술형 아님). 흐름:
-  1) 오늘자 관심종목 후보 조회 (app.repository.stocks.stocks.get_interest_stocks)
-  2) 이미 있는 값(등락률/거래대금 증가율)만으로 1차 예선 -> PRESCREEN_N개로 추림
-     (외국인/기관 조회는 종목당 API 호출이 들어서, 전체 후보 전부에 안 하고 예선 통과자만)
-  3) 예선 통과자에 한해 외국인/기관 순매수(ka10059)를 조회해 최종 점수 계산
-  4) 최종 점수가 MIN_SCORE(='관심' 등급 경계) 이상인 것만, 최대 MAX_N개까지 뉴스(Toss NEWS
-     섹션)까지 조회해서 리포트에 포함 — 2026-09-22부터 고정 10개가 아니라 이 기준으로 개수가
-     날마다 변한다(임계값 미만이면 0개일 수도, 상한까지 15개일 수도 있음 — 상한은 2026-11-14에
-     10으로 다시 내렸다, MAX_N 주석 참고). 무조건 10개를
-     채우다 보니 약세장엔 '관망'급까지 억지로 노출되고 강세장엔 11~15위 유망 종목이 잘리던
-     문제 대응.
-  5) JSON으로 저장 (logs/interest_stock_picks/picks_<타임스탬프>.json, latest.json)
-     2026-10-05부터 최종 picks 외에 후보 전체(candidates)와 예선 통과자의 수급·최종점수
-     (prescreened)도 같이 남긴다 — 사후 검증용. 전엔 picks만 남아 탈락 후보의 장중 값과
-     수급이 사라져서, '점수식이 후보 중에서 잘 골랐는가'를 실제 추천 시점 데이터로 잴 수
-     없었다(그날 최종값은 DB에 있지만 장중 스냅샷과 수급은 없음). 추가 API 호출은 없다.
+■ v2 (2026-11-14) — "천천히 움직이기 시작한 종목"을 전 종목에서 찾는다
+  흐름:
+    1) 전 종목 피처 스냅샷(AutoSales.py/data/universe_snapshot.json)을 읽는다. 이 파일은
+       AutoSales.py의 2_finding_stocks_with_increased_volume.py가 20분마다 전 종목 오늘 캔들을
+       pkl에 반영하면서 같이 쓴다(universe_snapshot.py). 이 잡이 pkl을 직접 열지 않는 건
+       safe_replace_pickle과의 파일 잠금 충돌(WinError 5) 때문이다.
+    2) 유동성 유니버스(종가 1,000원↑, 20일 평균 거래대금 30억↑, 하루 약 650종목) 안에서
+       피처마다 그날 백분위를 매기고, 아래 CONDITIONS의 '적정 구간'에 들면 1점씩(0~10점).
+    3) 게이트: 오늘 등락 4~12%(2026-11-14 8→10→12) + 오늘/최근 10일 고저폭이 직전 ATR의 4배 미만(폭발 제외).
+    4) 점수순(동점은 60일 고가 근접순) 상위 MAX_N, MIN_POINTS점 이상만.
+    5) 그 종목들만 외국인/기관 순매수(ka10059)와 뉴스를 조회해 표시하고, 등급을 매긴다.
+       외국인·기관이 둘 다 순매도면 등급을 '관심'으로 내린다.
+    6) JSON 저장(logs/interest_stock_picks/picks_<YYYYMMDD_HHMM>.json, latest.json). 후보 상위
+       CANDIDATE_LOG_N개의 피처·점수도 남긴다(사후 검증용).
 
-⚠️ "얼마나 오를지"는 백테스트/모델 근거가 없어 확정 수치를 만들지 않는다 — 점수 구간에 따른
-   정성적 라벨(상승여력 높음/보통/낮음)만 준다. 실제 매수 여부는 사용자 판단이다.
+  왜 바꿨나 — 9/8~11/13 15:20 추천 526건 사후 측정 + 2년 전 종목 재현(2024-09~2026-11):
+    * 구 방식(등락률·거래대금 증가율 가점)은 2년 내내 졌다. 다음날 시가 진입 10일 기준 시장
+      평균 대비 -3.2 / -3.1 / -2.5%p(24.9~25.8 / 25.9~26.8 / 26.9~), 하락(-7%↓) 확률이 기준의
+      1.6~1.9배. 많이 오른 종목·거래대금이 폭증한 종목은 상승도 하락도 커지는 복권형이었다.
+    * 후보 필터(조용하던 종목)는 처음 등록될 때만 적용되고 이후 종일 갱신돼, 라이브 후보의 82%가
+      장 마감 기준으로는 필터를 통과하지 못했다(=사실상 '크게 튄 종목'을 고르고 있었다).
+    * 1차 선별(등락률 60%)이 결과와 역상관(IC -0.13)이라, 그 뒤에 붙이는 수급 점수가 소용없었다.
+      v2는 1차 선별과 최종 점수가 같은 점수다.
+  v2 백테스트(같은 2년, 매일 상위 10, 다음날 시가 진입 10일, 비용 0.25% 차감 전 초과는 시장평균 대비):
+                          상승(+7%↑)확률  하락(-7%↓)확률  초과수익
+      24.9~25.8 (학습)      1.16배         0.98배       +0.76%p
+      25.9~26.8 (검증)      1.23배         1.01배       +0.48%p
+      26.9~11월 (검증)      1.16배         0.87배       +0.54%p
+    구간 경계를 ±10%p 흔들어도 상승확률>1, 하락확률<1이 유지됐다(최근 구간 초과수익은 변형에 따라
+    ±0.9%p로 흔들림). 점수별로 8~9점이 가장 좋고(초과 +1.0~+1.4%p) 4점 이하는 음수였다.
+    수급(네이버, 7/9~11/12): 이 상위 10 안에서 기관 순매수 종목 초과 -0.37%p vs 순매도 -0.80%p,
+    외국인·기관 둘 다 순매도 47건은 -3.11%p(상승확률 0.63배) — 그래서 점수엔 넣지 않고
+    '둘 다 순매도' 강등만 한다.
+
+  ⚠️ 한계
+    * 검증은 '종가 신호 -> 다음날 시가 매수'로 했다. 장중(09:30~15:20) 결과는 그날 일부 데이터
+      기준이라 검증되지 않은 근사다 — candidates 로그가 쌓이면 장중 vs 종가 신호를 비교할 것.
+    * 2026-09 이후는 시장 자체가 크게 빠져서(10월 종목 중앙값 -15%) 절대수익은 음수였다.
+      이 점수는 '시장보다 나은 종목'을 고르는 것이지 하락장을 피하는 장치가 아니다.
+    * 피처 정의는 universe_snapshot.py와 백테스트가 같아야 한다. 구간을 바꾸면 재검증할 것.
+
+⚠️ "얼마나 오를지" 확정 수치는 만들지 않는다 — 등급/상승여력은 점수 구간의 정성적 라벨이다.
 """
 import os
 import re
 import json
 import time
 import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
+import pandas as pd
 
 from auto_trading.kiwoom_api import get_investor_trend, get_trading_logger, is_krx_business_day
 from utils.request_toss_api import get_stock_news
@@ -40,29 +65,49 @@ _log = get_trading_logger('interest_stock_picks')
 
 _OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         'logs', 'interest_stock_picks')
+SNAPSHOT_PATH = r'C:\my-project\AutoSales.py\data\universe_snapshot.json'
+SNAPSHOT_MAX_AGE_MIN = 60   # 스냅샷이 이보다 오래되면(2_ 스크립트가 멈춤) 새 추천을 만들지 않는다
 
-PRESCREEN_N = 20   # 외국인/기관 조회(API 호출)까지 갈 예선 통과 수
-MIN_SCORE = 0.40   # 최종 노출 최소 점수 = _label()의 '관심' 등급 경계. 미만('관망')은 아예 안 보여준다.
-MAX_N = 10         # 최종 노출 상한(임계값을 넘는 종목이 많아도 여기서 자른다)
-# 2026-11-14: 15 -> 10. 9/8~11/13 15:20 추천 526건 사후 측정에서 그날 점수순위 11~15위(118건)가
-# D+5 -5.30%(시장 대비 -3.12%p)로 1~10위(-1.65~-2.40%)보다 확연히 나빴다 — 9/22에 상한을 늘린
-# 효과가 음(-)이었다. 1~3위가 4~10위보다 낫진 않아서 더 줄일 근거는 없다.
+# 유니버스(백테스트와 동일)
+UNIVERSE_MIN_CLOSE = 1000
+UNIVERSE_MIN_AMT20 = 3_000_000_000
 
-# 2026-10-05: '적극매수'는 점수 0.70 이상 + 외국인·기관 순매수 합이 거래대금의 이 비율 이상일 때만.
-# 미달이면 '매수'로 한 단계 내린다(점수·정렬·자동매수 대상 여부는 그대로 — 매수/적극매수 둘 다 대상).
-# 근거(9/8~10/2 15:20 추천 실측): 등급별 D+1/D+3/D+5가 관심 +1.1/+5.4/+8.1%,
-# 매수 +0.9/+2.4/+4.7%, 적극매수 -0.1/+0.4/+3.4%로 점수가 높을수록 오히려 나빴다. 등락률 30%·
-# 거래대금 5배를 채우면 수급이 0이어도 0.60+0.20(수급 중립)=0.80이 돼서, 수급 없는 상한가 종목이
-# 최고 등급을 받던 구조다. 적극매수 중 수급 3% 이상 44건은 D+3 +1.5%(승률 57%), 미만 22건은
-# -1.7%(41%). 네이버 수급(7~10월, 39거래일)에서도 당일 외+기 순매수 비중은 넓은 후보군 기준
-# 양(+)의 신호였다(IC +0.07, t 2.7). 표본이 작아 확정치는 아니다 — candidates 기록이 쌓이면 재검증.
-STRONG_FLOW_MIN = 0.03
+# 게이트
+CHG_MIN, CHG_MAX = 4.0, 12.0  # 오늘 등락률 4% 이상 12% 미만.
+# 2026-11-14 8 → 10 → 12 (사용자 요청). 근거(2년, 점수 상위10, 다음날 시가 기준 10일 시장 대비, 기간 P1/P2/P3):
+#   8~10% 구간 단독 +1.26/+1.43/+0.13%p(상승확률 1.28~1.32배) / 10~12% +0.33/+0.05/+0.89%p(하락확률 1.16~1.39배)
+#   슬롯 시뮬(10종목 10일, 종가 매수, 비용 0.25%) 월평균: 상한 8% +2.7% → 10% +3.4% → 12% +3.5% (손절 없음),
+#   손절 -20%면 +2.0 → +2.4 → +2.8%(기간별 10%: +2.7/+4.0/-8.7, 12%: +2.5/+4.5/-6.2).
+#   모의 손절 -20%와 짝으로 12% 채택. ⚠️ 10% 대비 우위는 대부분 최근(26.9~) 한 구간에서 나왔고,
+#   10~12% 구간 단독은 하락확률 1.16~1.39배로 위험이 크다 — 모의 실측으로 10%와 다시 비교할 것.
+#   12% 이상은 '이미 에너지를 쓴 종목(복권형)' 비중이 커진다.
+EXPLODE_X = 4.0               # 오늘/최근 10일 고저폭이 직전 ATR14의 이 배수 이상이면 제외
+
+# 적정 구간 조건 — (피처, 백분위 하한, 상한, 화면 설명). 구간은 24.9~25.8 데이터로만 정했다.
+CONDITIONS: List[Tuple[str, float, float, str]] = [
+    ('atr_n',    0.40, 0.80, '변동성 중간'),
+    ('vr5_20',   0.50, 0.85, '단기 변동성 완만 확대'),
+    ('vr20_60',  0.00, 0.60, '중기 변동성 아직 낮음'),
+    ('tv5_20',   0.30, 0.85, '거래대금 완만 증가'),
+    ('tvr',      0.40, 0.85, '오늘 거래대금 적당'),
+    ('max_rx10', 0.00, 0.70, '최근 폭발 없음'),
+    ('hi60',     0.60, 1.00, '60일 고가 근접'),
+    ('upwick',   0.00, 0.60, '위꼬리 짧음'),
+    ('spk20',    0.00, 0.70, '급등일 과다 아님'),
+    ('ma60_gap', 0.00, 0.80, '60일선 과열 아님'),
+]
+
+MIN_POINTS = 5        # 이 점수 미만은 노출하지 않는다(4점 이하 상위10 편입분은 초과수익 음수)
+MAX_N = 10            # 최종 노출 상한
+CANDIDATE_LOG_N = 60  # 사후 검증용으로 남길 후보 수(게이트 통과자 점수순)
+STRONG_POINTS = 8     # 적극매수 경계(8~9점 초과 +1.0~+1.4%p, 하락확률 0.88~0.91배)
+BUY_POINTS = 6        # 매수 경계
 
 # 2026-10-05: ka10059의 기관 순매수는 장중엔 일부 종목만 잠정치가 나오고 나머지는 0으로 온다.
 # 추천 이력 실측(9/23~10/2) 기관=0 비율: 10시대 33~37%, 13시대 18~28%, 15시대 6~16%, 16시 이후 1%.
 # 장 마감 후 값은 네이버 수급과 상관 1.0으로 일치 — 즉 장중 0은 '0원'이 아니라 '미집계'다.
 # 이 시각 전의 기관 0은 None(미집계)으로 바꿔 '집계 전'으로 표시하고, 오늘 앞 사이클의 정상값이
-# 있으면 그걸로 메운다(_carry_forward_flow). 점수 계산에선 None=0이라 기존과 같다.
+# 있으면 그걸로 메운다(_carry_forward_flow).
 INST_FINAL_HOUR = 16
 
 # 2026-09-22: 외국인/기관 순매수 직전 정상값 캐시(종목코드 -> {'date','foreign','institution'}).
@@ -72,7 +117,6 @@ INST_FINAL_HOUR = 16
 # ⚠️ 프로세스 재시작하면 비워진다 — 의도적이다. 순매수는 그날 누적치라 날짜가 바뀌면
 # 무의미해지므로, 캐시된 날짜가 오늘이 아니면 쓰지 않는다(아래 _carry_forward_flow).
 _LAST_FLOW: Dict[str, Dict] = {}
-
 
 def _carry_forward_flow(stk_cd: str, flow: Optional[Dict]) -> Optional[Dict]:
     """flow의 foreign/institution이 None(이번 사이클에 못 받음)이면 오늘자 직전 정상값으로
@@ -92,54 +136,54 @@ def _carry_forward_flow(stk_cd: str, flow: Optional[Dict]) -> Optional[Dict]:
     return flow
 
 
-def _f(v, default=0.0) -> float:
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return default
+def _load_snapshot() -> Optional[Dict]:
+    """스냅샷 JSON을 읽는다. 쓰는 쪽(os.replace)과 겹치면 PermissionError가 날 수 있어 짧게 재시도."""
+    for attempt in range(3):
+        try:
+            with open(SNAPSHOT_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
+        except (PermissionError, json.JSONDecodeError):
+            time.sleep(0.5 * (attempt + 1))
+    return None
 
 
-def _prescreen_score(row: Dict) -> float:
-    """1차 예선 점수 — API 호출 없이 이미 가진 값만으로."""
-    chg = min(_f(row.get('today_price_change_pct')), 30.0) / 30.0        # 등락률, 30%에서 캡
-    vol = min(_f(row.get('trading_value_change_pct')), 500.0) / 500.0    # 거래대금 증가율, 500%에서 캡
-    return chg * 0.6 + vol * 0.4
+def score_universe(rows: List[Dict], today_iso: str) -> pd.DataFrame:
+    """스냅샷 행 -> 오늘자 유동성 유니버스 + 백분위/점수/게이트 컬럼이 붙은 DataFrame."""
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    df = df[(df['date'] == today_iso)
+            & (df['close'] >= UNIVERSE_MIN_CLOSE)
+            & (df['amt20'] >= UNIVERSE_MIN_AMT20)].copy()
+    if df.empty:
+        return df
+    df['points'] = 0
+    met = []
+    for feat, lo, hi, _desc in CONDITIONS:
+        pct = df[feat].rank(pct=True)
+        ok = (pct >= lo) & (pct <= hi)
+        df['points'] += ok.astype(int)
+        met.append(ok.rename(feat))
+    df['met'] = pd.concat(met, axis=1).apply(lambda r: [f for f, v in r.items() if v], axis=1)
+    df['hi60_pct'] = df['hi60'].rank(pct=True)
+    df['gate'] = ((df['chg'] >= CHG_MIN) & (df['chg'] < CHG_MAX)
+                  & (df['rng_x'] < EXPLODE_X) & (df['max_rx10'] < EXPLODE_X))
+    df['rank_key'] = df['points'] + df['hi60_pct'] * 0.01   # 동점은 60일 고가 근접순(백테스트와 동일)
+    return df
 
 
-def _final_score(row: Dict, flow: Optional[Dict]) -> float:
-    chg = min(_f(row.get('today_price_change_pct')), 30.0) / 30.0
-    vol = min(_f(row.get('trading_value_change_pct')), 500.0) / 500.0
-    trd_amt = _f(row.get('last_trading_value'))
-    flow_score = 0.5   # 외국인/기관 조회 실패·데이터 없음 = 중립
-    if flow and trd_amt > 0:
-        net = _f(flow.get('foreign')) + _f(flow.get('institution'))
-        ratio = net / trd_amt   # 오늘 거래대금 대비 외국인+기관 순매수 비중
-        # -10%~+10%를 0~1로 매핑(그 밖은 클램프) — 임의 스케일, 근거는 없고 상대비교용
-        flow_score = max(0.0, min(1.0, 0.5 + ratio * 5))
-    return chg * 0.35 + vol * 0.25 + flow_score * 0.40
-
-
-def _flow_ratio(row: Dict, flow: Optional[Dict]) -> Optional[float]:
-    """외국인+기관 순매수 / 오늘 거래대금. 수급 조회 실패나 거래대금 0이면 None."""
-    trd_amt = _f(row.get('last_trading_value'))
-    if not flow or trd_amt <= 0:
-        return None
-    return (_f(flow.get('foreign')) + _f(flow.get('institution'))) / trd_amt
-
-
-def _label(score: float, flow_ratio: Optional[float] = None) -> str:
-    if score >= 0.70:
-        # 수급 확인이 안 되면(조회 실패 포함) 적극매수를 주지 않는다 — STRONG_FLOW_MIN 주석 참고
-        return '적극매수' if (flow_ratio is not None and flow_ratio >= STRONG_FLOW_MIN) else '매수'
-    if score >= 0.55:
-        return '매수'
-    if score >= 0.40:
-        return '관심'
-    return '관망'
+def _label(points: int, both_selling: bool) -> Tuple[str, Optional[str]]:
+    """(등급, 화면 툴팁용 메모). 외국인·기관 둘 다 순매도면 '관심'으로 내린다."""
+    base = '적극매수' if points >= STRONG_POINTS else ('매수' if points >= BUY_POINTS else '관심')
+    if both_selling and base != '관심':
+        return '관심', '점수는 %s 구간이지만 외국인·기관이 모두 순매도라 관심으로 표시' % base
+    return base, None
 
 
 def _upside_tier(label: str) -> str:
-    # 등급과 어긋나지 않게 등급에서 파생한다(적극매수에서 내려간 종목이 '높음'으로 남지 않도록)
+    # 등급과 어긋나지 않게 등급에서 파생한다
     if label == '적극매수':
         return '상승여력 높음'
     if label == '매수':
@@ -147,113 +191,137 @@ def _upside_tier(label: str) -> str:
     return '상승여력 낮음'
 
 
-def generate_picks(min_score: float = MIN_SCORE, max_n: int = MAX_N) -> Dict:
-    from app.repository.stocks.stocks import get_interest_stocks  # 지연 import(위 주석 참고)
+_DESC = {feat: desc for feat, _lo, _hi, desc in CONDITIONS}
+
+
+def _num(v, nd: Optional[int] = None):
+    """NaN/inf/None -> None (json.dump가 NaN을 그대로 써서 브라우저 JSON 파싱이 깨지는 것 방지)."""
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return None
+    if x != x or x in (float('inf'), float('-inf')):
+        return None
+    return round(x, nd) if nd is not None else x
+
+
+def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
+    from app.repository.stocks.stocks import get_logo_urls_by_codes  # 지연 import(위 주석 참고)
 
     started = time.perf_counter()
-    today = datetime.date.today().strftime('%Y%m%d')
-    rows = get_interest_stocks(today, today, mode='normal', target_value='interest')
+    snap = _load_snapshot()
+    if not snap:
+        _log.error('관심종목 추천: 전 종목 스냅샷 없음(%s) — 2_finding 스크립트가 아직 안 돌았거나 실패', SNAPSHOT_PATH)
+        return None
+    snap_at = datetime.datetime.fromisoformat(snap['generated_at'])
+    age_min = (datetime.datetime.now() - snap_at).total_seconds() / 60
+    if age_min > SNAPSHOT_MAX_AGE_MIN:
+        _log.error('관심종목 추천: 스냅샷이 %.0f분 묵음(생성 %s) — 새 추천을 만들지 않는다', age_min, snap['generated_at'])
+        return None
 
-    # 같은 종목이 하루에 여러 번 갱신될 수 있어(등락률 재조회 등) 코드별 최신 1건만 남긴다
-    latest_by_code: Dict[str, Dict] = {}
-    for row in rows:
-        code = row['stock_code']
-        prev = latest_by_code.get(code)
-        if prev is None or row['created_at'] > prev['created_at']:
-            latest_by_code[code] = row
-    candidates = list(latest_by_code.values())
+    today_iso = datetime.date.today().isoformat()
+    uni = score_universe(snap.get('rows') or [], today_iso)
+    if uni.empty:
+        _log.error('관심종목 추천: 오늘자(%s) 유니버스가 비었음 — 스냅샷 %d행', today_iso, snap.get('count', 0))
+        return None
 
-    prescreened = sorted(candidates, key=_prescreen_score, reverse=True)[:PRESCREEN_N]
+    gated = uni[uni['gate']].sort_values('rank_key', ascending=False)
+    qualified = gated[gated['points'] >= MIN_POINTS]
+    top = qualified.head(max_n)
 
     inst_pending_window = datetime.datetime.now().hour < INST_FINAL_HOUR
-    enriched = []
-    for row in prescreened:
-        flow = get_investor_trend(row['stock_code'], env='real')
-        if flow is not None and inst_pending_window and flow.get('institution') == 0:
-            flow['institution'] = None   # 장중 0 = 미집계 (INST_FINAL_HOUR 주석 참고)
-        flow = _carry_forward_flow(row['stock_code'], flow)
-        score = _final_score(row, flow)
-        enriched.append((row, flow, score))
-
-    qualified = sorted((t for t in enriched if t[2] >= min_score), key=lambda t: t[2], reverse=True)
-    top = qualified[:max_n]
+    codes = top['code'].tolist()
+    logos = get_logo_urls_by_codes(codes) if codes else {}
 
     picks = []
-    for row, flow, score in top:
-        news = get_stock_news(row['stock_name'], limit=3)
-        ratio = _flow_ratio(row, flow)
-        label = _label(score, ratio)
+    for r in top.itertuples():
+        flow = get_investor_trend(r.code, env='real')
+        if flow is not None and inst_pending_window and flow.get('institution') == 0:
+            flow['institution'] = None   # 장중 0 = 미집계 (INST_FINAL_HOUR 주석 참고)
+        flow = _carry_forward_flow(r.code, flow)
+        f_net = flow.get('foreign') if flow else None
+        i_net = flow.get('institution') if flow else None
+        both_selling = f_net is not None and i_net is not None and f_net < 0 and i_net < 0
+        label, note = _label(int(r.points), both_selling)
+        today_tv = _num(r.today_tv)
+        flow_ratio = None
+        if flow and today_tv and today_tv > 0:
+            flow_ratio = _num(((f_net or 0) + (i_net or 0)) / today_tv, 4)
+        tvr = _num(r.tvr)
         picks.append({
-            'stock_code': row['stock_code'],
-            'stock_name': row['stock_name'],
-            'logo_url': row.get('logo_image_url'),
-            'today_price_change_pct': _f(row.get('today_price_change_pct')),
-            'trading_value_change_pct': _f(row.get('trading_value_change_pct')),
-            'current_trading_value': _f(row.get('last_trading_value')),
-            'current_price': _f(row.get('current_price')),
-            'foreign_net': flow.get('foreign') if flow else None,
-            'institution_net': flow.get('institution') if flow else None,
+            'stock_code': r.code,
+            'stock_name': r.name,
+            'logo_url': logos.get(r.code),
+            'today_price_change_pct': _num(r.chg, 2),
+            'trading_value_change_pct': round(tvr * 100, 2) if tvr is not None else None,
+            'current_trading_value': today_tv,
+            'current_price': _num(r.close),
+            'foreign_net': f_net,
+            'institution_net': i_net,
             # 장중 기관 미집계(화면에 '집계 전'). 조회 실패(flow None)와 구분한다
-            'institution_pending': bool(flow and flow.get('institution') is None and inst_pending_window),
-            'flow_ratio': round(ratio, 4) if ratio is not None else None,
-            'score': round(score, 3),
+            'institution_pending': bool(flow and i_net is None and inst_pending_window),
+            'flow_ratio': flow_ratio,
+            'points': int(r.points),
+            'score': round(int(r.points) / len(CONDITIONS), 2),
+            'score_detail': '충족: ' + ', '.join(_DESC[f] for f in r.met) + ' / 미충족: '
+                            + ', '.join(desc for f, desc in _DESC.items() if f not in r.met),
             'label': label,
+            'label_note': note,
             'upside_tier': _upside_tier(label),
-            'news': news,
+            'news': get_stock_news(r.name, limit=3),
         })
 
-    picked_codes = {p['stock_code'] for p in picks}
-    flow_by_code = {row['stock_code']: (flow, score) for row, flow, score in enriched}
+    picked = set(codes)
+    feat_cols = ['chg', 'tvr', 'tv5_20', 'atr_n', 'rng_x', 'vr5_20', 'vr20_60', 'max_rx10', 'hi60', 'upwick', 'spk20', 'ma60_gap']
     candidates_log = []
-    for row in sorted(candidates, key=_prescreen_score, reverse=True):
-        code = row['stock_code']
-        item = {
-            'stock_code': code,
-            'stock_name': row['stock_name'],
-            'today_price_change_pct': _f(row.get('today_price_change_pct')),
-            'trading_value_change_pct': _f(row.get('trading_value_change_pct')),
-            'current_trading_value': _f(row.get('last_trading_value')),
-            'current_price': _f(row.get('current_price')),
-            'prescreen_score': round(_prescreen_score(row), 4),
-            'created_at': str(row.get('created_at')),
-            'picked': code in picked_codes,
-        }
-        if code in flow_by_code:   # 예선 통과자만 수급·최종점수가 있다
-            flow, score = flow_by_code[code]
-            item['foreign_net'] = flow.get('foreign') if flow else None
-            item['institution_net'] = flow.get('institution') if flow else None
-            item['institution_pending'] = bool(flow and flow.get('institution') is None and inst_pending_window)
-            item['final_score'] = round(score, 4)
+    for r in gated.head(CANDIDATE_LOG_N).itertuples():
+        item = {'stock_code': r.code, 'stock_name': r.name, 'current_price': _num(r.close),
+                'points': int(r.points), 'picked': r.code in picked}
+        for c in feat_cols:
+            item[c] = _num(getattr(r, c), 4)
         candidates_log.append(item)
 
+    now = datetime.datetime.now()
     result = {
-        'generated_at': datetime.datetime.now().isoformat(timespec='seconds'),
-        'candidate_count': len(candidates),
-        'prescreened_count': len(prescreened),
+        'generated_at': now.isoformat(timespec='seconds'),
+        'scheme': 'v2',
+        'snapshot_at': snap['generated_at'],
+        'candidate_count': int(len(uni)),          # 오늘 유동성 유니버스 크기
+        'prescreened_count': int(len(gated)),      # 게이트(등락 4~12%, 폭발 제외) 통과 수
         'picks': picks,
-        'candidates': candidates_log,   # 사후 검증용(화면 미사용). 위 docstring 5) 참고
-        'disclaimer': '정량 지표(등락률·거래대금 증가율·외국인/기관 순매수) 기반 참고용 순위입니다. '
+        'candidates': candidates_log,              # 사후 검증용(화면 미사용)
+        'disclaimer': '전 종목 중 "조용하던 종목이 완만하게 움직이기 시작한" 패턴을 점수화한 참고용 순위입니다 '
+                      '(백테스트는 장 마감 신호 → 다음날 시가 매수 기준, 장중 결과는 그날 일부 데이터 기준). '
                       '실제 매수 여부와 손익 책임은 본인에게 있습니다.',
     }
 
     os.makedirs(_OUT_DIR, exist_ok=True)
-    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M')
+    ts = now.strftime('%Y%m%d_%H%M')
     with open(os.path.join(_OUT_DIR, f'picks_{ts}.json'), 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     with open(os.path.join(_OUT_DIR, 'latest.json'), 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    _log.info('관심종목 추천 생성: 후보 %d건 -> 예선 %d건 -> 점수 %.2f 이상 %d건(상한 %d건) -> 최종 %d건 (총 소요 %.1f초)',
-              len(candidates), len(prescreened), min_score, len(qualified), max_n, len(picks),
-              time.perf_counter() - started)
+    _log.info('관심종목 추천(v2) 생성: 유니버스 %d -> 게이트 %d -> %d점↑ %d -> 최종 %d건 '
+              '(스냅샷 %s, %.0f분 전, 소요 %.1f초)',
+              len(uni), len(gated), MIN_POINTS, len(qualified), len(picks),
+              snap['generated_at'], age_min, time.perf_counter() - started)
     return result
+
+
+def log_config():
+    """서버 시작 시 실제 적용 값을 한 줄로 남긴다(재시작 후 새 값 반영 확인용)."""
+    _log.info('[config] interest_stock_picks v2: 등락 %.0f~%.0f%%, 폭발 %.0f배 미만, 유니버스 종가 %d↑ 20일거래대금 %.0f억↑, '
+              '점수 %d점↑ 상위 %d, 적극매수 %d점↑/매수 %d점↑, 조건=%s',
+              CHG_MIN, CHG_MAX, EXPLODE_X, UNIVERSE_MIN_CLOSE, UNIVERSE_MIN_AMT20 / 1e8,
+              MIN_POINTS, MAX_N, STRONG_POINTS, BUY_POINTS,
+              ','.join('%s[%.2f-%.2f]' % (f, lo, hi) for f, lo, hi, _ in CONDITIONS))
 
 
 def run_interest_stock_picks():
     """스케줄러 등록용 래퍼 — 예외를 삼켜서 스케줄 전체가 죽지 않게 한다.
-    ⚠️ 2026-09-24: 공휴일엔 등락률/거래대금 등 원천 데이터가 전날 것 그대로라 5분마다
-    돌려봐야 결과가 똑같고, 예선 통과자가 있으면 외국인/기관 순매수(ka10059) 조회까지
-    나가 API를 낭비한다 — is_krx_business_day()로 건너뛴다."""
+    ⚠️ 2026-09-24: 공휴일엔 원천 데이터가 전날 것 그대로라 5분마다 돌려봐야 결과가 똑같고,
+    외국인/기관 순매수(ka10059) 조회까지 나가 API를 낭비한다 — is_krx_business_day()로 건너뛴다."""
     if not is_krx_business_day():
         return
     try:
