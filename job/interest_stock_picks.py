@@ -161,6 +161,42 @@ def _foreign_hold_table() -> Optional[pd.DataFrame]:
     return table
 
 
+# ── 조용하던 종목의 첫 급등 (2026-11-14, 화면 참고 표시용 — 매수 대상 아님) ──────────────
+# 오늘 크게 오른 종목 중 '처음 터진' 것. 근거(2년 유동성 유니버스, 오늘 +8~15%, 10일 시장 대비 P1/P2/P3):
+#   +8~15% 전체 12,733건                        -1.04/+0.00/-1.33%p (이미 달린 종목의 급등은 확실히 나쁨)
+#   직전 20거래일 +8%↑ 없음                      +0.45/-0.11/-0.38   ← 20일로는 부족
+#   직전 60거래일 +8%↑ 없음                      +0.63/+0.28/+0.49   ← 세 기간 모두 플러스(n=624)
+#   직전 120거래일 +8%↑ 없음                     -0.74/+1.10/+8.20   (n=174, 표본 부족·불안정)
+#   60일 없음 + 60일선 이격 하위60% + 종가위치 0.7↑  +0.79/+0.62/+2.33 (n=241, 10일 평균 +1.3%, 승률 50%)
+#   그 안에서 등락 8~10% +0.90/+1.12/+4.81, 10~12% +0.68/-2.29/-4.21 — 10% 넘는 첫 급등은 아직 불안정.
+#   하루 평균 0.6종목 정도로 드물다. 표본이 작아 점수/매수엔 넣지 않는다.
+# 데이터: universe_snapshot.py의 clv / big8_60(오늘 제외 직전 60거래일 +8%↑ 날 수).
+FIRST_JUMP_CHG_MIN, FIRST_JUMP_CHG_MAX = 8.0, 15.0
+FIRST_JUMP_QUIET_DAYS = 60       # big8_60 정의와 맞출 것(스냅샷 쪽 rolling 60)
+FIRST_JUMP_MA60_PCT = 0.60       # 60일선 이격 백분위 상한(유동성 유니버스 안에서)
+FIRST_JUMP_CLV_MIN = 0.7         # 종가위치 하한(고가 근처 마감)
+
+
+def _first_jump_list(uni: pd.DataFrame, pick_codes: List[str], fhold: Optional[pd.DataFrame]) -> Optional[List[Dict]]:
+    """조건을 만족하는 종목 목록(등락률 높은순). 스냅샷에 clv/big8_60이 없으면(구버전) None."""
+    if 'big8_60' not in uni.columns or 'clv' not in uni.columns:
+        return None
+    ma_pct = uni['ma60_gap'].rank(pct=True)
+    m = ((uni['chg'] >= FIRST_JUMP_CHG_MIN) & (uni['chg'] < FIRST_JUMP_CHG_MAX)
+         & (uni['big8_60'] == 0) & (ma_pct <= FIRST_JUMP_MA60_PCT) & (uni['clv'] >= FIRST_JUMP_CLV_MIN))
+    out = []
+    for r in uni[m].sort_values('chg', ascending=False).itertuples():
+        out.append({
+            'stock_code': r.code, 'stock_name': r.name,
+            'current_price': _num(r.close), 'today_price_change_pct': _num(r.chg, 2),
+            'trading_value_change_pct': round(_num(r.tvr) * 100, 0) if _num(r.tvr) is not None else None,
+            'clv': _num(r.clv, 2), 'ma60_gap': _num(r.ma60_gap, 1),
+            'points': int(r.points), 'in_picks': r.code in pick_codes,
+            **_foreign_info(fhold, r.code),
+        })
+    return out
+
+
 def _foreign_info(table: Optional[pd.DataFrame], code: str) -> Dict:
     if table is None or code not in table.index:
         return {'foreign_hold_ratio': None, 'foreign_hold_chg5': None, 'foreign_net5_eok': None, 'foreign_flow_date': None}
@@ -325,6 +361,8 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
         })
 
     # 외국인 지분율 급증 목록 — 유동성 유니버스 전체에서(게이트/점수 무관), 참고 표시용
+    first_jump = _first_jump_list(uni, codes, fhold)
+
     foreign_surge = []
     if fhold is not None:
         u = uni.set_index('code')
@@ -360,6 +398,9 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
         'candidates': candidates_log,              # 사후 검증용(화면 미사용)
         'foreign_surge': foreign_surge,            # 외국인 지분율 5일 +2%p↑ (참고 표시용)
         'foreign_surge_rule': '외국인 지분율 %d거래일 +%.0f%%p 이상' % (FOREIGN_SURGE_DAYS, FOREIGN_SURGE_PP),
+        'first_jump': first_jump,                  # 조용하던 종목의 첫 급등 (참고 표시용)
+        'first_jump_rule': '오늘 +%.0f~%.0f%%, 직전 %d거래일 +8%%↑ 없음, 60일선 이격 하위 %.0f%%, 종가위치 %.1f↑' % (
+            FIRST_JUMP_CHG_MIN, FIRST_JUMP_CHG_MAX, FIRST_JUMP_QUIET_DAYS, FIRST_JUMP_MA60_PCT * 100, FIRST_JUMP_CLV_MIN),
         'disclaimer': '전 종목 중 "조용하던 종목이 완만하게 움직이기 시작한" 패턴을 점수화한 참고용 순위입니다 '
                       '(백테스트는 장 마감 신호 → 다음날 시가 매수 기준, 장중 결과는 그날 일부 데이터 기준). '
                       '실제 매수 여부와 손익 책임은 본인에게 있습니다.',
@@ -384,10 +425,11 @@ def log_config():
     """서버 시작 시 실제 적용 값을 한 줄로 남긴다(재시작 후 새 값 반영 확인용)."""
     _log.info('[config] interest_stock_picks v2: 등락 %.0f~%.0f%%, 폭발 %.0f배 미만, 유니버스 종가 %d↑ 20일거래대금 %.0f억↑, '
               '점수 %d점↑ 상위 %d, 적극매수 %d점↑/매수 %d점↑, 외국인 지분율 급증=%d일 +%.1f%%p↑(최대 %d), '
-              '조건=%s',
+              '첫 급등=+%.0f~%.0f%%/직전%d일 8%%↑없음/60일이격 하위%.0f%%/종가위치 %.1f↑, 조건=%s',
               CHG_MIN, CHG_MAX, EXPLODE_X, UNIVERSE_MIN_CLOSE, UNIVERSE_MIN_AMT20 / 1e8,
               MIN_POINTS, MAX_N, STRONG_POINTS, BUY_POINTS,
               FOREIGN_SURGE_DAYS, FOREIGN_SURGE_PP, FOREIGN_SURGE_LIST_N,
+              FIRST_JUMP_CHG_MIN, FIRST_JUMP_CHG_MAX, FIRST_JUMP_QUIET_DAYS, FIRST_JUMP_MA60_PCT * 100, FIRST_JUMP_CLV_MIN,
               ','.join('%s[%.2f-%.2f]' % (f, lo, hi) for f, lo, hi, _ in CONDITIONS))
 
 

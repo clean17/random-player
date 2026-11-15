@@ -351,7 +351,7 @@
         .mystocks-buy-row button { flex: 0 0 auto; white-space: nowrap; }
         .ms-positive { color: #d32f2f; }
         .ms-picks-score { color: #888; font-size: 0.9em; }   /* 상승여력 칸의 점수 */
-        /* 추천 탭 아래 참고 목록(외국인 급증) — "검색 결과" 헤더와 같은 모양으로 구분 */
+        /* 추천 탭 아래 참고 목록(첫 급등/외국인 급증) — "검색 결과" 헤더와 같은 모양으로 구분 */
         .ms-sub-block { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
         .ms-sub-block .section-title { margin-bottom: 4px; }
         .ms-sub-tag { font-size: 12px; font-weight: 400; color: #6b7280; }
@@ -805,6 +805,32 @@
                 </thead>
                 <tbody><tr><td colspan="11" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
+        </div>
+        <!-- 2026-11-14: 조용하던 종목의 첫 급등 — 참고 목록(매수 대상 아님). 조건·근거는
+             job/interest_stock_picks.py FIRST_JUMP_* 주석. -->
+        <div class="ms-sub-block" id="ms-first-jump-block" style="display:none;">
+        <h3 class="section-title">조용하던 종목의 첫 급등
+            <span class="badge" id="ms-first-jump-count">0건</span>
+            <span class="ms-sub-tag">참고용 · 자동매수 대상 아님</span>
+        </h3>
+        <p class="ms-sub-rule" id="ms-first-jump-rule"></p>
+        <div class="table-scroller">
+            <table class="table" id="table-first-jump">
+                <thead>
+                <tr>
+                    <th>종목명</th>
+                    <th class="right">등락률</th>
+                    <th class="right">현재가</th>
+                    <th class="right">거래대금 증가율</th>
+                    <th class="right">종가위치</th>
+                    <th class="right">60일선 이격</th>
+                    <th class="right">v2 점수</th>
+                    <th class="right">외국인 지분율(5일)<br><small class="ms-foreign-basis" style="font-weight:400;opacity:.7;">(매일 18:40 수집)</small></th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
         </div>
         <!-- 2026-11-14: 외국인 지분율 급증(5거래일 +2%p↑) — 유동성 유니버스 전체, 점수와 무관한 참고 목록.
              job/interest_stock_picks.py의 FOREIGN_SURGE_* 주석에 근거(4개월 표본, 아직 점수엔 미반영). -->
@@ -2187,7 +2213,7 @@
     // 네이버가 그날 값을 늦게 반영해 기준일이 '전 거래일'보다 하루 더 늦을 때가 있다(11/13 수집분 = 11/12).
     // 오늘이 아니라는 걸 분명히 하려고 날짜를 직접 쓴다.
     function renderForeignBasis(data) {
-        const dates = [...(data.picks || []), ...(data.foreign_surge || [])]
+        const dates = [...(data.picks || []), ...(data.foreign_surge || []), ...(data.first_jump || [])]
             .map(r => r.foreign_flow_date).filter(Boolean).sort();
         const basis = dates.length ? dates[dates.length - 1] : null;
         const t = new Date();
@@ -2201,7 +2227,7 @@
         });
     }
 
-    // 참고 목록(외국인 급증) 블록 헤더: 데이터가 없는 옛 파일이면 블록째 숨기고, 있으면 건수·조건을 채운다.
+    // 참고 목록(첫 급등/외국인 급증) 블록 헤더: 데이터가 없는 옛 파일이면 블록째 숨기고, 있으면 건수·조건을 채운다.
     function msSubBlockHeader(prefix, rows, ruleText) {
         const block = document.getElementById(`ms-${prefix}-block`);
         if (!block) return false;
@@ -2210,6 +2236,28 @@
         document.getElementById(`ms-${prefix}-count`).textContent = `${rows.length}건`;
         document.getElementById(`ms-${prefix}-rule`).textContent = ruleText;
         return true;
+    }
+
+    function renderFirstJump(data) {
+        const tbody = document.querySelector('#table-first-jump tbody');
+        const rows = data.first_jump;   // 2026-11-14 이전 파일/구버전 스냅샷엔 없음(null)
+        if (!tbody || !msSubBlockHeader('first-jump', rows,
+                `조건: ${data.first_jump_rule || ''} · 백테스트에선 8~10% 구간이 가장 좋았음`)) return;
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty">해당 종목 없음 (하루 평균 0.6종목 정도로 드묾)</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${msStockNameCellHtml(r.stock_name, r.stock_code, null, null)}${r.in_picks ? ' <span class="ms-positive" title="위 추천 목록에도 있음">★</span>' : ''}</td>
+          <td class="right ${msPnlClass(r.today_price_change_pct)}">${msFmtPct((r.today_price_change_pct || 0) / 100)}</td>
+          <td class="right">${r.current_price != null ? msFmtWon(r.current_price) : '-'}</td>
+          <td class="right">${r.trading_value_change_pct != null ? msFmtPct(r.trading_value_change_pct / 100, 0) : '-'}</td>
+          <td class="right">${r.clv != null ? Number(r.clv).toFixed(2) : '-'}</td>
+          <td class="right">${r.ma60_gap != null ? (r.ma60_gap >= 0 ? '+' : '') + Number(r.ma60_gap).toFixed(1) + '%' : '-'}</td>
+          <td class="right">${r.points != null ? r.points + '/10' : '-'}</td>
+          <td class="right">${msForeignHoldHtml(r)}</td>
+        </tr>`).join('');
     }
 
     function renderForeignSurge(data) {
@@ -2282,6 +2330,7 @@
         if (discEl) discEl.textContent = data.disclaimer || '';
 
         renderInterestPicksRows(msSortPicks(picks));
+        renderFirstJump(data);
         renderForeignSurge(data);
         renderForeignBasis(data);
         if (isPastDate) loadPicksLivePrices(picks);
