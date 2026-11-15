@@ -192,12 +192,18 @@ def get_reserved_stocks(user_id, conn=None):
 
 
 @db_transaction
-def get_reserved_stock_codes(conn=None) -> set:
+def get_reserved_stock_codes(since=None, conn=None) -> set:
     """flag=true인 reserved 종목코드 전체(사용자 무관) — 배치(자동매수) 잡에서 사용.
     스케줄러에는 로그인 세션이 없어 user_id를 특정할 수 없고, 이 계좌는 단일 사용자 기준이라
-    get_favorite_stocks_info_api()와 동일하게 user 필터 없이 조회한다."""
+    get_favorite_stocks_info_api()와 동일하게 user 필터 없이 조회한다.
+    since(datetime)가 있으면 그 이후에 체크(updated_at)된 것만 — 평일 20:00 해제 잡이 아직 안 돈
+    상태에서도 '지난 해제 시각 이전 체크'를 무효로 보기 위함(2026-11-14)."""
     with conn.cursor() as cur:
-        cur.execute("select distinct stock_code from reserved_stocks where flag = True;")
+        if since is None:
+            cur.execute("select distinct stock_code from reserved_stocks where flag = True;")
+        else:
+            cur.execute("select distinct stock_code from reserved_stocks where flag = True and updated_at >= %s;",
+                        (since,))
         return {str(r[0]).zfill(6) for r in cur.fetchall() if r[0]}
 
 
@@ -238,6 +244,15 @@ def clear_reserved_stocks(user_id, conn=None) -> int:
         WHERE user_id = %s AND flag = True;
         """
         cur.execute(sql, (user_id,))
+        return cur.rowcount
+
+
+@db_transaction
+def clear_all_reserved_stocks(conn=None) -> int:
+    """모든 사용자의 자동매수 대상 체크를 flag=false로 일괄 해제 — 배치(평일 20:00) 전용.
+    2026-11-14 사용자 요청: 체크는 '오늘 15:21 매수용'이라 하루가 지나면 무효로 돌린다."""
+    with conn.cursor() as cur:
+        cur.execute("UPDATE reserved_stocks SET updated_at = now(), flag = False WHERE flag = True;")
         return cur.rowcount
 
 

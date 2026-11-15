@@ -594,6 +594,18 @@ def reconcile_kiwoom_fills_final():
         _log.error(f'reconcile_kiwoom_fills_final 실패: {e}')
 
 
+def clear_reserved_stocks_daily():
+    """평일 20:00 — 자동매수 대상(reserved) 체크 전부 해제 (2026-11-14 사용자 요청).
+    체크는 '그날 15:21 매수용'이라 다음 날까지 남으면 의도치 않게 다시 사게 된다."""
+    from auto_trading.kiwoom_trailing_stop import _log
+    try:
+        from app.repository.stocks.stocks import clear_all_reserved_stocks
+        n = clear_all_reserved_stocks()
+        _log.info(f'[reserved] 20:00 자동매수 대상 체크 일괄 해제 {n}건')
+    except Exception as e:
+        _log.error(f'clear_reserved_stocks_daily 실패: {e}')
+
+
 def run_kiwoom_fire_buy():
     # is_market_open()이 아니라 동시호가 전용 게이트(15:20~15:30) — 2026-08-25부터
     # 연속거래 시장가(15:18/19) 대신 동시호가 시장가로 바꿔 '종가 매수'가 되게 한다.

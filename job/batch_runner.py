@@ -17,7 +17,8 @@ from job.batch_process import predict_stock_graph, find_stocks, find_stocks_adva
     reconcile_kiwoom_fills, reconcile_kiwoom_fills_final, \
     run_v8_screen, run_v8_buy, run_v8_exit, run_v8_eod, fetch_us_stock_data, \
     predict_kr_stocks_lgbm, predict_us_stocks_lgbm, recalibrate_v2_filters, recalibrate_v1_filters, \
-    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery, collect_investor_flow, refresh_krx_holidays_job
+    refresh_kr_lgbm_gallery, refresh_us_lgbm_gallery, collect_investor_flow, refresh_krx_holidays_job, \
+    clear_reserved_stocks_daily
 from job.buy_lotto import async_buy_lotto
 # utils패키지의 모듈을 임포트
 from job.compress_file import compress_directory_to_zip
@@ -921,6 +922,17 @@ def create_scheduler():
         run_interest_stock_picks,
         trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute="*/5"),
         id="interest_stock_picks",
+        executor="io",
+        replace_existing=True,
+    )
+
+    # 19) 자동매수 대상(reserved) 체크 일괄 해제 — 평일 20:00 (2026-11-14 사용자 요청).
+    #     체크는 '그날 15:21 모의 fire 매수용'이라 다음 거래일까지 남기지 않는다. 주말에 체크한 건
+    #     월요일 15:21까지 유지된다(금요일 20:00 해제 후 다음 해제는 월요일 20:00).
+    scheduler.add_job(
+        clear_reserved_stocks_daily,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20, minute=0),
+        id="clear_reserved_stocks_daily",
         executor="io",
         replace_existing=True,
     )
