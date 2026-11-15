@@ -1834,20 +1834,22 @@
         });
         preloaded.set(url, p);
         p.catch(() => preloaded.delete(url));
-        while (preloaded.size > 6) preloaded.delete(preloaded.keys().next().value);
+        while (preloaded.size > 8) preloaded.delete(preloaded.keys().next().value);
         return p;
     }
-    // 앞으로는 PREFETCH_AHEAD 장, 뒤로는 1장. 현재 + 앞 2 + 뒤 1 = 4 라 preloaded(최대 6) 안에 들어간다
-    const PREFETCH_AHEAD = 2;
-    function prefetchNeighbors(item) {
+    // 앞으로는 PREFETCH_AHEAD 장, 뒤로는 1장. 현재 + 앞 3 + 뒤 1 = 5 라 preloaded(최대 8) 안에 들어간다.
+    // 2026-11-15: 앞 3장을 1 → 2 → 3 순서대로 하나씩(앞 것을 다 받고 디코딩한 뒤 다음) 받는다 — 한꺼번에 받으면 대역폭을
+    //   나눠 바로 다음 장이 늦게 끝난다. 그새 다른 이미지로 넘어가면(token) 멈춘다(새 이미지 기준으로 다시 시작).
+    const PREFETCH_AHEAD = 3;
+    async function prefetchNeighbors(item, token) {
         let it = item;
         for (let i = 0; i < PREFETCH_AHEAD; i++) {
             it = findNext(it);
-            if (!it) break;
-            preload(originalUrl(it)).catch(() => {});
+            if (!it || token !== openToken) return;
+            try { await preload(originalUrl(it)); } catch (e) { /* 못 받은 장은 넘어가서 다음 장 */ }
         }
         const prev = findPrev(item);
-        if (prev) preload(originalUrl(prev)).catch(() => {});
+        if (prev && token === openToken) preload(originalUrl(prev)).catch(() => {});
     }
 
     // 편집 중인 이미지를 뒤 갤러리(메인 스크롤) 화면 가운데로 옮겨 둔다 — 슬라이드쇼(image.js setSlide)와 같은 방식.
@@ -1898,7 +1900,7 @@
         if (token !== openToken) return;       // 기다리는 사이 다른 이미지로 넘어감(키를 빠르게 연타)
         // 현재 원본을 다 받았으니 편집기를 만드는 동안 다음 것들을 받기 시작한다(예전엔 편집기 완성 후에 시작해서
         // 빠르게 넘기면 다음 원본이 아직 오는 중이었다). 현재 것과 대역폭을 다투지 않게 받은 뒤에 시작한다.
-        prefetchNeighbors(imageItem);
+        prefetchNeighbors(imageItem, token);
         let built;
         try {
             built = await buildEditor(url, token);

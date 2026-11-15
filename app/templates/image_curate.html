@@ -742,15 +742,24 @@ const cropEditor = (function () {
       im.onerror = reject; im.src = url;
     });
     preloaded.set(url, p); p.catch(() => preloaded.delete(url));
-    while (preloaded.size > 6) preloaded.delete(preloaded.keys().next().value);
+    while (preloaded.size > 8) preloaded.delete(preloaded.keys().next().value);
     return p;
   }
   function findNext(d) { const l = cards(); return l[l.indexOf(d) + 1]; }
   function findPrev(d) { const l = cards(), i = l.indexOf(d); return i > 0 ? l[i - 1] : undefined; }
-  function prefetchNeighbors(d) {
+  // 2026-11-15: 다음 3장을 1 → 2 → 3 순서대로 하나씩(앞 것을 다 받고 디코딩한 뒤 다음) 받고, 마지막에 이전 1장.
+  //   한꺼번에 받으면 대역폭을 나눠 바로 다음 장이 늦게 끝난다. 그새 다른 이미지로 넘어가면(token) 멈추고 새로 시작.
+  //   현재 + 앞 3 + 뒤 1 = 5 라 preloaded(최대 8) 안에 들어간다.
+  const PREFETCH_AHEAD = 3;
+  async function prefetchNeighbors(d, token) {
     let it = d;
-    for (let i = 0; i < 2; i++) { it = findNext(it); if (!it) break; preload(originalUrl(it)).catch(() => {}); }
-    const p = findPrev(d); if (p) preload(originalUrl(p)).catch(() => {});
+    for (let i = 0; i < PREFETCH_AHEAD; i++) {
+      it = findNext(it);
+      if (!it || token !== openToken) return;
+      try { await preload(originalUrl(it)); } catch (e) { /* 못 받은 장은 넘어가서 다음 장 */ }
+    }
+    const p = findPrev(d);
+    if (p && token === openToken) preload(originalUrl(p)).catch(() => {});
   }
 
   async function open(d, opts = {}) {
@@ -774,7 +783,7 @@ const cropEditor = (function () {
     info.textContent = opts.loadingText || '원본 불러오는 중...';
     try { await preload(url); } catch (e) { if (token === openToken) info.textContent = '원본을 불러오지 못했어요'; return; }
     if (token !== openToken) return;
-    prefetchNeighbors(d);
+    prefetchNeighbors(d, token);
     let built;
     try { built = await buildEditor(url, token); } catch (e) { if (token === openToken) info.textContent = '편집기를 만들지 못했어요'; return; }
     if (token !== openToken) { built.c.destroy(); built.layer.remove(); return; }
