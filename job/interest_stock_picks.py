@@ -119,6 +119,56 @@ INST_FINAL_HOUR = 16
 # 무의미해지므로, 캐시된 날짜가 오늘이 아니면 쓰지 않는다(아래 _carry_forward_flow).
 _LAST_FLOW: Dict[str, Dict] = {}
 
+# ── 외국인 지분율 급증 (2026-11-14, 화면 참고 표시용 — 점수/등급엔 넣지 않는다) ─────────
+# 근거(세션 분석, 네이버 수급 2026-07-09~10-30, 유동성 유니버스 40,193건, 10일 시장 대비):
+#   5일간 외국인 지분율 +1%p↑ 1,991건 +1.06%p 승률 44% / +2%p↑ 489건 +2.80%p 승률 51% (전체 승률 39%)
+#   표본이 4개월뿐이고 평균을 일부 대박 종목이 끌어올린 모양이라 아직 점수에 넣지 않는다 — 2027 초 재검증.
+#   예: 삼성E&A 10/22~29 지분율 37.7→41.8%(+4%p), 외국인 약 4,800억 순매수 뒤 계단식 상승.
+# 데이터: AutoSales.py 12_collect_investor_flow.py가 평일 18:40 쓰는 investor_flow.pkl(원자적 os.replace).
+#   장중에는 '전 거래일까지' 값이다. 파일 mtime이 바뀔 때만 다시 읽는다(하루 1회 수준 — 가격 pkl과 달리
+#   쓰는 쪽이 하루 한 번이라 잠금 충돌 여지가 작고, 실패해도 표시만 빠진다).
+INVESTOR_FLOW_PATH = r'C:\my-project\AutoSales.py\data\investor_flow.pkl'
+FOREIGN_SURGE_DAYS = 5        # 지분율 변화를 보는 거래일 수
+FOREIGN_SURGE_PP = 2.0        # 이 %p 이상이면 '급증'
+FOREIGN_SURGE_LIST_N = 20     # 화면 목록 최대 개수
+_FOREIGN_CACHE: Dict = {'mtime': None, 'table': None}
+
+
+def _foreign_hold_table() -> Optional[pd.DataFrame]:
+    """종목코드 index, 컬럼 date/hold/chg5/net5_eok(5일 외국인 순매수 억원). 실패하면 None."""
+    try:
+        mtime = os.path.getmtime(INVESTOR_FLOW_PATH)
+    except OSError:
+        return None
+    if _FOREIGN_CACHE['mtime'] == mtime:
+        return _FOREIGN_CACHE['table']
+    try:
+        f = pd.read_pickle(INVESTOR_FLOW_PATH)
+    except Exception as e:
+        _log.error('외국인 지분율 데이터 읽기 실패: %s', e)
+        return _FOREIGN_CACHE['table']
+    f = f.sort_values(['ticker', 'date'])
+    g = f.groupby('ticker')
+    k = FOREIGN_SURGE_DAYS
+    f['chg5'] = f['foreign_hold_ratio'] - g['foreign_hold_ratio'].shift(k)
+    f['net_amt'] = f['foreign_net_qty'] * f['close']
+    f['net5_eok'] = g['net_amt'].transform(lambda s: s.rolling(k).sum()) / 1e8
+    last = g.tail(1).set_index('ticker')
+    table = pd.DataFrame({'date': last['date'].astype(str).str[:10], 'hold': last['foreign_hold_ratio'],
+                          'chg5': last['chg5'], 'net5_eok': last['net5_eok']})
+    table.index = table.index.astype(str).str.zfill(6)
+    _FOREIGN_CACHE.update(mtime=mtime, table=table)
+    return table
+
+
+def _foreign_info(table: Optional[pd.DataFrame], code: str) -> Dict:
+    if table is None or code not in table.index:
+        return {'foreign_hold_ratio': None, 'foreign_hold_chg5': None, 'foreign_net5_eok': None, 'foreign_flow_date': None}
+    r = table.loc[code]
+    return {'foreign_hold_ratio': _num(r['hold'], 2), 'foreign_hold_chg5': _num(r['chg5'], 2),
+            'foreign_net5_eok': _num(r['net5_eok'], 0), 'foreign_flow_date': r['date']}
+
+
 def _carry_forward_flow(stk_cd: str, flow: Optional[Dict]) -> Optional[Dict]:
     """flow의 foreign/institution이 None(이번 사이클에 못 받음)이면 오늘자 직전 정상값으로
     채운다. 정상적으로 받은 필드는 캐시를 그 값으로 갱신한다."""
@@ -234,6 +284,7 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
     codes = top['code'].tolist()
     logos = get_logo_urls_by_codes(codes) if codes else {}
 
+    fhold = _foreign_hold_table()
     picks = []
     for r in top.itertuples():
         flow = get_investor_trend(r.code, env='real')
@@ -270,7 +321,23 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
             'label_note': note,
             'upside_tier': _upside_tier(label),
             'news': get_stock_news(r.name, limit=3),
+            **_foreign_info(fhold, r.code),
         })
+
+    # 외국인 지분율 급증 목록 — 유동성 유니버스 전체에서(게이트/점수 무관), 참고 표시용
+    foreign_surge = []
+    if fhold is not None:
+        u = uni.set_index('code')
+        cand = fhold[(fhold['chg5'] >= FOREIGN_SURGE_PP) & fhold.index.isin(u.index)]
+        for code, fr in cand.sort_values('chg5', ascending=False).head(FOREIGN_SURGE_LIST_N).iterrows():
+            ur = u.loc[code]
+            foreign_surge.append({
+                'stock_code': code, 'stock_name': ur['name'],
+                'current_price': _num(ur['close']), 'today_price_change_pct': _num(ur['chg'], 2),
+                'points': int(ur['points']), 'in_picks': code in codes,
+                'foreign_hold_ratio': _num(fr['hold'], 2), 'foreign_hold_chg5': _num(fr['chg5'], 2),
+                'foreign_net5_eok': _num(fr['net5_eok'], 0), 'foreign_flow_date': fr['date'],
+            })
 
     picked = set(codes)
     feat_cols = ['chg', 'tvr', 'tv5_20', 'atr_n', 'rng_x', 'vr5_20', 'vr20_60', 'max_rx10', 'hi60', 'upwick', 'spk20', 'ma60_gap']
@@ -291,6 +358,8 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
         'prescreened_count': int(len(gated)),      # 게이트(등락 4~12%, 폭발 제외) 통과 수
         'picks': picks,
         'candidates': candidates_log,              # 사후 검증용(화면 미사용)
+        'foreign_surge': foreign_surge,            # 외국인 지분율 5일 +2%p↑ (참고 표시용)
+        'foreign_surge_rule': '외국인 지분율 %d거래일 +%.0f%%p 이상' % (FOREIGN_SURGE_DAYS, FOREIGN_SURGE_PP),
         'disclaimer': '전 종목 중 "조용하던 종목이 완만하게 움직이기 시작한" 패턴을 점수화한 참고용 순위입니다 '
                       '(백테스트는 장 마감 신호 → 다음날 시가 매수 기준, 장중 결과는 그날 일부 데이터 기준). '
                       '실제 매수 여부와 손익 책임은 본인에게 있습니다.',
@@ -314,9 +383,11 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
 def log_config():
     """서버 시작 시 실제 적용 값을 한 줄로 남긴다(재시작 후 새 값 반영 확인용)."""
     _log.info('[config] interest_stock_picks v2: 등락 %.0f~%.0f%%, 폭발 %.0f배 미만, 유니버스 종가 %d↑ 20일거래대금 %.0f억↑, '
-              '점수 %d점↑ 상위 %d, 적극매수 %d점↑/매수 %d점↑, 조건=%s',
+              '점수 %d점↑ 상위 %d, 적극매수 %d점↑/매수 %d점↑, 외국인 지분율 급증=%d일 +%.1f%%p↑(최대 %d), '
+              '조건=%s',
               CHG_MIN, CHG_MAX, EXPLODE_X, UNIVERSE_MIN_CLOSE, UNIVERSE_MIN_AMT20 / 1e8,
               MIN_POINTS, MAX_N, STRONG_POINTS, BUY_POINTS,
+              FOREIGN_SURGE_DAYS, FOREIGN_SURGE_PP, FOREIGN_SURGE_LIST_N,
               ','.join('%s[%.2f-%.2f]' % (f, lo, hi) for f, lo, hi, _ in CONDITIONS))
 
 

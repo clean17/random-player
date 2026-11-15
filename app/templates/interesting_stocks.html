@@ -351,6 +351,11 @@
         .mystocks-buy-row button { flex: 0 0 auto; white-space: nowrap; }
         .ms-positive { color: #d32f2f; }
         .ms-picks-score { color: #888; font-size: 0.9em; }   /* 상승여력 칸의 점수 */
+        /* 추천 탭 아래 참고 목록(외국인 급증) — "검색 결과" 헤더와 같은 모양으로 구분 */
+        .ms-sub-block { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+        .ms-sub-block .section-title { margin-bottom: 4px; }
+        .ms-sub-tag { font-size: 12px; font-weight: 400; color: #6b7280; }
+        .ms-sub-rule { margin: 0 0 8px; font-size: 12px; color: #6b7280; }
         .ms-negative { color: #1565c0; }
         /* interest_stocks.css의 .table td { color: #111827 }가 특이도(요소+클래스)로 이겨버려서 별도 지정 */
         .table td.ms-positive { color: #d32f2f; }
@@ -793,11 +798,39 @@
                     <th class="right ms-sortable" data-sort="trading_value_change_pct">거래대금 증가율</th>
                     <th class="right ms-sortable" data-sort="foreign_net">외국인 순매수</th>
                     <th class="right ms-sortable" data-sort="institution_net">기관 순매수</th>
+                    <th class="right ms-sortable" data-sort="foreign_hold_chg5"
+                        title="외국인 지분율(전 거래일 기준)과 5거래일 변화(%p). +2%p 이상이면 급증으로 강조">외국인 지분율(5일)<br><small class="ms-foreign-basis" style="font-weight:400;opacity:.7;">(매일 18:40 수집)</small></th>
                     <th>뉴스</th>
                 </tr>
                 </thead>
-                <tbody><tr><td colspan="10" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
+                <tbody><tr><td colspan="11" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
+        </div>
+        <!-- 2026-11-14: 외국인 지분율 급증(5거래일 +2%p↑) — 유동성 유니버스 전체, 점수와 무관한 참고 목록.
+             job/interest_stock_picks.py의 FOREIGN_SURGE_* 주석에 근거(4개월 표본, 아직 점수엔 미반영). -->
+        <div class="ms-sub-block" id="ms-foreign-surge-block" style="display:none;">
+        <h3 class="section-title">외국인 지분율 급증
+            <span class="badge" id="ms-foreign-surge-count">0건</span>
+            <span class="ms-sub-tag">참고용 · 자동매수 대상 아님</span>
+        </h3>
+        <p class="ms-sub-rule" id="ms-foreign-surge-rule"></p>
+        <div class="table-scroller">
+            <table class="table" id="table-foreign-surge">
+                <thead>
+                <tr>
+                    <th>종목명</th>
+                    <th class="right">v2 점수</th>
+                    <th class="right">현재가</th>
+                    <th class="right">등락률</th>
+                    <th class="right">외국인 지분율<br><small class="ms-foreign-basis" style="font-weight:400;opacity:.7;">(매일 18:40 수집)</small></th>
+                    <th class="right">5일 변화</th>
+                    <th class="right">5일 외국인 순매수</th>
+                    <th>기준일</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
         </div>
     </section>
 
@@ -2134,7 +2167,72 @@
         trading_value_change_pct: p => Number(p.trading_value_change_pct ?? -Infinity),
         foreign_net: p => Number(p.foreign_net ?? -Infinity),
         institution_net: p => Number(p.institution_net ?? -Infinity),
+        foreign_hold_chg5: p => Number(p.foreign_hold_chg5 ?? -Infinity),
     };
+
+    // 외국인 지분율 + 5거래일 변화(%p). +2%p 이상은 '급증'으로 굵게(job/interest_stock_picks.py FOREIGN_SURGE_PP).
+    const MS_FOREIGN_SURGE_PP = 2.0;
+    function msForeignHoldHtml(p) {
+        if (p.foreign_hold_ratio == null) return '-';
+        const hold = `${Number(p.foreign_hold_ratio).toFixed(1)}%`;
+        if (p.foreign_hold_chg5 == null) return hold;
+        const ch = Number(p.foreign_hold_chg5);
+        const chText = `${ch >= 0 ? '+' : ''}${ch.toFixed(2)}%p`;
+        const surge = ch >= MS_FOREIGN_SURGE_PP;
+        const title = `기준일 ${p.foreign_flow_date ?? '-'}, 5일 외국인 순매수 ${p.foreign_net5_eok != null ? p.foreign_net5_eok + '억' : '-'}`;
+        return `<span title="${title}">${hold} <span class="${msPnlClass(ch)}"${surge ? ' style="font-weight:700;"' : ''}>(${chText}${surge ? ' 급증' : ''})</span></span>`;
+    }
+
+    // 외국인 지분율 헤더 둘째 줄: 실제 데이터 기준일을 보여준다(2026-11-14). 수집은 평일 18:40인데
+    // 네이버가 그날 값을 늦게 반영해 기준일이 '전 거래일'보다 하루 더 늦을 때가 있다(11/13 수집분 = 11/12).
+    // 오늘이 아니라는 걸 분명히 하려고 날짜를 직접 쓴다.
+    function renderForeignBasis(data) {
+        const dates = [...(data.picks || []), ...(data.foreign_surge || [])]
+            .map(r => r.foreign_flow_date).filter(Boolean).sort();
+        const basis = dates.length ? dates[dates.length - 1] : null;
+        const t = new Date();
+        const todayIso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+        const text = !basis ? '(매일 18:40 수집)'
+            : (basis === todayIso ? '(오늘 장 기준)'
+               : `(${Number(basis.slice(5, 7))}/${Number(basis.slice(8, 10))} 장 기준 · 오늘 아님)`);
+        document.querySelectorAll('.ms-foreign-basis').forEach(el => {
+            el.textContent = text;
+            el.title = basis ? `외국인 지분율은 ${basis} 장 마감 값입니다. 평일 18:40에 수집하며 오늘 장중 변화는 반영되지 않습니다.` : '';
+        });
+    }
+
+    // 참고 목록(외국인 급증) 블록 헤더: 데이터가 없는 옛 파일이면 블록째 숨기고, 있으면 건수·조건을 채운다.
+    function msSubBlockHeader(prefix, rows, ruleText) {
+        const block = document.getElementById(`ms-${prefix}-block`);
+        if (!block) return false;
+        if (rows == null) { block.style.display = 'none'; return false; }
+        block.style.display = '';
+        document.getElementById(`ms-${prefix}-count`).textContent = `${rows.length}건`;
+        document.getElementById(`ms-${prefix}-rule`).textContent = ruleText;
+        return true;
+    }
+
+    function renderForeignSurge(data) {
+        const tbody = document.querySelector('#table-foreign-surge tbody');
+        const rows = data.foreign_surge;   // 2026-11-14 이전 파일엔 없음(null)
+        if (!tbody || !msSubBlockHeader('foreign-surge', rows,
+                `조건: ${data.foreign_surge_rule || ''} · 유동성 종목 전체 대상, 추천 점수와 무관`)) return;
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty">해당 종목 없음</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${msStockNameCellHtml(r.stock_name, r.stock_code, null, null)}${r.in_picks ? ' <span class="ms-positive" title="위 추천 목록에도 있음">★</span>' : ''}</td>
+          <td class="right">${r.points != null ? r.points + '/10' : '-'}</td>
+          <td class="right">${r.current_price != null ? msFmtWon(r.current_price) : '-'}</td>
+          <td class="right ${msPnlClass(r.today_price_change_pct)}">${msFmtPct((r.today_price_change_pct || 0) / 100)}</td>
+          <td class="right">${r.foreign_hold_ratio != null ? Number(r.foreign_hold_ratio).toFixed(1) + '%' : '-'}</td>
+          <td class="right ms-positive" style="font-weight:700;">+${Number(r.foreign_hold_chg5).toFixed(2)}%p</td>
+          <td class="right ${msPnlClass(r.foreign_net5_eok)}">${r.foreign_net5_eok != null ? Number(r.foreign_net5_eok).toLocaleString('ko-KR') + '억' : '-'}</td>
+          <td>${r.foreign_flow_date ?? '-'}</td>
+        </tr>`).join('');
+    }
     let msPicksSort = { key: null, dir: 'desc' };  // key=null이면 기본 정렬(등급 → 점수 내림차순)
 
     function msSortPicks(picks) {
@@ -2184,6 +2282,8 @@
         if (discEl) discEl.textContent = data.disclaimer || '';
 
         renderInterestPicksRows(msSortPicks(picks));
+        renderForeignSurge(data);
+        renderForeignBasis(data);
         if (isPastDate) loadPicksLivePrices(picks);
     }
 
@@ -2299,6 +2399,7 @@
           <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100, 0)}</td>
           <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
           <td class="right ${msPnlClass(p.institution_net)}">${p.institution_net != null ? msFmtEok(p.institution_net) : (p.institution_pending ? '<span title="장중 기관 수급은 일부 종목만 잠정 집계됩니다(16시 이후 확정)">집계 전</span>' : '-')}</td>
+          <td class="right">${msForeignHoldHtml(p)}</td>
           <td>${newsHtml}</td>
         </tr>`;
         }).join('');
