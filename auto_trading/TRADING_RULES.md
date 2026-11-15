@@ -10,9 +10,9 @@
 | | 실전 (real) | 모의 (mock) |
 |---|---|---|
 | 매수 전략 | v8 + **v9 파라미터**(`kiwoom_v8_strategy.py`) | fire (`kiwoom_fire_strategy_mock.py`) |
-| 매수 방식 | 15:55 스크리닝 + 60초 지정가 대기<br>지정가 **종가×0.75** / 1회 투입 **4%** / 동시주문 상한 **25** | 15:21 동시호가 시장가, `interest_stocks`(v1/v2) ∩ reserved 체크 |
-| 청산(자체 소유분) | `kiwoom_v8_exit.py` (ATR 샹들리에, 최대 10영업일) | `kiwoom_trailing_stop.py` (손절-6%, 트레일링 OFF, 최대 **5**영업일) |
-| 청산(잔존/공통분) | `kiwoom_trailing_stop.py` (v8 미소유분만, 손절-6%/트레일링 OFF/최대 **15**영업일) | 위 자체소유분과 동일(5일) |
+| 매수 방식 | 15:55 스크리닝 + 60초 지정가 대기<br>지정가 **종가×0.75** / 1회 투입 **4%** / 동시주문 상한 **25** | 15:21 동시호가 시장가, **v2 추천 적극매수 ∪ 직접 체크**(2026-11-14~, 체크는 평일 20:00 해제) |
+| 청산(자체 소유분) | `kiwoom_v8_exit.py` (ATR 샹들리에, 최대 10영업일) | `kiwoom_trailing_stop.py` (손절 **-20%**(2026-11-14 -6→-20), 트레일링 OFF, 최대 **10**영업일 — 2026-11-14 5→10) |
+| 청산(잔존/공통분) | `kiwoom_trailing_stop.py` (v8 미소유분만, 손절-6%/트레일링 OFF/최대 **15**영업일) | 위 자체소유분과 동일(10일) |
 | 총 보유 상한 | `SLOTS=25` | `MAX_TOTAL_HOLDINGS=40`(2026-09-03 신규) |
 | 종목 제외 | 투자주의환기종목·거래정지 (2026-09-03 신규) | 없음(미반영) |
 
@@ -359,13 +359,21 @@ K=10 +28.9% / K=25 +46.1% / K=100 +81.2% / 무제한 +114.0%.
 
 ### 통과해야 하는 게이트 (순서대로)
 
+> ⚠️ **2026-11-14 변경 (모의 v2 테스트)** — 4·5번이 **"오늘 v2 추천 상위 10개 전체 ∪ 직접 체크(reserved)"**로 (같은 날 적극매수만 → 상위 10 전체로 확대)
+> 바뀌었다(`kiwoom_fire_strategy_mock.get_v2_buy_candidates()`). fire SQL은 더 이상 매수 경로에 쓰지 않는다
+> (아래 'fire SQL 조건'은 이력용). v2 추천은 `logs/interest_stock_picks/picks_<오늘>_HHMM.json` 최신분을 읽고,
+> 30분(`PICKS_MAX_AGE_MIN`)보다 오래됐으면 체크 종목만 산다. reserved 체크는 **평일 20:00 일괄 해제**
+> (`batch_process.clear_reserved_stocks_daily`)되고, 해제 잡이 안 돌았어도 '직전 평일 20:00 이전 체크'는
+> 매수 경로에서 무효로 본다. 정렬은 v2 점수 높은순. 모의 보유기간은 같은 날 5 → **10영업일**.
+> 근거: v1(fire 계열) 2년 재현 10일 시장 대비 -2.5~-3.2%p, v2 +0.5~+0.8%p / v2 슬롯 시뮬 5일 보유 월 ~0%, 10일 +2.7%.
+
 | # | 조건 | 값 / 상태 |
 |---|---|---|
 | 1 | 계좌 정보 | `KIWOOM_ACNT_NO` / `KIWOOM_ACNT_PWD` |
 | 2 | 장 시간 | 종가 동시호가 15:20~15:30 (`is_closing_auction_open()`) |
-| 3 | 시장폭 레짐 | `BREADTH_MIN = 0.0` → **OFF** (breadth는 로그용으로만 계산) |
-| 4 | fire SQL 조건 | 아래 |
-| 5 | **reserved 교집합** | 화면에서 '자동매수 대상' 체크한 종목만. 체크 0개면 그날 매수 0 |
+| 3 | ~~시장폭 레짐~~ | 2026-11-14 코드 제거(이전부터 `BREADTH_MIN = 0.0` OFF). 종가위치 필터(`CLOSE_POS_MIN`)도 같은 날 제거 |
+| 4 | ~~fire SQL 조건~~ | 2026-11-14 폐기 → v2 추천 상위 10 전체(`PICKS_BUY_LABELS`) |
+| 5 | ~~reserved 교집합~~ | 2026-11-14 → **합집합**(v2 추천 상위 10 ∪ 직접 체크) |
 | 6 | 일일 한도 | `BUY_SLOTS = 20` **성공 매수** 도달 시 중단 (skip은 슬롯 미소진) |
 | 7 | 쿨다운 | `COOLDOWN_DAYS = 2`. 보유 중이어도 쿨다운만 지나면 추가매수 |
 | 8 | 현재가 조회 | `price > 0` |
@@ -658,7 +666,7 @@ NXT 프리(08:00~08:50)·애프터(15:30~20:00)는 **2026-08-18에 제외했다*
 
 #### 1-2. 보유기간 상한 → 잔여 **전량** (2026-08-14 신규, 2026-08-26 5→15일, 2026-09-03 mock만 다시 5일)
 
-- 진입일로부터 **mock=5영업일 / real=15영업일**(`MAX_HOLD_DAYS`) 경과 시 시장가 전량 청산
+- 진입일로부터 **mock=10영업일**(2026-11-14 5→10, v2 테스트) **/ real=15영업일**(`MAX_HOLD_DAYS`) 경과 시 시장가 전량 청산
 - 손절 다음, 트레일링보다 먼저 평가한다
 - 기준일은 `pos_state['entry_date']` — 실제 매수일이 아니라 **상태를 처음 만든 날**이다.
   추가매수로 상태가 리셋되면 보유기간도 그때부터 다시 센다(평단가가 바뀌므로 손절선과 동일한 취급).
@@ -845,18 +853,18 @@ return_code == 0  AND  ord_no 존재
 | 상수 | mock (실제 가동값) | real (미사용, 매수 꺼짐) | 파일 |
 |---|---|---|---|
 | `FIRE_WINDOW_DAYS` | 6일 | 6일 | fire |
-| `BREADTH_MIN` | 0.0 (게이트 OFF) | 0.0 | fire |
+| ~~`BREADTH_MIN`~~ | 2026-11-14 제거 | 제거 | fire |
 | `CASH_DEPLOY_RATIO` | **0.90**(2026-10-04, 아래 6절 경고 참고 — 실측상 0.75보다 나쁨) | 0.65 | fire |
 | `BUY_SLOTS` | **20** (하루 신규매수 상한) | 5 | fire |
 | `MAX_TOTAL_HOLDINGS` | **40** (2026-09-03 신규, 총 보유 상한) | 없음(무제한) | fire |
-| `POS_CAP_DIVISOR` | 20 (= `BUY_SLOTS`) | 5 (= `BUY_SLOTS`) | fire |
+| `POS_CAP_DIVISOR` | **10**(2026-11-14, 종전 20 — v2 추천 최대 10종목에 맞춰 종목당 약 9%) | 5 (= `BUY_SLOTS`) | fire |
 | `REBUY_PROFIT_CAP` | +5% (2026-08-29, 보유중 수익률 이 이상이면 추가매수 skip) | 동일 | fire |
-| `CLOSE_POS_MIN` | **0.0**(2026-09-03 끔, 정렬은 유지) | 0.0 (필터 OFF, 매수 꺼져서 무의미) | fire |
+| ~~`CLOSE_POS_MIN`~~ | 2026-11-14 제거(2026-09-03부터 0.0). 정렬은 v2 점수순 | 제거 | fire |
 | `COOLDOWN_DAYS` | 2 | 2 | fire |
 | `CHECK_DISPLAY_LIMIT` | 20 (`--check` 표시용, 매수 무관) | 20 | fire |
-| `STOP_LOSS_RATE` | −6% | −6% | trailing(공통) |
+| `STOP_LOSS_RATE` | **−20%**(2026-11-14, 종전 −6% — `stop_loss_rate_for()` 주석 근거) | −6% | trailing(env로 분기) |
 | `TRAILING_ENABLED` | **False** | **False** | trailing(공통, env분기 없음) |
-| `MAX_HOLD_DAYS` | **5영업일**(2026-09-03) | **15영업일**(유지) | trailing (env로 분기) |
+| `MAX_HOLD_DAYS` | **10영업일**(2026-11-14, 종전 5) | **15영업일**(유지) | trailing (env로 분기) |
 | `ARMED_GIVEBACK_STOP` | −6% | −6% | trailing (TRAILING_ENABLED=False라 미작동) |
 | `TARGET_RATES` | `[]` (비활성) | `[]` | trailing |
 | `TRAIL_ACTIVATE_RATE` / `TRAIL_GAP` / `MIN_PROFIT_FLOOR` / `STALL_GAP` | +7%/5%p/+3%/6%p (전부 미작동) | 동일 | trailing |
