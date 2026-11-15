@@ -209,9 +209,8 @@ def create_mock_scheduler():
     유령 참조로 며칠 지속된 전례). fire 전략은 pkl 을 **읽기만** 하므로 안전하다.
     v8 잡도 넣지 않는다 — 모의는 '예전 방식(fire)' 으로 돌리는 것이 목적이다.
 
-    ⚠️ `market_breadth_cache.json` 은 계좌와 무관한 시장지표라 env 분리가 안 돼 있다.
-       두 프로세스가 같은 파일을 쓸 수 있는데, 하루 1회 쓰기이고 값이 같아 실害는 없다.
-       (BREADTH_MIN=0.0 으로 게이트가 꺼져 있어 매수 판단에도 쓰이지 않는다.)
+    (2026-11-14: fire의 시장폭(breadth) 계산은 코드에서 제거됐다 — 15:21마다 전 종목 pkl을
+     2~3분 읽던 것도 같이 없어졌다. 남은 logs/kiwoom_trading/market_breadth_cache.json은 미사용.)
     """
     global scheduler, executors
     from auto_trading.kiwoom_api import KIWOOM_ENV

@@ -2,9 +2,20 @@
 """
 fire(급상승 관심종목) 자동 매수 전략.
 
-매수 조건 (2026-08-05 기준):
-  1. 시장폭 레짐 ON      : 전 종목 중 종가>MA20 비율 >= 40% (BREADTH_MIN). 미만이면 그날 진입 전면 차단
-  2. fire 쿼리 통과      : get_interest_stocks_info(오늘-6일 ~ 오늘)를 총상승률 내림차순으로 받음.
+⚠️ 2026-11-14 변경 — 아래 1·2·3번은 폐기됐다. 지금 매수 대상은
+   '오늘 v2 추천(job/interest_stock_picks.py) 상위 10개 전체(PICKS_BUY_LABELS)' ∪ '화면에서 직접 체크(reserved)'다
+   (get_v2_buy_candidates). 청산은 kiwoom_trailing_stop (손절 -6% / 모의 보유 10영업일).
+   reserved 체크는 평일 20:00 일괄 해제된다.
+   시장폭 레짐 게이트(BREADTH_MIN)와 종가위치 필터(CLOSE_POS_MIN)는 각각 2026-08~09부터 0(꺼짐)이었고
+   2026-11-14 코드에서 제거했다. 되살리려면 git 이력(이 날짜 직전 커밋)을 볼 것. 당시 검증 근거:
+     시장폭 — 2026-06~08 3,045건: 0.40이면 7월 135건 통과 -3.06%, 0.50이면 42거래일 중 진입 2일.
+              v2 추천 재검증(2년): 40% 미만 날 10일 -1.2~-1.7%, 50~60% +3.5%, 60%↑ +0.8%(단조 아님).
+     종가위치 — 0.6 필터 있음/없음 CAGR 17.8%/19.4%(차이 노이즈 범위). v2 추천에선 구간별 차이 없음
+              (0.6~0.85 +1.1%, 0.85↑ +0.6%) — v2 점수에 '위꼬리 짧음'이 이미 들어 있다.
+
+매수 조건 (2026-08-05 기준, 1·2·3번은 2026-11-14 폐기):
+  1. 시장폭 레짐 ON      : 전 종목 중 종가>MA20 비율 >= 40%. 미만이면 그날 진입 전면 차단
+  2. fire 쿼리 통과     : get_interest_stocks_info(오늘-6일 ~ 오늘)를 총상승률 내림차순으로 받음.
                            쿼리 자체 조건(총상승률 8~12%, 당일 3~12%, 고점 대비 -3% 이내,
                            시총 700억↑, 거래대금 40억↑ 등)은 SQL에 있음
   3. reserved 교집합     : 위를 통과한 종목 중, 관심종목 화면에서 '자동매수 대상'으로 체크한
@@ -144,7 +155,6 @@ from auto_trading.kiwoom_trailing_stop import _log, _record_trade, order_accepte
 
 # ── 전략 파라미터 ────────────────────────────────────────────────────────────
 CHECK_DISPLAY_LIMIT = 20   # --check로 후보를 출력할 때만 쓰는 표시 개수 제한 (매수 로직과 무관)
-BREADTH_MIN = 0.0          # 시장폭 레짐 게이트. 0 이하면 게이트를 아예 끈다(현재 OFF).
 _autobuy_off_logged = False   # '자동 재주문 OFF' 로그 반복 방지 래치 (run_fire_buy_cycle)
 # 2026-09-14: 애프터마켓 잡은 1분마다 반복 호출된다(16:00~19:59, batch_runner.py
 # mock_fire_buy_aftermarket). reserved 종목을 그날 이미 다 사서 쿨다운(COOLDOWN_DAYS)에
@@ -154,28 +164,9 @@ _autobuy_off_logged = False   # '자동 재주문 OFF' 로그 반복 방지 래�
 # 바뀌며 매 분 값이 달라 계속 남긴다 — 스크리너가 살아있다는 신호이기도 하다).
 _FIRE_NOOP_LOG_INTERVAL_SEC = 900   # 15분 — reconcile_fills 15분 주기와 같은 리듬
 _last_fire_noop_log_ts = 0.0
-                           # breadth 값은 참고/로그용으로 계속 계산된다.
-                           # 켤 때 참고한 검증치(2026-06~08 데이터, 3,045건):
-                           #   0.40 → 2026-07에 135건 통과시켜 -3.06%, 2026-03도 못 막음(-2.73%)
-                           #   0.50 → 6·7월 거래 0건으로 차단, 다만 42거래일 중 진입 가능일이 2일뿐
-                           # breadth 방향(전일대비 상승/이평 상회)을 쓰는 안도 테스트했으나
-                           # 검증기간 전부 마이너스(-1.6~-2.1%)라 폐기 — 수준(level)만 유효했다.
-FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트 '관심' 탭과 동일)
-# 종가위치 = (현재가-당일저가)/(당일고가-당일저가). 1에 가까울수록 고가 근처 마감.
-# 낮으면 장중 급등이 밀린 것(윗꼬리)이고, 그런 종목은 이후 성과가 나쁘다 — 데드캣 판별용.
-# 근거: auto_trading/backtest/first_signal_filter.py (첫 신호일 11,759건, 기간분할 검증)
+FIRE_WINDOW_DAYS = 6       # fire 집계 기간 (오늘-6일 ~ 오늘, 프론트 '관심' 탭과 동일) — get_fire_candidates()(이력/비교용)만 사용
 _IS_MOCK_ENV = (KIWOOM_ENV == 'mock')
-# 종가위치 필터 = (종가-저가)/(고가-저가). 낮으면 장중 급등이 밀린 윗꼬리다.
-#   mock : 0.0  (2026-09-03 끔, 아래 참고) / real : 0.0 (끔)
-# 2026-08-20 요청으로 mock=0.6 켰었다. 검증치는 limitup_recheck.py (상한가 제외, 3년):
-#   종가위치 0.0~0.3 건당 -0.558% / 0.3~0.6 -0.462% / 0.6 이상 +0.070% → 당시엔 켜는 쪽이 유리.
-# 2026-09-03: 지금 v1(40억/4%박스/ATR·range 필터)·지금 청산(손절-6%+5일, mock 슬롯40개
-# 동일비중)으로 다시 재현하니 차이가 거의 없었다(필터 있음 CAGR 17.8%/MDD-17.0% vs
-# 없음 19.4%/-17.4%, 5일 보유 구간의 노이즈 범위 안). 슬롯이 남는 날 0.6 미만도 사는 쪽이
-# 슬롯을 놀리는 것보다 나아서, 사용자 요청으로 껐다. 정렬(종가위치 높은순)은 그대로 유지 —
-# 게이트만 끈 것이라 슬롯이 부족한 날엔 여전히 종가위치 높은 것부터 채워진다.
-# 되돌리려면 mock을 0.6으로. 근거: 세션 스크래치패드 v1_exit_portfolio40*.log / v1_slot_priority_search.log
-CLOSE_POS_MIN = 0.0
+# (시장폭 BREADTH_MIN / 종가위치 CLOSE_POS_MIN 은 2026-11-14 제거 — 모듈 docstring 맨 위 참고)
 CASH_DEPLOY_RATIO = 0.90 if _IS_MOCK_ENV else 0.65   # 가용 현금 중 자동매수에 쓸 최대 비율.
                            # ⚠️ 2026-08-24: 계좌 환경별로 분리했다. 기존 0.65는 real(슬롯5/divisor5/
                            #    소액) 기준으로 검증된 값인데, 실제로 이 값을 소비하는 건 mock(슬롯20/
@@ -267,7 +258,13 @@ MAX_TOTAL_HOLDINGS = 40 if _IS_MOCK else None   # 2026-09-03: kt00018 조회가 
                            # 확인 자체가 어렵다. 총 보유종목이 이 값 이상이면 그날은 신규매수를
                            # 하지 않는다(BUY_SLOTS와 달리 '하루 신규매수 수'가 아니라 '총 보유'
                            # 상한). real은 fire 매수가 꺼져 있어 None(무제한, 미사용).
-POS_CAP_DIVISOR = BUY_SLOTS  # 종목당 상한 = 매수한도 / 20 = 가용현금의 3.5%.
+POS_CAP_DIVISOR = 10 if _IS_MOCK else BUY_SLOTS  # 종목당 상한 = 매수한도 / 분모.
+                           # 2026-11-14 mock 20 → 10 (사용자 요청): v2 추천은 하루 최대 10종목이라
+                           # 분모 20이면 종목당 가용현금×90%÷20 = 4.5%로 현금 절반 이상이 놀았다.
+                           # v2 슬롯 시뮬(10종목 동일비중, 각 10%)에 맞춰 종목당 약 9%로 올린다.
+                           # 아래 2026-08-11 경고(기대값 0 이하 전략은 노출 확대 불리)는 v1 fire 기준이다 —
+                           # v2는 2년 재현에서 10일 시장 대비 +0.5~+0.8%p였지만 모의 실측으로 확인할 것.
+                           # (이하 종전 주석) 종목당 상한 = 매수한도 / 20 = 가용현금의 3.5%.
                            # ⚠️ 2026-08-11: 한때 10으로 내렸다가 되돌렸다. 근거였던
                            # fire_backtest_result.csv가 목표가 +15%가 살아 있던 구버전 규칙이라
                            # 건당 기대값을 +0.39%로 과대평가하고 있었다. 현재 청산규칙으로 재생성한
@@ -293,66 +290,25 @@ REBUY_PROFIT_CAP = 0.05    # 2026-08-29: 이미 보유 중인 종목의 추가�
                            # 않는 보수적인 쪽인 5%로 확정. 문서/추정이 아니라 위 백테스트 수치가
                            # 근거이니, 바꾸려면 auto_trading/backtest/로 재검증할 것.
 
+# ── 2026-11-14: 매수 대상 = v2 추천(PICKS_BUY_LABELS) ∪ 화면에서 직접 체크(reserved) ─────────
+# 종전: fire SQL(get_interest_stocks_info) ∩ reserved. fire 쿼리 계열(v1)은 2년 재현에서
+# 시장 대비 -2.5~-3.2%p(10일)였고, 위 get_fire_candidates() docstring의 재검증도 건당 -0.4~-0.5%였다.
+# v2 추천(job/interest_stock_picks.py)은 같은 기준에서 +0.5~+0.8%p라 모의 계좌로 실전 검증한다.
+# 15:21 시점 추천은 15:20 잡이 만든 것(스냅샷은 15:00 시작분 = 15:00~15:13 시세)이다.
+PICKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         'logs', 'interest_stock_picks')
+PICKS_BUY_LABELS = ('적극매수', '매수', '관심')   # v2 라벨 중 자동매수할 것 = 추천 상위 10개 전체.
+                           # 2026-11-14 적극매수만 → 전체(사용자 요청). 2년 슬롯 시뮬(10종목, 10일 보유,
+                           # 손절 없음)에서 상위10 전체 월 +2.7% vs 적극매수만 +0.7%. 다만 종목별 분석에선
+                           # 반대(8점↑ 시장 대비 +1.18%p vs 상위10 +0.87%p)라 둘 다 오차 범위 — 모의 실측으로 판단.
+PICKS_MAX_AGE_MIN = 30             # 추천 파일이 이보다 오래됐으면 v2 쪽 후보는 쓰지 않는다(체크 종목만 산다)
 PKL_DIR = r'C:\my-project\AutoSales.py\data\pickle'
 _LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'kiwoom_trading')
-BREADTH_CACHE = os.path.join(_LOG_DIR, 'market_breadth_cache.json')  # 시장 지표 캐시라 계좌와 무관 — 분리 불필요
 # 쿨다운·당일 매수건수는 계좌별 상태다. 모의/실전이 섞이면 모의에서 산 종목의 쿨다운이 실전 매수를
 # 막고, _daily 카운트도 뒤섞인다. 상세는 kiwoom_api.env_path() docstring 참고.
 FIRE_STATE_FILE = env_path(os.path.join(os.path.dirname(__file__), 'kiwoom_fire_state.json'))
 
 ACNT_NO, ACNT_PWD = get_account_credentials()
-
-
-# ── 시장폭(breadth) 레짐 ─────────────────────────────────────────────────────
-
-def _compute_breadth() -> Optional[Tuple[str, float]]:
-    """전 종목 pkl 스캔: 최신일 기준 (종가 > MA20) 종목 비율. (date_iso, ratio) 반환.
-    2,800여 파일을 읽어 2~3분 걸리므로 하루 1회 캐시해서 쓴다."""
-    files = [f for f in os.listdir(PKL_DIR) if f.endswith('.pkl')]
-    per_date = {}  # date -> [above, total]
-    for fname in files:
-        try:
-            df = pd.read_pickle(os.path.join(PKL_DIR, fname))
-            c = df.iloc[:, 3].dropna()  # 종가
-            if len(c) < 21:
-                continue
-            last_date = c.index[-1]
-            ma20 = c.tail(20).mean()
-            a = per_date.setdefault(last_date, [0, 0])
-            a[1] += 1
-            if c.iloc[-1] > ma20:
-                a[0] += 1
-        except Exception:
-            continue
-    if not per_date:
-        return None
-    # 파일별 마지막 일자가 다를 수 있으므로(상폐 등) 가장 최신 일자 기준
-    latest = max(per_date.keys())
-    above, total = per_date[latest]
-    if total < 500:
-        return None
-    return latest.date().isoformat(), above / total
-
-
-def get_market_breadth(force: bool = False) -> Optional[float]:
-    """오늘자 breadth 반환 (일 1회 계산 후 캐시)."""
-    today = datetime.date.today().isoformat()
-    if not force and os.path.exists(BREADTH_CACHE):
-        try:
-            with open(BREADTH_CACHE, 'r', encoding='utf-8') as f:
-                cache = json.load(f)
-            if cache.get('date') == today:
-                return cache.get('breadth')
-        except (json.JSONDecodeError, OSError):
-            pass
-    result = _compute_breadth()
-    if result is None:
-        return None
-    data_date, breadth = result
-    with open(BREADTH_CACHE, 'w', encoding='utf-8') as f:
-        json.dump({'date': today, 'data_date': data_date, 'breadth': breadth}, f)
-    _log.info(f'[레짐] 시장폭(종가>MA20 비율)={breadth:.1%} (데이터 기준일 {data_date})')
-    return breadth
 
 
 # ── fire 후보 + H2 필터 ─────────────────────────────────────────────────────
@@ -432,6 +388,80 @@ def get_fire_candidates(limit: Optional[int] = None, end_date: Optional[datetime
     return candidates
 
 
+def _load_today_picks() -> Optional[Dict]:
+    """오늘 생성된 가장 최근 v2 추천 파일. latest.json은 잡이 쓰는 도중일 수 있어(원자적 쓰기 아님)
+    picks_<오늘>_HHMM.json을 최신순으로 읽고, 깨진 파일이면 그 이전 파일로 넘어간다.
+    경로: PICKS_DIR/<YYMM>/<DD>/ (2026-11-14부터, job/interest_stock_picks.picks_day_dir()와 같은 규칙 —
+    그 모듈을 import하면 이 모의 프로세스가 추천 잡 의존성까지 끌어오므로 경로만 같은 규칙으로 만든다)."""
+    import glob
+    today = datetime.date.today().strftime('%Y%m%d')
+    day_dir = os.path.join(PICKS_DIR, today[2:6], today[6:8])
+    for path in sorted(glob.glob(os.path.join(day_dir, f'picks_{today}_*.json')), reverse=True):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get('scheme') != 'v2':
+            continue
+        return data
+    return None
+
+
+def _last_reserved_reset(now: Optional[datetime.datetime] = None) -> datetime.datetime:
+    """가장 최근의 '평일 20:00'(체크 일괄 해제 시각). 이보다 먼저 체크된 reserved는 무효로 본다 —
+    해제 잡(batch_runner clear_reserved_stocks_daily)이 서버 중단 등으로 안 돌았어도 묵은 체크를
+    사지 않게 하는 이중 장치. 금요일 20:00 이후 주말에 체크한 것은 월요일 15:21에 유효하다."""
+    now = now or datetime.datetime.now()
+    d = now.date()
+    while True:
+        t = datetime.datetime.combine(d, datetime.time(20, 0))
+        if d.weekday() < 5 and t <= now:
+            return t
+        d -= datetime.timedelta(days=1)
+
+
+def get_v2_buy_candidates() -> List[Dict]:
+    """매수 후보 = 오늘 v2 추천 중 PICKS_BUY_LABELS 라벨 ∪ 직접 체크(reserved, flag=true).
+    체크 종목은 v2 추천에 없어도 산다(체크는 매일 20:00 일괄 해제 — batch_process.clear_reserved_stocks_daily).
+    추천 파일이 없거나 PICKS_MAX_AGE_MIN보다 오래됐으면 체크 종목만 남는다."""
+    cands = {}
+    picks = _load_today_picks()
+    if picks is None:
+        _log.info('[fire] 오늘 v2 추천 파일 없음 — 직접 체크 종목만 대상')
+    else:
+        gen = datetime.datetime.fromisoformat(picks['generated_at'])
+        age = (datetime.datetime.now() - gen).total_seconds() / 60
+        if age > PICKS_MAX_AGE_MIN:
+            _log.error(f'[fire] v2 추천이 {age:.0f}분 묵음(생성 {picks["generated_at"]}) — 직접 체크 종목만 대상')
+        else:
+            for p in picks.get('picks', []):
+                if p.get('label') in PICKS_BUY_LABELS:
+                    cd = str(p.get('stock_code') or '').zfill(6)
+                    cands[cd] = {'stk_cd': cd, 'stk_nm': p.get('stock_name'),
+                                 'src': f"v2 {p.get('label')} {p.get('points')}점", 'points': p.get('points') or 0}
+
+    from app.repository.stocks.stocks import get_reserved_stock_codes
+    try:
+        reserved = get_reserved_stock_codes(since=_last_reserved_reset())
+    except Exception as e:
+        _log.error(f'[fire] reserved 목록 조회 실패 — 체크 종목 제외하고 진행: {e}')
+        reserved = set()
+    for cd in reserved:
+        if cd in cands:
+            cands[cd]['src'] += '+체크'
+        else:
+            cands[cd] = {'stk_cd': cd, 'stk_nm': cd, 'src': '직접 체크', 'points': 0}
+
+    out = []
+    for c in cands.values():
+        metrics = _daily_metrics(c['stk_cd'])  # 참고 지표(로그용) — 없어도 매수는 진행
+        c['dist_20d_high'] = round(metrics[0], 2) if metrics else None
+        c['ret_1d'] = round(metrics[1], 2) if metrics else None
+        out.append(c)
+    return out
+
+
 # ── 자동 매수 사이클 ─────────────────────────────────────────────────────────
 
 def _load_fire_state() -> Dict:
@@ -454,15 +484,15 @@ def log_config():
     매수 상수를 로그에 남긴다 (2026-09-15 사용자 요청, kiwoom_v8_strategy.log_config()와
     같은 목적). ⚠️ 상수를 하나라도 추가/변경하면 이 함수도 같이 갱신할 것."""
     _log.info(
-        'fire 매수 설정: BREADTH_MIN=%.0f%% CLOSE_POS_MIN=%.2f CASH_DEPLOY_RATIO=%.0f%% '
+        'fire 매수 설정: CASH_DEPLOY_RATIO=%.0f%% '
         'BUY_SLOTS=%d POS_CAP_DIVISOR=%d COOLDOWN_DAYS=%d일 REBUY_PROFIT_CAP=%.0f%% '
-        'MAX_TOTAL_HOLDINGS=%s FIRE_WINDOW_DAYS=%d일',
-        BREADTH_MIN * 100, CLOSE_POS_MIN, CASH_DEPLOY_RATIO * 100, BUY_SLOTS, POS_CAP_DIVISOR,
-        COOLDOWN_DAYS, REBUY_PROFIT_CAP * 100, MAX_TOTAL_HOLDINGS, FIRE_WINDOW_DAYS)
+        'MAX_TOTAL_HOLDINGS=%s | 매수대상=v2 %s ∪ 직접체크 (추천 유효 %d분)',
+        CASH_DEPLOY_RATIO * 100, BUY_SLOTS, POS_CAP_DIVISOR,
+        COOLDOWN_DAYS, REBUY_PROFIT_CAP * 100, MAX_TOTAL_HOLDINGS, '/'.join(PICKS_BUY_LABELS), PICKS_MAX_AGE_MIN)
 
 
 def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
-    """장중 주기 실행: 레짐 확인 → fire+H2 후보 → 쿨다운/보유중/일일한도 거르고 시장가 매수.
+    """15:21 동시호가: v2 추천 상위 10 ∪ 직접 체크 → 쿨다운/보유수익률상한/일일한도 거르고 시장가 매수.
 
     candidates_end_date: 기본 None(=오늘, 정기 15:21 잡과 동일 동작). get_fire_candidates()의
     '오늘 신호 필요' 게이트(09:00 이후)를 우회해 특정 과거 시점 기준 fire 후보로 사고 싶을 때만
@@ -484,36 +514,15 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
         return
     _autobuy_off_logged = False
 
-    # BREADTH_MIN <= 0 이면 레짐 게이트 자체를 끈다. 이때 breadth 계산 실패(None)로도 매수를
-    # 막지 않는다 — 게이트를 껐는데 계산 실패 때문에 조용히 안 사는 상황을 피하기 위함.
-    breadth = get_market_breadth()
-    if BREADTH_MIN > 0:
-        if breadth is None:
-            _log.error('[fire] 시장폭 계산 실패 — 진입 보류')
-            return
-        if breadth < BREADTH_MIN:
-            return  # 레짐 OFF: 조용히 스킵 (레짐 상태는 breadth 계산 시 하루 1회 로그됨)
-
-    candidates = get_fire_candidates(end_date=candidates_end_date)
-    if not candidates:
-        return
-
-    # 자동매수 대상(reserved) 교집합 — 화면(관심종목 뷰)에서 체크한 종목만 실제로 매수한다.
-    # fire SQL 조건을 통과한 것 중에서 고르는 방식이라, 체크했더라도 그날 조건을 못 넘기면 안 산다.
-    from app.repository.stocks.stocks import get_reserved_stock_codes
-    try:
-        reserved = get_reserved_stock_codes()
-    except Exception as e:
-        # 조회 실패 시 '전 종목 매수'로 흘러가면 안 되므로 보수적으로 중단
-        _log.error(f'[fire] reserved 목록 조회 실패 — 매수 보류: {e}')
-        return
-
-    if not reserved:
-        _log.info('[fire] 자동매수 대상(reserved)으로 체크된 종목이 없어 매수하지 않음')
-        return
-
+    # 2026-11-14: 매수 대상 = 오늘 v2 추천(PICKS_BUY_LABELS) ∪ 직접 체크(reserved). 종전 fire SQL ∩ reserved
+    # 방식은 폐기(PICKS_DIR 정의부 주석 참고). candidates_end_date는 v2 경로에선 쓰지 않는다
+    # (과거 시점 fire 후보 재현용이었음 — get_fire_candidates()는 --check 비교용으로만 남김).
+    candidates = get_v2_buy_candidates()
     passed = len(candidates)
-    candidates = [c for c in candidates if c['stk_cd'] in reserved]
+    if not candidates:
+        _log.info('[fire] 매수 대상 없음 (v2 추천 0건, 직접 체크 0건)')
+        return
+    candidates.sort(key=lambda c: c['points'], reverse=True)
     # 2026-09-16: 수동매수 보호 종목 제외 — reserved 교집합이어도 사용자가 대시보드에서
     # 직접 산 종목이면 fire가 "이미 보유 중이니 추가매수"로 취급해 더 사들이면 안 된다
     # (kiwoom_trailing_stop.manual_owned_codes, 같은 날 052710 손절 사고의 매수판 버전).
@@ -524,8 +533,8 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
         if excluded:
             candidates = [c for c in candidates if c['stk_cd'] not in _manual]
             _log.info(f'[fire] 수동매수 보호 종목 {len(excluded)}건 후보에서 제외 {excluded}')
-    _log.info(f'[fire] fire 조건 통과 {passed}종목 / reserved {len(reserved)}종목 '
-              f'→ 교집합 {len(candidates)}종목')
+    _log.info(f'[fire] 매수 대상 {passed}종목 (수동매수 보호 제외 후 {len(candidates)}): '
+              + ', '.join(f"{c['stk_nm']}({c['stk_cd']}) {c['src']}" for c in candidates))
     if not candidates:
         return
 
@@ -536,8 +545,6 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
     buys_at_cycle_start = buys_today   # '집행 완료' 로그에서 오늘 누적 vs 이번 사이클 신규를 구분하는 데 쓴다
     if buys_today >= BUY_SLOTS:
         return
-
-    bd_txt = f'{breadth:.0%}' if breadth is not None else 'n/a'  # 레짐 OFF면 None일 수 있음
 
     holdings, summary = get_holdings_and_summary(ACNT_NO, ACNT_PWD)
     # 2026-08-29: entry_date 오프바이원 버그 수정용 — 매수 직전 보유수량을 기억해뒀다가,
@@ -595,31 +602,15 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
                 pass
         live.append(cand)
 
-    # ── 종가위치 필터 + 정렬 ────────────────────────────────────────────────
-    # 매수 전에 후보 전체의 장중 시세를 먼저 받아 (현재가-저가)/(고가-저가)를 구한다.
-    # 장중 급등이 밀린 종목(윗꼬리)을 그 자리에서 걸러내기 위한 것 — 며칠 지켜보는 '확인'은
-    # 데이터가 두 번 부정했고(신호 차수·반등 지속일수 모두 단조 감소), 종가위치는 당일에
-    # 판별 가능하면서 예측력이 가장 강했다.
-    # 첫 신호일 11,759건 기준 종가위치별 3일 수익률(전/후반기 모두 같은 방향):
-    #   0.0~0.3(윗꼬리) -0.684 | 0.3~0.6 -0.132 | 0.6~0.85 +0.520 | 0.85~1.0 +1.175 (단위 %)
-    # 정렬도 종가위치 높은순으로 한다 — 상위로 좁힐수록 단조 증가한다(상위20 +0.664 →
-    # 상위10 +0.898 → 상위5 +1.166 → 상위3 +1.879). 등락률/거래대금비를 섞은 합성 순위는
-    # 오히려 나빴다(+0.529). 근거: auto_trading/backtest/ranking_test.py
-    # ⚠️ 15:18 시점의 잠정값이라 마감(15:30) 확정값과 다를 수 있다 — 15:20부터 동시호가라
-    #    그 전에 사야 하므로 감수한다. 백테스트는 확정 종가 기준이라 실제는 이보다 낮을 수 있다.
+    # ── 현재가 조회 + 정렬 (종가위치 필터는 2026-11-14 제거 — 모듈 docstring 참고) ──
     from auto_trading.kiwoom_api import get_intraday_range
     ranked = []
-    skipped_tail = 0
     skipped_profit_cap = 0
     for cand in live:
         rng = get_intraday_range(cand['stk_cd'])
         if rng is None:
             continue
-        price, day_high, day_low = rng
-        close_pos = (price - day_low) / (day_high - day_low) if day_high > day_low else 1.0
-        if close_pos < CLOSE_POS_MIN:
-            skipped_tail += 1
-            continue
+        price = rng[0]
         # REBUY_PROFIT_CAP: 이미 보유 중이고 평단가 기준 수익률이 상한 이상이면 자동매수예약에
         # 있어도 추가매수하지 않는다(근거는 위 REBUY_PROFIT_CAP 정의부 주석 참고).
         held_qty = held_qty_before.get(cand['stk_cd'], 0)
@@ -631,8 +622,10 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
                 _log.info(f"[fire] {cand.get('stk_nm', cand['stk_cd'])}({cand['stk_cd']}) "
                           f"보유중 수익률 {profit_rate:.1%} >= {REBUY_PROFIT_CAP:.0%} 상한 — 추가매수 skip")
                 continue
-        ranked.append({**cand, '_price': price, '_close_pos': close_pos})
-    ranked.sort(key=lambda c: c['_close_pos'], reverse=True)
+        ranked.append({**cand, '_price': price})
+    # 2026-11-14: v2 점수 높은순. 후보가 슬롯(BUY_SLOTS)보다 적어 순서가 매수 여부를 가르진
+    # 않지만, 예산이 바닥날 때 점수 높은 쪽이 먼저 사지게 한다.
+    ranked.sort(key=lambda c: c['points'], reverse=True)
 
     # ranked가 비면(오늘 이미 다 사서 쿨다운에 전부 걸림 등) 이번 사이클엔 확실히 0건
     # 매수한다 — 아래 for 루프가 그냥 안 돈다. 그런 '살 게 없는' 사이클의 상세 로그는
@@ -645,7 +638,7 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
         if not actionable:
             _last_fire_noop_log_ts = now_ts
         _log.info(f'[fire] 후보 {len(candidates)}종목(쿨다운 제외 {len(live)} → '
-                  f'종가위치 {CLOSE_POS_MIN} 미달 {skipped_tail}종목, 보유수익률상한 {skipped_profit_cap}종목 '
+                  f'보유수익률상한 {skipped_profit_cap}종목 '
                   f'제외 후 {len(ranked)}종목) / '
                   f'가용현금 {cash:,.0f}원 → 매수한도 {deploy_limit:,.0f}원({CASH_DEPLOY_RATIO:.0%}), '
                   f'종목당 상한 {pos_cap:,.0f}원(한도/{POS_CAP_DIVISOR}), 최대 {BUY_SLOTS}종목')
@@ -657,7 +650,6 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
             break
         stk_cd = cand['stk_cd']
         price = cand['_price']
-        close_pos = cand['_close_pos']
 
         is_new_position = held_qty_before.get(stk_cd, 0) <= 0
         if MAX_TOTAL_HOLDINGS is not None and is_new_position and held_count >= MAX_TOTAL_HOLDINGS:
@@ -700,7 +692,7 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
         if is_new_position:
             held_count += 1
         _log.info(f'[fire매수 {buys_today + 1}/{BUY_SLOTS}] {cand["stk_nm"]}({stk_cd}) 현재가={price:,}원 {qty}주 '
-                  f'(종가위치 {close_pos:.2f}, 총상승률 {cand["total_rate"]}, {ref}breadth={bd_txt}) '
+                  f'({cand["src"]}, {ref.rstrip(", ")}) '
                   f'거래대금={trade_value:,.0f}원(자산의 {asset_ratio:.1%}) '
                   f'누적 {deployed:,.0f}/{deploy_limit:,.0f}원 → {result}')
         _record_trade(stk_cd, cand['stk_nm'], 'buy', 'fire', qty, price, price, 0.0, asset_ratio=asset_ratio,
@@ -769,28 +761,15 @@ def run_fire_buy_cycle(candidates_end_date: Optional[datetime.date] = None):
 if __name__ == '__main__':
     import sys
     if '--check' in sys.argv:
-        # 매수 없이 현재 레짐/후보만 확인
-        b = get_market_breadth(force='--force' in sys.argv)
-        print(f'시장폭: {b:.1%}' if b is not None else '시장폭 계산 실패',
-              f'(레짐 {"ON" if b is not None and b >= BREADTH_MIN else "OFF"}, 기준 {BREADTH_MIN:.0%})')
-        cands = get_fire_candidates(limit=CHECK_DISPLAY_LIMIT)
-        try:
-            from app.repository.stocks.stocks import get_reserved_stock_codes
-            reserved = get_reserved_stock_codes()
-        except Exception as e:
-            reserved = set()
-            print(f'  (reserved 목록 조회 실패: {e})')
-
-        hit = [c for c in cands if c['stk_cd'] in reserved]
-        print(f'fire 조건 통과 {len(cands)}건(최대 {CHECK_DISPLAY_LIMIT} 표시) / '
-              f'reserved {len(reserved)}종목 → 매수 대상 {len(hit)}건 '
+        # 매수 없이 현재 후보만 확인
+        cands = sorted(get_v2_buy_candidates(), key=lambda c: c['points'], reverse=True)
+        print(f'매수 대상(v2 {"/".join(PICKS_BUY_LABELS)} ∪ 직접 체크) {len(cands)}건 '
               f'(매수한도=가용현금의 {CASH_DEPLOY_RATIO:.0%}, '
               f'종목당 상한=한도/{POS_CAP_DIVISOR}, 최대 {BUY_SLOTS}종목)')
         for i, c in enumerate(cands, 1):
             ref = (f' 신고가대비 {c["dist_20d_high"]:+.1f}% 당일 {c["ret_1d"]:+.1f}%'
                    if c['dist_20d_high'] is not None else ' (pkl 오늘자 없음)')
-            mark = '★매수대상' if c['stk_cd'] in reserved else '         '
-            print(f'  {i:2d}. {mark} {c["stk_nm"]}({c["stk_cd"]}) 총상승률 {c["total_rate"]}{ref}')
+            print(f'  {i:2d}. {c["stk_nm"]}({c["stk_cd"]}) {c["src"]}{ref}')
     elif '--run' in sys.argv:
         from auto_trading.kiwoom_trailing_stop import is_closing_auction_open
         if is_closing_auction_open():
