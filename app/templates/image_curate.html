@@ -194,7 +194,7 @@ const SUB = {review: '_review', archive: '_archive'};
 const subOf = t => SUB[t] || '';
 const imgUrl = (name, sub, original) =>
   `/image/images?dir=refine&filename=${enc2((sub ? sub + '/' : '') + name)}` + (original ? '&original=1' : '') +
-  (!sub && vers[name] ? `&v=${vers[name]}` : '');
+  (vers[name] ? `&v=${vers[name]}` : '');   // 보관함 이미지도 자를 수 있어(2026-11-15) 하위 폴더에도 붙인다
 let tab = 'cand', state = {}, nPer = 100;
 
 // 열 수(1~5). 선택값은 이 브라우저에만 저장. 선택 전에는 기존 갤러리와 같은 폭 기준으로 자동.
@@ -243,7 +243,7 @@ function card(it, sub, mark, opt = {}) {
   if (it.v) vers[it.name] = it.v;
   const meta = sub ? (it.src === 'dup' ? '중복 정리' : '후보 판정') + (it.ts ? ' · ' + it.ts.slice(5, 16).replace('T', ' ') : '')
                    : `aes ${it.aes} · sim ${it.sim}` + (it.model != null ? ` · 취향 ${(1 - it.model).toFixed(3)}` : '');   // 서버는 '제거될 가능성' — 높을수록 좋게 뒤집어 표시
-  d.innerHTML = `<img loading="lazy" alt=""><span class="badge"></span><button class="zoom" title="${sub ? '크게 보기' : '자르기 / 크게 보기'}">⤢</button><div class="meta"></div>`;
+  d.innerHTML = `<img loading="lazy" alt=""><span class="badge"></span><button class="zoom" title="자르기 / 크게 보기">⤢</button><div class="meta"></div>`;
   d.querySelector('img').src = imgUrl(it.name, sub);
   d.querySelector('.meta').textContent = it.simseed === undefined ? meta
     : (it.simseed === null ? '기준 이미지 · ' : `유사 ${it.simseed} · `) + meta;
@@ -255,8 +255,10 @@ function card(it, sub, mark, opt = {}) {
     b.onclick = e => { e.stopPropagation(); findSimilar(it.name, b); };
     d.appendChild(b);
   }
-  // ⤢ = 기존 자르기 편집기를 바로 연다(2026-11-02 사용자 요청). 보관함(_review·_archive)은 자르기 대상이 아니라 확대 보기만
-  d.querySelector('.zoom').onclick = e => { e.stopPropagation(); sub ? view(d) : cropEditor.open(d, {fromViewer: false}); };
+  // ⤢ = 기존 자르기 편집기를 바로 연다(2026-11-02 사용자 요청).
+  // 2026-11-15: 보관함(_review·_archive)도 확대 보기 대신 자르기 — 제거로 판정된 이미지를 싫은 부분 위주로 잘라 두면
+  //   embed.py 가 잘린 이미지로 다시 계산하고, 판정(제거)은 그대로라 잘린 모습이 '제거' 예시로 학습된다.
+  d.querySelector('.zoom').onclick = e => { e.stopPropagation(); cropEditor.open(d, {fromViewer: false}); };
   d.onclick = () => { state[it.name] = mark(state[it.name]); paint(d); count(); };
   paint(d);
   return d;
@@ -276,7 +278,6 @@ function view(d) {
   v.querySelector('img').src = imgUrl(name, subOf(tab), true);
   const s = state[name];
   v.querySelector('.cap').textContent = (LABEL[s] ? `[${LABEL[s]}] ` : '') + name;
-  v.querySelector('.crop-open').style.display = subOf(tab) ? 'none' : '';   // 보관함(_review·_archive)은 자르기 대상 아님
   v.style.display = 'block';
 }
 // 이전/다음 버튼을 실제로 그려진 이미지(object-fit:contain)의 세로 가운데에 둔다 — 모바일은 이미지를 아래로 붙여서 화면 가운데와 다르다
@@ -363,7 +364,7 @@ document.addEventListener('keydown', e => {
       if (viewerOpen()) { e.preventDefault(); closeViewer(); }
       break;
     case 'c': case 'C': case 'ㅊ':   // 확대 보기에서 자르기(ㅊ = 한글 자판의 c)
-      if (viewerOpen() && viewing && !subOf(tab)) { e.preventDefault(); cropEditor.open(viewing, {fromViewer: true}); }
+      if (viewerOpen() && viewing) { e.preventDefault(); cropEditor.open(viewing, {fromViewer: true}); }
       break;
   }
 });
@@ -637,7 +638,9 @@ const cropEditor = (function () {
   }, {passive: false});
 
   const nameOf = d => d.dataset.name;
-  const originalUrl = d => imgUrl(nameOf(d), false, true);
+  // 서버에 넘기는 refine 기준 경로 — 보관함 탭이면 '_archive/<name>' 처럼 하위 폴더가 붙는다(원본 백업도 origin/_archive/ 에 생긴다)
+  const fileOf = d => (subOf(tab) ? subOf(tab) + '/' : '') + nameOf(d);
+  const originalUrl = d => imgUrl(nameOf(d), subOf(tab), true);
 
   function setOriginView(on) {
     on = !!(on && st && st.ov);
@@ -745,7 +748,7 @@ const cropEditor = (function () {
     const token = ++openToken;
     const url = originalUrl(d);
     if (st && st.rotUrl) URL.revokeObjectURL(st.rotUrl);   // 이미 화면에 그려진 이미지는 그대로 보인다
-    st = {item: d, name: nameOf(d), rot: 0};
+    st = {item: d, name: fileOf(d), rot: 0};
     d.scrollIntoView({behavior: 'auto', block: 'center'});   // 닫으면 마지막에 편집한 이미지가 바로 보이게
     restoreBtn.style.visibility = 'hidden';
     resetOriginView();
@@ -977,7 +980,7 @@ const cropEditor = (function () {
   function refreshCard(d, v) {
     vers[nameOf(d)] = v;
     const img = d.querySelector('img');
-    if (img) img.src = imgUrl(nameOf(d), false);
+    if (img) img.src = imgUrl(nameOf(d), subOf(tab));
   }
 
   restoreBtn.onclick = async () => {
