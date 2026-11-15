@@ -276,7 +276,7 @@ def create_mock_scheduler():
         id="mock_fire_buy_aftermarket", executor="io", replace_existing=True,
     )
 
-    # fire 청산 (손절 -6% / 보유 5영업일) — 30초. v8 소유권 집합이 모의에서는 비어 있으므로
+    # fire 청산 (모의: 손절 -20% / 보유 10영업일, 2026-11-14 -6%→-20%, 5→10) — 30초. v8 소유권 집합이 모의에서는 비어 있으므로
     # 모의 보유 종목 전부를 이 잡이 담당한다.
     scheduler.add_job(
         run_kiwoom_trailing_stop,

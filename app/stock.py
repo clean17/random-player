@@ -919,7 +919,8 @@ def _legacy_holding_state(pos, avg_price, cur_price, env=None):
     rate = cur / avg - 1.0
     peak_rate = pos.get('peak_rate')
     was_armed = peak_rate is not None and peak_rate >= legacy_exit.TRAIL_ACTIVATE_RATE
-    stop_level = legacy_exit.ARMED_GIVEBACK_STOP if was_armed else legacy_exit.STOP_LOSS_RATE
+    # 2026-11-14: 손절선도 env별(모의 -20% / 실전 -6%) — max_hold_days_for와 같은 이유로 env 기준 재계산
+    stop_level = legacy_exit.ARMED_GIVEBACK_STOP if was_armed else legacy_exit.stop_loss_rate_for(env)
     stop_px = avg * (1.0 + stop_level)
     return {
         'type': 'legacy',
