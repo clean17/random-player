@@ -231,7 +231,9 @@ def _compute() -> Dict:
            'n_remove': len(rm), 'n_keep': int(keep_mask.sum()),
            # image2 1차 분류(_screen_result)가 같은 모델을 읽기만 한다
            'clf': clf, 'X_cur': X_all[ci], 'keep_cur': keep_mask[:len(ci)],
-           'E': E}   # 정규화 CLIP 임베딩(현재 refine 순서) — 유사 이미지 찾기(_sim_worker)
+           'E': E,   # 정규화 CLIP 임베딩(현재 refine 순서) — 유사 이미지 찾기(_sim_worker)
+           # 캐시 전체(보관함 포함) — 중복 탭이 보관함 이미지와 refine 이미지의 중복을 찾을 때(_stored_dup_pairs)
+           'E_all': E_all, 'aes_all': aes_all, 'idx_by_base': idx_by_base}
     _state_cache['key'], _state_cache['val'] = key, val
     return val
 
@@ -455,15 +457,51 @@ def api_dups():
                 in_sim.add(idx[n])
         if len(items) >= 2:
             sim_out.append({'id': g['id'], 'seed': g['seed'], 'ts': g.get('ts'), 'items': items})
-    pairs = st['sc']['pairs']
+    # 2026-11-15: 보관함(임시 보관함 포함)에 있는 이미지와 같은 이미지가 refine 에 다시 들어온 경우도 묶는다.
+    #   보관함 쪽 번호는 len(names) 부터 — 보관함끼리의 쌍은 만들지 않으므로 그룹엔 항상 refine 이미지가 있다.
+    stored, spairs = _stored_dup_pairs(st)
+    all_names = names + [n for n, _sub in stored]
+    pairs = np.concatenate([st['sc']['pairs'], spairs]) if len(spairs) else st['sc']['pairs']
     nd = _load_not_dup()
     if (nd or in_sim) and len(pairs):
         # 유사 검색 그룹에 이미 나온 이미지는 일반 중복 그룹에서 뺀다(같은 카드가 두 번 나오지 않게)
-        pairs = pairs[[_pair_key(names[i], names[j]) not in nd and i not in in_sim and j not in in_sim
+        pairs = pairs[[_pair_key(all_names[i], all_names[j]) not in nd and i not in in_sim and j not in in_sim
                        for i, j in pairs]]
-    groups = scoring.dup_groups(pairs, len(names))
-    out = [sorted([_item(st, i) for i in g], key=lambda x: -x['aes']) for g in groups]
+    groups = scoring.dup_groups(pairs, len(all_names))
+    n = len(names)
+
+    def item(i):
+        if i < n:
+            return dict(_item(st, i), where='refine')
+        nm, sub = stored[i - n]
+        return {'name': nm, 'where': 'review' if sub == REVIEW_SUBDIR else 'archive',
+                'aes': round(float(st['aes_all'][st['idx_by_base'][nm]]), 2), 'sim': None, 'model': None,
+                'v': image_mod.img_v('refine', sub + '/' + nm)}
+    # 그룹 안: refine 이미지 먼저(미적 점수 높은 순), 보관함 이미지는 뒤에
+    out = [sorted([item(i) for i in g], key=lambda x: (x['where'] != 'refine', -x['aes'])) for g in groups]
     return jsonify({'groups': out, 'sim_groups': sim_out, 'thr': scoring.DUP_THR, 'sim_top': SIM_TOP})
+
+
+def _stored_dup_pairs(st: Dict, block: int = 1024):
+    """임시 보관함·보관함 이미지 중 refine 이미지와 유사도 DUP_THR 이상인 쌍. (stored, pairs) —
+    stored = [(이름, 하위폴더)], pairs 의 보관함 쪽 번호는 len(refine) + stored 순번. 임베딩이 없거나 refine 에 같은
+    이름이 있는 파일은 뺀다. 보관함 목록은 요청마다 폴더를 직접 읽는다(_compute 캐시 키에 안 들어가서)."""
+    cur = set(st['names'])
+    stored = []
+    for sub in (REVIEW_SUBDIR, ARCHIVE_SUBDIR):
+        d = os.path.join(REF_IMAGE_DIR, sub)
+        if os.path.isdir(d):
+            stored += [(nm, sub) for nm, _s, _m in list_images(d) if nm in st['idx_by_base'] and nm not in cur]
+    n = len(st['names'])
+    if not stored or not n:
+        return stored, np.zeros((0, 2), dtype=int)
+    Es = st['E_all'][np.array([st['idx_by_base'][nm] for nm, _sub in stored], dtype=int)]
+    pi, pj = [], []
+    for s in range(0, len(Es), block):
+        ii, jj = np.where(Es[s:s + block] @ st['E'].T >= scoring.DUP_THR)
+        pi.append(jj)                  # refine 쪽
+        pj.append(ii + s + n)          # 보관함 쪽
+    return stored, np.stack([np.concatenate(pi), np.concatenate(pj)], axis=1).astype(int)
 
 
 # ── 유사 이미지 찾기 → 중복 탭 (2026-11-08 사용자 요청) ─────────────────────────
@@ -663,19 +701,35 @@ def api_purge_dups():
 @curate_bp.route('/api/apply', methods=['POST'])
 @login_required
 def api_apply():
-    """{remove: [...], keep: [...], src: 'candidate'|'dup'} — remove 는 보관함으로 옮기고 판정을 기록한다."""
+    """{remove: [...], keep: [...], src: 'candidate'|'dup'} — remove 는 보관함으로 옮기고 판정을 기록한다.
+    src='dup' 은 remove_archive / remove_review 도 받는다(2026-11-15): 중복 탭에 섞여 나온 보관함 이미지를 중복 제거로
+    다시 판정한다 — 보관함 것은 임시 보관함으로 옮기고, 임시 보관함 것은 그 자리에서 판정만 바꾼다.
+    판정이 src='dup' 으로 바뀌므로 취향 학습에서 빠지고(전에 후보 판정이었으면 그 제거 신호도 빠진다),
+    '중복 정리분 빼내기' 대상이 된다. 이전 판정은 prev 에 남긴다."""
     data = request.get_json(silent=True) or {}
     src = data.get('src')
     if src not in ('candidate', 'dup'):
         return jsonify({'error': 'invalid src'}), 400
     remove = [os.path.basename(x) for x in (data.get('remove') or [])]
     keep = [os.path.basename(x) for x in (data.get('keep') or [])] if src == 'candidate' else []
+    rm_arch = [os.path.basename(x) for x in (data.get('remove_archive') or [])] if src == 'dup' else []
+    rm_rev = [os.path.basename(x) for x in (data.get('remove_review') or [])] if src == 'dup' else []
     ts = datetime.now().isoformat(timespec='seconds')
     with _lock:
         ok, fail = _move_many(remove, '', REVIEW_SUBDIR)
+        ok_a, fail_a = _move_many(rm_arch, ARCHIVE_SUBDIR, REVIEW_SUBDIR)
+        fail.update(fail_a)
+        ok_r = [n for n in rm_rev if os.path.isfile(os.path.join(REF_IMAGE_DIR, REVIEW_SUBDIR, n))]
+        fail.update({n: 'missing' for n in rm_rev if n not in ok_r})
         labels = _load_labels()
         for n in ok:
             labels[n] = {'label': 'remove', 'src': src, 'ts': ts}
+        for n in ok_a + ok_r:
+            prev = labels.get(n)
+            labels[n] = {'label': 'remove', 'src': src, 'ts': ts}
+            if prev:
+                labels[n]['prev'] = {k: v for k, v in prev.items() if k != 'prev'}
+        ok = ok + ok_a + ok_r
         for n in keep:
             labels[n] = {'label': 'keep', 'src': src, 'ts': ts}
         _save_labels(labels)

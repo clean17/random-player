@@ -43,6 +43,7 @@ header a{color:var(--mut);text-decoration:none;margin-right:12px}
 .c.rm{outline-color:var(--rm)} .c.rm .badge{background:var(--rm)} .c.rm img{opacity:.55}
 .c.keep{outline-color:var(--keep)} .c.keep .badge{background:var(--keep)}
 .c.sel{outline-color:var(--acc)} .c.sel .badge{background:var(--acc)}
+.c.stored{outline:2px dashed #888;outline-offset:-2px} .c.stored img{opacity:.8}   /* 중복 탭의 보관함 이미지(제거 표시 안 함) */
 .bar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:#181818f2;border-top:1px solid #2a2a2a}
 .bar .cnt{color:var(--mut)} .bar .cnt b{color:var(--fg)}
 .bar button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:15px;cursor:pointer}
@@ -237,12 +238,19 @@ async function findSimilar(name, btn) {
   } catch (e) { toast('유사 찾기 오류: ' + e.message, 5000); }
   finally { btn.disabled = false; }
 }
+// 중복 탭 카드 위치(2026-11-15) — 보관함에 있는 이미지와 같은 이미지가 refine 에 다시 들어온 경우도 묶여 나온다
+const WHERE = {refine: ['후보', ''], review: ['임시 보관함', '_review'], archive: ['보관함', '_archive']};
+let storedWhere = {};   // 중복 탭에 나온 보관함 이미지 이름 → 'review' | 'archive' (확정 때 나눠 보낸다)
 function card(it, sub, mark, opt = {}) {
   const d = document.createElement('div');
-  d.className = 'c'; d.dataset.name = it.name;
+  const stored = !sub && it.where && it.where !== 'refine';   // 중복 탭의 보관함 이미지 — 제거하면 중복 정리로 임시 보관함에
+  if (stored) { sub = WHERE[it.where][1]; storedWhere[it.name] = it.where; }
+  d.className = 'c' + (stored ? ' stored' : ''); d.dataset.name = it.name; d.dataset.sub = sub || '';
   if (it.v) vers[it.name] = it.v;
-  const meta = sub ? (it.src === 'dup' ? '중복 정리' : '후보 판정') + (it.ts ? ' · ' + it.ts.slice(5, 16).replace('T', ' ') : '')
-                   : `aes ${it.aes} · sim ${it.sim}` + (it.model != null ? ` · 취향 ${(1 - it.model).toFixed(3)}` : '');   // 서버는 '제거될 가능성' — 높을수록 좋게 뒤집어 표시
+  const meta = (it.where ? `[${WHERE[it.where][0]}] ` : '') +
+    (stored ? `aes ${it.aes}`
+     : sub ? (it.src === 'dup' ? '중복 정리' : '후보 판정') + (it.ts ? ' · ' + it.ts.slice(5, 16).replace('T', ' ') : '')
+     : `aes ${it.aes} · sim ${it.sim}` + (it.model != null ? ` · 취향 ${(1 - it.model).toFixed(3)}` : ''));   // 서버는 '제거될 가능성' — 높을수록 좋게 뒤집어 표시
   d.innerHTML = `<img loading="lazy" alt=""><span class="badge"></span><button class="zoom" title="자르기 / 크게 보기">⤢</button><div class="meta"></div>`;
   d.querySelector('img').src = imgUrl(it.name, sub);
   d.querySelector('.meta').textContent = it.simseed === undefined ? meta
@@ -275,7 +283,7 @@ let viewing = null;   // 확대 보기 중인 카드
 function view(d) {
   viewing = d;
   const v = $('#viewer'), name = d.dataset.name;
-  v.querySelector('img').src = imgUrl(name, subOf(tab), true);
+  v.querySelector('img').src = imgUrl(name, d.dataset.sub, true);
   const s = state[name];
   v.querySelector('.cap').textContent = (LABEL[s] ? `[${LABEL[s]}] ` : '') + name;
   v.style.display = 'block';
@@ -394,7 +402,7 @@ $('#selall').onclick = () => {
 };
 
 async function load() {
-  state = {}; $('#list').innerHTML = ''; $('#info').textContent = '불러오는 중…'; $('#flip').style.display = 'none'; count();
+  state = {}; storedWhere = {}; $('#list').innerHTML = ''; $('#info').textContent = '불러오는 중…'; $('#flip').style.display = 'none'; count();
   try {
     if (tab === 'cand') {
       const j = await api(`/image/curate/api/candidates?n=${nPer}`);
@@ -433,7 +441,7 @@ async function load() {
       const total = j.groups.reduce((a, g) => a + g.length, 0);
       simShown = (j.sim_groups || []).map(g => ({id: g.id, names: g.items.map(it => it.name)}));
       $('#info').innerHTML = (simShown.length ? `유사 검색 <b>${simShown.length}</b>그룹 (기준 + 가장 비슷한 ${j.sim_top}장, 후보 탭 ≈ 버튼) · ` : '') +
-        `근접중복 <b>${j.groups.length}</b>그룹 · <b>${total}</b>장 (유사도 ≥ ${j.thr}) · 그룹 안은 미적 점수 높은 순.<br>` +
+        `근접중복 <b>${j.groups.length}</b>그룹 · <b>${total}</b>장 (유사도 ≥ ${j.thr}) · 그룹 안은 후보 먼저 미적 점수 높은 순 · 점선 카드는 이미 보관함에 있는 이미지(제거하면 중복 정리로 임시 보관함에, 취향 학습에서 빠짐).<br>` +
         `별로인 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 표시하고 확정하세요. 같은 촬영의 다른 컷일 수도 있으니 ⤢ 로 크게 확인하세요.`;
       // 유사 검색 그룹(맨 위) — 하나라도 제거로 표시하고 확정하면 그 그룹은 닫힌다. 그대로 둘 거면 '모두 유지 · 그룹 닫기'
       (j.sim_groups || []).forEach(sg => {
@@ -527,12 +535,16 @@ $('#go').onclick = async () => {
       const j = await api('/image/curate/api/apply', {src: 'candidate', remove: rm, keep});
       toast(`임시 보관함으로 ${j.moved}장 이동 · 유지 ${j.kept}장 기록` + (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
     } else if (tab === 'dup') {
-      const rm = pick('rm');
-      if (!confirm(`${rm.length}장을 임시 보관함으로 옮깁니다.`)) return count();
+      const all = pick('rm');
+      const rm = all.filter(n => !storedWhere[n]);
+      const ra = all.filter(n => storedWhere[n] === 'archive'), rr = all.filter(n => storedWhere[n] === 'review');
+      if (!confirm(`${all.length}장을 중복 정리로 임시 보관함에 둡니다.` +
+                   (ra.length || rr.length ? `
+(보관함 ${ra.length}장 · 임시 보관함 ${rr.length}장 포함 — 판정이 중복 정리로 바뀌어 취향 학습에서 빠집니다)` : ''))) return count();
       busyOn();
-      const j = await api('/image/curate/api/apply', {src: 'dup', remove: rm});
+      const j = await api('/image/curate/api/apply', {src: 'dup', remove: rm, remove_archive: ra, remove_review: rr});
       // 제거 표시를 한 유사 검색 그룹은 검토가 끝난 것으로 보고 닫는다(남은 이미지는 유지)
-      const done = simShown.filter(g => g.names.some(n => rm.includes(n))).map(g => g.id);
+      const done = simShown.filter(g => g.names.some(n => all.includes(n))).map(g => g.id);
       if (done.length) await api('/image/curate/api/similar/dismiss', {ids: done}).catch(() => {});
       toast(`임시 보관함으로 ${j.moved}장 이동` + (done.length ? ` · 유사 검색 ${done.length}그룹 닫음` : '') +
             (Object.keys(j.fail).length ? ` · 실패 ${Object.keys(j.fail).length}` : ''));
@@ -639,8 +651,8 @@ const cropEditor = (function () {
 
   const nameOf = d => d.dataset.name;
   // 서버에 넘기는 refine 기준 경로 — 보관함 탭이면 '_archive/<name>' 처럼 하위 폴더가 붙는다(원본 백업도 origin/_archive/ 에 생긴다)
-  const fileOf = d => (subOf(tab) ? subOf(tab) + '/' : '') + nameOf(d);
-  const originalUrl = d => imgUrl(nameOf(d), subOf(tab), true);
+  const fileOf = d => (d.dataset.sub ? d.dataset.sub + '/' : '') + nameOf(d);   // 카드마다 — 중복 탭엔 보관함 카드도 섞인다
+  const originalUrl = d => imgUrl(nameOf(d), d.dataset.sub, true);
 
   function setOriginView(on) {
     on = !!(on && st && st.ov);
@@ -980,7 +992,7 @@ const cropEditor = (function () {
   function refreshCard(d, v) {
     vers[nameOf(d)] = v;
     const img = d.querySelector('img');
-    if (img) img.src = imgUrl(nameOf(d), subOf(tab));
+    if (img) img.src = imgUrl(nameOf(d), d.dataset.sub);
   }
 
   restoreBtn.onclick = async () => {
