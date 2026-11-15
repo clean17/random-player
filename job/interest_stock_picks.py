@@ -13,7 +13,8 @@
     4) 점수순(동점은 60일 고가 근접순) 상위 MAX_N, MIN_POINTS점 이상만.
     5) 그 종목들만 외국인/기관 순매수(ka10059)와 뉴스를 조회해 표시하고, 등급을 매긴다.
        외국인·기관이 둘 다 순매도면 등급을 '관심'으로 내린다.
-    6) JSON 저장(logs/interest_stock_picks/picks_<YYYYMMDD_HHMM>.json, latest.json). 후보 상위
+    6) JSON 저장(logs/interest_stock_picks/<YYMM>/<DD>/picks_<YYYYMMDD_HHMM>.json + 바로 아래 latest.json,
+       2026-11-14부터 월/일 폴더). 후보 상위
        CANDIDATE_LOG_N개의 피처·점수도 남긴다(사후 검증용).
 
   왜 바꿨나 — 9/8~11/13 15:20 추천 526건 사후 측정 + 2년 전 종목 재현(2024-09~2026-11):
@@ -295,9 +296,10 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
                       '실제 매수 여부와 손익 책임은 본인에게 있습니다.',
     }
 
-    os.makedirs(_OUT_DIR, exist_ok=True)
+    day_dir = picks_day_dir(now.strftime('%Y%m%d'))
+    os.makedirs(day_dir, exist_ok=True)
     ts = now.strftime('%Y%m%d_%H%M')
-    with open(os.path.join(_OUT_DIR, f'picks_{ts}.json'), 'w', encoding='utf-8') as f:
+    with open(os.path.join(day_dir, f'picks_{ts}.json'), 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     with open(os.path.join(_OUT_DIR, 'latest.json'), 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
@@ -342,6 +344,26 @@ def load_latest_picks() -> Optional[Dict]:
         return None
 
 
+def picks_day_dir(date_str: str) -> str:
+    """YYYYMMDD -> logs/interest_stock_picks/<YYMM>/<DD> (2026-11-14 사용자 요청, 예: 2611/08).
+    latest.json만 _OUT_DIR 바로 아래에 둔다. kiwoom_fire_strategy_mock._load_today_picks도 이 경로를 쓴다."""
+    return os.path.join(_OUT_DIR, date_str[2:6], date_str[6:8])
+
+
+def list_picks_files(date_str: str) -> List[str]:
+    """그날 picks_<YYYYMMDD>_HHMM.json 전체 경로, 시간순. 새 구조(<YYMM>/<DD>/)에 없으면 예전
+    평면 구조(_OUT_DIR 바로 아래)도 본다 — 2026-11-14 이전 파일 이전이 실패했을 때 대비."""
+    prefix = f'picks_{date_str}_'
+    for d in (picks_day_dir(date_str), _OUT_DIR):
+        try:
+            files = sorted(f for f in os.listdir(d) if f.startswith(prefix) and f.endswith('.json'))
+        except OSError:
+            continue
+        if files:
+            return [os.path.join(d, f) for f in files]   # 파일명이 picks_YYYYMMDD_HHMM.json이라 정렬 = 시간순
+    return []
+
+
 def load_picks_for_date(date_str: str) -> Optional[Dict]:
     """특정 날짜(YYYYMMDD)에 생성된 추천 중 가장 마지막(최신) 결과를 반환한다.
 
@@ -350,14 +372,10 @@ def load_picks_for_date(date_str: str) -> Optional[Dict]:
     다시 보여줄 수 있다 — 2026-09-21 날짜 검색 기능 추가. 그날 파일이 하나도 없으면 None."""
     if not date_str or not re.fullmatch(r'\d{8}', date_str):
         return None
-    prefix = f'picks_{date_str}_'
-    try:
-        files = sorted(f for f in os.listdir(_OUT_DIR) if f.startswith(prefix) and f.endswith('.json'))
-    except OSError:
-        return None
+    files = list_picks_files(date_str)
     if not files:
         return None
-    path = os.path.join(_OUT_DIR, files[-1])  # 파일명이 picks_YYYYMMDD_HHMM.json이라 정렬 = 시간순
+    path = files[-1]
     try:
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
