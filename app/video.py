@@ -313,6 +313,11 @@ def get_videos():
 
     videos = _list_video_files(video_directory, liked_param)
 
+    # 검색(2026-11-16): q 의 공백으로 나눈 단어가 모두 경로(하위 폴더 포함 상대경로)에 들어 있는 영상만. 대소문자 무시
+    terms = (request.args.get('q') or '').lower().split()
+    if terms:
+        videos = [v for v in videos if all(t in v.lower() for t in terms)]
+
     # print('############### video_list ###############')
     random.seed(time.time())
     random.shuffle(videos)

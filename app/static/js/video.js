@@ -43,6 +43,15 @@ const likeFilterSelect = document.getElementById('likeFilterSelect');
 let likedVideosSet = new Set(); // 현재 dir에서 하트한 영상 파일명 집합 (서버에서 한 번에 불러와 캐시)
 let likeFilterMode = 'unliked'; // 'unliked' | 'liked' — Next가 어느 목록에서 뽑을지
 let isFetchingVideoList = false; // 목록이 빈 상태에서 PageDown을 연타하면 axios.get이 중복으로 나가는 것을 막는 가드
+// 검색(2026-11-16): ?q=검색어 — 경로에 검색어(공백으로 나눈 단어 모두)가 들어간 영상만 순회한다. 검색창과 주소가 같이 바뀐다
+const videoSearchForm = document.getElementById('videoSearchForm');
+const videoSearchInput = document.getElementById('videoSearchInput');
+let searchQuery = (new URLSearchParams(location.search).get('q') || '').trim();
+// 목록 드롭다운(2026-11-16): 서버에서 받은 이번 목록 전체(순회하며 줄어드는 fetchVideoArr 와 별개, 이름순)
+let listedVideos = [];
+const videoListToggle = document.getElementById('videoListToggle');
+const videoListPanel = document.getElementById('videoListPanel');
+const videoListItems = document.getElementById('videoListItems');
 
 /************************************************************************/
 /******************************   Common   ******************************/
@@ -66,7 +75,7 @@ function setVideoOptions(vodUrl, videoFileType) {
             remainingTimeDisplay: true, // 남은 시간 표시
             progressControl: true // 재생 진행바
         },
-        inactivityTimeout: 3000,
+        inactivityTimeout: 4000, // 우리 버튼 숨김(hideControls 4초)과 맞춘다
     };
     return videoOptions;
 }
@@ -222,8 +231,101 @@ function selectVideoFromArr(videos, randomIndex) {
 }
 
 function updateVideoCountDisplay() {
-    if (videoCountEl) videoCountEl.textContent = totalVideoCount === null ? '' : `총 ${totalVideoCount}개`;
+    if (videoCountEl) videoCountEl.textContent = totalVideoCount === null ? ''
+        : (searchQuery ? `'${searchQuery}' ${totalVideoCount}개` : `총 ${totalVideoCount}개`);
 }
+
+// ── 목록 드롭다운 ─────────────────────────────────────────────────────────────
+function isVideoListOpen() { return !!videoListPanel && !videoListPanel.hidden; }
+function renderVideoList() {
+    if (!videoListItems) return;
+    videoListItems.innerHTML = '';
+    if (!listedVideos.length) {
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = '목록이 비어 있습니다';
+        videoListItems.appendChild(li);
+        return;
+    }
+    const remaining = new Set(fetchVideoArr);
+    const frag = document.createDocumentFragment();
+    let currentLi = null;
+    listedVideos.forEach(function(rel) {
+        const li = document.createElement('li');
+        li.dataset.rel = rel;
+        const cut = rel.lastIndexOf('/');
+        const folder = cut > 0 ? rel.slice(0, cut).replace(/^\.\/?/, '') : '';
+        li.textContent = rel.slice(cut + 1);
+        if (folder) {
+            const d = document.createElement('span');
+            d.className = 'dir';
+            d.textContent = folder;
+            li.appendChild(d);
+        }
+        if (rel === currentVideo) { li.classList.add('current'); currentLi = li; }
+        else if (!remaining.has(rel)) li.classList.add('played');
+        frag.appendChild(li);
+    });
+    videoListItems.appendChild(frag);
+    if (currentLi) currentLi.scrollIntoView({block: 'center'});
+}
+function setVideoListOpen(on) {
+    if (!videoListPanel) return;
+    videoListPanel.hidden = !on;
+    videoListToggle?.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on) renderVideoList();
+}
+// 목록에서 고른 영상을 바로 재생한다 — Next(selectVideoFromArr)와 같은 처리, 이번 순회 목록에서도 뺀다
+function playVideoFromList(rel) {
+    if (!rel) return;
+    flushSyncOffsetPost();
+    scheduleLikeFlush();
+    resetLoop();
+    const idx = fetchVideoArr.indexOf(rel);
+    if (idx !== -1) fetchVideoArr.splice(idx, 1);
+    currentVideo = rel;
+    applySavedSyncOffset();
+    updateHeartButton();
+    scheduleVideoPlayback(makeGetUrl(currentVideo));
+}
+videoListToggle?.addEventListener('click', function(e) {
+    e.stopPropagation();
+    setVideoListOpen(!isVideoListOpen());
+});
+videoListItems?.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const li = e.target.closest('li[data-rel]');
+    if (!li) return;
+    setVideoListOpen(false);
+    playVideoFromList(li.dataset.rel);
+});
+
+// 검색어를 바꾸면 주소(?q=)도 같이 바꾸고(새로고침·공유해도 유지) 목록을 새로 받는다. 빈 값이면 전체로 돌아간다
+function applySearch(q) {
+    q = (q || '').trim();
+    videoSearchForm?.classList.toggle('active', !!q);
+    if (videoSearchInput && videoSearchInput.value !== q) videoSearchInput.value = q;
+    if (q === searchQuery && fetchVideoArr.length) return;
+    searchQuery = q;
+    const url = new URL(location.href);
+    if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+    history.replaceState(null, '', url);
+    fetchVideoArr = [];
+    currentVideo = '';
+    getVideo();
+}
+videoSearchForm?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    applySearch(videoSearchInput.value);
+    videoSearchInput.blur();   // 키보드 단축키(→, PageDown 등)가 다시 영상에 먹도록
+});
+// 검색창의 x(지우기) 버튼 — type=search 는 지우면 'search' 이벤트가 온다
+videoSearchInput?.addEventListener('search', function() { if (!videoSearchInput.value) applySearch(''); });
+
+// 검색창은 우하단 버튼 그룹(⋯ 로 펼침) 안에 있다(2026-11-16). 입력 중 Esc = 입력칸에서 빠져나오기(단축키 다시 사용)
+videoSearchInput?.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { e.preventDefault(); videoSearchInput.blur(); }
+});
 
 function getVideo() {
     document.querySelectorAll('canvas').forEach(elem => elem.remove());
@@ -232,9 +334,11 @@ function getVideo() {
         if (isFetchingVideoList) return; // 이전 목록 요청이 아직 안 끝났으면 PageDown 연타로 중복 요청을 쏘지 않는다
         isFetchingVideoList = true;
         const likedParam = likeFilterMode === 'liked' ? 'true' : 'false';
-        axios.get(`/video/videos?dir=${dir}&liked=${likedParam}`)
+        axios.get('/video/videos', {params: {dir: dir, liked: likedParam, q: searchQuery || undefined}})
             .then(response => {
                 let videos = response.data;
+                listedVideos = [...videos].sort((a, b) => a.localeCompare(b));
+                if (isVideoListOpen()) renderVideoList();
                 if (videos.length > 0) {
                     fetchVideoArr = [...videos];
                     totalVideoCount = videos.length;
@@ -244,7 +348,8 @@ function getVideo() {
                 } else {
                     totalVideoCount = 0;
                     updateVideoCountDisplay();
-                    alert(likeFilterMode === 'liked' ? '하트한 영상이 없습니다' : '안누른 영상이 없습니다');
+                    const what = likeFilterMode === 'liked' ? '하트한 영상' : '안누른 영상';
+                    alert(searchQuery ? `'${searchQuery}'이(가) 들어간 ${what}이 없습니다` : `${what}이 없습니다`);
                 }
             })
             .finally(() => { isFetchingVideoList = false; });
@@ -733,6 +838,8 @@ function delVideo() {
                         delete videoSyncOffsetsMap[deletedVideo]; // 삭제된 영상의 싱크 값도 같이 정리
                         axios.post('/video/sync-offset', {dir: dir, filename: deletedVideo, offset: 0}).catch(() => {});
                         likedVideosSet.delete(deletedVideo); // 서버에서도 delete 라우트가 같이 정리한다
+                        listedVideos = listedVideos.filter(v => v !== deletedVideo);
+                        if (isVideoListOpen()) renderVideoList();
                     } else {
                         alert('Failed to delete video');
                         if (totalVideoCount !== null) { // 실제로는 안 지워졌으니 낙관적으로 줄인 카운트를 되돌림
@@ -765,15 +872,17 @@ function pushVideoArr(url) {
 const hideControls = () => {
     clearTimeout(hideControlsTimeout);
     hideControlsTimeout = setTimeout(() => {
+        // 검색어 입력 중·목록을 펼쳐 둔 동안엔 숨기지 않는다
+        if (document.activeElement === videoSearchInput || isVideoListOpen()) { hideControls(); return; }
         controls.style.display = 'none';
         topDiv.style.display = 'none';
         // filenameDisplay는 항상 보이도록 둔다 — 이걸 숨겼을 때 전체화면에서 3분할 좌우
-        // 영상이 같이 사라지는 문제가 생겨서 되돌림.
+        // 영상이 같이 사라지는 문제가 생겨서 되돌림. (2026-11-16 숨겨 봤다가 사용자 요청으로 다시 항상 표시)
         videoContainer.style.cursor = 'none';
         // 네이티브 <video controls> 바의 자동숨김을 브라우저에 맡기지 않고 직접 제어한다
         // (영상 교체 후 브라우저 자체 유휴 타이머가 멈춰 계속 떠있던 문제 — video.css 참고).
         if (videoPlayer) videoPlayer.classList.add('controls-idle');
-    }, 3000);
+    }, 4000);   // 2026-11-16: 3초 → 4초
 };
 
 const showControls = () => {
@@ -783,6 +892,30 @@ const showControls = () => {
     if (videoPlayer) videoPlayer.classList.remove('controls-idle');
     hideControls();
 };
+
+// iOS Safari 는 터치 리스너가 하나도 없으면 버튼에 :active(누르는 동안 색)를 주지 않는다 — 빈 리스너로 켠다(video.css 참고)
+document.addEventListener('touchstart', function() {}, {passive: true});
+
+// 우하단 버튼 그룹 펼치기/접기(2026-11-16). 펼친 상태는 이 브라우저에 기억한다
+(function initControlsToggle() {
+    const btn = document.getElementById('controlsToggle');
+    if (!btn || !controls) return;
+    const KEY = 'videoControlsExpanded';
+    function set(on) {
+        controls.classList.toggle('expanded', on);
+        btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+        btn.title = on ? '버튼 접기' : '버튼 더 보기';
+        try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) { /* 저장 못 해도 동작엔 지장 없음 */ }
+    }
+    let saved = false;
+    try { saved = localStorage.getItem(KEY) === '1'; } catch (e) { /* noop */ }
+    set(saved);
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        set(!controls.classList.contains('expanded'));
+        showControls();   // 누른 직후 4초 타이머를 다시 건다
+    });
+})();
 
 document.getElementById('nextButton')?.removeEventListener('click', getVideo);
 document.getElementById('nextButton')?.addEventListener('click', getVideo);
@@ -842,6 +975,8 @@ function applyLikeMoves(moves) {
         }
         const idx = fetchVideoArr.indexOf(oldRel);
         if (idx !== -1) fetchVideoArr[idx] = newRel;
+        const li2 = listedVideos.indexOf(oldRel);
+        if (li2 !== -1) listedVideos[li2] = newRel;
         if (currentVideo === oldRel) currentVideo = newRel;
         if (likedVideosSet.delete(oldRel)) likedVideosSet.add(newRel);
         if (videoSyncOffsetsMap[oldRel] !== undefined) {
@@ -1277,6 +1412,7 @@ function syncPlusBigClick() {
 }
 
 function wheelEvent(evnet) {
+    if (videoListPanel && videoListPanel.contains(event.target)) return;   // 목록은 휠로 스크롤(볼륨 조절 안 함)
     if (event.deltaY < 0) {
         adjustVolume(0.1);
     } else {
@@ -1285,6 +1421,9 @@ function wheelEvent(evnet) {
 }
 
 function videoKeyEvent(event) {
+    // 검색창 등에 글자를 칠 때는 영상 단축키(←/→, 스페이스 등)를 쓰지 않는다
+    const tg = event.target;
+    if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable)) return;
     let currentTime, duration;
     let isVideoJS = false;
     const videoPlayer = document.getElementById('videoPlayer');
@@ -1611,6 +1750,8 @@ function initPage() {
     previousVideos.push(undefined)
     // player = videojs('videoPlayer');
     if (likeFilterSelect) likeFilterMode = likeFilterSelect.value;
+    if (videoSearchInput) videoSearchInput.value = searchQuery;
+    videoSearchForm?.classList.toggle('active', !!searchQuery);
     Promise.all([loadVideoSyncOffsetsFromServer(), loadLikedVideosFromServer()]).then(function() {
         getVideo();
     });
