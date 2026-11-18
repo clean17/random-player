@@ -4,7 +4,7 @@ fire(급상승 관심종목) 자동 매수 전략.
 
 ⚠️ 2026-11-14 변경 — 아래 1·2·3번은 폐기됐다. 지금 매수 대상은
    '오늘 v2 추천(job/interest_stock_picks.py) 상위 10개 전체(PICKS_BUY_LABELS)' ∪ '화면에서 직접 체크(reserved)'다
-   (get_v2_buy_candidates). 청산은 kiwoom_trailing_stop (손절 -6% / 모의 보유 10영업일).
+   (get_v2_buy_candidates). 청산은 kiwoom_trailing_stop (모의 손절 -20% / 보유 10영업일, 실전 -6% / 15영업일).
    reserved 체크는 평일 20:00 일괄 해제된다.
    시장폭 레짐 게이트(BREADTH_MIN)와 종가위치 필터(CLOSE_POS_MIN)는 각각 2026-08~09부터 0(꺼짐)이었고
    2026-11-14 코드에서 제거했다. 되살리려면 git 이력(이 날짜 직전 커밋)을 볼 것. 당시 검증 근거:

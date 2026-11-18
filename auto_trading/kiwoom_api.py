@@ -579,6 +579,34 @@ def get_current_prices(stk_cds: List[str], env: Optional[str] = None) -> Dict[st
     return out
 
 
+def get_base_prices(stk_cds: List[str], env: Optional[str] = None) -> Dict[str, int]:
+    """종목코드들의 오늘 기준가(base_pric, 등락률 계산 기준)를 {코드: 가격}으로 반환 — ka10095, 100종목씩.
+
+    2026-11-17 추가: 2026-09-14 KRX 애프터마켓(16:00~20:00) 신설 뒤로 일봉 '종가'(토스·키움 모두)는
+    20:00까지의 마지막 체결가인데, 다음 날 기준가는 정규장 종가라 둘이 매일 어긋난다(036710 2026-11-11:
+    전일 일봉 종가 3,815 / 실제 기준가 3,890 -> 등락률이 +29.82%(상한가)인데 +32.37%로 계산됨).
+    권리락·감자 등 조정도 이 값에 반영돼 있다. 응답 행의 stk_cd로 매칭한다(없는 코드는 빈 행)."""
+    codes = []
+    for c in stk_cds:
+        c = (c or '').strip()
+        if c and c not in codes:
+            codes.append(c)
+    out: Dict[str, int] = {}
+    for i in range(0, len(codes), _BULK_PRICE_MAX):
+        chunk = codes[i:i + _BULK_PRICE_MAX]
+        try:
+            data = _call('ka10095', '/api/dostk/stkinfo', {'stk_cd': '|'.join(chunk)}, env=env)
+        except Exception as e:
+            print(f'[ERROR] get_base_prices {len(chunk)}종목: {e}')
+            continue
+        for row in data.get('atn_stk_infr') or []:
+            code = str(row.get('stk_cd') or '').strip()
+            raw = str(row.get('base_pric') or '').replace(',', '').replace('+', '').replace('-', '')
+            if code and raw.isdigit() and int(raw) > 0:
+                out[code] = int(raw)
+    return out
+
+
 # ── 종목 상태(투자경고/관리종목/거래정지 등) 조회 (ka10099) ─────────────────────
 # 2026-09-02 실측: ka10001엔 이 정보가 없다. ka10099(mrkt_tp='0' 코스피/'10' 코스닥)의
 # 응답 list[].auditInfo 가 '정상'/'거래정지'/'관리종목'/'투자주의환기종목'/'투자경고'/

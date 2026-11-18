@@ -903,27 +903,24 @@ def create_scheduler():
         replace_existing=True,
     )
 
-    # 18) 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 09:30~20:00, 5분마다.
+    # 18) 관심종목 추천 top10 (규칙기반 점수/라벨, 2026-09-08 추가) — 월~금 09:30~20:30, 5분마다.
+    #     스케줄 정의는 interest_stock_picks.SCHEDULE_CRONS 한 곳(log_config()도 같은 값을 찍는다).
+    #     2026-11-16: 마지막 실행 20:55 -> 20:30(스냅샷 마지막 회차 20:15 이후엔 결과가 안 바뀜).
     #     2026-11-14 v2: 전 종목 스냅샷(AutoSales 2_finding이 20분마다 기록) 기반 점수로 바뀌어
     #     회당 최종 최대 10종목만 외국인/기관 조회(키움 ka10059, 실계좌 자동매매와 같은 API 예산
     #     공유) + 뉴스 조회(토스)가 들어간다 — 트레이딩 쪽에서 429가 잦아지면 이 주기부터 의심할 것.
     #     2026-09-22: 시작 시각을 10:00 -> 09:30으로 당겼다. CronTrigger는 minute 필드가 시(hour)
     #     전체에 공통 적용돼 "9:30부터, 10시부터는 매 5분"을 한 트리거로 못 써서 잡을 둘로 쪼갰다
-    #     (9시대는 30,35,...,55분만, 10시부터는 기존과 동일하게 */5).
-    scheduler.add_job(
-        run_interest_stock_picks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute="30-55/5"),
-        id="interest_stock_picks_early",
-        executor="io",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        run_interest_stock_picks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="10-20", minute="*/5"),
-        id="interest_stock_picks",
-        executor="io",
-        replace_existing=True,
-    )
+    #     (9시대는 30,35,...,55분만, 10~19시는 */5, 20시는 0~30분).
+    from job.interest_stock_picks import SCHEDULE_CRONS as _PICKS_CRONS
+    for _suffix, _hour, _minute in _PICKS_CRONS:
+        scheduler.add_job(
+            run_interest_stock_picks,
+            trigger=CronTrigger(day_of_week="mon-fri", hour=_hour, minute=_minute),
+            id="interest_stock_picks" + ("_" + _suffix if _suffix else ""),
+            executor="io",
+            replace_existing=True,
+        )
 
     # 19) 자동매수 대상(reserved) 체크 일괄 해제 — 평일 20:00 (2026-11-14 사용자 요청).
     #     체크는 '그날 15:21 모의 fire 매수용'이라 다음 거래일까지 남기지 않는다. 주말에 체크한 건

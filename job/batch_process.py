@@ -394,13 +394,67 @@ def refresh_us_lgbm_gallery():
                     cwd=r"C:\my-project\AutoSales.py")
 
 
+# ── 오늘 기준가 파일 (AutoSales 등락률 계산용, 2026-11-17) ─────────────────────────────────
+# AutoSales의 utils.update_today_ohlcv_from_amount()가 오늘 등락률을 '토스 일봉 종가 / 기준가'로
+# 계산하는데, 토스 공식 API엔 기준가가 없어 pkl 직전 종가로 대신했다. 그런데 2026-09-14 KRX
+# 애프터마켓(16:00~20:00) 신설 뒤 일봉 종가는 20:00 마지막 체결가라 다음 날 기준가(정규장 종가)와
+# 매일 어긋난다 — 036710 2026-11-11: 실제 +29.82%(상한가)가 +32.37%로, 005930 2026-11-17: 실제
+# -1.68%가 -0.62%로 계산됐다. AutoSales는 키움을 안 쓰므로 여기서 키움 ka10095로 전 종목 기준가를
+# 하루 한 번 받아 파일로 넘긴다(100종목/회 -> 약 29회). 형식은 AutoSales utils._load_kr_base_prices()와 맞출 것.
+KR_BASE_PRICE_PATH = r"C:\my-project\AutoSales.py\data\kr_base_price.json"
+_KR_PICKLE_DIR = r"C:\my-project\AutoSales.py\data\pickle"
+_KR_BASE_PRICE_MIN_COVERAGE = 0.5   # 이 비율 미만만 받아지면 저장하지 않고 다음 실행에서 다시 받는다
+_kr_base_price_lock = threading.Lock()
+
+
+def ensure_kr_base_prices() -> None:
+    """오늘(KRX 영업일, 09:00 이후) 기준가 파일이 없으면 받아서 원자적으로 쓴다. 이미 오늘 것이면 바로 리턴.
+
+    09:00 전엔 키움 기준가가 전날 값일 수 있어 받지 않는다(그 시간 AutoSales는 pkl 폴백 그대로).
+    실패해도 예외를 올리지 않는다 — 뒤의 AutoSales 스크립트는 파일이 없으면 기존 폴백으로 돈다."""
+    import re
+    import json
+    import datetime as _dt
+    log = _get_batch_logger()
+    try:
+        from auto_trading.kiwoom_api import is_krx_business_day, get_base_prices
+        now = _dt.datetime.now()
+        if not is_krx_business_day(now.date()) or now.time() < _dt.time(9, 0):
+            return
+        today = now.strftime('%Y%m%d')
+        with _kr_base_price_lock:
+            try:
+                with open(KR_BASE_PRICE_PATH, 'r', encoding='utf-8') as f:
+                    if json.load(f).get('date') == today:
+                        return
+            except (OSError, ValueError):
+                pass
+            codes = sorted(n[:-4] for n in os.listdir(_KR_PICKLE_DIR)
+                           if re.fullmatch(r'[0-9][0-9A-Z]{5}\.pkl', n))
+            started = time.perf_counter()
+            base = get_base_prices(codes)
+            if len(base) < len(codes) * _KR_BASE_PRICE_MIN_COVERAGE:
+                log.error(f'kr_base_price: 기준가 {len(base)}/{len(codes)}종목만 받아져 저장 안 함(다음 실행에서 재시도)')
+                return
+            tmp = KR_BASE_PRICE_PATH + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump({'date': today, 'fetched_at': now.isoformat(timespec='seconds'), 'base': base}, f)
+            os.replace(tmp, KR_BASE_PRICE_PATH)
+            log.info(f'kr_base_price: 오늘({today}) 기준가 {len(base)}/{len(codes)}종목 저장 '
+                     f'({time.perf_counter() - started:.1f}초) -> {KR_BASE_PRICE_PATH}')
+    except Exception as e:
+        log.error(f'kr_base_price: 기준가 파일 생성 실패(AutoSales는 pkl 직전 종가 폴백): {e}')
+
+
 def update_interest_stocks():
+    ensure_kr_base_prices()
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\1_periodically_update_today_interest_stocks.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
 
 
 def find_stocks():
+    ensure_kr_base_prices()
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\2_finding_stocks_with_increased_volume.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
@@ -409,6 +463,7 @@ def find_stocks():
 # 신호 재설계 병행검증(target='interest_v2') — find_stocks(기존 2_)와 완전히 분리된 트랙.
 # 기존 화면/자동매수는 target='interest'만 보므로 이 결과는 실거래에 영향을 주지 않는다.
 def find_stocks_advanced():
+    ensure_kr_base_prices()
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\2_finding_stocks_advanced.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script], cwd=r"C:\my-project\AutoSales.py")
@@ -503,6 +558,7 @@ def fetch_held_stock_data_priority():
     if not codes:
         return
 
+    ensure_kr_base_prices()
     venv_python = r"C:\my-project\AutoSales.py\venv\Scripts\python.exe"
     py_script = r"C:\my-project\AutoSales.py\job\0-2_priority_fetch_held_stock_data.py"
     _run_subprocess([venv_python, "-u", "-X", "utf8", py_script, *sorted(codes)],

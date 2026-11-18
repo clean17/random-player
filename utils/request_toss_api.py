@@ -138,20 +138,44 @@ def get_stock_news(stock_name: str, limit: int = 3) -> List[Dict]:
     Google News RSS(공개 피드)로 교체했다 — 최근 7일 기사만, 제목은 'OO - 매체' 꼴이라 매체명을
     떼어 source로 분리한다. url은 news.google.com 리다이렉트 링크(클릭하면 원문 매체로 이동)라
     프런트가 검색 링크 대신 이걸 쓸 수 있다. created_at은 ISO 8601(UTC). 같은 종목을 한 리포트에서
-    여러 번 부르지 않지만, 피드 부담을 줄이려 1시간 캐시한다."""
+    여러 번 부르지 않지만, 피드 부담을 줄이려 1시간 캐시한다.
+
+    2026-11-17: 5분 주기 추천 잡이 10종목을 연달아 불러 429(Too Many Requests)가 났고, 실패는 캐시하지
+    않아 5분 뒤 또 불러 차단이 길어졌다. 그래서
+      - 요청 사이 최소 _NEWS_MIN_INTERVAL초 간격(호출을 직렬화)
+      - 429를 받으면 _NEWS_BACKOFF_SEC 동안 요청을 아예 쉬고, 그 사이·실패 시엔 만료된 캐시라도
+        _NEWS_STALE_MAX 이내면 그걸 돌려준다(없으면 빈 리스트)."""
+    global _news_blocked_until, _news_last_call
     key = (stock_name, limit)
     now = time.time()
     with _NEWS_CACHE_LOCK:
         cached = _NEWS_CACHE.get(key)
         if cached and now - cached[0] < _NEWS_CACHE_TTL:
             return cached[1]
+        stale = cached[1] if cached and now - cached[0] < _NEWS_STALE_MAX else []
+        if now < _news_blocked_until:
+            return stale
     try:
-        res = requests.get(
-            _NEWS_RSS_URL,
-            params={"q": f"{stock_name} 주식 when:7d", "hl": "ko", "gl": "KR", "ceid": "KR:ko"},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=10,
-        )
+        with _NEWS_CALL_LOCK:
+            if time.time() < _news_blocked_until:   # 대기 중 다른 호출이 429를 받았을 수 있다
+                return stale
+            wait = _news_last_call + _NEWS_MIN_INTERVAL - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            try:
+                res = requests.get(
+                    _NEWS_RSS_URL,
+                    params={"q": f"{stock_name} 주식 when:7d", "hl": "ko", "gl": "KR", "ceid": "KR:ko"},
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=10,
+                )
+            finally:
+                _news_last_call = time.time()
+        if res.status_code == 429:
+            _news_blocked_until = time.time() + _NEWS_BACKOFF_SEC
+            print(f"[WARN] get_stock_news 429(요청 과다): {_NEWS_BACKOFF_SEC // 60:.0f}분간 뉴스 조회 중단, "
+                  f"그동안 이전 캐시 사용 ({stock_name})")
+            return stale
         res.raise_for_status()
         out = []
         for it in ET.fromstring(res.content).findall("./channel/item")[:limit]:
@@ -171,13 +195,19 @@ def get_stock_news(stock_name: str, limit: int = 3) -> List[Dict]:
         return out
     except Exception as e:
         print(f"[WARN] get_stock_news 실패: {stock_name} {e}")
-        return []
+        return stale
 
 
 _NEWS_RSS_URL = "https://news.google.com/rss/search"
 _NEWS_CACHE_LOCK = threading.Lock()
 _NEWS_CACHE: Dict[tuple, tuple] = {}
 _NEWS_CACHE_TTL = 3600.0
+_NEWS_STALE_MAX = 86400.0     # 차단·실패 때 대신 돌려줄 만료 캐시의 최대 나이
+_NEWS_MIN_INTERVAL = 0.7      # 요청 사이 최소 간격(초)
+_NEWS_BACKOFF_SEC = 20 * 60   # 429 받은 뒤 요청을 쉬는 시간
+_NEWS_CALL_LOCK = threading.Lock()
+_news_blocked_until = 0.0
+_news_last_call = 0.0
 
 
 def request_stock_category(company_code):

@@ -121,7 +121,9 @@
            2026-09-08: 추천종목 탭(#table-picks)도 같은 컴포넌트를 쓰면서 이 규칙이
            #table-mystocks-holdings에만 있어 아이콘 레이아웃이 깨졌었다 — 추가. */
         #table-mystocks-holdings .ms-stock-name,
-        #table-picks .ms-stock-name {
+        #table-picks .ms-stock-name,
+        #table-foreign-surge .ms-stock-name,
+        #table-first-jump .ms-stock-name {
             display: flex;
             align-items: flex-start;
             gap: 8px;
@@ -778,7 +780,7 @@
     </section>
 
     <!-- 관심종목 추천(규칙기반 점수/라벨, 2026-09-08 추가). job/interest_stock_picks.py가
-         월~금 09:30~20:00 5분마다 생성해둔 결과를 그대로 읽어서 보여준다 — 이 탭 자체는 계산하지 않는다. -->
+         월~금 09:30~20:30 5분마다 생성해둔 결과를 그대로 읽어서 보여준다 — 이 탭 자체는 계산하지 않는다. -->
     <section id="tab-picks" class="tab-panel" style="display:none;">
         <div class="mystocks-livegap-toolbar">
             <span class="ms-refresh-status" id="ms-picks-status"></span>
@@ -790,11 +792,15 @@
                 <tr>
                     <th>종목명</th>
                     <th>관리</th>
-                    <th class="ms-sortable" data-sort="label">추천</th>
-                    <th class="ms-sortable" data-sort="upside_tier">상승여력</th>
-                    <th class="right" id="th-picks-price" style="display:none;">가격</th>
+                    <th class="ms-sortable" data-sort="label"
+                        title="등급 (★ 점수 5점 만점). 점수에 마우스를 올리면 충족/미충족 조건이 보입니다">추천</th>
+                    <!-- 과거 날짜 조회 때만 보이는 '추천 당시 가격' 컬럼(2026-11-17 헤더명 '가격' -> '당시 가격') -->
+                    <th class="right" id="th-picks-price" style="display:none;"
+                        title="그 날짜에 추천이 마지막으로 생성될 때의 가격. 옆 현재가의 (%)는 이 가격 대비 등락">당시 가격</th>
                     <th class="right">현재가</th>
                     <th class="right ms-sortable" data-sort="today_price_change_pct">등락률</th>
+                    <th class="right ms-sortable" data-sort="current_trading_value"
+                        title="오늘(과거 날짜면 그날 추천 생성 시점) 누적 거래대금">거래대금</th>
                     <th class="right ms-sortable" data-sort="trading_value_change_pct">거래대금 증가율</th>
                     <th class="right ms-sortable" data-sort="foreign_net">외국인 순매수</th>
                     <th class="right ms-sortable" data-sort="institution_net">기관 순매수</th>
@@ -806,8 +812,34 @@
                 <tbody><tr><td colspan="11" class="empty" data-empty-text="불러오는 중...">불러오는 중...</td></tr></tbody>
             </table>
         </div>
+        <!-- 2026-11-14: 외국인 지분율 급증(5거래일 +2%p↑) — 유동성 유니버스 전체, 점수와 무관한 참고 목록.
+             job/interest_stock_picks.py의 FOREIGN_SURGE_* 주석에 근거(4개월 표본, 아직 점수엔 미반영). -->
+        <div class="ms-sub-block" id="ms-foreign-surge-block" style="display:none;">
+        <h3 class="section-title">외국인 지분율 급증
+            <span class="badge" id="ms-foreign-surge-count">0건</span>
+            <span class="ms-sub-tag">참고용 · 자동매수 대상 아님</span>
+        </h3>
+        <p class="ms-sub-rule" id="ms-foreign-surge-rule"></p>
+        <div class="table-scroller">
+            <table class="table" id="table-foreign-surge">
+                <thead>
+                <tr>
+                    <th>종목명</th>
+                    <th class="right">v2 점수(5점)</th>
+                    <th class="right">현재가</th>
+                    <th class="right">등락률</th>
+                    <th class="right">외국인 지분율<br><small class="ms-foreign-basis" style="font-weight:400;opacity:.7;">(매일 18:40 수집)</small></th>
+                    <th class="right">5일 변화</th>
+                    <th class="right">5일 외국인 순매수</th>
+                    <th>기준일</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        </div>
         <!-- 2026-11-14: 조용하던 종목의 첫 급등 — 참고 목록(매수 대상 아님). 조건·근거는
-             job/interest_stock_picks.py FIRST_JUMP_* 주석. -->
+             job/interest_stock_picks.py FIRST_JUMP_* 주석. 2026-11-16 맨 아래로 이동. -->
         <div class="ms-sub-block" id="ms-first-jump-block" style="display:none;">
         <h3 class="section-title">조용하던 종목의 첫 급등
             <span class="badge" id="ms-first-jump-count">0건</span>
@@ -824,34 +856,8 @@
                     <th class="right">거래대금 증가율</th>
                     <th class="right">종가위치</th>
                     <th class="right">60일선 이격</th>
-                    <th class="right">v2 점수</th>
+                    <th class="right">v2 점수(5점)</th>
                     <th class="right">외국인 지분율(5일)<br><small class="ms-foreign-basis" style="font-weight:400;opacity:.7;">(매일 18:40 수집)</small></th>
-                </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-        </div>
-        <!-- 2026-11-14: 외국인 지분율 급증(5거래일 +2%p↑) — 유동성 유니버스 전체, 점수와 무관한 참고 목록.
-             job/interest_stock_picks.py의 FOREIGN_SURGE_* 주석에 근거(4개월 표본, 아직 점수엔 미반영). -->
-        <div class="ms-sub-block" id="ms-foreign-surge-block" style="display:none;">
-        <h3 class="section-title">외국인 지분율 급증
-            <span class="badge" id="ms-foreign-surge-count">0건</span>
-            <span class="ms-sub-tag">참고용 · 자동매수 대상 아님</span>
-        </h3>
-        <p class="ms-sub-rule" id="ms-foreign-surge-rule"></p>
-        <div class="table-scroller">
-            <table class="table" id="table-foreign-surge">
-                <thead>
-                <tr>
-                    <th>종목명</th>
-                    <th class="right">v2 점수</th>
-                    <th class="right">현재가</th>
-                    <th class="right">등락률</th>
-                    <th class="right">외국인 지분율<br><small class="ms-foreign-basis" style="font-weight:400;opacity:.7;">(매일 18:40 수집)</small></th>
-                    <th class="right">5일 변화</th>
-                    <th class="right">5일 외국인 순매수</th>
-                    <th>기준일</th>
                 </tr>
                 </thead>
                 <tbody></tbody>
@@ -1230,7 +1236,7 @@
             msStopTimer();
             loadData()
         } else if (target.id === 'tab-picks') {
-            // 계산은 스케줄 잡(평일 09:30~20:00, 5분마다)이 미리 해두므로, 여기선 결과만 가볍게
+            // 계산은 스케줄 잡(평일 09:30~20:30, 5분마다)이 미리 해두므로, 여기선 결과만 가볍게
             // 조회한다. 2026-09-21: 날짜 검색 추가 — 기본은 오늘, loadData()가 날짜 변경 시
             // 다시 불러온다(tab-picks 분기 참고).
             msStopTimer();
@@ -1694,6 +1700,19 @@
         if (Math.abs(v) >= jo) return (v / jo).toFixed(1) + '조';
         if (Math.abs(v) >= eok) return (v / eok).toFixed(1) + '억';
         if (Math.abs(v) >= man) return Math.round(v / man).toLocaleString('ko-KR') + '만원';
+        return msFmtWon(v);
+    }
+    // 금액을 조/억/만 단위 소수 1자리로: 1.2조 / 296.9억 / 3,512.3만 (만 미만은 원). 2026-11-17 추천 표 '거래대금' 칸.
+    // msFmtEok과 달리 '만' 단위도 소수 1자리이고 '원'을 붙이지 않는다.
+    function msFmtAmount1(n) {
+        if (n == null || !isFinite(Number(n))) return '-';
+        const v = Number(n);
+        const units = [[1_0000_0000_0000, '조'], [1_0000_0000, '억'], [1_0000, '만']];
+        for (const [u, name] of units) {
+            if (Math.abs(v) >= u) {
+                return (v / u).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + name;
+            }
+        }
         return msFmtWon(v);
     }
     function msFmtPct(n, decimals = 2) {
@@ -2191,6 +2210,7 @@
         upside_tier: msLabelScore,
         today_price_change_pct: p => Number(p.today_price_change_pct ?? -Infinity),
         trading_value_change_pct: p => Number(p.trading_value_change_pct ?? -Infinity),
+        current_trading_value: p => Number(p.current_trading_value ?? -Infinity),
         foreign_net: p => Number(p.foreign_net ?? -Infinity),
         institution_net: p => Number(p.institution_net ?? -Infinity),
         foreign_hold_chg5: p => Number(p.foreign_hold_chg5 ?? -Infinity),
@@ -2227,6 +2247,13 @@
         });
     }
 
+    // 참고 목록 빈 결과 행. 공통 CSS(style.css td.empty::before)가 data-empty-text만 보여주므로 꼭 넣는다 —
+    // 2026-11-16: 빠져 있어서 빈 말풍선만 보였다.
+    function msEmptyRowHtml(tableSel, msg = '조회 결과가 없어요') {
+        const n = document.querySelectorAll(`${tableSel} thead tr th`).length || 1;
+        return `<tr><td colspan="${n}" class="empty" data-empty-text="${msg}">${msg}</td></tr>`;
+    }
+
     // 참고 목록(첫 급등/외국인 급증) 블록 헤더: 데이터가 없는 옛 파일이면 블록째 숨기고, 있으면 건수·조건을 채운다.
     function msSubBlockHeader(prefix, rows, ruleText) {
         const block = document.getElementById(`ms-${prefix}-block`);
@@ -2244,7 +2271,7 @@
         if (!tbody || !msSubBlockHeader('first-jump', rows,
                 `조건: ${data.first_jump_rule || ''} · 백테스트에선 8~10% 구간이 가장 좋았음`)) return;
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty">해당 종목 없음 (하루 평균 0.6종목 정도로 드묾)</td></tr>';
+            tbody.innerHTML = msEmptyRowHtml('#table-first-jump');
             return;
         }
         tbody.innerHTML = rows.map(r => `
@@ -2255,7 +2282,7 @@
           <td class="right">${r.trading_value_change_pct != null ? msFmtPct(r.trading_value_change_pct / 100, 0) : '-'}</td>
           <td class="right">${r.clv != null ? Number(r.clv).toFixed(2) : '-'}</td>
           <td class="right">${r.ma60_gap != null ? (r.ma60_gap >= 0 ? '+' : '') + Number(r.ma60_gap).toFixed(1) + '%' : '-'}</td>
-          <td class="right">${r.points != null ? r.points + '/10' : '-'}</td>
+          <td class="right">${msScore5(r.points)}</td>
           <td class="right">${msForeignHoldHtml(r)}</td>
         </tr>`).join('');
     }
@@ -2266,13 +2293,13 @@
         if (!tbody || !msSubBlockHeader('foreign-surge', rows,
                 `조건: ${data.foreign_surge_rule || ''} · 유동성 종목 전체 대상, 추천 점수와 무관`)) return;
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty">해당 종목 없음</td></tr>';
+            tbody.innerHTML = msEmptyRowHtml('#table-foreign-surge');
             return;
         }
         tbody.innerHTML = rows.map(r => `
         <tr>
           <td>${msStockNameCellHtml(r.stock_name, r.stock_code, null, null)}${r.in_picks ? ' <span class="ms-positive" title="위 추천 목록에도 있음">★</span>' : ''}</td>
-          <td class="right">${r.points != null ? r.points + '/10' : '-'}</td>
+          <td class="right">${msScore5(r.points)}</td>
           <td class="right">${r.current_price != null ? msFmtWon(r.current_price) : '-'}</td>
           <td class="right ${msPnlClass(r.today_price_change_pct)}">${msFmtPct((r.today_price_change_pct || 0) / 100)}</td>
           <td class="right">${r.foreign_hold_ratio != null ? Number(r.foreign_hold_ratio).toFixed(1) + '%' : '-'}</td>
@@ -2324,8 +2351,8 @@
                 ? `${requestedDate.slice(0, 4)}-${requestedDate.slice(4, 6)}-${requestedDate.slice(6, 8)} `
                 : '';
             statusEl.textContent = data.generated_at
-                ? `${dateLabel}생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 09:30~20:00, 5분마다 자동 갱신)`
-                : (isPastDate ? `${dateLabel}에 생성된 추천이 없어요` : '아직 생성된 추천이 없어요 (평일 09:30~20:00, 5분마다 자동 생성됩니다)');
+                ? `${dateLabel}생성 시각: ${new Date(data.generated_at).toLocaleString('ko-KR')} (평일 09:30~20:30, 5분마다 자동 갱신)`
+                : (isPastDate ? `${dateLabel}에 생성된 추천이 없어요` : '아직 생성된 추천이 없어요 (평일 09:30~20:30, 5분마다 자동 생성됩니다)');
         }
         if (discEl) discEl.textContent = data.disclaimer || '';
 
@@ -2377,25 +2404,25 @@
         }
     }
 
-    // 상승여력 칸: '상승여력 높음' → '높음'(추천 헤더와 같은 의미라 접두어 생략) + 점수. 과거 날짜 파일엔
-    // 접두어가 붙은 옛 문구가 그대로 있어서 화면에서 떼어 쓴다.
-    // v1(~2026-11-13 파일): 점수 0.70 이상인데 '매수'면 수급 조건(STRONG_FLOW_MIN)에서 한 단계 내려간 것.
-    // v2(2026-11-14~, scheme='v2'): 서버가 label_note(강등 사유)와 score_detail(충족/미충족 조건)을 준다.
-    function msUpsideCellHtml(p) {
-        const tier = String(p.upside_tier ?? '').replace(/^상승여력\s*/, '');
-        if (!tier) return '';
+    // 점수 표시는 5점 만점 소수 1자리(2026-11-16 사용자 요청). v2 points(0~10) → points/2.
+    function msScore5(points) {
+        return points == null ? '-' : (Number(points) / 2).toFixed(1);
+    }
+
+    // 추천 칸: '적극매수 (★ 4.5)'. 상승여력 칸은 등급에서 파생돼 내용이 같아서 2026-11-16 합쳤다.
+    // score는 v1(~2026-11-13 파일)·v2 모두 0~1이라 ×5로 5점 만점이 된다(v2 score = points/10).
+    // 툴팁: v2는 서버의 label_note(강등 사유)+score_detail(충족/미충족 조건),
+    //       v1은 점수 0.70 이상인데 '매수'면 수급 조건(STRONG_FLOW_MIN)으로 한 단계 내려간 것.
+    function msLabelCellHtml(p) {
+        const label = p.label ?? '';
         const sc = Number(p.score);
-        if (!Number.isFinite(sc)) return tier;
+        if (!label || !Number.isFinite(sc)) return label;
         const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
-        let note = '';
-        if (p.points != null) {
-            const text = [p.label_note, p.score_detail].filter(Boolean).join('\n');
-            if (text) note = ` title="${esc(text)}"`;
-            return `${tier} <span class="ms-picks-score"${note}>(${p.points}/10)</span>`;
-        }
-        if (sc >= 0.70 && p.label === '매수')
-            note = ' title="점수는 적극매수 구간이지만 외국인·기관 순매수가 거래대금의 3% 미만이라 매수로 표시"';
-        return `${tier} <span class="ms-picks-score"${note}>(${sc.toFixed(2)})</span>`;
+        let text = '';
+        if (p.points != null) text = [p.label_note, p.score_detail].filter(Boolean).join('\n');
+        else if (sc >= 0.70 && label === '매수') text = '점수는 적극매수 구간이지만 외국인·기관 순매수가 거래대금의 3% 미만이라 매수로 표시';
+        const note = text ? ` title="${esc(text)}"` : '';
+        return `${label} <span class="ms-picks-score"${note}>(★ ${(sc * 5).toFixed(1)})</span>`;
     }
 
     function renderInterestPicksRows(picks) {
@@ -2438,13 +2465,13 @@
                       aria-pressed="false" aria-label="자동매수 대상 추가"></button>
             </div>
           </td>
-          <td class="${labelClass}">${p.label ?? ''}</td>
-          <td>${msUpsideCellHtml(p)}</td>
+          <td class="${labelClass}">${msLabelCellHtml(p)}</td>
           ${msPicksShowLive
             ? `<td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>
           <td class="right picks-live" data-stock-code="${p.stock_code ?? ''}">${msPicksLiveCellHtml(p)}</td>`
             : `<td class="right">${p.current_price != null ? msFmtWon(p.current_price) : '-'}</td>`}
           <td class="right ${msPnlClass(p.today_price_change_pct)}">${msFmtPct((p.today_price_change_pct || 0) / 100)}</td>
+          <td class="right">${msFmtAmount1(p.current_trading_value)}</td>
           <td class="right">${msFmtPct((p.trading_value_change_pct || 0) / 100, 0)}</td>
           <td class="right ${msPnlClass(p.foreign_net)}">${p.foreign_net != null ? msFmtEok(p.foreign_net) : '-'}</td>
           <td class="right ${msPnlClass(p.institution_net)}">${p.institution_net != null ? msFmtEok(p.institution_net) : (p.institution_pending ? '<span title="장중 기관 수급은 일부 종목만 잠정 집계됩니다(16시 이후 확정)">집계 전</span>' : '-')}</td>
@@ -2546,7 +2573,9 @@
         }
     });
 
-    document.getElementById('table-picks')?.addEventListener('click', (e) => {
+    // 종목명 클릭 → 네이버 증권. 2026-11-16: 추천 표만 걸려 있어 아래 참고 목록(외국인 급증/첫 급등)에서는
+    // 안 열렸다 — 탭 전체(#tab-picks)에 위임한다.
+    document.getElementById('tab-picks')?.addEventListener('click', (e) => {
         const nameCell = e.target.closest('.ms-stock-name');
         if (!nameCell) return;
         const stkCd = nameCell.dataset.stkCd;

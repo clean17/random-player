@@ -118,5 +118,6 @@ grep -A50 'name="no-commit"' .idea/workspace.xml | sed '/<\/list>/q' | grep -o '
 | `auto_trading/TRADING_RULES.md` | 매수/매도 조건 스펙, 파라미터, 알려진 한계 (0절 = v8) |
 | `auto_trading/V8_SWITCHOVER.md` | v8 전환 상태, 백테스트와 실매매 차이, 되돌리기 |
 | `.claude/KIWOOM_AUTO_TRADING.md` | 키움 API 실사양, `_call()` 함정, 재시작 규칙, 미해결 과제 |
+| `job/INTEREST_PICKS_V2.md` | 추천종목 v2(2026-11-14) 설계·근거·모의 fire 연동·재검증 일정 |
 
 자동매매 코드를 건드리기 전에 두 문서를 먼저 읽는다. 값을 바꾸면 문서도 같이 고친다.

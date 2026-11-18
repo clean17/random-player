@@ -36,8 +36,19 @@
     외국인·기관 둘 다 순매도 47건은 -3.11%p(상승확률 0.63배) — 그래서 점수엔 넣지 않고
     '둘 다 순매도' 강등만 한다.
 
+  진입 시점 재검증(2026-11-17, 현행 설정 = 등락 4~12% + 폭발 제외 + 5점↑ 상위 10, 비용 0.25%):
+    모의 fire는 15:21 동시호가(=당일 종가)로 사므로 '당일 종가 진입'으로 다시 계산했다.
+                          다음날 시가 진입            당일 종가 진입
+      P1 24.9~25.8   초과10일 +0.88%p 순 +0.65%   초과10일 +1.04%p 순 +0.95%
+      P2 25.9~26.8   초과10일 +0.75%p 순 +0.38%   초과10일 +0.81%p 순 +0.75%
+      P3 26.9~(368건) 초과10일 +0.22%p 순 -3.35%  초과10일 +0.06%p 순 -3.74%
+      전체 4,937건   초과10일 +0.77%p 순 +0.23%   초과10일 +0.86%p 순 +0.50% (상승 1.21배/하락 1.00배)
+    추천 종목의 다음날 시가 갭은 평균 +0.28%(전 종목 +0.23%)로 밤사이 우위가 없어, 종가에 사도 손해가 없다.
+    한계: 패널은 '최종 종가'로 신호를 계산했다 — 실제 15:20 신호는 마감 직전 값이라 약간 다를 수 있다.
+    화면 문구(disclaimer)는 이 '당일 종가 진입' 수치를 쓴다.
+
   ⚠️ 한계
-    * 검증은 '종가 신호 -> 다음날 시가 매수'로 했다. 장중(09:30~15:20) 결과는 그날 일부 데이터
+    * 검증은 '종가 신호 -> 다음날 시가 매수'로 했다(위 진입 시점 재검증으로 당일 종가 매수도 확인). 장중(09:30~15:20) 결과는 그날 일부 데이터
       기준이라 검증되지 않은 근사다 — candidates 로그가 쌓이면 장중 vs 종가 신호를 비교할 것.
     * 2026-09 이후는 시장 자체가 크게 빠져서(10월 종목 중앙값 -15%) 절대수익은 음수였다.
       이 점수는 '시장보다 나은 종목'을 고르는 것이지 하락장을 피하는 장치가 아니다.
@@ -68,6 +79,19 @@ _OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
                         'logs', 'interest_stock_picks')
 SNAPSHOT_PATH = r'C:\my-project\AutoSales.py\data\universe_snapshot.json'
 SNAPSHOT_MAX_AGE_MIN = 60   # 스냅샷이 이보다 오래되면(2_ 스크립트가 멈춤) 새 추천을 만들지 않는다
+
+# 생성 스케줄(평일, 5분마다) — job/batch_runner.py가 이 목록 그대로 CronTrigger 잡을 등록하고
+# log_config()도 이걸 찍는다(스케줄과 시작 로그가 따로 놀지 않게 한 곳에만 둔다).
+# (job id 접미사, hour, minute). CronTrigger의 minute은 hour 전체에 공통이라 시간대별로 쪼갠다.
+# 2026-11-16 사용자 요청: 마지막 실행 20:55 -> 20:30. 스냅샷(2_finding)의 마지막 회차가 20:15 시작
+# (~20:27 기록)이라 20:35~20:55 5회는 같은 스냅샷으로 결과가 안 바뀌면서 ka10059만 회당 최대
+# 10번 더 불렀다(2026-11-16 20:45 429 경고).
+SCHEDULE_CRONS = [
+    ('early', '9', '30-55/5'),   # 09:30~09:55
+    ('', '10-19', '*/5'),        # 10:00~19:55
+    ('late', '20', '0-30/5'),    # 20:00~20:30 (마지막)
+]
+SCHEDULE_DESC = '평일 09:30~20:30, 5분마다'
 
 # 유니버스(백테스트와 동일)
 UNIVERSE_MIN_CLOSE = 1000
@@ -401,9 +425,13 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
         'first_jump': first_jump,                  # 조용하던 종목의 첫 급등 (참고 표시용)
         'first_jump_rule': '오늘 +%.0f~%.0f%%, 직전 %d거래일 +8%%↑ 없음, 60일선 이격 하위 %.0f%%, 종가위치 %.1f↑' % (
             FIRST_JUMP_CHG_MIN, FIRST_JUMP_CHG_MAX, FIRST_JUMP_QUIET_DAYS, FIRST_JUMP_MA60_PCT * 100, FIRST_JUMP_CLV_MIN),
-        'disclaimer': '전 종목 중 "조용하던 종목이 완만하게 움직이기 시작한" 패턴을 점수화한 참고용 순위입니다 '
-                      '(백테스트는 장 마감 신호 → 다음날 시가 매수 기준, 장중 결과는 그날 일부 데이터 기준). '
-                      '실제 매수 여부와 손익 책임은 본인에게 있습니다.',
+        # 2026-11-17 문구 수정(사용자 지적): 예전 문구 '조용하던 종목이 완만하게 움직이기 시작한'은 아래
+        # '조용하던 종목의 첫 급등' 표와 헷갈리고 실제 기준(오늘 +4~12% 게이트 + 10개 조건 점수)을 말하지 않았다.
+        'disclaimer': ('오늘 +%.0f~%.0f%% 오른 종목 중 변동성·거래대금이 과열되지 않고 60일 고가에 가까운지 등 '
+                       '%d개 조건으로 채점해(★ 5점 = %d개 모두 충족) %.1f점 이상 상위 %d개를 보여주는 참고용 순위입니다. '
+                       '2년 백테스트(장 마감 신호 → 당일 종가 매수, 10일 보유) 기준 시장 평균 대비 +0.9%%p(기간별 +0.1~+1.0%%p)였고, '
+                       '장중 결과는 그날 일부 데이터 기준이라 검증되지 않았습니다. 실제 매수 여부와 손익 책임은 본인에게 있습니다.') % (
+            CHG_MIN, CHG_MAX, len(CONDITIONS), len(CONDITIONS), MIN_POINTS / 2, MAX_N),
     }
 
     day_dir = picks_day_dir(now.strftime('%Y%m%d'))
@@ -423,9 +451,10 @@ def generate_picks(max_n: int = MAX_N) -> Optional[Dict]:
 
 def log_config():
     """서버 시작 시 실제 적용 값을 한 줄로 남긴다(재시작 후 새 값 반영 확인용)."""
-    _log.info('[config] interest_stock_picks v2: 등락 %.0f~%.0f%%, 폭발 %.0f배 미만, 유니버스 종가 %d↑ 20일거래대금 %.0f억↑, '
+    _log.info('[config] interest_stock_picks v2: 스케줄 %s [%s], 등락 %.0f~%.0f%%, 폭발 %.0f배 미만, 유니버스 종가 %d↑ 20일거래대금 %.0f억↑, '
               '점수 %d점↑ 상위 %d, 적극매수 %d점↑/매수 %d점↑, 외국인 지분율 급증=%d일 +%.1f%%p↑(최대 %d), '
               '첫 급등=+%.0f~%.0f%%/직전%d일 8%%↑없음/60일이격 하위%.0f%%/종가위치 %.1f↑, 조건=%s',
+              SCHEDULE_DESC, ' '.join('%sh:%sm' % (h, m) for _, h, m in SCHEDULE_CRONS),
               CHG_MIN, CHG_MAX, EXPLODE_X, UNIVERSE_MIN_CLOSE, UNIVERSE_MIN_AMT20 / 1e8,
               MIN_POINTS, MAX_N, STRONG_POINTS, BUY_POINTS,
               FOREIGN_SURGE_DAYS, FOREIGN_SURGE_PP, FOREIGN_SURGE_LIST_N,
@@ -481,7 +510,7 @@ def load_picks_for_date(date_str: str) -> Optional[Dict]:
     """특정 날짜(YYYYMMDD)에 생성된 추천 중 가장 마지막(최신) 결과를 반환한다.
 
     generate_picks()가 실행마다 latest.json과 별도로 picks_<YYYYMMDD_HHMM>.json도 남겨두므로
-    (평일 09:30~20:00 5분마다), 화면에서 과거 날짜를 골랐을 때도 그날 마지막 생성분을 그대로
+    (SCHEDULE_DESC), 화면에서 과거 날짜를 골랐을 때도 그날 마지막 생성분을 그대로
     다시 보여줄 수 있다 — 2026-09-21 날짜 검색 기능 추가. 그날 파일이 하나도 없으면 None."""
     if not date_str or not re.fullmatch(r'\d{8}', date_str):
         return None
