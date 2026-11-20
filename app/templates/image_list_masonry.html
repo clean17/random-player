@@ -58,6 +58,21 @@
         .masonry-column .image-item .video-thumbnail:not(.video-ready) {
             min-height: 0;
         }
+        /* 재생 실패한 영상 — 지우지 않고 포스터 위에 표시만 (videoLoadObserver source.onerror) */
+        .image-item.video-unplayable .video-unplayable-note {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, .7);
+            color: #fff;
+            font-size: 13px;
+            text-align: center;
+            pointer-events: none;
+        }
         /* 영상 첫 프레임이 나오기 전까지 포스터 위에 띄우는 로딩 표시 (videoLoadObserver 에서 붙이고 뗀다) */
         .image-item.video-loading::after {
             content: '';
@@ -914,9 +929,21 @@
             const url = source.dataset.src;
             source.src = url;
             source.removeAttribute('data-src');
+            // 재생 실패해도 항목을 지우지 않는다(2026-11-20) — Playwright 내장 Chromium 처럼 H.264 를 못 트는
+            // 브라우저에서 영상이 말없이 사라져 total_count 만 남고 화면이 비었다. 서버가 만든 포스터(첫 프레임)는
+            // 그대로 보이게 두고 '재생 불가' 표시만 얹는다
             source.onerror = () => {
-                targetEl.closest('.image-item')?.remove();
                 observer.unobserve(targetEl);
+                const it = targetEl.closest('.image-item');
+                if (!it || it.classList.contains('video-unplayable')) return;
+                it.classList.remove('video-loading');
+                it.classList.add('video-unplayable');
+                targetEl.classList.add('video-ready');   // 포스터 높이로 보이게 (min-height 해제 상태 유지 방지)
+                const note = document.createElement('div');
+                note.className = 'video-unplayable-note';
+                note.textContent = '이 브라우저에서 재생할 수 없는 영상';
+                note.title = decodeURIComponent(source.dataset.filename || '');
+                it.appendChild(note);
             };
             if (targetEl.dataset.poster) targetEl.poster = targetEl.dataset.poster;
             // 첫 프레임이 나올 때까지 포스터 위에 로딩 표시
