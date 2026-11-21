@@ -3546,7 +3546,7 @@
 
     // 2026-09-14: 실전/모의 계좌 보유중 배지용. 다른 목록(즐겨찾기/자동매수/확인함)과 같은
     // 60초 동기화 주기(flagSyncTimer)에 얹혀 간다 — 계좌 조회(kt00018)라 너무 자주 부르지
-    // 않는다(서버도 5초 캐시로 한 번 더 막아준다. kiwoom_api.get_owned_codes 참고).
+    // 않는다(서버도 90초 캐시로 한 번 더 막아준다. kiwoom_api.get_owned_codes 참고).
     function getOwnedCodes() {
         return axios.get('/stocks/kiwoom/owned_codes').then(res => {
             ownedRealCodes.length = 0;

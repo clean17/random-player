@@ -1006,7 +1006,10 @@ def get_holdings_and_summary(acnt_no: str, acnt_pwd: str,
 # (실제 보유 화면인 '내 계좌' 탭은 이 함수를 쓰지 않고 3초 주기로 직접 조회한다).
 _owned_codes_cache_lock = threading.Lock()
 _owned_codes_cache: Dict[str, Tuple[float, set]] = {}
-_OWNED_CODES_CACHE_TTL = 5.0
+# 2026-11-20: 5초 -> 90초. 브라우저가 60초마다 부르므로 5초 캐시는 매번 만료돼 탭 하나당 분당 2건
+# (실전+모의)의 kt00018이 그대로 나갔고, 키움 호출 예산을 나눠 쓰는 청산/매수 쪽과 겹쳐 429가 났다.
+# 배지는 실시간성이 필요 없고(매매 로직은 이 캐시를 안 쓴다), 탭 한 개여도 2번에 1번만 조회된다.
+_OWNED_CODES_CACHE_TTL = 90.0
 
 
 def get_owned_codes(env: Optional[str] = None) -> set:
