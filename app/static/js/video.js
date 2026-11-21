@@ -461,6 +461,36 @@ function armPlaybackStallWatchdog(expectedVideo, videoUrl) {
     }, PLAYBACK_STALL_TIMEOUT_MS);
 }
 
+// play() 실패를 조용히 삼키지 않고 콘솔에 남긴다. PageDown 후 0초에서 멈춰 있고 Space를 누르면
+// 바로 재생되던 현상 — 데이터는 다 받아졌는데 play() 프라미스만 거부된 상태였다(에러를
+// .catch(() => {})로 버려서 원인이 안 보였음). AbortError(재생 요청이 새 load/src 교체에 끊김)는
+// 재생 가능해지는 시점(canplay)에 같은 영상이고 아직 멈춰 있으면 한 번만 다시 play()한다.
+function playVjsLogged(vjsPlayer, label) {
+    const expectedVideo = currentVideo;
+    let promise;
+    try {
+        promise = vjsPlayer.play();
+    } catch (e) {
+        console.warn('[play]', label, e && e.name, e && e.message, expectedVideo);
+        return;
+    }
+    if (!promise || typeof promise.catch !== 'function') return;
+    promise.catch(function(e) {
+        console.warn('[play]', label, e && e.name, e && e.message, expectedVideo);
+        if (!e || e.name !== 'AbortError') return;
+        if (vjsPlayer.isDisposed()) return;
+        vjsPlayer.one('canplay', function() {
+            if (vjsPlayer.isDisposed() || currentVideo !== expectedVideo || !vjsPlayer.paused()) return;
+            const retry = vjsPlayer.play();
+            if (retry && typeof retry.catch === 'function') {
+                retry.catch(function(e2) {
+                    console.warn('[play] retry', label, e2 && e2.name, e2 && e2.message, expectedVideo);
+                });
+            }
+        });
+    });
+}
+
 function startVjsFastPath(videoUrl) {
     mimeType = currentVideo.split('.').pop() === 'ts' ? 'video/mp2t' : 'video/mp4';
     pushVideoArr(currentVideo);
@@ -475,7 +505,7 @@ function startVjsFastPath(videoUrl) {
     player.load();
     player.volume(previousVolume);
     player.loop(isLooping);
-    player.play().catch(() => {});
+    playVjsLogged(player, 'fastPath');
     showControls(); // 새 영상 시작 시 컨트롤을 즉시 노출 (삭제 후 등 재사용 경로 대비)
 
     // fast path는 delayAudio()를 다시 안 타므로, 이 영상에 저장된 싱크 오프셋이 있는데
@@ -755,7 +785,7 @@ function changeVideo() {
     player.load();
     player.volume(previousVolume);
     player.loop(isLooping);
-    player.play().catch(() => {});
+    playVjsLogged(player, 'changeVideo');
     showControls(); // 새 영상 시작 시 컨트롤을 즉시 노출 (모바일에서 play 이벤트 누락 대비)
     const readyPlayer = player;
     readyPlayer.ready(function() {
@@ -1688,7 +1718,7 @@ function activateSyncAudio(videoElement, isVjs) {
         videoElement.muted = true; // 모바일에서 재생을 누를 때마다 muted가 풀려 원본 오디오가 같이
         // 들리는 경우가 있어(합성 오디오와 겹쳐 트랙이 여러 개로 들림) 매 play 시점에 재확인한다
         resyncAudioElement(true);
-        audioEl.play().catch(() => {});
+        audioEl.play().catch(function(e) { console.warn('[play] syncAudio', e && e.name, e && e.message); });
         audioContext && audioContext.resume();
     }
 
@@ -1699,7 +1729,7 @@ function activateSyncAudio(videoElement, isVjs) {
         // 있었다 — 영상은 계속 재생되는데 소리만 사라지는(멈춘 것처럼 보이는) 원인이었다. 비디오가
         // 재생 중이면 매 seek마다 audioEl 재생을 다시 보장한다.
         if (!videoElement.paused && !videoElement.ended) {
-            audioEl.play().catch(() => {});
+            audioEl.play().catch(function(e) { console.warn('[play] syncAudio seeked', e && e.name, e && e.message); });
         }
     }
 
