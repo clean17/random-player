@@ -362,7 +362,10 @@ def api_candidates():
     labels = st['labels']
     rnd = _load_round()
     since = rnd.get('started') if rnd else None
-    order = np.argsort(-st['final'])
+    # final 은 '제거될 가능성'(높을수록 먼저 뺄 후보) — 화면의 취향 점수는 1-final.
+    # 기본(asc) = 취향 낮은 순(제거 후보 먼저), desc = 취향 높은 순 (2026-11-20 사용자 요청)
+    desc = request.args.get('order') == 'desc'
+    order = np.argsort(st['final'] if desc else -st['final'], kind='stable')
     out, remaining = [], 0
     for i in order:
         nm = st['names'][i]
@@ -380,7 +383,7 @@ def api_candidates():
             out.append(_item(st, int(i)))
     return jsonify({'items': out, 'model': st['model'] is not None,
                     'n_remove': st['n_remove'], 'n_keep': st['n_keep'], 'remaining': remaining,
-                    'round': rnd,
+                    'round': rnd, 'order': 'desc' if desc else 'asc',
                     'total': len(st['names']), 'missing': st['missing'], 'cache_ver': _cache_ver()})
 
 

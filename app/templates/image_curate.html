@@ -197,6 +197,10 @@ const imgUrl = (name, sub, original) =>
   `/image/images?dir=refine&filename=${enc2((sub ? sub + '/' : '') + name)}` + (original ? '&original=1' : '') +
   (vers[name] ? `&v=${vers[name]}` : '');   // 보관함 이미지도 자를 수 있어(2026-11-15) 하위 폴더에도 붙인다
 let tab = 'cand', state = {}, nPer = 100;
+// 후보 정렬 — asc: 취향 낮은 순(기본, 제거 후보 먼저) / desc: 취향 높은 순. 선택값은 이 브라우저에만 저장
+const ORDER_KEY = 'curate-cand-order';
+let candOrder = 'asc';
+try { if (localStorage.getItem(ORDER_KEY) === 'desc') candOrder = 'desc'; } catch (_) {}
 
 // 열 수(1~5). 선택값은 이 브라우저에만 저장. 선택 전에는 기존 갤러리와 같은 폭 기준으로 자동.
 const COL_KEY = 'curate-col-count';
@@ -405,7 +409,7 @@ async function load() {
   state = {}; storedWhere = {}; $('#list').innerHTML = ''; $('#info').textContent = '불러오는 중…'; $('#flip').style.display = 'none'; count();
   try {
     if (tab === 'cand') {
-      const j = await api(`/image/curate/api/candidates?n=${nPer}`);
+      const j = await api(`/image/curate/api/candidates?n=${nPer}&order=${candOrder}`);
       shownVer = j.cache_ver;
       $('#info').innerHTML = `refine <b>${j.total}</b>장 중 정리 후보 <b>${j.items.length}</b>장 (gif 제외) · ` +
         (j.model ? `취향 모델 사용 중 (제거 ${j.n_remove} · 유지 ${j.n_keep} 판정 학습)` : `기본 점수(동떨어짐) — 판정이 쌓이면 취향 모델이 켜집니다`) +
@@ -418,8 +422,16 @@ async function load() {
             `title="판정 기록·모델은 그대로 두고, 유지로 판정했던 이미지까지 refine 전체를 다시 훑습니다">전체 재평가 시작</button>`) +
         `<br>기본값은 <b style="color:var(--keep)">유지</b>입니다. 뺄 이미지만 눌러 <b style="color:var(--rm)">제거</b>로 바꾸고 확정하세요` +
         (j.round ? '. ' : `(유지로 확정한 이미지는 다시 후보에 나오지 않습니다). `) + `제거는 임시 보관함(_review)으로 옮기기만 합니다. ` +
-        `표시 수 <select id="nsel">${[50, 100, 150, 300].map(n => `<option ${n === nPer ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+        `표시 수 <select id="nsel">${[50, 100, 150, 300].map(n => `<option ${n === nPer ? 'selected' : ''}>${n}</option>`).join('')}</select> · ` +
+        `정렬 <select id="osel"><option value="asc">취향 낮은 순 (제거 후보 먼저)</option><option value="desc">취향 높은 순</option></select>`;
       $('#nsel').onchange = e => { nPer = +e.target.value; load(); };
+      // 서버가 이전 버전이면 order 를 모른다(응답에 없음) — 실제로 적용된 순서를 보여 준다
+      $('#osel').value = j.order || 'asc';
+      $('#osel').onchange = e => {
+        candOrder = e.target.value;
+        try { localStorage.setItem(ORDER_KEY, candOrder); } catch (_) {}
+        load();
+      };
       $('#round-btn').onclick = async () => {
         const start = !j.round;
         if (!confirm(start
@@ -733,6 +745,7 @@ const cropEditor = (function () {
     if (item) { if (fromViewer) view(item); else item.scrollIntoView({behavior: 'auto', block: 'center'}); }
   }
 
+  const PRELOAD_KEEP = 12;   // 받아 둔 원본 보관 한도 — 아래 PREFETCH_AHEAD 주석 참고
   const preloaded = new Map();
   function preload(url) {
     if (preloaded.has(url)) return preloaded.get(url);
@@ -742,15 +755,16 @@ const cropEditor = (function () {
       im.onerror = reject; im.src = url;
     });
     preloaded.set(url, p); p.catch(() => preloaded.delete(url));
-    while (preloaded.size > 8) preloaded.delete(preloaded.keys().next().value);
+    while (preloaded.size > PRELOAD_KEEP) preloaded.delete(preloaded.keys().next().value);
     return p;
   }
   function findNext(d) { const l = cards(); return l[l.indexOf(d) + 1]; }
   function findPrev(d) { const l = cards(), i = l.indexOf(d); return i > 0 ? l[i - 1] : undefined; }
-  // 2026-11-15: 다음 3장을 1 → 2 → 3 순서대로 하나씩(앞 것을 다 받고 디코딩한 뒤 다음) 받고, 마지막에 이전 1장.
+  // 2026-11-15: 다음 N장을 1 → 2 → … 순서대로 하나씩(앞 것을 다 받고 디코딩한 뒤 다음) 받고, 마지막에 이전 1장.
   //   한꺼번에 받으면 대역폭을 나눠 바로 다음 장이 늦게 끝난다. 그새 다른 이미지로 넘어가면(token) 멈추고 새로 시작.
-  //   현재 + 앞 3 + 뒤 1 = 5 라 preloaded(최대 8) 안에 들어간다.
-  const PREFETCH_AHEAD = 3;
+  // 2026-11-20: 3 → 6장. 원본(original=1)을 받으므로 한 장 받는 시간보다 빨리 넘기면 누를 때마다 여유가 1장씩
+  //   줄어 3장으로는 서너 번 만에 '원본 불러오는 중'에 걸렸다. 보관 한도도 8 → 12 (현재 + 앞 6 + 뒤 1 = 8 에 여유).
+  const PREFETCH_AHEAD = 6;
   async function prefetchNeighbors(d, token) {
     let it = d;
     for (let i = 0; i < PREFETCH_AHEAD; i++) {
