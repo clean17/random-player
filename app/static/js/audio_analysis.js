@@ -16,7 +16,8 @@
     const drop = $('drop'), fileInput = $('file-input'), uploadBtn = $('upload-btn');
     const jobsEl = $('jobs'), resultCard = $('result-card');
     const audioEl = $('r-audio');
-    let selectedFile = null, pollTimer = null;
+    let selectedFiles = [], pollTimer = null;
+    const MAX_FILES = window.AUDIO_MAX_FILES || 1;  // 1 = 서버가 아직 다중 업로드를 모름(재시작 전)
 
     // 현재 열린 결과
     const view = {
@@ -69,25 +70,57 @@
     }
 
     // ───────────────────────── 업로드 ─────────────────────────
-    function setFile(f) {
-        selectedFile = f || null;
-        $('file-name').textContent = f ? `${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)` : '';
-        uploadBtn.disabled = !f;
+    // 여러 개를 고르면 한 대화를 나눠 녹음한 것으로 보고 목록 순서대로 이어 붙인다 — 기본은 파일명순(녹음
+    // 앱은 보통 시각을 파일명에 넣는다), ▲▼로 순서를 바꿀 수 있다
+    function setFiles(files) {
+        const arr = Array.from(files || []);
+        if (arr.length > MAX_FILES) {
+            alert(MAX_FILES === 1 ? '여러 파일 분석은 서버 재시작 후에 쓸 수 있습니다 — 지금은 한 개씩 올려 주세요'
+                : `한 번에 ${MAX_FILES}개까지 올릴 수 있습니다 (${arr.length}개 선택)`);
+            return;
+        }
+        selectedFiles = arr.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+        renderFileList();
         // 삼성 통화 녹음('통화 홍길동_261008_162732.m4a')은 2명 — 자동 감지는 상대 목소리를 둘로 쪼개곤 한다
+        const f = selectedFiles[0];
         if (f && /^(통화|call)/i.test(f.name) && $('num-speakers').value === '0') {
             $('num-speakers').value = '2';
             showDebugToast('통화 녹음으로 보여 화자 수를 2명으로 맞췄습니다');
         }
     }
-    fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
+    function renderFileList() {
+        const el = $('file-list'), n = selectedFiles.length;
+        uploadBtn.disabled = !n;
+        uploadBtn.textContent = n > 1 ? `${n}개 이어서 분석 시작` : '분석 시작';
+        el.hidden = !n;
+        el.classList.toggle('is-multi', n > 1);
+        el.innerHTML = selectedFiles.map((f, i) => `<li data-i="${i}">
+            <span class="va-file-name">${esc(f.name)}</span><span class="va-muted">${(f.size / 1024 / 1024).toFixed(1)}MB</span>
+            ${n > 1 ? `<button type="button" class="va-btn va-btn-sm" data-mv="-1"${i === 0 ? ' disabled' : ''} aria-label="위로">▲</button><button type="button" class="va-btn va-btn-sm" data-mv="1"${i === n - 1 ? ' disabled' : ''} aria-label="아래로">▼</button>` : ''}
+            <button type="button" class="va-btn va-btn-sm" data-rm aria-label="빼기">✕</button></li>`).join('');
+    }
+    $('file-list').addEventListener('click', (e) => {
+        const li = e.target.closest('li[data-i]'), btn = e.target.closest('button');
+        if (!li || !btn) return;
+        const i = Number(li.dataset.i);
+        if (btn.hasAttribute('data-rm')) {
+            selectedFiles.splice(i, 1);
+        } else {
+            const j = i + Number(btn.dataset.mv);
+            if (j < 0 || j >= selectedFiles.length) return;
+            [selectedFiles[i], selectedFiles[j]] = [selectedFiles[j], selectedFiles[i]];
+        }
+        renderFileList();
+    });
+    fileInput.addEventListener('change', () => setFiles(fileInput.files));
     ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('is-over'); }));
     ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('is-over'); }));
-    drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+    drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) setFiles(e.dataTransfer.files); });
 
     uploadBtn.addEventListener('click', () => {
-        if (!selectedFile) return;
+        if (!selectedFiles.length) return;
         const fd = new FormData();
-        fd.append('file', selectedFile);
+        selectedFiles.forEach(f => fd.append('file', f));  // 이 순서대로 이어 붙인다
         fd.append('num_speakers', $('num-speakers').value);
         fd.append('hotwords', $('job-hotwords').value);
         fd.append('previous_job', $('upload-previous').value);
@@ -111,7 +144,7 @@
             }
             fileInput.value = '';
             $('job-hotwords').value = '';
-            setFile(null);
+            setFiles([]);
             showDebugToast('업로드 완료 — 분석 대기열에 추가했습니다');
             loadJobs();
         };
@@ -130,6 +163,7 @@
             if (j.duration) meta.push(fmtDur(j.duration));
             if (j.stage === 'done') meta.push(j.speakers ? `화자 ${j.speakers}명` : '화자 구분 없음');
             if (j.stage === 'done' && j.summarized === false) meta.push('요약 없음');
+            if ((j.files || []).length > 1) meta.push(`파일 ${j.files.length}개`);
             const msg = (j.stage === 'running' || j.stage === 'error') ? `<div class="va-job-meta">${esc(j.message)}</div>` : '';
             const bar = j.stage === 'running' ? `<div class="va-progress"><div style="width:${j.progress}%"></div></div>` : '';
             const actions = [];
@@ -407,6 +441,11 @@
         const pct = (t) => (Math.min(Math.max(t, 0), dur) / dur * 100).toFixed(3) + '%';
         const topics = (r.analysis && r.analysis.topics) || [];
         const rows = [];
+        if ((r.parts || []).length) {
+            rows.push(`<div class="va-tl-row is-parts"><div class="va-tl-label">파일</div><div class="va-tl-track">${
+                r.parts.map(p => `<div class="va-tl-part${p.index % 2 ? ' is-odd' : ''}" data-seek="${p.start}" style="left:${pct(p.start)};width:calc(${pct(p.end)} - ${pct(p.start)})" title="${p.index + 1}. ${esc(p.name)} (${fmtTs(p.start)}~${fmtTs(p.end)})">${p.index + 1}</div>`).join('')
+            }</div></div>`);
+        }
         if (topics.length) {
             // 막대에는 번호만 — 안건이 많으면 제목이 '…'로 잘려 안 보였다. 제목은 아래 목록에서 다 보여 준다
             rows.push(`<div class="va-tl-row is-topic"><div class="va-tl-label">주제</div><div class="va-tl-track">${
@@ -504,6 +543,8 @@
         html.push(`<div class="va-sec"><h3>📌 회의 개요</h3><dl class="va-overview-list">${
             ov.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>`);
 
+        if ((r.parts || []).length) html.push(partsSectionHtml(r.parts));
+
         html.push(`<div class="va-sec va-conclusion"><h3>🧠 AI 핵심 요약</h3><p class="va-summary-text">${esc(a.summary_text || '-')}</p></div>`);
 
         html.push(`<div class="va-sec"><h3>✅ 결정사항</h3>${list(a.decisions, 'va-decisions')}</div>`);
@@ -522,6 +563,23 @@
 
         html.push(`<div class="va-sec" id="compare-sec"><h3>🔁 이전 회의 대비 변경사항</h3>${renderCompare(r)}</div>`);
         panel('summary').innerHTML = html.join('');
+    }
+
+    // 여러 파일을 이어 붙인 작업 — 파일마다 구간·다룬 주제(시간이 겹치는 주제)·화자. 시각은 이어 붙인 기준
+    function partsSectionHtml(parts) {
+        return `<div class="va-sec va-parts"><h3>📁 녹음 파일 구성 <span class="va-muted">— ${parts.length}개를 이어 붙여 한 대화로 분석</span></h3><ol class="va-part-list">${
+            parts.map(p => `<li class="va-part">
+                <div class="va-part-head"><span class="va-part-no">${p.index + 1}</span><b class="va-part-name">${esc(p.name)}</b>
+                    ${tsBtn(p.start)}<span class="va-muted">~ ${fmtTs(p.end)} · ${esc(fmtDur(p.duration))} · 발화 ${p.utterances}개</span></div>
+                ${(p.speakers || []).length && p.speakers[0] !== '화자' ? `<div class="va-part-spk">${p.speakers.map(spkChip).join(' ')}</div>` : ''}
+                ${(p.topics || []).length
+                    ? `<ul class="va-part-topics">${p.topics.map(t => `<li><span class="va-topic-no">${t.no}</span>${esc(t.title)} ${tsBtn(t.start)}</li>`).join('')}</ul>`
+                    : (p.first ? `<p class="va-muted">“${esc(p.first)}…”</p>` : '')}
+            </li>`).join('')}</ol></div>`;
+    }
+    function partAt(sec) {
+        const parts = (view.result && view.result.parts) || [];
+        return parts.find(p => sec < p.end) || parts[parts.length - 1] || null;
     }
 
     const FOLLOW_CLASS = { '완료': 'done', '진행 중': 'doing', '지연': 'late', '변경': 'changed', '언급 없음': 'none' };
@@ -576,10 +634,17 @@
     function renderTranscript(r) {
         const roles = rolesOf(r);
         const topics = ((r.analysis && r.analysis.topics) || []).slice();
-        let ti = 0, prev = null;
+        const parts = r.parts || [];
+        let ti = 0, prev = null, curPart = null;
         const html = [];
         view.utterStarts = r.utterances.map(u => u.start);
         r.utterances.forEach((u, i) => {
+            if (parts.length && typeof u.part === 'number' && u.part !== curPart) {
+                curPart = u.part;
+                const p = parts[u.part];
+                if (p) html.push(`<div class="va-part-divider">📁 <span class="va-part-no">${p.index + 1}</span>${esc(p.name)} <span class="va-muted">${fmtTs(p.start)}~${fmtTs(p.end)}</span></div>`);
+                prev = null;
+            }
             while (ti < topics.length && topics[ti].start <= u.start + 0.5) {
                 html.push(`<div class="va-topic-divider"><span class="va-topic-no">${ti + 1}</span>${esc(topics[ti].title)} ${tsBtn(topics[ti].start)}</div>`);
                 ti++;
@@ -802,7 +867,8 @@
             if (el) el.classList.add('is-playing');
             view.playingIdx = idx;
             const u = view.result.utterances[idx];
-            if (u) $('r-now').textContent = `${fmtTs(u.start)} ${u.speaker}`;
+            const p = u && (view.result.parts || []).length ? view.result.parts[u.part] || partAt(u.start) : null;
+            if (u) $('r-now').textContent = `${p ? `📁${p.index + 1} ` : ''}${fmtTs(u.start)} ${u.speaker}`;
         }
     });
 

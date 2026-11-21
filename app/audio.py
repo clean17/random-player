@@ -6,6 +6,8 @@
 작업 디렉토리: data/audio_analysis/<job_id>/
   job.json      업로드 메타 (원본 파일명, 화자 수, 업로드 사용자)
   input.<ext>   원본 오디오
+  input_NN.<ext>  여러 파일을 한 대화로 올렸을 때의 원본들(job.json inputs 순서 = 이어 붙이는 순서)
+  playback.m4a  여러 파일일 때 워커가 이어 붙여 만든 재생용 음성 — 대화록 시각이 이 파일 기준이다
   status.json   워커가 갱신하는 진행 상태 (stage: queued/running/done/error)
   result.md     최종 결과
   worker.log    워커 stdout/stderr
@@ -37,6 +39,8 @@ AUDIO_EXTENSIONS = {'.m4a', '.mp3', '.wav', '.aac', '.amr', '.3gp', '.ogg', '.op
 JOB_ID_RE = re.compile(r'^[0-9a-f]{32}$')
 DICTIONARY_DIR = os.path.join(JOBS_DIR, 'dictionary')
 MAX_SPEAKERS = 10
+MAX_FILES = 20  # 한 대화로 이어 붙일 수 있는 파일 수
+PLAYBACK_FILE = 'playback.m4a'
 
 _queue = queue.Queue()  # type: queue.Queue
 _worker_lock = threading.Lock()
@@ -123,7 +127,15 @@ def _job_summary(job_id: str) -> Dict:
         'finished_at': status.get('finished_at'),
         'title': status.get('title') or '',            # 분석이 붙인 제목 — 이전 회의 고르기 목록에 쓴다
         'previous_job': meta.get('previous_job') or '',
+        'files': [x.get('name', '') for x in meta.get('inputs') or []],  # 여러 파일 작업이면 원본 파일명들
     }
+
+
+def _audio_source(path: str, meta: Dict) -> str:
+    """재생할 음성 파일 경로 — 여러 파일 작업은 워커가 이어 붙인 playback.m4a (분석 전이면 없음)."""
+    if meta.get('inputs'):
+        return os.path.join(path, PLAYBACK_FILE)
+    return os.path.join(path, meta.get('input') or '') if meta.get('input') else ''
 
 
 def _valid_previous(prev_id: Optional[str], job_id: str) -> Optional[str]:
@@ -157,8 +169,9 @@ def _run_job(job_id: str):
     status_path = os.path.join(path, 'status.json')
     _write_json(status_path, {'stage': 'running', 'progress': 0, 'message': '분석 시작', 'started_at': _now()})
 
+    inputs = [x['input'] for x in meta.get('inputs') or []] or [meta['input']]
     cmd = [AUDIO_PYTHON, WORKER_SCRIPT,
-           '--input', os.path.join(path, meta['input']),
+           '--input'] + [os.path.join(path, x) for x in inputs] + [
            '--outdir', path,
            '--title', os.path.splitext(meta.get('filename', ''))[0] or '음성 분석',
            '--num-speakers', str(meta.get('num_speakers') or 0)]
@@ -228,7 +241,8 @@ def _ensure_worker():
 def get_audio_page():
     _ensure_worker()
     ready = os.path.exists(AUDIO_PYTHON) and os.path.exists(WORKER_SCRIPT)
-    return render_template('audio_analysis.html', ready=ready, max_speakers=MAX_SPEAKERS, version=int(time.time()))
+    return render_template('audio_analysis.html', ready=ready, max_speakers=MAX_SPEAKERS, max_files=MAX_FILES,
+                           version=int(time.time()))
 
 
 @audio.route('/upload', methods=['POST'])
@@ -238,13 +252,20 @@ def upload_audio():
     if not os.path.exists(AUDIO_PYTHON):
         return jsonify({'error': '분석 환경(venv_audio)이 설치되지 않았습니다'}), 500
 
-    file = request.files.get('file')
-    if not file or not file.filename:
+    # 여러 파일 = 한 대화를 나눠 녹음한 것 — 보낸 순서대로 이어 붙여 하나로 분석한다 (2026-11-20)
+    files = [f for f in request.files.getlist('file') if f and f.filename]
+    if not files:
         return jsonify({'error': '파일이 없습니다'}), 400
-    filename = os.path.basename(file.filename.replace('\\', '/'))
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in AUDIO_EXTENSIONS:
-        return jsonify({'error': '지원하지 않는 형식입니다: {}'.format(ext or filename)}), 400
+    if len(files) > MAX_FILES:
+        return jsonify({'error': '한 번에 {}개까지 올릴 수 있습니다'.format(MAX_FILES)}), 400
+    names = []  # type: List[str]
+    for f in files:
+        name = os.path.basename(f.filename.replace('\\', '/'))
+        ext = os.path.splitext(name)[1].lower()
+        if ext not in AUDIO_EXTENSIONS:
+            return jsonify({'error': '지원하지 않는 형식입니다: {}'.format(ext or name)}), 400
+        names.append(name)
+    filename = names[0] if len(names) == 1 else '{} 외 {}개'.format(names[0], len(names) - 1)
 
     try:
         num_speakers = int(request.form.get('num_speakers') or 0)
@@ -257,12 +278,22 @@ def upload_audio():
     job_id = uuid.uuid4().hex
     path = os.path.join(JOBS_DIR, job_id)
     os.makedirs(path)
-    file.save(os.path.join(path, 'input' + ext))
-    _write_json(os.path.join(path, 'status.json'), {'stage': 'queued', 'progress': 0, 'message': '대기 중'})
-    _write_json(os.path.join(path, 'job.json'), {
-        'id': job_id, 'filename': filename, 'input': 'input' + ext, 'num_speakers': num_speakers,
+    meta = {
+        'id': job_id, 'filename': filename, 'num_speakers': num_speakers,
         'hotwords': hotwords, 'previous_job': previous_job, 'user': current_user.get_id(), 'created_at': _now(),
-    })
+    }
+    if len(files) == 1:
+        ext = os.path.splitext(names[0])[1].lower()
+        files[0].save(os.path.join(path, 'input' + ext))
+        meta['input'] = 'input' + ext
+    else:
+        meta['inputs'] = []
+        for i, (f, name) in enumerate(zip(files, names)):
+            stored = 'input_{:02d}{}'.format(i, os.path.splitext(name)[1].lower())
+            f.save(os.path.join(path, stored))
+            meta['inputs'].append({'name': name, 'input': stored})
+    _write_json(os.path.join(path, 'status.json'), {'stage': 'queued', 'progress': 0, 'message': '대기 중'})
+    _write_json(os.path.join(path, 'job.json'), meta)
     _queue.put(job_id)
     return jsonify(_job_summary(job_id))
 
@@ -329,7 +360,8 @@ def get_job(job_id):
         analysis = _read_json(os.path.join(path, 'analysis.json'))
         if analysis:
             info['result'] = analysis
-        info['has_audio'] = bool(_read_json(os.path.join(path, 'job.json')).get('input'))
+        src = _audio_source(path, _read_json(os.path.join(path, 'job.json')))
+        info['has_audio'] = bool(src) and os.path.isfile(src)
     return jsonify(info)
 
 
@@ -356,9 +388,8 @@ def download_md(job_id):
 def stream_audio(job_id):
     """대화록에서 시각을 누르면 그 지점부터 재생 — conditional=True 로 Range 요청(구간 탐색)을 지원한다."""
     path = _job_dir(job_id)
-    meta = _read_json(os.path.join(path, 'job.json'))
-    src = os.path.join(path, meta.get('input') or '')
-    if not meta.get('input') or not os.path.isfile(src):
+    src = _audio_source(path, _read_json(os.path.join(path, 'job.json')))
+    if not src or not os.path.isfile(src):
         abort(404)
     # 윈도우 mimetypes 는 m4a 를 모르거나 audio/x-m4a 로 준다 — 브라우저가 확실히 재생하는 타입으로
     mime = {'.m4a': 'audio/mp4', '.mp4': 'audio/mp4', '.aac': 'audio/aac', '.mp3': 'audio/mpeg', '.wav': 'audio/wav',

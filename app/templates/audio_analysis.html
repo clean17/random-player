@@ -35,11 +35,16 @@
         <div class="va-warn">분석 환경(venv_audio)이 아직 설치되지 않았습니다.</div>
         {% endif %}
         <label class="va-drop" id="drop">
-            <input type="file" id="file-input" accept="audio/*,video/mp4,video/webm,.m4a,.amr,.3gp,.opus">
+            {# max_files 는 app/audio.py 가 넘긴다 — 템플릿은 자동 리로드되지만 audio.py 는 서버 재시작 전엔 옛 코드라
+               (첫 파일만 받고 나머지를 조용히 버림) 값이 없으면 다중 선택을 열지 않는다 #}
+            <input type="file" id="file-input"{% if max_files %} multiple{% endif %} accept="audio/*,video/mp4,video/webm,.m4a,.amr,.3gp,.opus">
             <div><strong>파일을 끌어다 놓거나 클릭해서 선택</strong></div>
             <div class="va-hint">m4a · mp3 · wav · ogg · flac · mp4 등 — 통화 녹음, 회의 녹음</div>
-            <div id="file-name" class="va-job-name" style="margin-top:8px"></div>
+            {% if max_files %}
+            <div class="va-hint">여러 개(최대 {{ max_files }}개)를 고르면 <b>한 대화를 나눠 녹음한 것</b>으로 보고 아래 순서대로 이어 붙여 하나로 분석합니다 — 결과에서 파일별로도 구분됩니다.</div>
+            {% endif %}
         </label>
+        <ol class="va-file-list" id="file-list" hidden></ol>
         <div class="va-row">
             <label for="num-speakers">화자 수</label>
             <select id="num-speakers">
@@ -140,6 +145,7 @@
 </main>
 
 <script src="/static/js/ui_chrome.js?v={{ version }}"></script>
+<script>window.AUDIO_MAX_FILES = {{ max_files or 1 }};</script>
 <script src="/static/js/audio_analysis.js?v={{ version }}"></script>
 </body>
 </html>

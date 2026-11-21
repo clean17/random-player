@@ -6,7 +6,8 @@ Flask(venv, Python 3.8)는 torch/whisper/pyannote 를 못 쓰므로 이 스크�
     venv_audio/Scripts/python.exe tools/audio_analysis/worker.py --input a.m4a --outdir data/audio_analysis/<id>
 
 단계
-  1. ffmpeg 로 16kHz mono wav 변환
+  1. ffmpeg 로 16kHz mono wav 변환 — --input 이 여러 개면 한 대화를 나눠 녹음한 것으로 보고 순서대로 이어 붙인다
+     (경계 시각은 analysis.json parts, 발화마다 part 번호. 재생용으로 이어 붙인 playback.m4a 를 남긴다)
   2. faster-whisper 받아쓰기 (단어 단위 타임스탬프)
   3. pyannote 화자분리 — HF_TOKEN 이 없으면 생략하고 화자 구분 없이 대본만 만든다
   4. 단어마다 가장 많이 겹치는 화자 구간을 붙이고, 같은 화자의 연속 발화를 묶는다
@@ -117,6 +118,126 @@ def convert_to_wav(src: str, dst: str) -> float:
     subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)
     import soundfile as sf
     return float(sf.info(dst).duration)
+
+
+PLAYBACK_FILE = 'playback.m4a'  # app/audio.py PLAYBACK_FILE 과 같은 이름
+
+
+def convert_parts_to_wav(srcs: List[str], names: List[str], dst: str, outdir: str) -> Tuple[float, List[Dict]]:
+    """한 대화를 여러 파일로 나눠 녹음한 것 — 파일마다 16kHz mono 로 바꿔 순서대로 이어 붙인다.
+
+    파일별로 따로 변환한 뒤 PCM 을 그대로 잇기 때문에 경계 시각이 샘플 단위로 정확하다(ffmpeg concat 필터는
+    코덱 지연·패딩 때문에 경계가 조금씩 밀릴 수 있다). 대화록 시각은 전부 이어 붙인 기준이고, 재생도 같은 기준이
+    되도록 이어 붙인 음성을 playback.m4a 로 따로 남긴다.
+    returns (전체 길이, [{index, name, start, end, duration}])
+    """
+    import wave
+    parts = []  # type: List[Dict]
+    offset = 0.0
+    with wave.open(dst, 'wb') as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(16000)
+        for i, (src, name) in enumerate(zip(srcs, names)):
+            tmp = os.path.join(outdir, 'part_{:02d}.wav'.format(i))
+            convert_to_wav(src, tmp)
+            with wave.open(tmp, 'rb') as w:
+                frames = w.getnframes()
+                while True:
+                    chunk = w.readframes(16000 * 60)
+                    if not chunk:
+                        break
+                    out.writeframes(chunk)
+            os.remove(tmp)
+            dur = frames / 16000.0
+            parts.append({'index': i, 'name': name, 'start': offset, 'end': offset + dur, 'duration': dur})
+            offset += dur
+    # 재생용 — 받아쓰기용 16kHz mono 를 그대로 압축한다(통화·회의 음성엔 충분). 실패해도 분석은 계속한다
+    try:
+        subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', '-i', dst, '-c:a', 'aac', '-b:a', '48k',
+                        os.path.join(outdir, PLAYBACK_FILE)], check=True, stdin=subprocess.DEVNULL)
+    except Exception:
+        traceback.print_exc()
+    return offset, parts
+
+
+def part_index_at(parts: List[Dict], sec: float) -> int:
+    for p in parts:
+        if sec < p['end']:
+            return p['index']
+    return parts[-1]['index'] if parts else 0
+
+
+def split_at_parts(utterances: List[Dict], words: List[Dict], parts: List[Dict]) -> List[Dict]:
+    """이어 붙인 경계에선 무음 틈이 없어서, 앞 파일 끝 발화와 뒤 파일 첫 발화가 같은 화자면 한 발화로 붙는다 —
+    경계를 넘는 발화는 단어 시각으로 다시 나눈다. 모든 발화에 파일 번호(part)를 붙인다."""
+    out = []  # type: List[Dict]
+    for u in utterances:
+        a, b = part_index_at(parts, u['start']), part_index_at(parts, max(u['start'], u['end'] - 0.01))
+        if a == b:
+            out.append(dict(u, part=a))
+            continue
+        ws = [w for w in words if w['start'] >= u['start'] - 0.01 and w['end'] <= u['end'] + 0.01]
+        pieces = {}  # type: Dict[int, Dict]
+        for w in ws:
+            k = part_index_at(parts, (w['start'] + w['end']) / 2)
+            p = pieces.setdefault(k, {'speaker': u['speaker'], 'start': w['start'], 'end': w['end'], 'text': '', 'part': k})
+            p['text'] += w['text']
+            p['end'] = w['end']
+        if not pieces:  # 단어 시각을 못 찾음 — 시작 시각 기준으로 한 파일에 둔다
+            out.append(dict(u, part=a))
+            continue
+        for k in sorted(pieces):
+            pieces[k]['text'] = pieces[k]['text'].strip()
+            if pieces[k]['text']:
+                out.append(pieces[k])
+    return out
+
+
+def parts_overview(parts: List[Dict], utterances: List[Dict], analysis: Optional[Dict]) -> List[Dict]:
+    """파일별 구분 — 각 파일에서 다룬 주제(시간이 겹치는 주제)와 발화 수·화자. LLM 을 더 부르지 않는다."""
+    topics = (analysis or {}).get('topics') or []
+    out = []
+    for p in parts:
+        utts = [u for u in utterances if u.get('part') == p['index']]
+        ts = []
+        for i, t in enumerate(topics):
+            ov = min(t['end'], p['end']) - max(t['start'], p['start'])
+            # 주제가 이 파일에 10초 이상 걸치거나, 주제 구간이 짧아 통째로 이 파일 안에 있으면 포함
+            if ov >= min(10.0, max(t['end'] - t['start'], 0.0) * 0.5) and ov > 0:
+                ts.append({'no': i + 1, 'title': t['title'], 'start': max(t['start'], p['start'])})
+        speakers = []
+        for u in utts:
+            if u['speaker'] not in speakers:
+                speakers.append(u['speaker'])
+        out.append(dict(p, utterances=len(utts), speakers=speakers, topics=ts,
+                        first=(utts[0]['text'][:80] if utts else '')))
+    return out
+
+
+def parts_markdown(parts: List[Dict], utterances: List[Dict]) -> Tuple[List[str], List[str]]:
+    """(파일별 구성 섹션, 파일 구분선을 넣은 대화록) 마크다운 줄."""
+    sec = ['## 녹음 파일 구성 ({}개 — 이어 붙여 한 대화로 분석)'.format(len(parts)), '']
+    for p in parts:
+        sec.append('{}. **{}** `@{}` ~ {} ({} · 발화 {}개{})'.format(
+            p['index'] + 1, p['name'], fmt_ts(p['start']), fmt_ts(p['end']), fmt_dur(p['duration']), p['utterances'],
+            ' · ' + ', '.join(p['speakers']) if p['speakers'] and p['speakers'] != ['화자'] else ''))
+        for t in p['topics']:
+            sec.append('   - 주제 {}. {} `@{}`'.format(t['no'], t['title'], fmt_ts(t['start'])))
+        if not p['topics'] and p['first']:
+            sec.append('   - 시작: “{}…”'.format(p['first']))
+    sec.append('')
+
+    tr = ['## 전체 대화록', '']
+    cur = None
+    for u in utterances:
+        if u.get('part') != cur:
+            cur = u.get('part')
+            p = parts[cur] if cur is not None and cur < len(parts) else None
+            if p:
+                tr += ['### 📁 {}. {} ({}~{})'.format(p['index'] + 1, p['name'], fmt_ts(p['start']), fmt_ts(p['end'])), '']
+        tr += ['**{}** `{}`  '.format(u['speaker'], fmt_ts(u['start'])), '  \n'.join(summarizer.split_sentences(u['text'])), '']
+    return sec, tr
 
 
 # ─────────────────────────── 2. 받아쓰기 ───────────────────────────
@@ -376,7 +497,8 @@ def _write_text(path: str, text: str):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--input', required=True)
+    # --input 을 여러 개 주면 한 대화를 나눠 녹음한 파일들로 보고 그 순서대로 이어 붙인다
+    ap.add_argument('--input', required=True, nargs='+')
     ap.add_argument('--outdir', required=True)
     ap.add_argument('--title', default='')
     ap.add_argument('--num-speakers', type=int, default=0)
@@ -388,8 +510,18 @@ def main():
     try:
         status.update(0, '오디오 변환 중')
         wav = os.path.join(args.outdir, 'audio.wav')
-        duration = convert_to_wav(args.input, wav)
-        status.update(P_CONVERT, '변환 완료 — {}'.format(fmt_dur(duration)), duration=duration)
+        parts = []  # type: List[Dict]
+        if len(args.input) == 1:
+            duration = convert_to_wav(args.input[0], wav)
+        else:
+            job_inputs = _read_json_file(os.path.join(args.outdir, 'job.json')).get('inputs') or []
+            names = [x.get('name') for x in job_inputs]
+            if len(names) != len(args.input) or not all(names):
+                names = [os.path.basename(p) for p in args.input]
+            duration, parts = convert_parts_to_wav(args.input, names, wav, args.outdir)
+        status.update(P_CONVERT, '변환 완료 — {}{}'.format(
+            fmt_dur(duration), ' (파일 {}개 이어 붙임)'.format(len(parts)) if parts else ''), duration=duration)
+        title_src = args.title or args.input[0]
 
         # 받아쓰기가 가장 오래 걸린다(38분 녹음 ≈ 5~11분) — 재분석(화자 수 변경, 토큰 추가 후 재시도) 때 재사용
         cache_path = os.path.join(args.outdir, 'whisper.json')
@@ -411,7 +543,7 @@ def main():
         # 화자분리가 실패해도(토큰·약관·GPU 메모리) 받아쓰기 결과는 살린다 — 이유는 md 에 경고로 남긴다.
         # 결과는 화자 수 설정별로 저장해 두고 재분석(요약만 다시) 때 재사용한다
         diar_cache = os.path.join(args.outdir, 'diarization.json')
-        diar_opts = diarization_options(args.num_speakers, args.title or args.input)
+        diar_opts = diarization_options(args.num_speakers, title_src)
         diar_skip = ''
         turns = _load_diar_cache(diar_cache, diar_opts)
         if turns:
@@ -432,6 +564,8 @@ def main():
             utterances = assign_speakers(words, turns)
         else:
             utterances = segments_as_utterances(segments)
+        if parts:
+            utterances = split_at_parts(utterances, words, parts)
         # 단어장 교정은 캐시(원본 받아쓰기)에 손대지 않고 매번 적용 — 단어장만 고친 재분석은 받아쓰기 없이 바로 반영된다
         vocab_changes = vocab.apply_vocabulary(utterances, corrections, terms)
         if vocab_changes:
@@ -441,8 +575,8 @@ def main():
         speakers = [s['speaker'] for s in summarizer.speaker_stats(utterances)]
 
         analysis, summary_skip, compare = None, '', None
-        title = args.title or os.path.splitext(os.path.basename(args.input))[0]
-        kind_hint = '통화 녹음' if is_call_recording(args.title or args.input) else ''
+        title = args.title or os.path.splitext(os.path.basename(args.input[0]))[0]
+        kind_hint = '통화 녹음' if is_call_recording(title_src) else ''
         prev = load_previous(args.outdir)
         # 요약 입력이 그대로면 LLM 을 다시 돌리지 않고 이전 결과를 쓴다. temperature 0·고정 seed·요청마다 빈 상태로
         # 시작해도 GPU 병렬 연산의 미세한 차이로 긴 회의는 뒤쪽 구간 문장이 갈린다 — 같은 입력에 다른 회의록이
@@ -496,9 +630,24 @@ def main():
             'input_key': input_key if analysis else '',
             'minutes_md': summarizer.build_minutes(meta, analysis) if analysis else '',
         }
+        markdown = summarizer.build_markdown(meta, analysis, utterances, bool(turns), diar_skip, summary_skip, compare)
+        if parts:
+            # 파일별 구분은 summarizer.py 를 건드리지 않고 여기서 덧붙인다 — summarizer.py 를 고치면 요약 캐시
+            # 키(코드 해시)가 바뀌어 기존 작업들이 재분석 때 요약을 전부 새로 돌리게 된다
+            result['parts'] = parts_overview(parts, utterances, analysis)
+            sec, transcript = parts_markdown(result['parts'], utterances)
+            head, sep, _ = markdown.partition('## 전체 대화록\n')
+            markdown = (head if sep else markdown + '\n') + '\n'.join(sec + transcript)
+            # 회의록 머리 표의 '소요 시간' 아래에 파일 구성 한 줄 (result.md 안의 회의록 섹션도 같은 표다)
+            files_row = '| 녹음 파일 | {} |'.format(' → '.join(
+                '{} ({}~{})'.format(p['name'].replace('|', '\\|'), fmt_ts(p['start']), fmt_ts(p['end']))
+                for p in result['parts']))
+            add_row = lambda text: re.sub(r'^(\| 소요 시간 \|.*)$', lambda m: m.group(1) + '\n' + files_row,
+                                          text, count=1, flags=re.M)
+            result['minutes_md'] = add_row(result['minutes_md']) if result['minutes_md'] else ''
+            markdown = add_row(markdown)
         _write_text(os.path.join(args.outdir, 'analysis.json'), json.dumps(result, ensure_ascii=False))
-        _write_text(os.path.join(args.outdir, 'result.md'),
-                    summarizer.build_markdown(meta, analysis, utterances, bool(turns), diar_skip, summary_skip, compare))
+        _write_text(os.path.join(args.outdir, 'result.md'), markdown)
         if analysis:
             _write_text(os.path.join(args.outdir, 'minutes.md'), result['minutes_md'])
 
